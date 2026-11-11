@@ -35,6 +35,11 @@ describe('saving and loading', () => {
     expect(P.load(fakeStorage({ [P.STORAGE_KEY]: '{"version":99}' }))).toEqual(P.empty());
   });
 
+  it('upgrades a stored version 1 record', () => {
+    const s = fakeStorage({ [P.STORAGE_KEY]: '{"version":1,"done":{"a":true},"quiz":{},"checks":{}}' });
+    expect(P.load(s)).toEqual({ ...P.empty(), done: { a: true } });
+  });
+
   it('reports failure when the browser refuses to store', () => {
     const s = fakeStorage();
     s.setItem = () => {
@@ -108,13 +113,31 @@ describe('export and import', () => {
     ['not JSON at all', 'hello'],
     ['JSON from somewhere else', '{"name":"package"}'],
     ['a list', '[1,2,3]'],
-    ['a future version', '{"app":"zero-to-engineer","version":2,"done":{},"quiz":{},"checks":{}}'],
+    ['a future version', '{"app":"zero-to-engineer","version":3,"done":{},"quiz":{},"checks":{},"review":{}}'],
+    ['a version 2 file with no review section', '{"app":"zero-to-engineer","version":2,"done":{},"quiz":{},"checks":{}}'],
     ['a missing section', '{"app":"zero-to-engineer","version":1,"done":{},"checks":{}}'],
     ['damaged quiz answers', '{"app":"zero-to-engineer","version":1,"done":{},"quiz":{"a":"x"},"checks":{}}'],
   ])('rejects %s with a message', (_name, text) => {
     const result = P.importJson(text);
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.length).toBeGreaterThan(10);
+  });
+
+  it('reads a version 1 file, starting the review queue and planner empty', () => {
+    const result = P.importJson('{"app":"zero-to-engineer","version":1,"done":{"a":true},"quiz":{"a":[1]},"checks":{"a/k":true}}');
+    expect(result.ok).toBe(true);
+    if (result.ok) expect(result.progress).toEqual({ ...P.empty(), done: { a: true }, quiz: { a: [1] }, checks: { 'a/k': true } });
+  });
+
+  it('keeps the review queue and planner settings, dropping damaged entries', () => {
+    const p = P.empty();
+    p.review = { 'sql#0': { box: 2, due: '2026-11-14' } };
+    p.planner = { course: 'ai', hoursPerWeek: 8, start: '2026-11-16' };
+    const result = P.importJson(P.exportJson(p));
+    expect(result).toEqual({ ok: true, progress: p });
+    const bad = P.importJson('{"app":"zero-to-engineer","version":2,"done":{},"quiz":{},"checks":{},"review":{"a#0":{"box":9,"due":"2026-11-14"},"b#0":{"box":1,"due":"tomorrow"},"c#0":{"box":1,"due":"2026-11-14"}},"planner":{"course":"ai","hoursPerWeek":-1,"start":"2026-11-16"}}');
+    expect(bad.ok && bad.progress.review).toEqual({ 'c#0': { box: 1, due: '2026-11-14' } });
+    expect(bad.ok && bad.progress.planner).toBeNull();
   });
 
   it('drops values that are not what they should be', () => {

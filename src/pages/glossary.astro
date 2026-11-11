@@ -1,0 +1,60 @@
+---
+// Every glossary term from both courses on one page, with the chapters that mention each.
+import { getCollection } from 'astro:content';
+import Page from '../layouts/Page.astro';
+import { getCourses, getGlossary, chapterHref } from '../lib/load';
+import { termAnchor, termNames } from '../lib/glossary-links.mjs';
+
+const courses = await getCourses();
+const courseTitle = Object.fromEntries(courses.map((c) => [c.id, c.title]));
+const entries = await getCollection('chapters');
+const skip = /(^|-)(glossary|library)$/; // the glossary and library chapters mention everything
+const bodies = entries
+  .filter((e) => !skip.test(e.id))
+  .map((e) => ({ id: e.id, text: (e.body ?? '').replace(/```[\s\S]*?```/g, ' ') }));
+
+// The chapter's place in the first course that contains it.
+const place = (id: string) => {
+  for (const course of courses) {
+    const c = course.chapters.find((x) => x.id === id);
+    if (c) return { href: chapterHref(course, c.slug), title: c.title, order: courses.indexOf(course) * 1000 + c.number };
+  }
+};
+const terms = getGlossary().map((e) => {
+  const names = termNames(e).map((n: string) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+  const re = new RegExp(`\\b(${names.join('|')})s?\\b`, 'i');
+  const mentions = bodies
+    .filter((b) => re.test(b.text))
+    .map((b) => place(b.id)!)
+    .sort((a, b) => a.order - b.order);
+  const defs = e.definitions
+    ? Object.entries(e.definitions).map(([course, text]) => ({ label: `In ${courseTitle[course]}`, text }))
+    : [{ label: '', text: e.definition! }];
+  return { term: e.term, anchor: termAnchor(e.term), defs, mentions };
+});
+const letters = [...new Set(terms.map((t) => t.term[0].toUpperCase()))];
+---
+<Page title="Glossary · Zero to Engineer" heading="Glossary" description="Every term used in the two courses, in one sentence each, with the chapters that mention it.">
+  <p class="lead">Every piece of jargon in both courses, in one sentence each. In a chapter, a term is a dotted link the first time it is introduced; it brings you here.</p>
+  <nav class="letters" aria-label="Jump to a letter">
+    {letters.map((l) => <a href={`#letter-${l}`}>{l}</a>)}
+  </nav>
+  <dl class="gloss" data-pagefind-body>
+    {terms.map((t, i) => (
+      <>
+        <dt id={t.anchor}>
+          {(i === 0 || terms[i - 1].term[0].toUpperCase() !== t.term[0].toUpperCase()) && <span id={`letter-${t.term[0].toUpperCase()}`}></span>}
+          {t.term}
+        </dt>
+        <dd>
+          {t.defs.map((d) => <p>{d.label && <em>{d.label}: </em>}{d.text}</p>)}
+          {t.mentions.length > 0 && (
+            <p class="mentions" data-pagefind-ignore>
+              Mentioned in: {t.mentions.map((m, j) => <>{j > 0 && ', '}<a href={m.href}>{m.title}</a></>)}
+            </p>
+          )}
+        </dd>
+      </>
+    ))}
+  </dl>
+</Page>

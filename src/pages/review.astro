@@ -1,0 +1,21 @@
+---
+import Page from '../layouts/Page.astro';
+import { href } from '../lib/load';
+---
+<Page title="Review · Zero to Engineer" heading="Review" description="Quiz questions you got wrong come back here, spaced out over days and weeks.">
+  <p class="lead">Questions you got wrong in a chapter quiz come back here. Each time you get one right it waits longer before returning: 1 day, then 3, 7, 14 and 30. Get it wrong and it starts again.</p>
+  <noscript><p class="note">Review needs JavaScript switched on.</p></noscript>
+  <div id="review" data-src={href('/data/site.json')}>
+    <p id="reviewStatus" role="status">Loading…</p>
+    <div id="reviewCard" class="q reviewcard" hidden>
+      <p class="crumb" id="reviewFrom"></p>
+      <p id="reviewQ"></p>
+      <div id="reviewOptions"></div>
+      <div class="why" id="reviewWhy" role="status" hidden></div>
+      <p><button class="btn" type="button" id="reviewNext" hidden>Next question</button></p>
+    </div>
+  </div>
+</Page>
+<script>
+  import '../scripts/review.ts';
+</script>

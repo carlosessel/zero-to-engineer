@@ -1,0 +1,53 @@
+---
+// "Ask a tutor": builds a prompt for the learner to paste into any AI assistant.
+// No key, no network request, nothing stored.
+import { SUGGESTIONS } from '../lib/tutor';
+interface Props { course: string; chapter: string }
+const { course, chapter } = Astro.props;
+---
+<section class="tutor" id="tutor" aria-labelledby="tutor-heading" data-course={course} data-chapter={chapter}>
+  <h2 id="tutor-heading">Ask a tutor</h2>
+  <p class="hint">
+    This site has no built-in tutor. Instead, this box writes a good question for you. It copies your question, the text of this chapter, and instructions to explain things for a beginner. Paste the result into any AI assistant you already use.
+  </p>
+  <div class="chips">
+    {SUGGESTIONS.map((s) => <button class="btn ghost" type="button" data-ask={s.ask}>{s.label}</button>)}
+  </div>
+  <label for="tutorQ">Your question, or your code or answer to have it checked</label>
+  <textarea id="tutorQ"></textarea>
+  <div class="row"><button class="btn" type="button" id="tutorCopy">Copy the prompt</button></div>
+  <p class="hint" id="tutorOut" role="status"></p>
+  <p class="hint">Never paste passwords or API keys into an assistant. Assistants can be wrong: check what they tell you against the chapter and by running the code.</p>
+</section>
+<script>
+  import { buildTutorPrompt } from '../lib/tutor';
+  const box = document.querySelector<HTMLElement>('#tutor');
+  if (box) {
+    const q = box.querySelector<HTMLTextAreaElement>('#tutorQ')!;
+    const out = box.querySelector<HTMLElement>('#tutorOut')!;
+    for (const chip of box.querySelectorAll<HTMLButtonElement>('[data-ask]')) {
+      chip.addEventListener('click', () => {
+        q.value = chip.dataset.ask!;
+        q.focus();
+      });
+    }
+    box.querySelector('#tutorCopy')!.addEventListener('click', async () => {
+      if (!q.value.trim()) {
+        out.textContent = 'Type a question first, or choose one of the suggestions.';
+        q.focus();
+        return;
+      }
+      const body = document.querySelector('[data-migrated-body]')!.cloneNode(true) as HTMLElement;
+      body.querySelectorAll('.widget, .copy, .runner, noscript, script').forEach((n) => n.remove());
+      const prompt = buildTutorPrompt(box.dataset.course!, box.dataset.chapter!, body.innerText || body.textContent || '', q.value);
+      try {
+        await navigator.clipboard.writeText(prompt);
+        out.textContent = 'Copied. Now paste it into your AI assistant.';
+      } catch {
+        out.textContent = 'Your browser would not copy automatically. The prompt is in the box above: select all of it and copy it.';
+        q.value = prompt;
+        q.select();
+      }
+    });
+  }
+</script>

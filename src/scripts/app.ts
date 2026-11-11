@@ -1,61 +1,40 @@
 // Runs on every page. Everything it touches is optional: a page without a
 // quiz, a sidebar or a "done" button simply skips that part.
 import * as P from '../lib/progress';
-
-const $$ = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) => Array.from(root.querySelectorAll<T>(sel));
-const $ = <T extends Element = HTMLElement>(sel: string, root: ParentNode = document) => root.querySelector<T>(sel);
-
-const memory = new Map<string, string>();
-const fallback: P.StorageLike = {
-  getItem: (k) => memory.get(k) ?? null,
-  setItem: (k, v) => void memory.set(k, v),
-  removeItem: (k) => void memory.delete(k),
-};
-function storage(): P.StorageLike {
-  try {
-    const s = window.localStorage;
-    s.getItem(P.STORAGE_KEY);
-    return s;
-  } catch {
-    return fallback;
-  }
-}
-const store = storage();
-let progress = P.load(store);
-
-function save() {
-  const ok = P.save(store, progress) && store !== fallback;
-  const warn = $('#saveWarn');
-  if (warn) warn.hidden = ok;
-}
+import { recordChapterAnswer, summary } from '../lib/review';
+import { $, $$, download, save, state, storage, today } from './store';
 
 // ---------- painting progress onto the page ----------
 function paint() {
   for (const link of $$('[data-nav-chapter]')) {
-    const done = !!progress.done[link.dataset.navChapter!];
+    const done = !!state.progress.done[link.dataset.navChapter!];
     link.classList.toggle('done', done);
     const tick = $('.tick', link);
     if (tick) tick.hidden = !done;
   }
   for (const meter of $$('[data-meter]')) {
-    const { done, total } = P.countDone(progress, meter.dataset.meter!.split(' '));
+    const { done, total } = P.countDone(state.progress, meter.dataset.meter!.split(' '));
     const bar = $('.bar i', meter);
     const text = $('span', meter);
     if (bar) bar.style.width = `${(100 * done) / total}%`;
     if (text) text.textContent = `${done} of ${total} chapters done`;
   }
   for (const btn of $$<HTMLButtonElement>('[data-done]')) {
-    const done = !!progress.done[btn.dataset.done!];
+    const done = !!state.progress.done[btn.dataset.done!];
     const undo = $<HTMLButtonElement>(`[data-undone="${btn.dataset.done}"]`);
     if (undo) undo.hidden = !done;
     if (!btn.dataset.label) btn.dataset.label = btn.textContent!.trim();
     btn.textContent = done ? (btn.dataset.next ? 'Done. Continue' : 'Done') : btn.dataset.label;
   }
+  const r = summary(state.progress, today());
+  for (const badge of $$('[data-review-count]')) {
+    badge.textContent = r.due ? ` (${r.due} due)` : '';
+  }
   const resume = $<HTMLAnchorElement>('[data-resume]');
   if (resume) {
     const pairs = resume.dataset.resume!.split(' ').map((p) => p.split('='));
-    const firstOpen = pairs.find(([id]) => !progress.done[id]);
-    const started = pairs.some(([id]) => progress.done[id]);
+    const firstOpen = pairs.find(([id]) => !state.progress.done[id]);
+    const started = pairs.some(([id]) => state.progress.done[id]);
     if (started && firstOpen) {
       resume.href = firstOpen[1];
       resume.textContent = `Continue at chapter ${pairs.indexOf(firstOpen) + 1}`;
@@ -66,7 +45,7 @@ function paint() {
 // ---------- done buttons ----------
 for (const btn of $$<HTMLButtonElement>('[data-done]')) {
   btn.addEventListener('click', () => {
-    P.setDone(progress, btn.dataset.done!, true);
+    P.setDone(state.progress, btn.dataset.done!, true);
     save();
     paint();
     if (btn.dataset.next) window.location.href = btn.dataset.next;
@@ -74,7 +53,7 @@ for (const btn of $$<HTMLButtonElement>('[data-done]')) {
 }
 for (const btn of $$<HTMLButtonElement>('[data-undone]')) {
   btn.addEventListener('click', () => {
-    P.setDone(progress, btn.dataset.undone!, false);
+    P.setDone(state.progress, btn.dataset.undone!, false);
     save();
     paint();
   });
@@ -83,9 +62,9 @@ for (const btn of $$<HTMLButtonElement>('[data-undone]')) {
 // ---------- exercise checkboxes ----------
 for (const box of $$<HTMLInputElement>('input[data-check]')) {
   const [chapter, key] = box.dataset.check!.split('/');
-  box.checked = P.isChecked(progress, chapter, key);
+  box.checked = P.isChecked(state.progress, chapter, key);
   box.addEventListener('change', () => {
-    P.setCheck(progress, chapter, key, box.checked);
+    P.setCheck(state.progress, chapter, key, box.checked);
     save();
   });
 }
@@ -113,14 +92,16 @@ for (const quiz of $$('[data-quiz]')) {
   const chapter = quiz.dataset.quiz!;
   for (const q of $$('.q', quiz)) {
     const qi = Number(q.dataset.q);
-    const stored = progress.quiz[chapter]?.[qi];
+    const stored = state.progress.quiz[chapter]?.[qi];
     if (typeof stored === 'number') showAnswer(q, stored);
     for (const b of $$<HTMLButtonElement>('button[data-o]', q)) {
       b.addEventListener('click', () => {
         const chosen = Number(b.dataset.o);
         showAnswer(q, chosen);
-        P.setAnswer(progress, chapter, qi, chosen);
+        P.setAnswer(state.progress, chapter, qi, chosen);
+        recordChapterAnswer(state.progress, chapter, qi, chosen === Number(q.dataset.answer), today());
         save();
+        paint();
       });
     }
   }
@@ -203,14 +184,7 @@ function say(text: string) {
   }
 }
 $('#exportBtn')?.addEventListener('click', () => {
-  const blob = new Blob([P.exportJson(progress)], { type: 'application/json' });
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = `zero-to-engineer-progress-${new Date().toISOString().slice(0, 10)}.json`;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  download(`zero-to-engineer-progress-${today()}.json`, P.exportJson(state.progress), 'application/json');
   say('Downloaded. Keep the file somewhere safe.');
 });
 const importFile = $<HTMLInputElement>('#importFile');
@@ -222,11 +196,11 @@ if (importFile && importBtn) {
     if (!file) return;
     const result = P.importJson(await file.text());
     if (!result.ok) return say(`Nothing was changed. ${result.error}`);
-    progress = result.progress;
+    state.progress = result.progress;
     save();
     paint();
-    const n = Object.keys(progress.done).length;
-    const t = Object.keys(progress.checks).length;
+    const n = Object.keys(state.progress.done).length;
+    const t = Object.keys(state.progress.checks).length;
     say(`Restored: ${n} finished ${n === 1 ? 'chapter' : 'chapters'}, ${t} ticked ${t === 1 ? 'exercise' : 'exercises'}.`);
   });
 }
@@ -243,8 +217,8 @@ if (resetBtn) {
       }, 4000);
       return;
     }
-    P.clear(store);
-    progress = P.empty();
+    P.clear(storage);
+    state.progress = P.empty();
     armed = false;
     resetBtn.textContent = 'Erase my progress';
     paint();

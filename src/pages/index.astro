@@ -1,5 +1,5 @@
 ---
-import Base from '../layouts/Base.astro';
+import Page from '../layouts/Page.astro';
 import { getCourses, href } from '../lib/load';
 const courses = await getCourses();
 const blurb: Record<string, string> = {
@@ -7,9 +7,7 @@ const blurb: Record<string, string> = {
   se: 'From how a computer works to building, testing, deploying and running real software with other people.',
 };
 ---
-<Base title="Zero to Engineer" description="Two free courses that start from nothing: Zero to AI Engineer and Zero to Software Engineer.">
-  <main id="main" class="home" tabindex="-1">
-    <h1>Zero to Engineer</h1>
+<Page title="Zero to Engineer" heading="Zero to Engineer" description="Two free courses that start from nothing: Zero to AI Engineer and Zero to Software Engineer.">
     <p class="lead">Two free courses that assume you know nothing about programming. They share their beginner chapters, so starting one gives you a head start on the other.</p>
     <div class="cards">
       {courses.map((c) => (
@@ -23,11 +21,13 @@ const blurb: Record<string, string> = {
       ))}
     </div>
     <div class="note">
-      <p><strong>This site is being built in the open and is not finished.</strong> Every chapter shows its own status. At the moment the chapters are short first drafts moved over from a prototype: the code in them has not yet been run under test, the linked resources have not all been checked, and no subject expert has reviewed them.</p>
+      <p><strong>This site is being built in the open and is not finished.</strong> Every chapter shows its own status. At the moment the chapters are short first drafts moved over from a prototype: the code in them has not yet been run under test, the contents of the linked resources have not been reviewed, and no subject expert has reviewed them.</p>
     </div>
-    <p class="sidelinks">
-      <a href={href('/progress/')}>Save or restore your progress</a>
-      <button class="btn ghost" type="button" data-theme-toggle>Theme: auto</button>
-    </p>
-  </main>
-</Base>
+    <h2>Study tools</h2>
+    <ul>
+      <li><a href={href('/review/')}>Review</a>: quiz questions you got wrong come back, spaced out over days and weeks.</li>
+      <li><a href={href('/planner/')}>Study planner</a>: enter your hours a week and get a schedule.</li>
+      <li><a href={href('/search/')}>Search</a> every chapter, and the <a href={href('/glossary/')}>glossary</a> of every term.</li>
+      <li><a href={href('/progress/')}>Save or restore your progress</a> as a file.</li>
+    </ul>
+</Page>

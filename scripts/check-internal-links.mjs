@@ -16,6 +16,15 @@ const pages = [];
   }
 })(DIST);
 
+const idCache = new Map();
+function idsOf(file) {
+  if (!idCache.has(file)) {
+    const d = new JSDOM(fs.readFileSync(file, 'utf8')).window.document;
+    idCache.set(file, new Set([...d.querySelectorAll('[id]')].map((e) => e.id)));
+  }
+  return idCache.get(file);
+}
+
 let links = 0;
 const broken = [];
 for (const page of pages) {
@@ -41,6 +50,7 @@ for (const page of pages) {
     let target = path.join(DIST, decodeURIComponent(p.slice(base.length)));
     if (p.endsWith('/')) target = path.join(target, 'index.html');
     if (!fs.existsSync(target)) broken.push(`${page}: ${raw} (nothing at ${target})`);
+    else if (hash && target.endsWith('.html') && !idsOf(target).has(hash)) broken.push(`${page}: ${raw} (the page exists but has no place called "${hash}")`);
   }
 }
 for (const b of broken) console.error('BROKEN  ' + b);

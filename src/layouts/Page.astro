@@ -1,0 +1,14 @@
+---
+// Layout for pages that are not inside a course: home, review, planner, search, glossary, progress.
+import Base from './Base.astro';
+import SiteNav from '../components/SiteNav.astro';
+interface Props { title: string; description?: string; heading: string }
+const { title, description, heading } = Astro.props;
+---
+<Base title={title} description={description}>
+  <header class="sitehead"><SiteNav /></header>
+  <main id="main" class="home" tabindex="-1">
+    <h1>{heading}</h1>
+    <slot />
+  </main>
+</Base>

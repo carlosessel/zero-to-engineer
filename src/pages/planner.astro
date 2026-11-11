@@ -1,0 +1,25 @@
+---
+import Page from '../layouts/Page.astro';
+import { getCourses, href } from '../lib/load';
+const courses = await getCourses();
+---
+<Page title="Study planner · Zero to Engineer" heading="Study planner" description="Enter the hours you can study each week and get a week-by-week schedule.">
+  <p class="lead">Say how many hours a week you can study. The planner lays the chapters you have not finished onto weeks, in course order, and tells you when you would finish.</p>
+  <div class="note"><p>The time for each chapter is a rough estimate worked out from its length and its exercises, not measured on real learners. Treat the finish date as a guide. The schedule updates itself as you mark chapters done.</p></div>
+  <noscript><p class="note">The planner needs JavaScript switched on.</p></noscript>
+  <form id="plannerForm" class="plannerform" data-src={href('/data/site.json')}>
+    <p><label for="plCourse">Course</label><br />
+      <select id="plCourse">{courses.map((c) => <option value={c.id}>{c.title}</option>)}</select></p>
+    <p><label for="plHours">Hours a week</label><br />
+      <input type="number" id="plHours" min="0.5" max="80" step="0.5" value="8" inputmode="decimal" aria-describedby="plError" /></p>
+    <p><label for="plStart">Start date</label><br />
+      <input type="date" id="plStart" /></p>
+  </form>
+  <p id="plError" class="note" role="alert" hidden></p>
+  <p id="plSummary" role="status"></p>
+  <p><button class="btn ghost" type="button" id="plIcs" hidden>Download as a calendar file</button></p>
+  <div id="plWeeks"></div>
+</Page>
+<script>
+  import '../scripts/planner.ts';
+</script>

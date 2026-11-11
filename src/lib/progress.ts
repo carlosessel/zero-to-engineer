@@ -1,16 +1,33 @@
 // Learner progress: pure logic, no DOM. Stored in the browser as one JSON record.
 
 export const STORAGE_KEY = 'zte-progress';
-export const VERSION = 1;
+export const VERSION = 2;
+
+export interface ReviewItem {
+  /** Leitner box, 1 to 5. A higher box means a longer wait before the question returns. */
+  box: number;
+  /** The day it is next due, as YYYY-MM-DD in the learner's own time zone. */
+  due: string;
+}
+
+export interface PlannerSettings {
+  course: string;
+  hoursPerWeek: number;
+  start: string;
+}
 
 export interface Progress {
-  version: 1;
+  version: 2;
   /** chapter id -> true */
   done: Record<string, true>;
   /** chapter id -> chosen option for each question (null = not answered) */
   quiz: Record<string, (number | null)[]>;
   /** "chapter-id/exercise-key" -> true */
   checks: Record<string, true>;
+  /** "chapter-id#question-number" -> when a question answered wrongly comes back */
+  review: Record<string, ReviewItem>;
+  /** What the learner last entered in the study planner */
+  planner: PlannerSettings | null;
   /** ISO time of the last change */
   updated: string | null;
 }
@@ -22,8 +39,10 @@ export interface StorageLike {
 }
 
 export function empty(): Progress {
-  return { version: 1, done: {}, quiz: {}, checks: {}, updated: null };
+  return { version: 2, done: {}, quiz: {}, checks: {}, review: {}, planner: null, updated: null };
 }
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null && !Array.isArray(v);
@@ -32,8 +51,9 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 /** Checks untrusted data (a stored record or an imported file) and returns a clean copy. */
 export function validate(data: unknown): { ok: true; progress: Progress } | { ok: false; error: string } {
   if (!isRecord(data)) return { ok: false, error: 'This is not a progress file.' };
-  if (data.version !== VERSION) {
-    return { ok: false, error: `This progress file is version ${String(data.version)}; this site reads version ${VERSION}.` };
+  // Version 1 had no review queue and no planner settings. It is read as-is and those start empty.
+  if (data.version !== 1 && data.version !== VERSION) {
+    return { ok: false, error: `This progress file is version ${String(data.version)}; this site reads versions 1 and ${VERSION}.` };
   }
   const p = empty();
   for (const field of ['done', 'checks'] as const) {
@@ -45,6 +65,18 @@ export function validate(data: unknown): { ok: true; progress: Progress } | { ok
   for (const [k, v] of Object.entries(data.quiz)) {
     if (!Array.isArray(v)) return { ok: false, error: `The quiz answers for "${k}" are damaged.` };
     p.quiz[k] = v.map((a) => (Number.isInteger(a) && (a as number) >= 0 ? (a as number) : null));
+  }
+  if (data.version === VERSION) {
+    if (!isRecord(data.review)) return { ok: false, error: 'The "review" section is missing or damaged.' };
+    for (const [k, v] of Object.entries(data.review)) {
+      if (isRecord(v) && Number.isInteger(v.box) && (v.box as number) >= 1 && (v.box as number) <= 5 && typeof v.due === 'string' && DAY.test(v.due)) {
+        p.review[k] = { box: v.box as number, due: v.due };
+      }
+    }
+    const pl = data.planner;
+    if (isRecord(pl) && typeof pl.course === 'string' && typeof pl.hoursPerWeek === 'number' && pl.hoursPerWeek > 0 && typeof pl.start === 'string' && DAY.test(pl.start)) {
+      p.planner = { course: pl.course, hoursPerWeek: pl.hoursPerWeek, start: pl.start };
+    }
   }
   p.updated = typeof data.updated === 'string' ? data.updated : null;
   return { ok: true, progress: p };

@@ -1,0 +1,16 @@
+---
+import Page from '../layouts/Page.astro';
+import { href } from '../lib/load';
+---
+<Page title="Search · Zero to Engineer" heading="Search" description="Search every chapter of both courses and the glossary.">
+  <noscript><p class="note">Search needs JavaScript switched on.</p></noscript>
+  <form id="searchForm" role="search" data-pagefind={href('/pagefind/pagefind.js')} data-base={href('/')}>
+    <label for="searchQ">Search all chapters and the glossary</label>
+    <input type="search" id="searchQ" autocomplete="off" spellcheck="false" />
+  </form>
+  <p id="searchStatus" role="status"></p>
+  <ol id="searchResults" class="results"></ol>
+</Page>
+<script>
+  import '../scripts/search.ts';
+</script>

@@ -2,6 +2,7 @@
 import { render, getEntry } from 'astro:content';
 import Course from '../../layouts/Course.astro';
 import Quiz from '../../components/Quiz.astro';
+import TutorPrompt from '../../components/TutorPrompt.astro';
 import Ref from '../../components/Ref.astro';
 import Only from '../../components/Only.astro';
 import Note from '../../components/Note.astro';
@@ -41,17 +42,18 @@ const statusText = {
 <Course course={course} current={chapterId} title={`${chapter.title} · ${course.title}`} description={entry.data.summary}>
   <article data-chapter={chapterId}>
     <p class="crumb">Chapter {chapter.number} of {course.chapters.length}, {chapter.part}</p>
-    <h1>{chapter.title}</h1>
+    <h1 data-pagefind-meta="title">{chapter.title}</h1>
     <p class="chapmeta">
       <span>About {time} with the exercises (a rough estimate)</span>
       {sharedWith.map((c) => <span>Also part of <a href={chapterHref(c, c.chapters.find((x) => x.id === chapterId)!.slug)}>{c.title}</a>; your progress counts in both</span>)}
       <span class="status">{statusText}</span>
     </p>
-    <div class="body" data-migrated-body>
+    <div class="body" data-migrated-body data-pagefind-body data-pagefind-meta={`course:${course.title}`}>
       <p class="lead">{entry.data.summary}</p>
       <Content components={{ Ref, Only, Note, Exercises, Demo, Route, GlossaryList }} />
     </div>
     {quiz.length > 0 && <Quiz chapter={chapterId} questions={quiz} />}
+    <TutorPrompt course={course.title} chapter={chapter.title} />
     <div class="foot">
       {prev ? <a class="btn ghost" href={chapterHref(course, prev.slug)}>Previous chapter</a> : <span></span>}
       <span class="donebtns">
