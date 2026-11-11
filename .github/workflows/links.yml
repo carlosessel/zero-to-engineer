@@ -1,0 +1,27 @@
+name: Outside links
+# Links to other sites break without anything changing here, so this runs on
+# a schedule as well as on changes to content. It is separate from CI so that
+# someone else's outage does not block a merge.
+on:
+  push:
+    branches: [main]
+    paths: ['content/**']
+  schedule:
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lychee:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: lycheeverse/lychee-action@v2
+        with:
+          args: >-
+            --no-progress --exclude-loopback --max-redirects 5 --timeout 30 --max-retries 2
+            --accept 200,429
+            'content/**/*.mdx' 'content/**/*.yaml' README.md
+          fail: true

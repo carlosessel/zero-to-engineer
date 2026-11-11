@@ -226,7 +226,8 @@ if (importFile && importBtn) {
     save();
     paint();
     const n = Object.keys(progress.done).length;
-    say(`Restored: ${n} finished ${n === 1 ? 'chapter' : 'chapters'}, ${Object.keys(progress.checks).length} ticked exercises.`);
+    const t = Object.keys(progress.checks).length;
+    say(`Restored: ${n} finished ${n === 1 ? 'chapter' : 'chapters'}, ${t} ticked ${t === 1 ? 'exercise' : 'exercises'}.`);
   });
 }
 const resetBtn = $<HTMLButtonElement>('#resetBtn');

@@ -1,0 +1,34 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Type and content checks
+        run: npm run check
+      - name: Unit tests (progress, course model, inline text)
+        run: npm test
+      - name: Build the site
+        run: npm run build
+      - name: No chapter lost text in migration
+        run: npm run verify:migration
+      - name: Links inside the site
+        run: npm run verify:links
+      - uses: actions/upload-artifact@v7
+        with:
+          name: site
+          path: dist
+          retention-days: 3

@@ -1,6 +1,6 @@
 # PLAN
 
-Status: **draft for your approval. Nothing has been built yet.**
+Status: **approved on 11 November 2026 with the recommended option for every decision in section 9** (D1 site first; D2 fill all ● gaps; D3 share the engineering chapters into the AI course; D4 TypeScript; D5 "copy a tutor prompt" button; D6 live API tests with the learner's own key as a secret, Anthropic SDK plus a section on the OpenAI-compatible shape; D7 GitHub Pages; D8 CC BY 4.0 text and MIT code; D9 working name `zero-to-engineer`, no personal author name yet; D10 chapter ids unchanged). Progress is recorded in `CHANGELOG.md`.
 Written 11 November 2026, after reading `HANDOFF.md` and both HTML files in full.
 
 Contents: 1. What I found · 2. Architecture · 3. Content structure · 4. Gaps against public curricula · 5. Learning system · 6. Quality and testing · 7. Research method · 8. Phases · 9. Decisions I need from you · 10. Honest limits

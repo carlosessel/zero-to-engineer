@@ -345,8 +345,8 @@ def main():
             if slug == "python-collections":
                 conv["body"] = conv["body"].replace(
                     "@@ONLY@@",
-                    '<Only course="ai">That is exactly how a conversation is sent to a language model later in this course.</Only>'
-                    '<Only course="se">A list of dictionaries is also how most data travels between programs, as you will see when you build web APIs.</Only>',
+                    '<Only course="ai">\n\nThat is exactly how a conversation is sent to a language model later in this course.\n\n</Only>\n\n'
+                    '<Only course="se">\n\nA list of dictionaries is also how most data travels between programs, as you will see when you build web APIs.\n\n</Only>',
                 )
             d = CONTENT / "chapters" / chapter
             mdx = d / "index.mdx"
