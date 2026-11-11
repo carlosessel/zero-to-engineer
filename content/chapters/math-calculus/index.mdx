@@ -1,0 +1,53 @@
+---
+title: "Maths from zero: slopes and derivatives"
+summary: "Calculus for AI is one idea: at any point on a curve, how steep is it, and in which direction is downhill?"
+prerequisites: []
+estimated_minutes: 65
+status: migrated
+---
+
+## Slope of a line
+
+Slope is rise divided by run. If y goes up by 6 while x goes up by 2, the slope is 3. A straight line has the same slope everywhere.
+
+## Slope of a curve
+
+A curve’s steepness changes from point to point. The **derivative** is the slope at one exact point: the slope of the straight line that just touches the curve there, called the tangent.
+
+<Demo name="tangent" />
+
+Where the slope is zero, the curve is flat: you are at the bottom of a valley or the top of a hill. Training a model means finding the bottom of the valley of its loss, so “where is the slope zero, and which way is down?” is the whole game.
+
+## Finding a derivative without formulas
+
+Nudge the input a tiny amount and see how much the output moves:
+
+```python
+def f(x):
+    return x ** 2
+
+h = 0.0001
+slope_at_3 = (f(3 + h) - f(3)) / h
+print(slope_at_3)        # about 6
+```
+
+## The few rules worth knowing
+
+| Function | Derivative | In words |
+| --- | --- | --- |
+| a constant, such as 7 | 0 | A flat line has no slope |
+| x | 1 |  |
+| x² | 2x | Bring the power down, reduce it by one |
+| x³ | 3x² | Same rule |
+| 5x² | 10x | Constants multiply through |
+| x² + 3x | 2x + 3 | Do each part separately |
+
+## The chain rule
+
+When one function feeds into another, multiply their slopes. If changing x by 1 changes u by 3, and changing u by 1 changes y by 2, then changing x by 1 changes y by 6. A neural network is a long chain of functions, and backpropagation is this rule applied layer after layer.
+
+## Many inputs: the gradient
+
+A model’s loss depends on millions of weights. For each weight you can ask: if I nudge only this one, how does the loss change? That is a **partial derivative**. The list of all of them is the **gradient**. It points uphill, so you step the opposite way. You will do exactly that in the gradient descent chapter. Libraries compute the gradient for you; your job is to understand what it means.
+
+<Exercises set={0} />

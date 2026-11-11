@@ -1,0 +1,43 @@
+---
+title: "Fine-tuning"
+summary: "Fine-tuning continues training a model on your own examples. It is powerful, and it is usually the last thing you should try."
+prerequisites: []
+estimated_minutes: 45
+status: migrated
+---
+
+## Try these first, in order
+
+1. A better prompt with examples.
+2. Retrieval, if the model lacks knowledge.
+3. A more capable model.
+4. Breaking the task into steps.
+
+Fine-tune when you need a consistent style or format that prompting cannot hold, when you want a small cheap model to match a large one on a narrow task, or when latency demands a tiny model. Fine-tuning teaches *behaviour*. For *facts*, use retrieval.
+
+## LoRA
+
+Updating every weight of a large model is expensive. **LoRA** freezes the original weights and trains small add-on matrices, often under 1% of the parameters. With a 4-bit quantised base model (QLoRA), this fits on a single free Colab GPU.
+
+```python
+from peft import LoraConfig, get_peft_model
+
+config = LoraConfig(r=8, lora_alpha=16, lora_dropout=0.05,
+                    target_modules=["q_proj", "v_proj"],   # depends on the model
+                    task_type="CAUSAL_LM")
+model = get_peft_model(base_model, config)
+model.print_trainable_parameters()      # a fraction of a percent
+```
+
+## The real work is the data
+
+- A few hundred to a few thousand high-quality examples in the exact input and output format you will use.
+- Clean them by hand. Bad examples teach bad behaviour.
+- Hold out a validation set and run your eval before and after.
+- Watch for overfitting: training loss falling while validation loss rises.
+
+## Distillation
+
+Use a large model to label thousands of examples, then fine-tune a small model on them. You get most of the quality at a fraction of the running cost. This is a common production pattern.
+
+<Exercises set={0} />

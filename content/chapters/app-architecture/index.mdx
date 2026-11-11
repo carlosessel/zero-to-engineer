@@ -1,0 +1,54 @@
+---
+title: "Architecture, cost and speed"
+summary: "A prototype answers one user in a notebook. A product answers thousands, quickly, affordably, and keeps working when a provider is slow."
+prerequisites: []
+estimated_minutes: 70
+status: migrated
+---
+
+## The basic shape
+
+Client app → your backend → model provider. The API key lives only on your backend. Never put it in a web page or mobile app, where anyone can extract it. Your backend also handles authentication, rate limits per user, logging, and retrieval.
+
+```bash
+pip install fastapi uvicorn
+```
+
+```python
+from fastapi import FastAPI
+from fastapi.responses import StreamingResponse
+from pydantic import BaseModel
+
+app = FastAPI()
+
+class Ask(BaseModel):
+    question: str
+
+@app.post("/ask")
+def ask(body: Ask):
+    def gen():
+        with client.messages.stream(model=MODEL, max_tokens=800,
+                messages=[{"role": "user", "content": body.question}]) as s:
+            for text in s.text_stream:
+                yield text
+    return StreamingResponse(gen(), media_type="text/plain")
+```
+
+<Demo name="cost" />
+
+Notice how input tokens dominate once you add retrieved documents and chat history.
+
+## Making it cheaper and faster
+
+- **Use the smallest model that passes your eval.** Route easy requests to a cheap model, hard ones to a strong one.
+- **Trim the prompt.** Fewer, better retrieved chunks. Summarise old conversation turns.
+- **Cache.** Store answers to repeated questions; use provider prompt caching for long shared prefixes.
+- **Batch** work that is not urgent; many providers discount it.
+- **Stream**, so the wait feels short. Time to first token matters more than total time.
+- **Run independent calls in parallel.**
+
+## Making it reliable
+
+Set timeouts. Retry with exponential backoff on rate limits and server errors. Have a fallback model. Put slow jobs on a queue and notify the user when done. Decide what the user sees when everything fails.
+
+<Exercises set={0} />

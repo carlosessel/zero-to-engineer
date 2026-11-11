@@ -1,0 +1,47 @@
+---
+title: "Metrics and the classic models"
+summary: "Accuracy lies when classes are unbalanced. Know which number to trust, and know that a small classic model often beats a large one."
+prerequisites: [ml-idea]
+estimated_minutes: 45
+status: migrated
+---
+
+## Classification metrics
+
+Suppose 1% of transactions are fraud. A model that always says “not fraud” is 99% accurate and catches nothing.
+
+- **Precision**: of the items flagged, how many were truly positive? Low precision means false alarms.
+- **Recall**: of the true positives, how many did we catch? Low recall means misses.
+- **F1**: a single number balancing both.
+- **Confusion matrix**: the full table of predicted versus actual. Always look at it.
+
+Which matters more depends on the cost of each mistake. A cancer screen wants high recall. A spam filter wants high precision.
+
+```python
+from sklearn.metrics import classification_report, confusion_matrix
+print(confusion_matrix(y_test, preds))
+print(classification_report(y_test, preds))
+```
+
+## Regression metrics
+
+**MAE** is the average size of the error in the original units. **RMSE** punishes large errors more. Always compare against a dumb baseline such as predicting the average.
+
+## The classic toolbox
+
+| Model | Use it for |
+| --- | --- |
+| Linear / logistic regression | A fast, explainable baseline. Start here. |
+| Decision tree | Rules you can read. Overfits alone. |
+| Random forest | Many trees voting. Strong with little tuning. |
+| Gradient boosting (XGBoost, LightGBM) | Usually the best choice for tables of data. |
+| k-nearest neighbours | “Find similar examples.” The idea behind vector search. |
+| k-means | Grouping unlabelled data into clusters. |
+
+<Note>
+
+For rows-and-columns business data, such as churn, pricing or fraud, gradient boosting usually beats deep learning and costs almost nothing to run. Knowing when not to use a language model is part of being good at this job.
+
+</Note>
+
+<Exercises set={0} />

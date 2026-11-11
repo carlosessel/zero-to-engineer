@@ -1,0 +1,45 @@
+---
+title: "Front-end applications"
+summary: "A modern front end is a program running in the browser. The challenge is keeping what is on screen in step with the data."
+prerequisites: []
+estimated_minutes: 65
+status: migrated
+---
+
+## State
+
+**State** is the data the screen depends on: the items in the cart, whether a menu is open, what the user typed. The clean approach: keep state in one place, and write a function that draws the screen from it. When state changes, redraw. Never let the screen and the data disagree.
+
+## Components and frameworks
+
+Frameworks such as React, Vue and Svelte are built on that idea. You split the interface into **components**, reusable pieces that each take inputs and manage their own state, and the framework updates the page when state changes.
+
+```jsx
+// A React component
+import { useState } from "react";
+
+function Counter({ step }) {
+  const [count, setCount] = useState(0);        // a piece of state
+  return (
+    <button onClick={() => setCount(count + step)}>
+      Clicked {count} times
+    </button>
+  );
+}
+```
+
+Learn plain JavaScript first, then one framework. React is the most widely used. **TypeScript** adds types to JavaScript so that many mistakes are caught before the code runs; most teams use it.
+
+## The tools around it
+
+- **Node.js** runs JavaScript outside the browser. **npm** installs packages.
+- A **build tool** such as Vite bundles your files and reloads the page as you edit.
+- The front end gets its data by calling the back end’s API with `fetch`.
+
+## What makes a front end good
+
+It loads fast, works on a phone, works from the keyboard and with a screen reader, shows a clear state while loading and when something fails, and never loses what the user typed.
+
+Mobile apps follow the same ideas with different tools: Swift for iPhone, Kotlin for Android, or Flutter and React Native for both.
+
+<Exercises set={0} />

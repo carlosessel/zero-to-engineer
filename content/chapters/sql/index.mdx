@@ -1,0 +1,65 @@
+---
+title: "Databases and SQL"
+summary: "Variables vanish when a program stops. A database keeps data safe, lets many users work at once, and answers questions about millions of rows in milliseconds."
+prerequisites: []
+estimated_minutes: 70
+status: migrated
+---
+
+A **relational database** stores data in **tables**: rows are records, columns are fields. **SQL** is the language for asking it things. Popular ones are PostgreSQL, MySQL, SQL Server, and SQLite, which is a single file and already included with Python.
+
+```sql
+CREATE TABLE customers (
+  id    INTEGER PRIMARY KEY,
+  name  TEXT NOT NULL,
+  city  TEXT
+);
+
+CREATE TABLE orders (
+  id          INTEGER PRIMARY KEY,
+  customer_id INTEGER NOT NULL REFERENCES customers(id),
+  amount      REAL NOT NULL,
+  created     TEXT NOT NULL
+);
+
+INSERT INTO customers (name, city) VALUES ('Ama', 'Accra'), ('Kofi', 'Kumasi');
+INSERT INTO orders (customer_id, amount, created) VALUES (1, 120.0, '2026-01-05');
+
+SELECT name, city FROM customers WHERE city = 'Accra' ORDER BY name;
+
+UPDATE customers SET city = 'Tema' WHERE id = 1;
+DELETE FROM orders WHERE id = 9;
+
+-- Combine tables
+SELECT c.name, o.amount
+FROM orders o
+JOIN customers c ON c.id = o.customer_id;
+
+-- Summarise
+SELECT c.city, COUNT(*) AS orders, SUM(o.amount) AS revenue
+FROM orders o
+JOIN customers c ON c.id = o.customer_id
+GROUP BY c.city
+HAVING SUM(o.amount) > 100;
+```
+
+## The ideas
+
+- **Primary key**: a column that uniquely identifies each row.
+- **Foreign key**: a column pointing at a row in another table. This is the “relation”.
+- **JOIN**: combines rows from two tables that match.
+- **Index**: like the index of a book. It makes lookups on a column fast, at a small cost when writing. Missing indexes are the commonest cause of slow applications.
+- **Transaction**: a group of changes that all succeed or all fail. Moving money takes two updates; a transaction guarantees you never get only one.
+
+## From code, safely
+
+```python
+import sqlite3
+db = sqlite3.connect("shop.db")
+city = input("City: ")
+rows = db.execute("SELECT name FROM customers WHERE city = ?", (city,)).fetchall()
+```
+
+Always pass values separately with `?` placeholders. Building the query by gluing user text into the string allows **SQL injection**, where a user types SQL that your database then runs.
+
+<Exercises set={0} />

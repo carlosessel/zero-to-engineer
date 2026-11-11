@@ -1,0 +1,46 @@
+---
+title: "RAG: answering from your own data"
+summary: "Retrieval-augmented generation means: find the relevant passages first, then hand them to the model with the question. It is how you get answers grounded in documents the model was never trained on."
+prerequisites: []
+estimated_minutes: 65
+status: migrated
+---
+
+<Demo name="retrieval" />
+
+“Money back” finds nothing useful, because word matching cannot see that it means “refund”. Embeddings can. That is why retrieval systems use embedding vectors, usually combined with keyword search (**hybrid search**) to get the strengths of both.
+
+## The pipeline
+
+1. **Load** documents and extract clean text.
+2. **Chunk** them into passages of a few hundred tokens, with some overlap, splitting on headings and paragraphs where possible.
+3. **Embed** each chunk and store the vectors in a **vector database** (Chroma, pgvector, Qdrant, FAISS).
+4. At question time, **embed the question** and retrieve the nearest chunks.
+5. Optionally **rerank** them with a more accurate model.
+6. **Generate**: put the chunks in the prompt and instruct the model to answer only from them and cite which ones it used.
+
+```python
+import numpy as np
+from sentence_transformers import SentenceTransformer
+embedder = SentenceTransformer("all-MiniLM-L6-v2")
+
+chunks = [...]                                   # your passages
+index = embedder.encode(chunks, normalize_embeddings=True)
+
+def answer(question: str, k: int = 4) -> str:
+    q = embedder.encode([question], normalize_embeddings=True)[0]
+    top = np.argsort(index @ q)[::-1][:k]
+    context = "\n\n".join(f"<doc id='{i}'>{chunks[i]}</doc>" for i in top)
+    msg = client.messages.create(
+        model=MODEL, max_tokens=600,
+        system="Answer using only the documents provided. Cite doc ids. "
+               "If the answer is not in them, say you do not know.",
+        messages=[{"role": "user", "content": f"{context}\n\nQuestion: {question}"}])
+    return msg.content[0].text
+```
+
+## Where RAG goes wrong
+
+When an answer is bad, check retrieval first: were the right chunks even fetched? Most failures are there, caused by poor chunking, messy text extraction from PDFs, or questions phrased unlike the documents. Measure retrieval separately from generation.
+
+<Exercises set={0} />

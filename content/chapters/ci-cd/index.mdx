@@ -1,0 +1,47 @@
+---
+title: "Releasing safely: CI and CD"
+summary: "Teams that release small changes many times a day have fewer outages than teams that release rarely. Automation is what makes that possible."
+prerequisites: []
+estimated_minutes: 65
+status: migrated
+---
+
+## Continuous integration
+
+Every time someone pushes code, a server automatically installs the project, runs the formatter check, the linter and all the tests. A red result blocks the merge. Problems are found in minutes, by a machine, before they reach users.
+
+```yaml
+# .github/workflows/ci.yml
+name: CI
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - run: ruff check .
+      - run: pytest
+```
+
+## Continuous delivery
+
+After the checks pass on the main branch, the same pipeline builds the container and deploys it, first to staging, then to production. Nobody copies files by hand.
+
+## Making releases boring
+
+- **Small changes.** A ten-line release that breaks is found in a minute. A ten-thousand-line release is a week of detective work.
+- **Feature flags**: ship code switched off, then turn it on for a few users, then everyone. Deploying and releasing become separate decisions.
+- **Gradual rollout**: send 5% of traffic to the new version and watch the error rate before continuing.
+- **Rollback**: one command returns to the previous version. Practise it before you need it.
+- **Database changes in two steps**: add the new column first, deploy code that uses it, remove the old column later. Old and new code must both work during the switch.
+- **Versioning**: number releases, commonly as major.minor.patch, and keep a changelog.
+
+## Infrastructure as code
+
+Servers, databases and networks are described in files, kept in Git and applied by a tool such as Terraform. The setup is reviewable, repeatable and recoverable.
+
+<Exercises set={0} />

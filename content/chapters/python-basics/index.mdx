@@ -1,0 +1,77 @@
+---
+title: "Python from zero: values and variables"
+summary: "Your first real programs. By the end of this chapter you can store information, calculate with it, and talk to the person using your program."
+prerequisites: []
+estimated_minutes: 85
+status: migrated
+---
+
+## Two ways to run Python
+
+**Interactive**: type `python` in the terminal and press Enter. You get a `>>>` prompt where each line runs immediately. Good for trying things. Type `exit()` to leave.
+
+**From a file**: in VS Code, create a file called `hello.py`, type code in it, save, then run `python hello.py` in the terminal. This is how real programs are run.
+
+## Values and their types
+
+```python
+42            # int: a whole number
+3.14          # float: a number with a decimal point
+"hello"       # str (string): text, always inside quotes
+True          # bool: True or False, nothing else
+```
+
+Anything after a `#` is a **comment**: a note for humans that Python ignores.
+
+## Variables: labels for values
+
+```python
+price = 50            # the = sign means "store", not "equals"
+quantity = 3
+total = price * quantity
+print(total)          # 150
+
+price = 60            # a variable can be given a new value
+print(price * quantity)   # 180
+```
+
+Names can contain letters, numbers and underscores, cannot start with a number, and should describe what they hold: `total_price`, not `x`.
+
+## Arithmetic
+
+```python
+7 + 2     # 9
+7 - 2     # 5
+7 * 2     # 14
+7 / 2     # 3.5   division
+7 // 2    # 3     division, rounded down
+7 % 2     # 1     the remainder
+7 ** 2    # 49    to the power of
+```
+
+## Working with text
+
+```python
+first = "Kofi"
+greeting = "Hello, " + first          # joining strings
+print(greeting)
+
+age = 19
+print(f"{first} is {age} years old")  # an f-string fills in the {braces}
+
+len(first)        # 4, the number of characters
+first.upper()     # "KOFI"
+first[0]          # "K": counting starts at 0, not 1
+```
+
+## Asking the user
+
+```python
+name = input("What is your name? ")
+year = int(input("What year were you born? "))   # input gives text; int() makes it a number
+print(f"Hi {name}, you turn {2026 - year} this year.")
+```
+
+The commonest beginner error is mixing text and numbers: `"5" + 5` fails, because one is text. Convert with `int("5")`, `float("2.5")` or `str(5)`.
+
+<Exercises set={0} />

@@ -1,0 +1,56 @@
+---
+title: "Your first model call"
+summary: "A model API is an HTTP endpoint: you send a list of messages, you get text back. That is the entire primitive you will build on."
+prerequisites: []
+estimated_minutes: 75
+status: migrated
+---
+
+```python
+import anthropic
+from dotenv import load_dotenv
+load_dotenv()
+
+MODEL = "claude-sonnet-5-5"       # check the provider docs for current names
+client = anthropic.Anthropic()    # reads ANTHROPIC_API_KEY
+
+msg = client.messages.create(
+    model=MODEL,
+    max_tokens=500,
+    system="You are a patient tutor. Answer in at most three sentences.",
+    messages=[{"role": "user", "content": "What is overfitting?"}],
+)
+print(msg.content[0].text)
+print(msg.usage)                  # tokens in and out: this is your bill
+```
+
+The examples use Anthropic’s Python SDK; current details are at [docs.claude.com](https://docs.claude.com). Other providers have almost the same shape: a model name, a system instruction, and alternating user and assistant messages.
+
+## The model has no memory
+
+Each call is independent. A chat “remembers” because your code resends the whole conversation every time:
+
+```python
+history = []
+while True:
+    history.append({"role": "user", "content": input("> ")})
+    msg = client.messages.create(model=MODEL, max_tokens=800, messages=history)
+    reply = msg.content[0].text
+    history.append({"role": "assistant", "content": reply})
+    print(reply)
+```
+
+As the history grows, each call costs more and eventually exceeds the context window. Real applications trim or summarise old turns.
+
+## Streaming
+
+Users should see words appear as they are generated, not wait for the whole answer.
+
+```python
+with client.messages.stream(model=MODEL, max_tokens=800,
+        messages=[{"role": "user", "content": "Explain attention simply."}]) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)
+```
+
+<Exercises set={0} />

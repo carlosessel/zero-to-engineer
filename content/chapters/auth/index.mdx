@@ -1,0 +1,36 @@
+---
+title: "Logging in: authentication and authorisation"
+summary: "Authentication answers “who are you?”. Authorisation answers “what are you allowed to do?”. Getting either wrong is how data leaks happen."
+prerequisites: []
+estimated_minutes: 45
+status: migrated
+---
+
+## Storing passwords
+
+Never store a password. Store a **hash**: the output of a one-way function, with a random **salt** mixed in so identical passwords produce different hashes. At login, hash what was typed and compare. Use a function designed for passwords, such as bcrypt or argon2, through a library. If your database is stolen, the attacker gets hashes, not passwords.
+
+```python
+from argon2 import PasswordHasher     # pip install argon2-cffi
+ph = PasswordHasher()
+
+stored = ph.hash("correct horse battery staple")   # save this string
+ph.verify(stored, "correct horse battery staple")  # True, or raises an error
+```
+
+## Staying logged in
+
+HTTP has no memory; each request arrives as a stranger. Two common solutions:
+
+- **Sessions**: after login the server creates a random session id, remembers which user it belongs to, and sends it to the browser in a **cookie**. The browser returns the cookie with every request.
+- **Tokens**: the server issues a signed token, often a JWT, stating who the user is and when it expires. The client sends it in a header. The server checks the signature instead of looking anything up.
+
+## Authorisation
+
+Check permissions on the server for every request. Hiding a button in the front end protects nothing, because anyone can call your API directly. The classic bug: `GET /orders/123` returns the order without checking that order 123 belongs to the person asking.
+
+## Do not build it all yourself
+
+“Sign in with Google” uses a standard called OAuth. Hosted identity services and well-tested libraries handle login, password reset and two-factor codes. Use them. Your job is to understand what they do and to get authorisation right.
+
+<Exercises set={0} />

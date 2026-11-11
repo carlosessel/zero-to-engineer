@@ -1,0 +1,33 @@
+---
+title: "Agents"
+summary: "An agent is a model using tools in a loop, deciding its own next step until the task is done. You already built the core of one in chapter 28."
+prerequisites: []
+estimated_minutes: 60
+status: migrated
+---
+
+## Workflow or agent?
+
+A **workflow** is a fixed sequence that you design: classify, then retrieve, then draft, then check. An **agent** chooses its own steps. Workflows are cheaper, faster and more predictable. Use an agent only when the steps cannot be known in advance, such as debugging code or researching an open question.
+
+## Useful patterns
+
+- **Prompt chaining**: the output of one call feeds the next.
+- **Routing**: a cheap call classifies the request and sends it to a specialised prompt.
+- **Parallelisation**: split work into independent calls and combine.
+- **Evaluator and optimiser**: one call drafts, another critiques, repeat.
+- **Orchestrator and workers**: a lead model breaks a task down and delegates to sub-agents.
+
+## What a real agent needs
+
+- **A step limit and a budget.** Loops can run forever and bills grow with them.
+- **Memory management.** Long runs overflow the context window; summarise or store notes in files.
+- **Good tools** with clear errors. An agent is only as capable as its tools.
+- **Guardrails.** Limit permissions, sandbox code execution, and ask a person before irreversible actions.
+- **Traces.** Log every step so you can see why it did what it did.
+
+## MCP
+
+The Model Context Protocol is an open standard for connecting models to tools and data sources. Instead of writing custom integration for every application, you write or install an MCP server once, and any compatible client can use it. Learn to build a small one; it is quickly becoming expected knowledge.
+
+<Exercises set={0} />

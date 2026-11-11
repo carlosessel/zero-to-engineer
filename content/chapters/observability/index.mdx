@@ -1,0 +1,35 @@
+---
+title: "Running it: monitoring, incidents and performance"
+summary: "Once real people depend on your software, you need to know it is healthy without waiting for them to complain."
+prerequisites: []
+estimated_minutes: 60
+status: migrated
+---
+
+## Three kinds of signal
+
+- **Logs**: timestamped records of what happened. Write them as structured data, include a request id so one request can be followed across services, and choose levels well: debug, info, warning, error.
+- **Metrics**: numbers over time. The four to watch for any service: request rate, error rate, response time, and how full its resources are.
+- **Traces**: the journey of one request through every service, showing where the time went.
+
+Look at the slowest responses, not the average. If one request in twenty takes eight seconds, the average hides it and your users do not.
+
+## Alerts
+
+Alert on what users feel, such as errors and slowness, and make every alert something a person must act on. Alerts that cry wolf get ignored, and then the real one is missed.
+
+## When it breaks
+
+1. **Stop the harm first.** Roll back or switch the feature off. Understand it afterwards.
+2. **Communicate**: tell the team and the users what is known, at regular intervals.
+3. **Write a blameless review**: what happened, why the system allowed it, and what will change. The question is never “who”, always “how did our process let this through”.
+
+## Performance
+
+Measure before you optimise. A **profiler** shows where time is actually spent, and it is rarely where you guessed. The usual culprits, in order: too many database queries, a missing index, doing work on every request that could be cached, sending too much data, and only then slow code.
+
+## Reliability targets
+
+Decide how reliable the service needs to be, such as 99.9% of requests succeeding, and measure against it. Perfection is not the goal; it costs too much and slows everything down. Also test your backups and have a written plan for losing a server or a database.
+
+<Exercises set={0} />

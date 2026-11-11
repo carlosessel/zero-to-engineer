@@ -1,0 +1,56 @@
+---
+title: "Testing"
+summary: "A test is code that checks your code. Tests are what let you change software next month without fear of silently breaking it."
+prerequisites: []
+estimated_minutes: 70
+status: migrated
+---
+
+```bash
+pip install pytest
+```
+
+```python
+# cart.py
+def cart_total(prices, discount=0):
+    if not 0 <= discount <= 1:
+        raise ValueError("discount must be between 0 and 1")
+    return sum(prices) * (1 - discount)
+
+# test_cart.py
+import pytest
+from cart import cart_total
+
+def test_adds_prices():
+    assert cart_total([10, 20]) == 30
+
+def test_empty_cart_is_zero():
+    assert cart_total([]) == 0
+
+def test_applies_discount():
+    assert cart_total([100], discount=0.25) == 75
+
+def test_rejects_bad_discount():
+    with pytest.raises(ValueError):
+        cart_total([100], discount=2)
+```
+
+Run `pytest` in the terminal. Green means every check passed.
+
+## Kinds of test
+
+- **Unit tests** check one function alone. Fast, and you write many.
+- **Integration tests** check parts working together, such as your code with a real database.
+- **End-to-end tests** drive the whole application like a user. Slow, so keep a few for the paths that matter most.
+
+## What to test
+
+The normal case, the edges (empty, zero, one item, very large), and the invalid input. When you fix a bug, first write a test that fails because of it, then fix it. That bug can never return unnoticed.
+
+## Test-driven development
+
+Write a failing test, write just enough code to pass, tidy up, repeat. It is not required, but it produces code that is easy to test, which tends to be well-designed code.
+
+Code that is hard to test is usually doing too much. Separate the logic from input, output and network calls, and the logic becomes simple to test.
+
+<Exercises set={0} />

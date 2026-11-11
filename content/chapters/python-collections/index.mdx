@@ -1,0 +1,102 @@
+---
+title: "Python from zero: lists, dictionaries, files and errors"
+summary: "Real programs handle many things at once. Lists and dictionaries are how Python holds them, and they are the shape of almost all data you will send to an AI model."
+prerequisites: []
+estimated_minutes: 95
+status: migrated
+---
+
+## Lists: things in order
+
+```python
+fruits = ["mango", "banana", "orange"]
+fruits[0]              # "mango"   positions start at 0
+fruits[-1]             # "orange"  negative counts from the end
+len(fruits)            # 3
+fruits.append("pawpaw")     # add to the end
+"banana" in fruits     # True
+
+for fruit in fruits:   # visit each item in turn
+    print(fruit.upper())
+```
+
+## Dictionaries: looking things up by name
+
+```python
+student = {"name": "Ama", "age": 20, "courses": ["Maths", "ICT"]}
+student["name"]            # "Ama"
+student["age"] = 21        # change a value
+student["city"] = "Accra"  # add a new key
+
+for key, value in student.items():
+    print(key, "->", value)
+```
+
+Each entry is a **key** and a **value**. A list of dictionaries is the most common data shape you will meet:
+
+```python
+messages = [
+    {"role": "user", "content": "What is the capital of Ghana?"},
+    {"role": "assistant", "content": "Accra."},
+]
+print(messages[1]["content"])     # Accra.
+```
+
+<Only course="ai">That is exactly how a conversation is sent to a language model later in this course.</Only><Only course="se">A list of dictionaries is also how most data travels between programs, as you will see when you build web APIs.</Only>
+
+## Using code other people wrote
+
+```python
+import random                 # built into Python
+print(random.randint(1, 6))
+
+import math
+print(math.sqrt(49))          # 7.0
+```
+
+Libraries that do not come with Python are installed once from the terminal with `pip install name`, then imported the same way.
+
+## Reading and writing files
+
+```python
+with open("notes.txt", "w") as f:      # "w" = write (replaces the file)
+    f.write("First line\nSecond line\n")
+
+with open("notes.txt") as f:           # default is read
+    text = f.read()
+print(text)
+
+import json
+with open("student.json", "w") as f:
+    json.dump(student, f)              # save a dictionary
+with open("student.json") as f:
+    loaded = json.load(f)              # load it back
+```
+
+## Reading an error message
+
+```text
+Traceback (most recent call last):
+  File "shop.py", line 7, in <module>
+    print(prices["bread"])
+KeyError: 'bread'
+```
+
+Read it from the bottom. The last line is the kind of error and the detail: there is no key called bread. The lines above say where: file `shop.py`, line 7. The errors you will meet most: `SyntaxError` (a typo in the code’s structure), `NameError` (a variable that does not exist, often misspelt), `TypeError` (wrong kind of value, such as text plus number), `IndexError` and `KeyError` (asking for an item that is not there), `IndentationError` (spaces do not line up).
+
+```python
+try:
+    age = int(input("Age: "))
+except ValueError:
+    print("Please type a number.")
+```
+
+`try` and `except` let a program recover from an expected problem instead of stopping.
+
+<Exercises set={0} />
+
+<Note>
+
+You now know enough Python to follow everything ahead. If you want more practice first, the Python resources in the library chapter at the end are free and well regarded.
+
+</Note>

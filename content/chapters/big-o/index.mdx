@@ -1,0 +1,46 @@
+---
+title: "How fast is it? Big O"
+summary: "Two programs can give the same answer while one takes a second and the other takes a year. Big O is how engineers talk about that difference."
+prerequisites: []
+estimated_minutes: 10
+status: migrated
+---
+
+Big O describes how the work grows as the input grows. We do not count seconds, because machines differ. We count steps as a function of n, the size of the input.
+
+<Demo name="big-o" />
+
+| Name | Written | Example |
+| --- | --- | --- |
+| Constant | O(1) | Looking up a key in a dictionary |
+| Logarithmic | O(log n) | Binary search: halving the problem each step |
+| Linear | O(n) | One loop over the items |
+| Linearithmic | O(n log n) | Good sorting algorithms |
+| Quadratic | O(n²) | A loop inside a loop over the same items |
+
+```python
+# O(n²): compares every pair
+def has_duplicate_slow(items):
+    for i in range(len(items)):
+        for j in range(i + 1, len(items)):
+            if items[i] == items[j]:
+                return True
+    return False
+
+# O(n): one pass, remembering what we have seen
+def has_duplicate_fast(items):
+    seen = set()
+    for item in items:
+        if item in seen:
+            return True
+        seen.add(item)
+    return False
+```
+
+With a million items, the first does around 500 billion comparisons and the second a million. Choosing the right data structure changed the growth rate. The same reasoning applies to memory used, called space complexity.
+
+<Note>
+
+Do not optimise everything. Write the clear version first, measure, and speed up only what is proven slow. But learn to spot a loop inside a loop over large data.
+
+</Note>

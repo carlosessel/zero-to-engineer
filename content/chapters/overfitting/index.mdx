@@ -1,0 +1,27 @@
+---
+title: "Overfitting, and why you hold data back"
+summary: "A model that memorises its training data looks brilliant and is useless. The only score that matters is the one on data it has never seen."
+prerequisites: []
+estimated_minutes: 10
+status: migrated
+---
+
+<Demo name="polynomial-fit" />
+
+At degree 1 the line is too stiff to follow the pattern: that is **underfitting**, and both errors are high. Around degree 3 it captures the real shape. At degree 9 the curve threads through every training dot, training error is nearly zero, and error on new data climbs: that is **overfitting**. The model learned the noise.
+
+## Three splits
+
+- **Training set**: the model learns from this.
+- **Validation set**: you use this to choose settings and compare models.
+- **Test set**: touched once, at the end, for an honest final score.
+
+## Fixes for overfitting
+
+More data, a simpler model, regularisation (penalising large weights), dropout in neural networks, and stopping training when validation loss stops improving.
+
+## Data leakage
+
+Leakage is when information about the answer sneaks into the inputs: the test rows were used to compute normalisation statistics, the same customer appears in both train and test, or a column was only filled in after the outcome happened. Leaky models score superbly and then fail in production. Split first, then do everything else.
+
+This idea returns in <Ref to="evals" />: you will evaluate language model applications on held-out examples for exactly the same reason.

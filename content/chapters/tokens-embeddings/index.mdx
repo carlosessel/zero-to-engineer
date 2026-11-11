@@ -1,0 +1,39 @@
+---
+title: "Tokens and embeddings"
+summary: "A language model never sees letters or words. It sees integers, each standing for a chunk of text, and turns each one into a vector."
+prerequisites: []
+estimated_minutes: 50
+status: migrated
+---
+
+## Tokens
+
+A tokenizer splits text into pieces from a fixed vocabulary of tens of thousands of tokens. Common words are one token; rare words are broken into several. In English, a token averages about four characters, or three-quarters of a word.
+
+<Demo name="tokenizer" />
+
+Tokens matter for three practical reasons: you are billed per token, the model has a maximum number of tokens it can read at once (the **context window**), and odd tokenization explains odd failures, such as models struggling to count letters in a word.
+
+## Embeddings
+
+Each token ID is looked up in a table to get a vector of hundreds or thousands of numbers. These vectors are learned so that tokens used in similar ways have similar vectors. The same idea extends to whole sentences and documents: an **embedding model** turns any text into one vector that captures its meaning.
+
+```bash
+pip install sentence-transformers
+```
+
+```python
+from sentence_transformers import SentenceTransformer
+model = SentenceTransformer("all-MiniLM-L6-v2")   # small, runs on a laptop
+
+texts = ["How do I get a refund?",
+         "I want my money back",
+         "What time do you open?"]
+vecs = model.encode(texts, normalize_embeddings=True)
+print(vecs.shape)            # (3, 384)
+print(vecs @ vecs.T)         # similarity table
+```
+
+The first two sentences share no key words yet score as close. That is what makes semantic search possible, and it is the foundation of <Ref to="rag" />.
+
+<Exercises set={0} />

@@ -1,0 +1,42 @@
+---
+title: "Neural networks from the inside"
+summary: "A neural network is layers of very simple units. Each one multiplies, adds, and bends. Stack enough and they can approximate almost any function."
+prerequisites: []
+estimated_minutes: 50
+status: migrated
+---
+
+## One neuron
+
+A neuron takes inputs, multiplies each by a weight, adds a bias, and passes the result through an **activation function**:
+
+```text
+output = activation(w1*x1 + w2*x2 + ... + b)
+```
+
+The usual activation is **ReLU**: negative numbers become zero, positives pass through. Without that bend, stacking layers would collapse into one straight-line function and the network could learn nothing interesting.
+
+## Layers
+
+A layer is many neurons side by side, which is one matrix multiplication. Early layers learn simple patterns (edges in an image), later layers combine them (eyes, then faces). Nobody programs those features; they emerge from training.
+
+```python
+import numpy as np
+
+def relu(z): return np.maximum(0, z)
+
+x  = np.random.randn(4)            # 4 input features
+W1 = np.random.randn(8, 4); b1 = np.zeros(8)
+W2 = np.random.randn(3, 8); b2 = np.zeros(3)
+
+h      = relu(W1 @ x + b1)         # hidden layer: 8 numbers
+scores = W2 @ h + b2               # output: 3 class scores
+```
+
+That is a complete forward pass. With random weights its output is rubbish. Training fixes the weights.
+
+## Backpropagation
+
+To train, you need the gradient of the loss with respect to every weight in every layer. Backpropagation computes them all in one backward sweep using the chain rule: the error at the output is passed back layer by layer, and each weight learns how much it contributed. You will never write it by hand in a job, because frameworks do it automatically, but you should do it once to remove the mystery.
+
+<Exercises set={0} />

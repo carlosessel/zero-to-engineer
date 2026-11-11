@@ -1,0 +1,43 @@
+---
+title: "Designing your data"
+summary: "Code is easy to change. Data is not. A good table design makes every later feature simpler; a bad one is paid for daily."
+prerequisites: []
+estimated_minutes: 40
+status: migrated
+---
+
+## Start from the things and their relationships
+
+- **One to many**: a customer has many orders. Put `customer_id` on the orders table.
+- **Many to many**: a student takes many courses and a course has many students. Add a third table, `enrolments`, with `student_id` and `course_id`.
+- **One to one**: a user has one profile. Often the same table.
+
+## Normalisation: store each fact once
+
+If a customer’s city is copied onto every order, a move means updating a hundred rows, and missing one leaves the data contradicting itself. Keep the city only on the customer and join when you need it. Break this rule deliberately, for speed, and only with evidence.
+
+## Let the database enforce the rules
+
+Use `NOT NULL`, `UNIQUE`, foreign keys and sensible types. Application code has bugs; constraints hold regardless. Store money as whole numbers of the smallest unit or a decimal type, never as floating point. Store times in UTC.
+
+## Migrations
+
+You will change the design after launch. A **migration** is a small versioned script that alters the database, such as adding a column. Migrations are kept in Git and run in order, so every copy of the database reaches the same shape.
+
+## ORMs
+
+An object-relational mapper, such as SQLAlchemy, Django’s ORM or Prisma, lets you work with rows as objects in your language. Convenient, but learn SQL first so you can see what it does. The famous trap is the N+1 problem: one query for a list, then one more query for each item in it.
+
+## Beyond relational
+
+| Kind | Good for | Example |
+| --- | --- | --- |
+| Relational | Almost everything; the default choice | PostgreSQL |
+| Key-value | Caches, sessions, counters | Redis |
+| Document | Flexible, nested records | MongoDB |
+| Search | Full-text search | Elasticsearch |
+| Object storage | Files, images, backups | Amazon S3 |
+
+And back up your database, then test that you can restore from the backup. An untested backup is a hope.
+
+<Exercises set={0} />

@@ -1,0 +1,42 @@
+---
+title: "Writing code people can read"
+summary: "Code is read far more often than it is written, usually by someone tired and in a hurry, and often that person is you in six months."
+prerequisites: []
+estimated_minutes: 45
+status: migrated
+---
+
+```python
+# Hard to read
+def calc(l, t):
+    r = 0
+    for i in l:
+        if i[1] > t:
+            r += i[0] * i[1]
+    return r
+
+# The same logic, readable
+def total_for_large_orders(orders, minimum_quantity):
+    total = 0
+    for price, quantity in orders:
+        if quantity > minimum_quantity:
+            total += price * quantity
+    return total
+```
+
+## The habits
+
+- **Names say what things are.** `days_until_due`, not `d`. Functions are verbs: `send_invoice`.
+- **Functions do one thing** and are short enough to see whole. If you need “and” to describe it, split it.
+- **Do not repeat yourself.** The same logic in three places will be fixed in two. Put it in one function.
+- **No magic numbers.** `MAX_LOGIN_ATTEMPTS = 5` explains itself; a bare 5 does not.
+- **Comments explain why**, not what. The code already says what.
+- **Handle the unhappy path.** Empty input, missing file, no network.
+- **Keep it simple.** The clever solution is harder to debug than to write. Do not build for needs you do not have yet.
+- **Format consistently** with an automatic formatter, such as Black or Ruff for Python and Prettier for JavaScript, and stop arguing about spaces.
+
+## Refactoring
+
+Refactoring is improving the structure of code without changing what it does: renaming, splitting, removing duplication. Do it in small steps and run your tests after each. Leave every file a little cleaner than you found it.
+
+<Exercises set={0} />

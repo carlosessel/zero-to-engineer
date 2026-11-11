@@ -1,0 +1,43 @@
+---
+title: "Doing many things at once"
+summary: "Servers handle thousands of users at the same moment. Concurrency makes software fast, and it creates a class of bug that appears only sometimes."
+prerequisites: []
+estimated_minutes: 45
+status: migrated
+---
+
+## The vocabulary
+
+- **Process**: a running program with its own memory.
+- **Thread**: a line of execution inside a process. Threads share memory.
+- **Concurrency**: making progress on several tasks by switching between them. **Parallelism**: truly running several at the same instant on different processor cores.
+- **Async**: one thread that starts a slow operation, such as a network call, and does other work while waiting.
+
+Most web work is waiting on the network or database, so async or threads help a lot. Heavy calculation needs multiple processes or cores.
+
+## Race conditions
+
+```python
+balance = 100
+
+def withdraw(amount):
+    global balance
+    if balance >= amount:         # A checks: 100 >= 80, fine
+        # ... B runs here and also sees 100 ...
+        balance = balance - amount
+
+# Two withdrawals of 80 at once can both pass the check.
+# The account ends at -60.
+```
+
+A **race condition** is when the result depends on timing. It will pass every test on your laptop and fail in production under load.
+
+## Defences
+
+- **Do not share changing data.** The simplest fix.
+- **Locks**: only one thread may be inside a critical section at a time. Beware **deadlock**, where two threads each hold a lock the other needs.
+- **Let the database do it**: transactions, and atomic updates such as `UPDATE accounts SET balance = balance - 80 WHERE id = 1 AND balance >= 80`.
+- **Queues**: put work on a queue and let workers take one job each.
+- **Idempotency**: design operations so that doing them twice has the same effect as once. Networks retry, so a “pay” request may arrive twice; an idempotency key lets the server ignore the repeat.
+
+<Exercises set={0} />

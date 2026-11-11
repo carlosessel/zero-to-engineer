@@ -1,0 +1,43 @@
+---
+title: "Software design and architecture"
+summary: "Architecture is how you divide a program into parts and decide who may talk to whom. Good structure makes change cheap."
+prerequisites: []
+estimated_minutes: 40
+status: migrated
+---
+
+## The two measures
+
+- **High cohesion**: things that change together live together.
+- **Low coupling**: parts know as little as possible about each other, so changing one does not break others.
+
+## Layers
+
+A reliable default for most applications:
+
+1. **Interface layer**: receives HTTP requests, checks input, returns responses. No business rules.
+2. **Business logic**: the rules, such as “an order over the credit limit needs approval”. Knows nothing of HTTP or SQL.
+3. **Data access**: reads and writes the database.
+
+Because the rules sit alone in the middle, you can test them without a server or a database, and you can change the database without rewriting the rules.
+
+## Principles that last
+
+- **Single responsibility**: each module has one reason to change.
+- **Depend on interfaces**: code against “something that can send a message”, not against one email provider. Swapping providers then touches one file.
+- **Dependency injection**: pass a component what it needs instead of letting it create it. This is what makes testing with fakes possible.
+- **Simplicity first**: build what is needed now, in a way that is easy to change later.
+
+## Design patterns
+
+Named solutions to recurring problems. Know a few so you recognise them: **Strategy** (swap one algorithm for another), **Observer** (notify subscribers when something happens), **Adapter** (wrap something so it fits the shape you need), **Factory** (one place that decides which object to create), **Repository** (hide database access behind simple methods).
+
+## Monolith or microservices
+
+A **monolith** is one application deployed as one unit. **Microservices** split it into many small services talking over the network. Microservices let large organisations work independently, at a heavy cost in complexity. Start with a well-organised monolith. Most products never need more.
+
+## Write decisions down
+
+For any significant choice, write a short note: the context, the options, what you chose and why. Future engineers will thank you.
+
+<Exercises set={0} />

@@ -1,0 +1,57 @@
+---
+title: "Algorithms"
+summary: "An algorithm is a precise recipe for solving a problem. You will rarely write the famous ones yourself, but learning them teaches you how to think."
+prerequisites: []
+estimated_minutes: 90
+status: migrated
+---
+
+## Searching
+
+**Linear search** checks every item: O(n). If the data is sorted, **binary search** looks at the middle, throws away the half that cannot contain the target, and repeats: O(log n).
+
+<Demo name="binary-search" />
+
+```python
+def binary_search(items, target):
+    low, high = 0, len(items) - 1
+    while low <= high:
+        mid = (low + high) // 2
+        if items[mid] == target:
+            return mid
+        if items[mid] < target:
+            low = mid + 1
+        else:
+            high = mid - 1
+    return -1
+```
+
+A million sorted items take at most 20 steps.
+
+## Sorting
+
+Simple sorts such as bubble sort are O(n²). Good ones such as merge sort are O(n log n). In real code, call the built-in: `sorted(items)` or `items.sort(key=...)`. Implement one by hand once to understand it.
+
+## Recursion
+
+A function that calls itself on a smaller version of the problem, with a base case that stops it.
+
+```python
+def total_size(folder):
+    size = 0
+    for item in folder["children"]:
+        if "children" in item:
+            size += total_size(item)     # a folder inside a folder: same problem, smaller
+        else:
+            size += item["size"]
+    return size
+```
+
+## Patterns worth recognising
+
+- **Divide and conquer**: split, solve the parts, combine.
+- **Graph traversal**: breadth-first search finds the shortest path in steps; depth-first explores as far as possible first.
+- **Dynamic programming**: store answers to sub-problems so you never compute one twice.
+- **Greedy**: take the best-looking option at each step; fast, sometimes wrong.
+
+<Exercises set={0} />

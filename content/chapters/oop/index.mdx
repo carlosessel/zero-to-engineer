@@ -1,0 +1,41 @@
+---
+title: "Objects and classes"
+summary: "As programs grow, loose variables and functions become hard to follow. Classes bundle related data and behaviour into one named thing."
+prerequisites: []
+estimated_minutes: 65
+status: migrated
+---
+
+```python
+class BankAccount:
+    def __init__(self, owner, balance=0):    # runs when an account is created
+        self.owner = owner                   # data stored on this object
+        self.balance = balance
+
+    def deposit(self, amount):               # a method: a function that belongs to the object
+        if amount <= 0:
+            raise ValueError("Deposit must be positive")
+        self.balance += amount
+
+    def withdraw(self, amount):
+        if amount > self.balance:
+            raise ValueError("Not enough money")
+        self.balance -= amount
+
+ama = BankAccount("Ama", 100)     # an object, also called an instance
+ama.deposit(50)
+print(ama.balance)                # 150
+```
+
+A **class** is the blueprint. An **object** is one thing built from it. `self` means “this particular object”. Each account keeps its own balance.
+
+## The ideas behind it
+
+- **Encapsulation**: the object protects its own data. Nobody sets the balance directly; they go through `deposit`, which enforces the rules.
+- **Inheritance**: a class can extend another. `class SavingsAccount(BankAccount)` gets everything above and can add interest.
+- **Polymorphism**: different classes can offer the same method name, so code can use them without caring which it has.
+- **Composition**: an object contains other objects. A `Bank` has a list of accounts. Prefer this to deep inheritance; it stays simpler.
+
+Not everything needs a class. A few plain functions are often clearer. Use a class when data and the rules about it belong together.
+
+<Exercises set={0} />

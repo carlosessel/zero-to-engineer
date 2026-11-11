@@ -1,0 +1,63 @@
+---
+title: "Maths from zero: numbers, algebra and functions"
+summary: "You need less maths than you fear, and you can learn all of it here. We start from arithmetic and build up to the four ideas AI runs on. Python is your calculator throughout."
+prerequisites: []
+estimated_minutes: 80
+status: migrated
+---
+
+## Order of operations, powers and roots
+
+Brackets first, then powers, then multiply and divide, then add and subtract. So 2 + 3 × 4 is 14, and (2 + 3) × 4 is 20.
+
+A **power** is repeated multiplication: 2³ means 2 × 2 × 2 = 8. In Python: `2 ** 3`. A **square root** undoes squaring: √49 = 7 because 7² = 49. A negative power means “one over”: 10⁻² = 1/100 = 0.01.
+
+**Scientific notation** writes very large or small numbers compactly. 3 × 10⁶ is 3,000,000. In code and in AI papers this is written `3e6`; a learning rate of `1e-3` is 0.001.
+
+## Fractions, decimals and percentages
+
+These are three ways of writing the same thing: 1/4 = 0.25 = 25%. A probability of 0.9 means 90%. To take 15% of 80, multiply: 0.15 × 80 = 12.
+
+## Algebra: letters standing for numbers
+
+In maths, a letter such as x is a variable, just as in Python. An **equation** says two things are equal, and solving it means finding the value that makes it true. The rule: do the same thing to both sides.
+
+```text
+3x + 2 = 14
+3x     = 12      (subtract 2 from both sides)
+x      = 4       (divide both sides by 3)
+```
+
+## Functions: a machine that turns input into output
+
+f(x) = 2x + 1 means: take a number, double it, add one. So f(3) = 7. This is exactly a Python function:
+
+```python
+def f(x):
+    return 2 * x + 1
+```
+
+A model is a function too: input goes in, a prediction comes out. It just has millions of adjustable numbers inside instead of the 2 and the 1.
+
+## Graphs and straight lines
+
+A graph draws a function: input along the bottom (x), output up the side (y). The simplest is a straight line, y = mx + b. The number m is the **slope**: how much y rises when x increases by 1. The number b is where the line crosses the vertical axis.
+
+<Demo name="line" />
+
+## Exponentials and logarithms
+
+An **exponential** grows by multiplying: 2, 4, 8, 16. A **logarithm** asks the reverse question: what power do I need? log₂(8) = 3, because 2³ = 8. Logs turn huge ranges into small numbers and turn multiplication into addition, which is why they appear in loss functions. The special number e ≈ 2.718 is the usual base; “log” in AI almost always means log base e.
+
+```python
+import math
+math.exp(2)       # e squared, about 7.39
+math.log(7.39)    # about 2: log undoes exp
+math.log2(8)      # 3.0
+```
+
+## The Σ symbol
+
+Σ (sigma) means “add them all up”. Σ xᵢ for x = \[2, 5, 3\] is 10. In Python it is `sum(x)`. Whenever you see Σ in a formula, read it as a for loop that adds.
+
+<Exercises set={0} />

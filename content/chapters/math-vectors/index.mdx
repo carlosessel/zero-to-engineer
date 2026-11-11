@@ -1,0 +1,44 @@
+---
+title: "Maths from zero: vectors and matrices"
+summary: "Linear algebra sounds advanced. For AI it comes down to lists of numbers and tables of numbers, and three operations on them."
+prerequisites: []
+estimated_minutes: 70
+status: migrated
+---
+
+## A vector is a list of numbers
+
+\[3, 4\] is a vector with two numbers. Picture it as an arrow from the origin to the point 3 across, 4 up. A vector with 300 numbers is an arrow in 300-dimensional space; you cannot picture it, but the arithmetic is identical. AI represents everything this way: a word, a photo, a customer.
+
+## Three operations
+
+```text
+a = [1, 2]      b = [3, 1]
+
+a + b   = [1+3, 2+1]   = [4, 3]        add matching entries
+2 * a   = [2, 4]                       stretch the arrow
+a · b   = 1*3 + 2*1    = 5             dot product: multiply matching entries, add up
+```
+
+The **length** of a vector comes from Pythagoras: the length of \[3, 4\] is √(3² + 4²) = 5.
+
+## The dot product measures agreement
+
+When two arrows point the same way, their dot product is large and positive. At right angles it is zero. Pointing opposite ways, it is negative. Divide the dot product by both lengths and you get **cosine similarity**, always between −1 and 1, which ignores length and measures direction only.
+
+<Demo name="vectors" />
+
+This is how “search by meaning” works: texts become vectors, and the closest in direction are the most similar in meaning.
+
+## A matrix is a table of numbers
+
+A matrix with 2 rows and 3 columns has **shape** 2 × 3. Multiplying a matrix by a vector produces a new vector: each output number is the dot product of one row with the vector.
+
+```text
+| 1  2 |   | 5 |     | 1*5 + 2*6 |     | 17 |
+| 3  4 | × | 6 |  =  | 3*5 + 4*6 |  =  | 39 |
+```
+
+So a matrix is a machine that transforms vectors. One layer of a neural network is one matrix multiplication. The rule to remember: the number of columns in the matrix must equal the number of entries in the vector. Mismatched shapes are the most common error you will hit.
+
+<Exercises set={0} />

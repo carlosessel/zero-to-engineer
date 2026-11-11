@@ -1,0 +1,46 @@
+---
+title: "Prompt engineering"
+summary: "A prompt is a specification. Write it the way you would brief a capable new colleague who knows nothing about your project."
+prerequisites: []
+estimated_minutes: 65
+status: migrated
+---
+
+## The techniques that do most of the work
+
+1. **Be specific and give context.** Who is the audience? What is the output for? What does good look like? “Summarise this” is weak. “Summarise this support ticket in two sentences for an engineer deciding whether it is a bug” is strong.
+2. **Show examples.** Two or three input and output pairs teach format and tone better than a paragraph of description.
+3. **Separate instructions from data.** Wrap documents and user input in clear delimiters such as XML-style tags so the model can tell them apart.
+4. **Ask for reasoning before the answer** on hard problems. Working through steps first improves accuracy.
+5. **Specify the output format** exactly, including what to do when the answer is unknown.
+6. **Say what to do**, not only what to avoid.
+
+```python
+SYSTEM = """You classify customer messages for a phone repair shop.
+
+Categories: booking, pricing, complaint, other.
+
+Reply with the category on the first line, then one sentence
+explaining why. If the message fits no category, use "other".
+
+<examples>
+<example>
+Message: How much to replace an iPhone 13 screen?
+pricing
+The customer asks what a repair costs.
+</example>
+</examples>"""
+
+def classify(message: str) -> str:
+    msg = client.messages.create(
+        model=MODEL, max_tokens=100, temperature=0, system=SYSTEM,
+        messages=[{"role": "user",
+                   "content": f"<message>{message}</message>"}])
+    return msg.content[0].text
+```
+
+## Prompts are code
+
+Keep prompts in version control. Change one thing at a time. Test every change against a saved set of inputs, not against one example you happened to try. A prompt that improves one case often breaks three others, which is why <Ref to="evals" /> exists.
+
+<Exercises set={0} />

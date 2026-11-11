@@ -1,0 +1,48 @@
+---
+title: "Servers, containers and the cloud"
+summary: "Software that runs only on your laptop helps nobody. Deployment is putting it on a computer that is always on and reachable."
+prerequisites: []
+estimated_minutes: 70
+status: migrated
+---
+
+## Linux
+
+Most servers run Linux and have no screen; you control them through the terminal, usually over **SSH**, a secure remote connection. The commands you learned at the start are the same ones. Add a few: `cat` and `less` to read files, `grep` to search, `tail -f` to watch a log, `ps` and `top` to see what is running.
+
+## Configuration and environments
+
+The same code runs in several **environments**: development on your machine, staging for testing, production for real users. What differs, such as the database address and keys, comes from **environment variables**, never from the code.
+
+## Containers
+
+“It works on my machine” is the oldest problem in software. A **container** packages your application with everything it needs, so it runs identically everywhere. Docker is the standard tool.
+
+```dockerfile
+# Dockerfile
+FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+```
+
+```bash
+docker build -t task-api .
+docker run -p 8000:8000 task-api
+```
+
+An **image** is the packaged application. A **container** is a running copy of it. Docker Compose runs several together, such as your API and a database. Kubernetes manages containers across many machines; learn it when a job requires it, not before.
+
+## The cloud
+
+Cloud providers rent computers and services by the hour. Three levels:
+
+- **Platform services** (Render, Railway, Fly.io, Vercel): hand over your code or container and they run it. Start here.
+- **Virtual machines**: a rented Linux server you manage yourself.
+- **Managed services**: a database, storage or queue run for you. Use a managed database; running your own safely is a job in itself.
+
+The large providers are AWS, Google Cloud and Azure. Their core ideas are the same: compute, storage, databases, networking, and permissions. Set a spending alert on day one.
+
+<Exercises set={0} />

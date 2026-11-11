@@ -1,0 +1,41 @@
+---
+title: "Learning from examples"
+summary: "Normal programming: you write the rules. Machine learning: you supply examples and the computer finds the rules."
+prerequisites: []
+estimated_minutes: 65
+status: migrated
+---
+
+## The vocabulary
+
+- **Features** (X): the inputs. Size of a house, pixels of an image, words of an email.
+- **Label** (y): the answer you want predicted. Price, “cat”, spam or not.
+- **Model**: a function with adjustable numbers (parameters, or weights) that maps X to a prediction.
+- **Loss**: one number saying how wrong the predictions are.
+- **Training**: adjusting the parameters to make the loss smaller.
+
+## Kinds of learning
+
+**Supervised** learning has labels: classification predicts a category, regression predicts a number. **Unsupervised** learning has no labels and finds structure, such as clusters. **Self-supervised** learning creates labels from the data itself, for example hiding the next word and predicting it; this is how language models are trained. **Reinforcement** learning learns from rewards for actions.
+
+## Your first model
+
+```python
+from sklearn.datasets import load_breast_cancer
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+X, y = load_breast_cancer(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, test_size=0.2, random_state=42)
+
+model = RandomForestClassifier(random_state=42)
+model.fit(X_train, y_train)              # learn from examples
+preds = model.predict(X_test)            # predict on unseen data
+print(accuracy_score(y_test, preds))
+```
+
+Notice the split. The model never sees the test rows during training, so the score tells you how it does on new data. Every scikit-learn model has the same `fit` and `predict` interface, so swapping algorithms is one line.
+
+<Exercises set={0} />

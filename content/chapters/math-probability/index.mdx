@@ -1,0 +1,46 @@
+---
+title: "Maths from zero: probability and statistics"
+summary: "Models never say “yes”. They say “92% likely”. To build with them you need to be comfortable with chance and with summarising data."
+prerequisites: []
+estimated_minutes: 65
+status: migrated
+---
+
+## Probability
+
+A probability is a number from 0 (impossible) to 1 (certain). For equally likely outcomes it is the count of outcomes you want divided by the count of all outcomes: rolling a 5 on a die is 1/6. The probabilities of all possible outcomes add up to 1.
+
+- **Not**: P(not A) = 1 − P(A).
+- **And**, for independent events: multiply. Two heads in a row is 0.5 × 0.5 = 0.25.
+- **Or**, for events that cannot both happen: add. Rolling a 1 or a 2 is 1/6 + 1/6.
+
+<Demo name="coin-flips" />
+
+## Conditional probability
+
+P(A | B) means “the probability of A, given that B is known”. The probability of rain is one number; the probability of rain given dark clouds is higher. A language model computes exactly this: the probability of each next word, given all the words so far.
+
+A classic trap: a test for a rare condition is 99% accurate, and 1 in 1,000 people have the condition. If you test positive, the chance you actually have it is only about 9%, because the few true cases are outnumbered by false alarms from the many healthy people. Base rates matter. You will meet the same effect when judging classifiers on rare events.
+
+## Summarising data
+
+```python
+import statistics as st
+data = [4, 8, 6, 5, 3, 40]
+
+st.mean(data)      # 11: the average, pulled up by the 40
+st.median(data)    # 5.5: the middle value, not fooled by the 40
+st.stdev(data)     # about 14.3: how spread out the values are
+```
+
+The **mean** is the total divided by the count. The **median** is the middle value and resists outliers. **Variance** is the average squared distance from the mean, and **standard deviation** is its square root: a small one means values cluster tightly.
+
+## Distributions
+
+A distribution describes how likely each value is. The **normal distribution** is the bell curve: most values near the mean, fewer far away. About 68% of values lie within one standard deviation of the mean and 95% within two. A model’s output over possible next words is also a distribution, and “sampling” means picking one value according to those probabilities.
+
+## Correlation is not causation
+
+Two things rising together does not mean one causes the other. Models learn correlations. That is powerful, and it is also how they pick up shortcuts and biases from their data.
+
+<Exercises set={0} />

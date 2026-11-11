@@ -1,0 +1,59 @@
+---
+title: "Set up your workshop"
+slug: setup
+summary: "One hour now saves many later. Get Python, an editor, notebooks, and one model API key working."
+prerequisites: []
+estimated_minutes: 100
+status: migrated
+---
+
+## Install
+
+- **Python 3.11 or newer** from python.org, or with a version manager such as `uv` or `pyenv`.
+- **VS Code** with the Python and Jupyter extensions.
+- **Git**, and a GitHub account. Every project in this course goes in a public repository; that is your portfolio.
+
+## One environment per project
+
+Python packages clash across projects, so each project gets its own isolated environment. Think of it as `node_modules`, but you create it yourself.
+
+```bash
+mkdir ai-course && cd ai-course
+python -m venv .venv
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
+pip install numpy pandas matplotlib scikit-learn jupyter
+```
+
+## Notebooks and free GPUs
+
+A Jupyter notebook runs code in cells and shows results inline. It is the standard tool for exploring data and models. Google Colab and Kaggle give you hosted notebooks with a free GPU, which is enough for every training exercise here.
+
+## Git: save points for your code
+
+Git records snapshots of your project so you can go back, and GitHub stores them online where others can see your work. Four commands cover most days:
+
+```bash
+git init                         # once: start tracking this folder
+git add .                        # stage every changed file
+git commit -m "Add first script" # save a snapshot with a message
+git push                         # upload to GitHub (after linking a repository)
+```
+
+A file named `.gitignore` lists things Git must never save, such as secrets.
+
+## API keys
+
+An API key is a secret password that lets your code use a model provider’s service, and usage is billed to you. You will not need one until the language-model chapters, and most providers give a small free allowance or require a few dollars of credit.
+
+Create an account with a model provider and generate an API key. Keep it out of your code and out of Git:
+
+```bash
+# .env   (add this file to .gitignore)
+ANTHROPIC_API_KEY=your-key-here
+```
+
+```bash
+pip install python-dotenv anthropic
+```
+
+<Exercises set={0} />

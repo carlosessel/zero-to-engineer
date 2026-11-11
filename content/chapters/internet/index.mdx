@@ -1,0 +1,40 @@
+---
+title: "How the internet and the web work"
+summary: "Nearly all software talks over a network. Know what happens between pressing Enter and seeing a page, and half of web development stops being magic."
+prerequisites: []
+estimated_minutes: 40
+status: migrated
+---
+
+## What happens when you visit a page
+
+1. You type `example.com`. Your computer asks **DNS**, the internet’s phone book, for the numeric **IP address** of that name.
+2. Your browser, the **client**, opens a connection to that address, a **server**: a computer whose job is answering requests.
+3. The browser sends an **HTTP request**: “GET me the page at /”.
+4. The server sends an **HTTP response**: a status code and the content.
+5. The browser reads the HTML, requests the CSS, JavaScript and images it mentions, and draws the page.
+
+## HTTP
+
+A request has a **method**, a **path**, **headers** (extra information) and sometimes a **body** (data being sent).
+
+| Method | Meaning |  | Status code | Meaning |
+| --- | --- | --- | --- | --- |
+| GET | Read something |  | 200 | OK |
+| POST | Create something |  | 201 | Created |
+| PUT / PATCH | Update something |  | 400 | Your request was invalid |
+| DELETE | Remove something |  | 401 / 403 | Not logged in / not allowed |
+|  |  |  | 404 | Not found |
+|  |  |  | 500 | The server broke |
+
+Codes starting with 2 mean success, 4 means the client made a mistake, 5 means the server did.
+
+## Other terms
+
+- **HTTPS**: HTTP encrypted, so nobody between you and the server can read or change it.
+- **URL**: the full address: protocol, domain, path and optional query, as in `https://shop.com/items?page=2`.
+- **Port**: a numbered door on a computer. Web servers use 80 and 443; while developing you will see `localhost:8000`, meaning “this computer, door 8000”.
+- **JSON**: the text format programs use to exchange data. It looks like Python dictionaries and lists.
+- **API**: a set of URLs a server offers for programs, not people, to call.
+
+<Exercises set={0} />

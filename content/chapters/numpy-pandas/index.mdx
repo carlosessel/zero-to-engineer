@@ -1,0 +1,53 @@
+---
+title: "NumPy and pandas: thinking in arrays"
+summary: "Every model input and output is an array of numbers. NumPy is how you hold and transform them without writing loops."
+prerequisites: []
+estimated_minutes: 75
+status: migrated
+---
+
+## Arrays and shape
+
+The most common bug in this field is a shape mismatch. Get into the habit of printing `.shape`.
+
+```python
+import numpy as np
+
+x = np.array([[1., 2., 3.],
+              [4., 5., 6.]])
+x.shape            # (2, 3): 2 rows, 3 columns
+x * 10             # applies to every element, no loop
+x.mean(axis=0)     # mean down each column -> shape (3,)
+x.T                # transpose -> shape (3, 2)
+x @ x.T            # matrix multiply -> shape (2, 2)
+x[:, 0]            # first column
+x[x > 2]           # boolean mask -> [3. 4. 5. 6.]
+```
+
+## Broadcasting
+
+When shapes differ, NumPy stretches the smaller one where it can. Subtracting a row of column means from a whole table is one line:
+
+```python
+normalised = (x - x.mean(axis=0)) / x.std(axis=0)
+```
+
+This is vectorisation: one operation over the whole array, executed in fast compiled code. A Python loop over a million numbers is often a hundred times slower.
+
+## pandas for tables
+
+```python
+import pandas as pd
+
+df = pd.read_csv("sales.csv")
+df.head()                          # first rows
+df.info()                          # columns, types, missing values
+df["total"] = df["price"] * df["qty"]
+df[df["total"] > 100]              # filter
+df.groupby("region")["total"].sum()
+df.isna().sum()                    # missing values per column
+```
+
+If you know SQL, pandas will feel familiar: `groupby` is GROUP BY, boolean filters are WHERE, `merge` is JOIN.
+
+<Exercises set={0} />

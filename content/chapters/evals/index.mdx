@@ -1,0 +1,52 @@
+---
+title: "Evals: knowing whether it works"
+summary: "This is the skill that separates people who demo AI from people who ship it. If you cannot measure quality, you cannot improve it, and you will not notice when it gets worse."
+prerequisites: [overfitting]
+estimated_minutes: 65
+status: migrated
+---
+
+## What an eval is
+
+A set of test inputs, a way to run your system on them, and a way to score the outputs. It is a test suite for behaviour that is not exactly predictable.
+
+## Three ways to grade
+
+| Grader | How | Good for |
+| --- | --- | --- |
+| Code | Exact match, regex, valid JSON, a number within tolerance, tests pass | Classification, extraction, code generation. Fast, free, reliable. |
+| Model | Another model scores the output against a written rubric | Tone, helpfulness, faithfulness to sources. Check it against human scores first. |
+| Human | A person reads and rates | The ground truth. Slow, so use it to calibrate the others. |
+
+```python
+cases = [
+    {"input": "How much for a screen repair?", "expected": "pricing"},
+    {"input": "My phone came back still broken", "expected": "complaint"},
+    # ... 50 or more, including awkward ones
+]
+
+def run_eval(classify) -> float:
+    hits = 0
+    for c in cases:
+        got = classify(c["input"]).splitlines()[0].strip().lower()
+        ok = got == c["expected"]
+        hits += ok
+        if not ok:
+            print("FAIL", c["input"], "->", got)
+    return hits / len(cases)
+
+print(run_eval(classify))
+```
+
+## Building a good test set
+
+- Start with 20 to 50 cases written by hand. Small and real beats large and synthetic.
+- Include edge cases: empty input, another language, hostile input, questions that should be refused.
+- Every bug a user reports becomes a new case.
+- Keep some cases you never look at while tuning prompts, for the reason you learned in <Ref to="overfitting" />.
+
+## The working loop
+
+Change one thing, run the eval, read the failures, repeat. Run it automatically on every change to a prompt or model version. When a new model is released, your eval tells you in minutes whether to switch.
+
+<Exercises set={0} />

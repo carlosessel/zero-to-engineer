@@ -1,0 +1,75 @@
+---
+title: "PyTorch and the training loop"
+summary: "PyTorch is NumPy that runs on GPUs and computes gradients for you. Learn this one training loop and you can read almost any model’s code."
+prerequisites: [gradient-descent]
+estimated_minutes: 75
+status: migrated
+---
+
+```bash
+pip install torch torchvision
+```
+
+## Autograd in four lines
+
+```python
+import torch
+w = torch.tensor(-4.0, requires_grad=True)
+loss = (w - 3) ** 2
+loss.backward()          # computes d(loss)/dw
+print(w.grad)            # tensor(-14.)
+```
+
+## A full image classifier
+
+```python
+import torch
+from torch import nn
+from torch.utils.data import DataLoader
+from torchvision import datasets, transforms
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
+tfm = transforms.ToTensor()
+train = DataLoader(datasets.MNIST("data", train=True, download=True, transform=tfm),
+                   batch_size=64, shuffle=True)
+test  = DataLoader(datasets.MNIST("data", train=False, transform=tfm), batch_size=256)
+
+model = nn.Sequential(
+    nn.Flatten(),                 # 28x28 image -> 784 numbers
+    nn.Linear(784, 128), nn.ReLU(),
+    nn.Linear(128, 10),           # 10 digit classes
+).to(device)
+
+loss_fn = nn.CrossEntropyLoss()
+opt = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+for epoch in range(3):
+    model.train()
+    for X, y in train:
+        X, y = X.to(device), y.to(device)
+        loss = loss_fn(model(X), y)   # 1. predict and measure
+        opt.zero_grad()               # 2. clear old gradients
+        loss.backward()               # 3. backpropagate
+        opt.step()                    # 4. update weights
+
+    model.eval()
+    correct = 0
+    with torch.no_grad():
+        for X, y in test:
+            X, y = X.to(device), y.to(device)
+            correct += (model(X).argmax(1) == y).sum().item()
+    print(epoch, correct / len(test.dataset))
+```
+
+The four numbered lines are gradient descent from <Ref to="gradient-descent" />. Everything else is loading data and measuring. Expect about 97% accuracy after three epochs.
+
+## Pieces to recognise
+
+- **Dataset / DataLoader**: serve shuffled batches.
+- **nn.Module**: a model or layer holding its own weights.
+- **Loss function**: cross-entropy for classification, mean squared error for regression.
+- **Optimiser**: Adam or AdamW is the default choice.
+- **train() / eval()**: switches layers like dropout on and off.
+- **Saving**: `torch.save(model.state_dict(), "model.pt")`.
+
+<Exercises set={0} />

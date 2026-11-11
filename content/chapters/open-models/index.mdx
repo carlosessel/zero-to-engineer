@@ -1,0 +1,47 @@
+---
+title: "Open models and running them yourself"
+summary: "You can download capable models and run them on your own machine or server. Sometimes that is the right choice, and it teaches you a great deal."
+prerequisites: [evals]
+estimated_minutes: 50
+status: migrated
+---
+
+## Hosted API or self-hosted?
+
+|  | Hosted API | Open model, self-hosted |
+| --- | --- | --- |
+| Quality | Usually the strongest models | Good, improving fast, smaller |
+| Effort | None | You run and scale the servers |
+| Cost | Per token | Per GPU hour, whether used or not |
+| Privacy | Data leaves your network | Data stays with you |
+| Control | Provider can change models | Fixed version, can fine-tune freely |
+
+## Hugging Face
+
+The Hugging Face Hub is the GitHub of models and datasets. The `transformers` library loads them in a few lines:
+
+```python
+from transformers import pipeline
+classifier = pipeline("sentiment-analysis")
+print(classifier("This course is worth the effort."))
+```
+
+Always read the model card: what it was trained on, its licence, and its limits. Some licences forbid commercial use.
+
+## Running a chat model locally
+
+Tools such as Ollama and llama.cpp run models on a laptop. Install Ollama, then:
+
+```bash
+ollama run <model-name>      # pick a small model from the Ollama library
+```
+
+## Quantisation
+
+Model weights are normally 16-bit numbers. Quantisation stores them in 8 or 4 bits, cutting memory by half or three-quarters with a small quality loss. A rough guide: a model needs about its parameter count times bytes per weight in memory. A 7-billion-parameter model at 4 bits needs around 4 to 5 GB.
+
+## Serving
+
+For production, inference servers such as vLLM batch many requests together on a GPU and expose an API your application calls just like a hosted one.
+
+<Exercises set={0} />

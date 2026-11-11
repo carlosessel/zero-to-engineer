@@ -1,0 +1,37 @@
+---
+title: "Debugging: finding out why it is wrong"
+summary: "You will spend more time fixing code than writing it. Debugging is a method, and people who follow the method fix things faster than people who guess."
+prerequisites: []
+estimated_minutes: 45
+status: migrated
+---
+
+## The method
+
+1. **Reproduce it.** Find the exact steps that make the bug happen every time.
+2. **Read the error.** All of it, from the last line up. It names the type of problem and the line.
+3. **Form one guess** about the cause, and decide what you would see if the guess were right.
+4. **Check the guess** by looking at real values, not by staring at the code.
+5. **Fix the cause**, not the symptom, then confirm the original steps now work.
+
+## Looking at real values
+
+```python
+def average(numbers):
+    print("DEBUG numbers =", numbers)      # the quickest tool there is
+    return sum(numbers) / len(numbers)
+```
+
+Better, use the **debugger**. In VS Code, click left of a line number to set a red **breakpoint**, then press F5. The program pauses there and you can inspect every variable and step forward one line at a time.
+
+## When you are stuck
+
+- **Halve the problem.** Is the data correct at the midpoint? Then the bug is in the second half. Repeat.
+- **Explain it aloud**, line by line, to a person or an object on your desk. The act of explaining exposes the wrong assumption surprisingly often.
+- **Search the exact error message** in quotes.
+- **Ask well**: what you expected, what happened, the smallest code that shows it, and what you already tried.
+- **Take a break.** Many bugs are solved on the walk back.
+
+The usual suspects: a misspelt name, off-by-one in a loop, text where a number was expected, changing a list while looping over it, and assuming a value that is actually empty.
+
+<Exercises set={0} />

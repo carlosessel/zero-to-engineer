@@ -1,0 +1,73 @@
+---
+title: "Python from zero: decisions, loops and functions"
+summary: "Programs become useful when they can choose, repeat, and be organised into reusable pieces."
+prerequisites: []
+estimated_minutes: 80
+status: migrated
+---
+
+## Comparing things
+
+```python
+5 > 3        # True
+5 == 5       # True   two equals signs ask "are these equal?"
+5 != 3       # True   "not equal"
+"a" == "A"   # False  capitals matter
+5 > 3 and 2 > 4   # False: both sides must be True
+5 > 3 or 2 > 4    # True: one side is enough
+```
+
+## Making decisions with if
+
+```python
+score = 72
+
+if score >= 80:
+    print("Excellent")
+elif score >= 50:
+    print("Pass")
+else:
+    print("Try again")
+```
+
+Two rules. The line ends with a colon. The lines that belong to it are **indented** by four spaces. Python uses that indentation to know what is inside the `if`, so the spaces are not decoration. Only the first matching branch runs; here it prints Pass.
+
+## Repeating with loops
+
+```python
+for i in range(5):        # i takes the values 0, 1, 2, 3, 4
+    print("Step", i)
+
+total = 0
+for n in range(1, 11):    # 1 up to 10; the end number is not included
+    total = total + n
+print(total)              # 55
+
+count = 3
+while count > 0:          # repeats as long as the condition is True
+    print(count)
+    count = count - 1
+print("Go!")
+```
+
+Use `for` when you know how many times. Use `while` when you repeat until something changes. If a `while` loop never ends, press Ctrl and C.
+
+## Functions: naming a piece of work
+
+```python
+def area(width, height):      # def creates a function; width and height are its inputs
+    return width * height     # return hands back the result
+
+print(area(3, 4))             # 12
+room = area(5, 6) + area(2, 2)
+
+def greet(name, greeting="Hello"):   # a default value
+    return f"{greeting}, {name}!"
+
+print(greet("Esi"))                  # Hello, Esi!
+print(greet("Esi", "Welcome"))       # Welcome, Esi!
+```
+
+A function lets you write logic once and use it many times. Every library you will use in AI is a collection of functions other people wrote. Note the difference: `print` shows a value on screen; `return` gives the value back to the code that called the function so it can be used.
+
+<Exercises set={0} />

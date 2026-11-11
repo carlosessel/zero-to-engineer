@@ -1,0 +1,42 @@
+---
+title: "Beyond text: images, audio and documents"
+summary: "Modern models read images and documents, listen, speak, and generate pictures. The engineering patterns you know carry over."
+prerequisites: [rag]
+estimated_minutes: 65
+status: migrated
+---
+
+## Vision input
+
+Multimodal models accept images in the same messages list as text. Uses include reading screenshots, charts, receipts, handwriting and photos.
+
+```python
+import base64
+data = base64.standard_b64encode(open("receipt.jpg", "rb").read()).decode()
+
+msg = client.messages.create(model=MODEL, max_tokens=400, messages=[{
+    "role": "user",
+    "content": [
+        {"type": "image", "source": {"type": "base64",
+                                     "media_type": "image/jpeg", "data": data}},
+        {"type": "text", "text": "List each item and its price as JSON."},
+    ]}])
+```
+
+## Documents
+
+PDFs are the everyday hard case. Text-based PDFs can be parsed with libraries; scanned ones need OCR or a vision model. Tables and multi-column layouts break naive extraction, and bad extraction silently ruins a retrieval system. Always look at the extracted text yourself.
+
+## Speech
+
+**Speech-to-text** models such as Whisper (open, runs locally) transcribe audio. **Text-to-speech** turns replies into voice. A voice assistant chains the three: transcribe, think, speak. The challenge is latency, so everything streams.
+
+## Image generation
+
+**Diffusion models** start from random noise and remove it step by step, guided by your text prompt. Open models such as Stable Diffusion can be run and fine-tuned yourself through the `diffusers` library.
+
+## Multimodal embeddings
+
+Models such as CLIP place images and text in the same vector space, so you can search photos with a sentence. Your retrieval pipeline from <Ref to="rag" /> works unchanged.
+
+<Exercises set={0} />

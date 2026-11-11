@@ -1,0 +1,70 @@
+---
+title: "JavaScript"
+summary: "JavaScript is the language that runs inside the browser and makes pages react. You already know programming; this is a second accent."
+prerequisites: []
+estimated_minutes: 95
+status: migrated
+---
+
+```js
+// Variables
+const name = "Ama";        // cannot be reassigned
+let count = 0;             // can be reassigned
+
+// Functions, two ways
+function add(a, b) { return a + b; }
+const double = (n) => n * 2;
+
+// Arrays and objects are Python's lists and dicts
+const prices = [10, 20, 30];
+const user = { name: "Kofi", age: 19 };
+console.log(user.name, prices[0]);         // console.log is print
+
+// Decisions and loops
+if (count === 0) { console.log("empty"); } // use === for comparing
+for (const p of prices) { console.log(p); }
+
+// The methods you will use every day
+const doubled = prices.map((p) => p * 2);        // [20, 40, 60]
+const big = prices.filter((p) => p > 15);        // [20, 30]
+const total = prices.reduce((sum, p) => sum + p, 0);
+
+console.log(`Total is ${total}`);          // backticks fill in ${values}
+```
+
+## Changing the page
+
+The browser turns HTML into a tree of objects called the **DOM**. JavaScript can find elements, change them, and respond to **events** such as clicks.
+
+```html
+<button id="like">Like</button> <span id="count">0</span>
+<script>
+  let likes = 0;
+  const button = document.querySelector("#like");
+  const label = document.querySelector("#count");
+  button.addEventListener("click", () => {
+    likes += 1;
+    label.textContent = likes;
+  });
+</script>
+```
+
+## Waiting for things
+
+Network calls take time, and JavaScript does not freeze the page while it waits. A slow operation returns a **promise**, and `await` pauses just that function until the result arrives.
+
+```js
+async function loadUser() {
+  try {
+    const response = await fetch("https://api.github.com/users/octocat");
+    if (!response.ok) throw new Error("Request failed: " + response.status);
+    const data = await response.json();
+    console.log(data.name);
+  } catch (error) {
+    console.error(error);
+  }
+}
+loadUser();
+```
+
+<Exercises set={0} />

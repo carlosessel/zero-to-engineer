@@ -1,0 +1,66 @@
+---
+title: "Back ends and APIs"
+summary: "The back end is the program on the server. It receives requests, applies the rules, talks to the database, and sends back data."
+prerequisites: []
+estimated_minutes: 70
+status: migrated
+---
+
+```bash
+pip install fastapi uvicorn
+```
+
+```python
+# main.py
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+
+app = FastAPI()
+tasks = {}            # stands in for a database for now
+next_id = 1
+
+class TaskIn(BaseModel):
+    title: str
+    done: bool = False
+
+@app.get("/tasks")
+def list_tasks():
+    return list(tasks.values())
+
+@app.post("/tasks", status_code=201)
+def create_task(task: TaskIn):
+    global next_id
+    saved = {"id": next_id, **task.model_dump()}
+    tasks[next_id] = saved
+    next_id += 1
+    return saved
+
+@app.get("/tasks/{task_id}")
+def get_task(task_id: int):
+    if task_id not in tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+    return tasks[task_id]
+
+@app.delete("/tasks/{task_id}", status_code=204)
+def delete_task(task_id: int):
+    tasks.pop(task_id, None)
+```
+
+Run `uvicorn main:app --reload` and open `localhost:8000/docs` for a page where you can try each endpoint.
+
+## REST: the common style
+
+URLs name **things** (`/tasks`, `/tasks/7`), and HTTP methods say what to do with them. Data travels as JSON. Status codes report the outcome.
+
+## What a good API does
+
+- **Validates every input.** Never trust what a client sends. Here `TaskIn` rejects a request with a missing title.
+- Returns clear errors with the right status code.
+- Stays consistent in naming and shape.
+- Limits and paginates large lists.
+- Keeps secrets such as passwords and keys in **environment variables**, never in the code.
+- Is documented.
+
+Other back-end choices follow the same pattern: Django and Flask in Python, Express in JavaScript, Spring in Java, ASP.NET in C#, and Go’s standard library.
+
+<Exercises set={0} />

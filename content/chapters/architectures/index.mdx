@@ -1,0 +1,43 @@
+---
+title: "Architectures and the craft of training"
+summary: "Different data shapes get different network designs. And training well is a craft with a known checklist."
+prerequisites: []
+estimated_minutes: 45
+status: migrated
+---
+
+## The families
+
+| Architecture | Idea | Used for |
+| --- | --- | --- |
+| MLP (fully connected) | Every input connects to every neuron | Small tabular problems, final layers |
+| CNN (convolutional) | Small filters slide over the image, sharing weights | Images, audio spectrograms |
+| RNN / LSTM | Reads a sequence one step at a time, carrying memory | Older sequence models; mostly replaced |
+| Transformer | Every position looks at every other position at once | Text, and now images, audio and video |
+| Diffusion | Learns to remove noise step by step | Image, audio and video generation |
+
+## Transfer learning
+
+You almost never train from scratch. You take a model someone trained on huge data and **fine-tune** it on your smaller dataset. A few hundred labelled images can beat months of training from zero.
+
+```python
+from torchvision import models
+from torch import nn
+
+model = models.resnet18(weights="DEFAULT")       # pretrained on ImageNet
+for p in model.parameters():
+    p.requires_grad = False                      # freeze what it knows
+model.fc = nn.Linear(model.fc.in_features, 2)    # new head: your 2 classes
+```
+
+## The training checklist
+
+- First overfit a single batch. If the model cannot memorise 32 examples, there is a bug.
+- Plot training and validation loss together. Diverging curves mean overfitting.
+- Tune learning rate first; use a schedule that warms up, then decays.
+- Normalise inputs. Use batch or layer normalisation inside the network.
+- Regularise with dropout, weight decay and data augmentation.
+- Stop early and keep the checkpoint with the best validation score.
+- Look at the examples the model gets wrong. This teaches more than any metric.
+
+<Exercises set={0} />

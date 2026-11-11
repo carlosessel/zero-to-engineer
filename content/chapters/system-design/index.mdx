@@ -1,0 +1,37 @@
+---
+title: "System design: building for scale"
+summary: "What changes when you go from a hundred users to ten million? A handful of building blocks, combined with judgement about trade-offs."
+prerequisites: []
+estimated_minutes: 60
+status: migrated
+---
+
+## Start simple
+
+One server and one database handle far more than beginners expect. Add complexity only when measurements say you must.
+
+## The building blocks
+
+- **Vertical scaling**: a bigger machine. Simple, with a ceiling.
+- **Horizontal scaling**: more machines behind a **load balancer** that spreads requests. This requires **stateless** servers: no user data kept in a server’s memory, so any server can answer any request.
+- **Caching**: keep the result of expensive work somewhere fast, such as Redis, and reuse it. The hard part is knowing when the cached copy is out of date.
+- **CDN**: copies of your images, scripts and pages on servers near users worldwide.
+- **Database replicas**: copies that serve reads, while one primary takes writes.
+- **Sharding**: splitting data across several databases. Powerful and painful; a last resort.
+- **Message queues**: the web server puts slow work, such as sending email or resizing video, on a queue and replies immediately; workers process it later.
+- **Rate limiting**: capping requests per user to protect the system.
+
+## The trade-offs
+
+- **Consistency or availability**: when machines cannot reach each other, you either refuse some requests or risk serving stale data. Banks choose consistency; a social feed chooses availability.
+- **Latency or throughput**, **cost or speed**, **simplicity or flexibility**. There is no best design, only a best fit for the requirements.
+
+## How to approach a design question
+
+1. Clarify requirements: what must it do, for how many users, how fast, how reliable?
+2. Estimate the numbers: requests per second, data stored per year.
+3. Sketch the simplest design that works: client, server, database.
+4. Find the bottleneck and address it with one of the blocks above.
+5. State the trade-offs and the failure cases: what happens when each part dies?
+
+<Exercises set={0} />

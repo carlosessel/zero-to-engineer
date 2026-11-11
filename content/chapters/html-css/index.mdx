@@ -1,0 +1,64 @@
+---
+title: "HTML and CSS"
+summary: "Every web page is built from two languages: HTML says what is on the page, CSS says how it looks."
+prerequisites: []
+estimated_minutes: 70
+status: migrated
+---
+
+Create a file called `index.html`, type this, and open it in your browser:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>My first page</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header><h1>Ama's Bakery</h1></header>
+  <main>
+    <p class="intro">Fresh bread every <strong>morning</strong>.</p>
+    <ul>
+      <li>Sugar bread</li>
+      <li>Tea bread</li>
+    </ul>
+    <a href="menu.html">See the menu</a>
+    <img src="bread.jpg" alt="A loaf of sugar bread">
+  </main>
+</body>
+</html>
+```
+
+HTML is made of **elements** written as **tags**: an opening `<p>`, content, a closing `</p>`. Tags can carry **attributes** such as `href` and `class`. Use tags for their meaning (`header`, `main`, `nav`, `button`) so that screen readers and search engines understand the page.
+
+```css
+/* style.css */
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 16px;
+}
+h1 { color: #7a3e00; }
+.intro { font-size: 1.2rem; }          /* a dot selects by class */
+
+ul { display: flex; gap: 12px; list-style: none; padding: 0; }
+li { background: #fff3d1; padding: 8px 12px; border-radius: 8px; }
+
+@media (max-width: 500px) {            /* rules for small screens */
+  ul { flex-direction: column; }
+}
+```
+
+## The CSS ideas that matter
+
+- **Selectors** choose elements: by tag (`p`), class (`.intro`) or id (`#menu`).
+- **The box model**: every element is a box with content, padding inside the border, and margin outside it.
+- **Flexbox** lays items out in a row or column. **Grid** lays them out in rows and columns.
+- **Responsive design**: the layout adapts to screen width using flexible sizes and media queries.
+- **Accessibility**: images need `alt` text, text needs contrast, and everything must work from the keyboard.
+
+<Exercises set={0} />

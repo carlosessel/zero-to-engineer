@@ -1,0 +1,35 @@
+---
+title: "Deploying and operating"
+summary: "Launch day is the start. AI systems drift: users change, data changes, and providers update models under you."
+prerequisites: []
+estimated_minutes: 60
+status: migrated
+---
+
+## Log everything, then look at it
+
+For every request, record the full prompt, the response, retrieved chunks, tool calls, tokens, latency, cost, and the versions of the prompt and model. This is a **trace**. Tracing tools for model applications exist, but a database table is a fine start. Read real traces every week. Nothing else improves a product as quickly.
+
+## What to monitor
+
+- Latency (median and slowest 5%), error rate, cost per request.
+- User feedback: thumbs up and down, edits, retries, abandoned sessions.
+- Quality: run a model-graded check on a sample of live traffic.
+- Retrieval: how often nothing relevant was found.
+
+## Release discipline
+
+- Prompts and model names are versioned configuration, reviewed like code.
+- Your eval suite runs in continuous integration and blocks a release that drops quality.
+- Pin model versions. Evaluate before upgrading.
+- Roll out changes to a small share of users first, and compare.
+
+## Deployment basics
+
+Package the backend with Docker. Deploy to any platform that runs containers. Keep keys in a secrets manager. For models you host yourself, you also manage GPUs, autoscaling and model files; start with a managed inference service before running your own.
+
+## MLOps for trained models
+
+If you train models, add: versioned datasets, experiment tracking (Weights & Biases or MLflow), a model registry, and automated retraining when live data drifts from the training data.
+
+<Exercises set={0} />

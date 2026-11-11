@@ -1,0 +1,52 @@
+---
+title: "Structured output"
+summary: "Software cannot use a paragraph. To connect a model to code, you need output in a shape your program can parse and trust."
+prerequisites: []
+estimated_minutes: 50
+status: migrated
+---
+
+## Ask for JSON, then validate
+
+```bash
+pip install pydantic
+```
+
+````python
+import json
+from pydantic import BaseModel, ValidationError
+
+class Invoice(BaseModel):
+    vendor: str
+    total: float
+    currency: str
+    due_date: str | None
+
+PROMPT = """Extract the invoice fields from the text below.
+Reply with JSON only, using exactly these keys:
+vendor (string), total (number), currency (3-letter code),
+due_date (YYYY-MM-DD or null if absent).
+
+<invoice>{text}</invoice>"""
+
+def extract(text: str, tries: int = 3) -> Invoice:
+    messages = [{"role": "user", "content": PROMPT.format(text=text)}]
+    for _ in range(tries):
+        msg = client.messages.create(model=MODEL, max_tokens=300,
+                                     temperature=0, messages=messages)
+        raw = msg.content[0].text.strip().removeprefix("```json").removesuffix("```")
+        try:
+            return Invoice(**json.loads(raw))
+        except (json.JSONDecodeError, ValidationError) as e:
+            messages += [{"role": "assistant", "content": msg.content[0].text},
+                         {"role": "user", "content": f"That was invalid: {e}. Reply with corrected JSON only."}]
+    raise ValueError("could not extract invoice")
+````
+
+Three ideas are at work: a schema defines the contract, validation catches bad output before it reaches the rest of your system, and a retry feeds the error back so the model can fix it.
+
+## Stronger guarantees
+
+Most providers offer features that constrain output to a JSON schema, and tool use (next chapter) is another reliable route to structured data. Check your provider’s documentation and prefer those when available. Validate anyway: well-formed JSON can still contain wrong values.
+
+<Exercises set={0} />

@@ -1,0 +1,53 @@
+---
+title: "Git with other people"
+summary: "On a team, many people change the same code at once. Branches and pull requests are how that works without chaos."
+prerequisites: []
+estimated_minutes: 75
+status: migrated
+---
+
+## Branches
+
+A **branch** is a separate line of work. The main branch holds the working product. You make a branch for each change, so unfinished work never breaks main.
+
+```bash
+git switch -c add-login          # create a branch and move to it
+# ... edit, then ...
+git add .
+git commit -m "Add login form"
+git push -u origin add-login     # upload the branch to GitHub
+```
+
+## Pull requests
+
+On GitHub you open a **pull request**: a proposal to merge your branch into main. Teammates read the changes, comment, and approve. Automated tests run. Then it is merged. This review step catches bugs and spreads knowledge.
+
+```bash
+git switch main
+git pull                         # get everyone else's merged work
+git switch -c next-feature
+```
+
+## Merge conflicts
+
+If two people change the same lines, Git cannot choose and marks the file:
+
+```text
+<<<<<<< HEAD
+price = 50
+=======
+price = 55
+>>>>>>> add-discount
+```
+
+Edit the file to the correct final version, delete the marker lines, then `git add` and commit. Conflicts are routine. Small, frequent pull requests keep them rare.
+
+## Good habits
+
+- One pull request does one thing and is small enough to review in fifteen minutes.
+- Commit messages say why: “Fix total when cart is empty”.
+- Never commit passwords or keys. Use a `.gitignore` file to exclude them.
+- `git diff` before you commit; read your own change first.
+- Undo safely with `git revert`, which adds a new commit that reverses an old one.
+
+<Exercises set={0} />

@@ -1,0 +1,35 @@
+---
+title: "Gradient descent: how models learn"
+summary: "Almost every model in this course, from a straight line to a language model with billions of weights, is trained by the same loop."
+prerequisites: []
+estimated_minutes: 45
+status: migrated
+---
+
+1. Make predictions with the current weights.
+2. Measure the loss.
+3. Compute the gradient: for each weight, which direction makes the loss go up.
+4. Move each weight a small step the opposite way.
+5. Repeat.
+
+The size of the step is the **learning rate**. It is the most important setting in training.
+
+<Demo name="gradient-descent" />
+
+What you should have seen: a tiny learning rate creeps; a moderate one converges quickly; a rate that is too high overshoots the minimum, and each step lands further away than the last. When a real training run shows loss going to `nan` or jumping around, the learning rate is the first suspect.
+
+## In code
+
+```python
+w = -4.0                       # start anywhere
+lr = 0.1
+for step in range(50):
+    loss = (w - 3) ** 2        # how wrong we are
+    grad = 2 * (w - 3)         # slope of the loss at w
+    w = w - lr * grad          # step downhill
+print(w)                       # ~3.0
+```
+
+Real models have millions of weights and compute the loss on a small random **batch** of examples at each step (stochastic gradient descent), but the loop is identical. One pass through all the training data is an **epoch**.
+
+<Exercises set={0} />

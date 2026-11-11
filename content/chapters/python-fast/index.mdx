@@ -1,0 +1,77 @@
+---
+title: "Python habits you will use in AI code"
+summary: "You know the basics now. These are the shorter, more compact ways of writing Python that you will see in every AI codebase."
+prerequisites: []
+estimated_minutes: 75
+status: migrated
+---
+
+## Compact Python
+
+```python
+# Type hints (the : and -> parts) say what goes in and what comes out.
+def describe(scores: list[float]) -> str:
+    avg = sum(scores) / len(scores)
+    if avg >= 0.8:
+        return f"good ({avg:.2f})"
+    return f"needs work ({avg:.2f})"
+
+names = ["ama", "kofi", "esi"]
+ages = {"ama": 21, "kofi": 19}
+
+# A comprehension builds a list or dict from a loop in one line
+upper = [n.upper() for n in names if len(n) > 3]
+lengths = {n: len(n) for n in names}
+
+# Slicing
+names[0], names[-1], names[1:]
+
+# Unpacking and looping
+for i, name in enumerate(names):
+    print(i, name)
+for name, age in ages.items():
+    print(name, age)
+```
+
+## Classes, files, errors
+
+```python
+from dataclasses import dataclass
+import json
+
+@dataclass
+class Doc:
+    title: str
+    text: str
+
+    def words(self) -> int:
+        return len(self.text.split())
+
+with open("docs.json") as f:          # closes the file for you
+    docs = [Doc(**d) for d in json.load(f)]
+
+try:
+    docs[99]
+except IndexError as e:
+    print("no such doc:", e)
+```
+
+## Async
+
+Model calls are slow network calls, so you will often want several running at the same time instead of one after another. An `async` function can pause at each `await` while it waits, letting others run. `asyncio.gather` starts several and collects all the results.
+
+```python
+import asyncio
+
+async def ask(q: str) -> str:
+    await asyncio.sleep(1)            # stands in for a model call
+    return q.upper()
+
+async def main():
+    answers = await asyncio.gather(*(ask(q) for q in ["a", "b", "c"]))
+    print(answers)                    # takes 1 second, not 3
+
+asyncio.run(main())
+```
+
+<Exercises set={0} />

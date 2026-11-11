@@ -1,0 +1,35 @@
+---
+title: "Security"
+summary: "Every application on the internet is probed by automated attacks within minutes of going live. Security is a habit in everyday code, not a final step."
+prerequisites: []
+estimated_minutes: 60
+status: migrated
+---
+
+## The rule under all the others
+
+**Never trust input.** Anything from a user, a browser, a file or another system may be hostile. Validate it on the server.
+
+## The attacks you must know
+
+| Attack | What happens | Defence |
+| --- | --- | --- |
+| SQL injection | User text is run as part of a database query | Parameterised queries, always |
+| Cross-site scripting (XSS) | An attacker’s script runs in other users’ browsers | Escape anything you put into a page; frameworks do this by default |
+| Cross-site request forgery (CSRF) | Another site makes the user’s browser send a request to yours | CSRF tokens; SameSite cookies |
+| Broken access control | A user reads or changes data that is not theirs | Check ownership on the server for every request |
+| Leaked secrets | Keys or passwords committed to Git | Environment variables and a secrets manager; rotate anything exposed |
+| Vulnerable dependencies | A library you use has a known hole | Keep dependencies updated; use automated scanning |
+| Password guessing | Automated login attempts | Rate limits, strong hashing, two-factor authentication |
+
+## Principles
+
+- **Least privilege**: every user, service and key gets only the access it needs.
+- **Defence in depth**: several layers, so one failure is not a breach.
+- **HTTPS everywhere.**
+- **Do not invent cryptography.** Use well-known libraries.
+- **Collect less data.** What you do not store cannot leak. Know the privacy law that covers your users.
+- **Log security events**, and never log passwords or card numbers.
+- **Fail closed**: when a check errors, deny.
+
+<Exercises set={0} />

@@ -1,0 +1,26 @@
+---
+title: "Sampling: where the randomness comes from"
+summary: "The model outputs probabilities for the next token. How you pick from them changes the personality of the output."
+prerequisites: []
+estimated_minutes: 40
+status: migrated
+---
+
+<Demo name="temperature" />
+
+**Temperature** divides the scores before softmax. Low values sharpen the distribution so the top choice nearly always wins: consistent and focused. High values flatten it: more varied, eventually incoherent.
+
+## The settings you will use
+
+- **temperature**: near 0 for extraction, classification and code; higher for brainstorming and creative writing.
+- **top\_p**: only sample from the smallest set of tokens whose probabilities add up to p. Change this or temperature, not both.
+- **max\_tokens**: a hard limit on output length. Output cut off mid-sentence usually means you hit it.
+- **stop sequences**: strings that end generation when produced.
+
+<Note>
+
+Even at temperature 0, do not assume identical output every time. Design your application to tolerate variation, and test with several runs.
+
+</Note>
+
+<Exercises set={0} />

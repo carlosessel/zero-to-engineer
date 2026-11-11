@@ -1,0 +1,40 @@
+---
+title: "Data structures"
+summary: "A data structure is a way of organising data so that the operations you need are fast. Picking the right one is half of writing efficient code."
+prerequisites: []
+estimated_minutes: 65
+status: migrated
+---
+
+| Structure | What it is | Fast at | In Python |
+| --- | --- | --- | --- |
+| Array / list | Items in order, by position | Reading by position; adding at the end | `list` |
+| Hash map | Key to value lookup | Finding, adding, removing by key | `dict` |
+| Set | Unique items, no order | “Have I seen this?” | `set` |
+| Stack | Last in, first out | Undo, back button, function calls | `list` with append/pop |
+| Queue | First in, first out | Jobs waiting in line | `collections.deque` |
+| Linked list | Items each pointing to the next | Inserting in the middle | rarely needed |
+| Tree | Items with children, like folders | Hierarchies; sorted data | your own class |
+| Heap | Always gives the smallest item | Priority queues | `heapq` |
+| Graph | Items connected by links | Maps, social networks, dependencies | `dict` of lists |
+
+## Why a dictionary is fast
+
+A hash map runs the key through a **hash function** that turns it into a number, and uses that number to jump straight to where the value is stored. No searching. That is why `x in my_set` is instant while `x in my_list` checks every item.
+
+```python
+stack = []
+stack.append("page1"); stack.append("page2")
+stack.pop()                    # "page2": the most recent
+
+from collections import deque
+queue = deque(["job1", "job2"])
+queue.popleft()                # "job1": the oldest
+
+graph = {"Accra": ["Kumasi", "Tema"], "Kumasi": ["Accra", "Tamale"],
+         "Tema": ["Accra"], "Tamale": ["Kumasi"]}
+```
+
+In daily work you will use lists, dictionaries and sets constantly, and the others occasionally. Know what each is for so you recognise the moment.
+
+<Exercises set={0} />
