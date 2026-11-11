@@ -4,8 +4,13 @@
 interface Props { name: string }
 const { name } = Astro.props;
 const all = import.meta.glob('../demos/html/*.html', { query: '?raw', import: 'default', eager: true }) as Record<string, string>;
-const html = all[`../demos/html/${name}.html`];
-if (!html) throw new Error(`No demo called "${name}" in src/demos/html.`);
+const raw = all[`../demos/html/${name}.html`];
+if (!raw) throw new Error(`No demo called "${name}" in src/demos/html.`);
+// Two accessibility fixes applied to the ported markup:
+// - the box title is a level-2 heading, so heading levels never skip when a
+//   demo comes before the chapter's first section;
+// - the read-out under each demo is announced by screen readers when it changes.
+const html = raw.replace(/<(\/?)h3>/g, '<$1h2>').replace(/class="read"/g, 'class="read" aria-live="polite"');
 ---
 <Fragment set:html={html} />
 <noscript><p class="note">This demo needs JavaScript switched on.</p></noscript>

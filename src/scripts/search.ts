@@ -1,12 +1,14 @@
 // Search uses Pagefind: an index built from the finished site, loaded in
 // small pieces by the browser. Nothing is sent to a server.
+import { isRelevant, markedWords } from '../lib/search';
 import { $ } from './store';
 
 const form = $<HTMLFormElement>('#searchForm')!;
 const input = $<HTMLInputElement>('#searchQ')!;
 const status = $('#searchStatus')!;
 const list = $('#searchResults')!;
-const MAX = 30;
+const MAX = 30; // shown
+const CONSIDER = 80; // loaded and filtered (the whole site is smaller than this)
 
 interface Hit { url: string; excerpt: string; meta: { title?: string; course?: string } }
 interface Pagefind {
@@ -39,10 +41,12 @@ async function run() {
   }
   const found = await pf.debouncedSearch(q, {}, 200);
   if (!found) return; // a newer search has replaced this one
-  const hits = await Promise.all(found.results.slice(0, MAX).map((r) => r.data()));
+  const all = await Promise.all(found.results.slice(0, CONSIDER).map((r) => r.data()));
   if (input.value.trim() !== q) return;
+  const relevant = all.filter((hit) => isRelevant(q, markedWords(hit.excerpt)));
+  const hits = relevant.slice(0, MAX);
   list.textContent = '';
-  const n = found.results.length;
+  const n = relevant.length;
   status.textContent = n === 0 ? `Nothing found for "${q}".` : `${n} ${n === 1 ? 'page' : 'pages'} found${n > MAX ? `; showing the first ${MAX}` : ''}.`;
   for (const hit of hits) {
     const li = document.createElement('li');

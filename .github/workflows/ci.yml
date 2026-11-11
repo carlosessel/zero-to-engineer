@@ -19,7 +19,7 @@ jobs:
       - run: npm ci
       - name: Type and content checks
         run: npm run check
-      - name: Unit tests (progress, course model, inline text)
+      - name: Unit tests
         run: npm test
       - name: Build the site
         run: npm run build
@@ -27,6 +27,16 @@ jobs:
         run: npm run verify:migration
       - name: Links inside the site
         run: npm run verify:links
+      - name: Install a browser for the end-to-end tests
+        run: npx playwright install --with-deps chromium
+      - name: End-to-end tests (progress, review, planner, search, accessibility, Python runner)
+        run: npm run test:e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-traces
+          path: test-results
+          retention-days: 3
       - uses: actions/upload-artifact@v7
         with:
           name: site

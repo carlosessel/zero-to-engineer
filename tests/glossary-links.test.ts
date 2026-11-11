@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-// @ts-expect-error plain JavaScript module, shared with astro.config.mjs
 import { linkTerms, termAnchor, termNames } from '../src/lib/glossary-links.mjs';
 
 const entries = [{ term: 'Model' }, { term: 'API' }, { term: 'Parameter (weight)' }, { term: 'Learning rate' }];

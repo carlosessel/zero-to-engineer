@@ -12,12 +12,18 @@ The two courses share their beginner chapters (the terminal and Python from zero
 This project is **under construction**. Read this before relying on it.
 
 - The chapters are currently short first drafts, moved word for word from two single-page prototypes (kept in `legacy/`). They are a spine, not yet a full course.
-- **No code example has been run under test yet.**
+- **No code example in the chapters has been run under test yet.**
 - The linked resources respond when opened, but their contents have not been reviewed.
 - No subject expert has reviewed any chapter.
-- Search, in-browser Python, spaced-repetition review, the study planner, glossary links and the projects section are planned and **not built yet**.
+- The projects section is planned and **not built yet**.
+
+What does work today: reading both courses on a phone or computer in light or dark mode, quizzes with explanations, tick-off exercises, saved progress with download and restore, a review page that brings back questions you got wrong, a study planner, search, a glossary, runnable Python in the browser, 12 interactive demos, a printable layout, and an "Ask a tutor" box that writes a prompt for whichever AI assistant you use.
 
 Every chapter page shows its own status. `PLAN.md` has the full plan and the list of known gaps; `CHANGELOG.md` records what has been done.
+
+## Privacy
+
+The site has no server, no accounts, no analytics and no cookies. Progress is kept in your browser. The only request to another company's servers happens when you press **Run** on a Python example: the Python runtime (Pyodide) is then downloaded from the jsDelivr CDN. The "Ask a tutor" box sends nothing anywhere; it copies text for you to paste.
 
 ## Run it on your own computer
 
@@ -37,13 +43,24 @@ Other commands:
 
 | Command | What it does |
 | --- | --- |
-| `npm run build` | Builds the finished site into `dist/` |
-| `npm run preview` | Serves `dist/` so you can try the built site |
-| `npm test` | Unit tests for progress, the course model and inline text |
+| `npm run build` | Builds the finished site into `dist/`, then builds the search index |
+| `npm run preview` | Serves `dist/` so you can try the built site (search only works here, not in `npm run dev`) |
+| `npm test` | Unit tests: progress, review scheduling, planner, course model, glossary links, tutor prompt, runner helpers |
+| `npm run test:e2e` | After a build: drives the site in a real browser (see below) |
 | `npm run check` | Type checks, and checks every chapter's front matter |
 | `npm run verify:migration` | After a build: proves no chapter is missing words compared with the prototypes |
-| `npm run verify:links` | After a build: checks every link between pages of the site |
-| `npm run verify` | All of the above, in order |
+| `npm run verify:links` | After a build: checks every link between pages of the site, including glossary anchors |
+| `npm run verify` | Everything above except the end-to-end tests, in order |
+
+The end-to-end tests need a browser installed once:
+
+```bash
+npx playwright install chromium
+```
+
+Or, to use Chrome if it is already on your computer, run them as `PW_CHANNEL=chrome npm run test:e2e`.
+
+They cover saved progress, export and import, the review queue, the planner, search, glossary links, the tutor box, demos, keyboard use, the phone menu, automated accessibility checks (axe) on 15 page types in light and dark mode, and running Python. The Python test needs an internet connection.
 
 ## How it is organised
 
@@ -55,19 +72,30 @@ content/
   courses/*.yaml               one file per course: parts, and the chapters in order
   glossary.yaml                every glossary term
 src/
-  pages/                       the home page, course pages, chapter pages, progress page
+  pages/                       home, course and chapter pages, review, planner, search, glossary, progress
   components/                  pieces a chapter can use (see below)
-  lib/                         logic with unit tests: progress, course model, inline text
+  lib/                         logic with unit tests: progress, review, planner, course model,
+                               glossary links, tutor prompt, inline text
+  runner/pyworker.js           runs Python in the browser (Pyodide, in a web worker)
   demos/                       the interactive demos
-  scripts/app.ts               what runs in the browser: progress, quizzes, theme
+  scripts/                     what runs in the browser
 scripts/                       migration and checking scripts
 tests/                         unit tests
+e2e/                           end-to-end tests
 legacy/                        the two original prototype pages, untouched
 ```
 
 A chapter exists **once**. A course is a list of chapter ids, so a chapter listed in both course files appears in both courses, is edited in one place, and a learner's progress in it counts for both.
 
 Progress is stored only in the learner's browser (`localStorage`). The progress page can download it as a file and restore it from one. Nothing is sent to a server.
+
+How the learning features work:
+
+- **Review.** A quiz question answered wrongly comes back on the review page the next day. Each correct review moves it up a box and it waits longer (1, 3, 7, 14, 30 days); a wrong answer sends it back to the start.
+- **Planner.** Lays unfinished chapters, in course order, onto weeks of the hours you enter, using each chapter's `estimated_minutes`.
+- **Runnable Python.** Every `python` code block gets Run and Edit buttons, unless it needs something a browser cannot provide (PyTorch, an API key, a file of yours); those say so instead. Examples on one page share one Python session, like cells in a notebook. A line that is just a value shows that value, as the `>>>` prompt does. `input()` works by re-running the program with the answers typed so far.
+- **Glossary links.** A term is linked to the glossary where a chapter puts it in bold, and capital-letter acronyms are linked where they first appear. To make a new term link, add it to `content/glossary.yaml` (an optional `aliases:` list adds other spellings).
+- **Search.** Pagefind builds an index from the finished site; the browser loads only the pieces it needs.
 
 ## Add a chapter
 
@@ -148,7 +176,7 @@ The workflow asks GitHub for the site's address and passes it to the build as `S
 
 ## Checks that run automatically
 
-- **CI** (`ci.yml`), on every push and pull request: type and content checks, unit tests, a full build, the no-lost-text check, and the internal link check.
+- **CI** (`ci.yml`), on every push and pull request: type and content checks, unit tests, a full build, the no-lost-text check, the internal link check, and the end-to-end tests in a real browser.
 - **Outside links** (`links.yml`), when content changes and every Monday: opens every link to another site.
 
 ## Licence

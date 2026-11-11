@@ -11,10 +11,13 @@
     "test": "vitest run",
     "verify:migration": "node scripts/verify-migration.mjs",
     "verify:links": "node scripts/check-internal-links.mjs",
-    "verify": "npm run check && npm test && npm run build && npm run verify:migration && npm run verify:links"
+    "verify": "npm run check && npm test && npm run build && npm run verify:migration && npm run verify:links",
+    "test:e2e": "playwright test"
   },
   "devDependencies": {
     "@astrojs/check": "^0.9.12",
+    "@axe-core/playwright": "^4.14.0",
+    "@playwright/test": "^1.65.0",
     "@types/node": "^26.6.6",
     "axe-core": "^4.14.0",
     "jsdom": "^29.1.1",
@@ -26,7 +29,7 @@
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.8",
     "@astrojs/mdx": "^8.1.5",
-    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource/bricolage-grotesque": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
     "@fontsource/jetbrains-mono": "^5.3.0",
     "astro": "^7.4.11"
