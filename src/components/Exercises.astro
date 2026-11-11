@@ -1,0 +1,24 @@
+---
+// The tick-off list for a chapter. The items live in exercises.yaml beside the chapter.
+import { getCourses, getExercises, pageContext, chapterHref } from '../lib/load';
+import { resolveRef } from '../lib/model';
+import { renderInline } from '../lib/inline';
+interface Props { set?: number }
+const { set = 0 } = Astro.props;
+const { course, chapterId } = await pageContext(Astro.url);
+if (!chapterId) throw new Error('<Exercises /> can only be used inside a chapter.');
+const sets = getExercises(chapterId);
+const ex = sets[set];
+if (!ex) throw new Error(`Chapter "${chapterId}" uses exercise set ${set}, but exercises.yaml has ${sets.length}.`);
+const courses = await getCourses();
+const ref = (id: string) => {
+  const t = resolveRef(courses, course?.id, id);
+  return { href: chapterHref(t.course, t.chapter.slug), number: t.chapter.number };
+};
+---
+<div class="try">
+  <h3>{ex.title}</h3>
+  {ex.items.map((item) => (
+    <label><input type="checkbox" data-check={`${chapterId}/${item.key}`} /><span set:html={renderInline(item.text, ref)} /></label>
+  ))}
+</div>

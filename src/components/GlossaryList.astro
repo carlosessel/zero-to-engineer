@@ -1,0 +1,18 @@
+---
+// The glossary for the course being read, from content/glossary.yaml.
+import { getGlossary, pageContext } from '../lib/load';
+const { course } = await pageContext(Astro.url);
+if (!course) throw new Error('<GlossaryList /> can only be used inside a course.');
+const entries = getGlossary()
+  .filter((e) => e.courses.includes(course.id))
+  .map((e) => ({ term: e.term, definition: e.definitions?.[course.id] ?? e.definition ?? '' }));
+const anchor = (term: string) => 'term-' + term.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+---
+<dl class="gloss">
+  {entries.map((e) => (
+    <>
+      <dt id={anchor(e.term)}>{e.term}</dt>
+      <dd>{e.definition}</dd>
+    </>
+  ))}
+</dl>

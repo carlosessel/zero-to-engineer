@@ -1,0 +1,16 @@
+---
+import type { QuizQuestion } from '../lib/load';
+interface Props { chapter: string; questions: QuizQuestion[] }
+const { chapter, questions } = Astro.props;
+---
+<section class="quiz" data-quiz={chapter} aria-labelledby="quiz-heading">
+  <h2 id="quiz-heading">Check yourself</h2>
+  <noscript><p class="note">The quiz needs JavaScript switched on to check your answers.</p></noscript>
+  {questions.map((q, qi) => (
+    <div class="q" data-q={qi} data-answer={q.answer} role="group" aria-labelledby={`q${qi}`}>
+      <p id={`q${qi}`}>{qi + 1}. {q.question}</p>
+      {q.options.map((o, oi) => <button type="button" data-o={oi}>{o}</button>)}
+      <div class="why" hidden role="status" data-why={q.explanation}></div>
+    </div>
+  ))}
+</section>

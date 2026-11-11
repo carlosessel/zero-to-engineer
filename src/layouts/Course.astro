@@ -1,0 +1,41 @@
+---
+import Base from './Base.astro';
+import { chapterHref, href } from '../lib/load';
+import type { Course } from '../lib/model';
+interface Props { course: Course; current?: string; title: string; description?: string }
+const { course, current, title, description } = Astro.props;
+---
+<Base title={title} description={description}>
+  <div class="topbar">
+    <a class="home" href={href('/')}><b>{course.title}</b></a>
+    <button class="btn ghost" id="menuBtn" aria-expanded="false" aria-controls="side">Chapters</button>
+  </div>
+  <div class="shell">
+    <aside class="side" id="side">
+      <p class="brand"><a href={href(`/${course.id}/`)}>{course.title}</a><small>{course.tagline}</small></p>
+      <div class="meter" data-meter={course.chapters.map((c) => c.id).join(' ')}>
+        <div class="bar"><i></i></div><span></span>
+      </div>
+      <nav class="nav" aria-label="Chapters">
+        {course.parts.map((p) => (
+          <>
+            <p class="part">{p.name}</p>
+            {p.chapters.map((c) => (
+              <a href={chapterHref(course, c.slug)} data-nav-chapter={c.id} aria-current={c.id === current ? 'page' : undefined}>
+                <span class="n">{c.number}</span><span>{c.title}</span><span class="tick" hidden> (done)</span>
+              </a>
+            ))}
+          </>
+        ))}
+      </nav>
+      <p class="sidelinks">
+        <a href={href('/')}>All courses</a>
+        <a href={href('/progress/')}>Save or restore progress</a>
+        <button class="btn ghost" type="button" data-theme-toggle>Theme: auto</button>
+      </p>
+    </aside>
+    <main id="main" tabindex="-1">
+      <slot />
+    </main>
+  </div>
+</Base>

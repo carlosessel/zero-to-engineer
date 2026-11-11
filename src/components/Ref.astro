@@ -1,0 +1,12 @@
+---
+// A link to another chapter, by id. Prints the right chapter number for the
+// course being read: <Ref to="sampling" /> -> "chapter 24".
+import { getCourses, pageContext, chapterHref } from '../lib/load';
+import { resolveRef } from '../lib/model';
+interface Props { to: string; bare?: boolean }
+const { to, bare = false } = Astro.props;
+const { course } = await pageContext(Astro.url);
+const t = resolveRef(await getCourses(), course?.id, to);
+const label = Astro.slots.has('default') ? await Astro.slots.render('default') : bare ? String(t.chapter.number) : `chapter ${t.chapter.number}`;
+---
+<a href={chapterHref(t.course, t.chapter.slug)} set:html={label} />

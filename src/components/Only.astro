@@ -1,0 +1,8 @@
+---
+// Text that appears in one course only, inside a chapter shared by several.
+import { pageContext } from '../lib/load';
+interface Props { course: string }
+const { course } = await pageContext(Astro.url);
+const show = course?.id === Astro.props.course;
+---
+{show && <slot />}

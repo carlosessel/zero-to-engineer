@@ -1,0 +1,65 @@
+---
+import { render, getEntry } from 'astro:content';
+import Course from '../../layouts/Course.astro';
+import Quiz from '../../components/Quiz.astro';
+import Ref from '../../components/Ref.astro';
+import Only from '../../components/Only.astro';
+import Note from '../../components/Note.astro';
+import Exercises from '../../components/Exercises.astro';
+import Demo from '../../components/Demo.astro';
+import Route from '../../components/Route.astro';
+import GlossaryList from '../../components/GlossaryList.astro';
+import { getCourses, getQuiz, chapterHref } from '../../lib/load';
+import { coursesContaining } from '../../lib/model';
+
+export async function getStaticPaths() {
+  const courses = await getCourses();
+  return courses.flatMap((course) =>
+    course.chapters.map((chapter) => ({ params: { course: course.id, slug: chapter.slug }, props: { courseId: course.id, chapterId: chapter.id } })),
+  );
+}
+
+const { courseId, chapterId } = Astro.props;
+const courses = await getCourses();
+const course = courses.find((c) => c.id === courseId)!;
+const chapter = course.chapters.find((c) => c.id === chapterId)!;
+const entry = (await getEntry('chapters', chapterId))!;
+const { Content } = await render(entry);
+const quiz = getQuiz(chapterId);
+const prev = course.chapters[chapter.number - 2];
+const next = course.chapters[chapter.number];
+const sharedWith = coursesContaining(courses, chapterId).filter((c) => c.id !== course.id);
+const hours = entry.data.estimated_minutes / 60;
+const time = hours < 1 ? `${entry.data.estimated_minutes} minutes` : `${hours.toFixed(1).replace('.0', '')} ${hours === 1 ? 'hour' : 'hours'}`;
+const statusText = {
+  migrated: 'Moved from the prototype unchanged. Not yet deepened; code not yet run; resources not yet checked.',
+  deepened: 'Deepened. Code not yet run under test.',
+  'code-verified': 'Deepened, and every code example runs under test.',
+  'resources-verified': 'Deepened, code tested, and every linked resource opened and checked.',
+}[entry.data.status];
+---
+<Course course={course} current={chapterId} title={`${chapter.title} · ${course.title}`} description={entry.data.summary}>
+  <article data-chapter={chapterId}>
+    <p class="crumb">Chapter {chapter.number} of {course.chapters.length}, {chapter.part}</p>
+    <h1>{chapter.title}</h1>
+    <p class="chapmeta">
+      <span>About {time} with the exercises (a rough estimate)</span>
+      {sharedWith.map((c) => <span>Also part of <a href={chapterHref(c, c.chapters.find((x) => x.id === chapterId)!.slug)}>{c.title}</a>; your progress counts in both</span>)}
+      <span class="status">{statusText}</span>
+    </p>
+    <div class="body" data-migrated-body>
+      <p class="lead">{entry.data.summary}</p>
+      <Content components={{ Ref, Only, Note, Exercises, Demo, Route, GlossaryList }} />
+    </div>
+    {quiz.length > 0 && <Quiz chapter={chapterId} questions={quiz} />}
+    <div class="foot">
+      {prev ? <a class="btn ghost" href={chapterHref(course, prev.slug)}>Previous chapter</a> : <span></span>}
+      <span class="donebtns">
+        <button class="btn ghost" type="button" data-undone={chapterId} hidden>Mark as not done</button>
+        <button class="btn" type="button" data-done={chapterId} data-next={next ? chapterHref(course, next.slug) : undefined}>
+          {next ? 'Mark done and continue' : 'Mark chapter done'}
+        </button>
+      </span>
+    </div>
+  </article>
+</Course>

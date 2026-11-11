@@ -1,0 +1,26 @@
+---
+import Course from '../../layouts/Course.astro';
+import { getCourses, chapterHref } from '../../lib/load';
+
+export async function getStaticPaths() {
+  return (await getCourses()).map((course) => ({ params: { course: course.id }, props: { courseId: course.id } }));
+}
+const course = (await getCourses()).find((c) => c.id === Astro.props.courseId)!;
+---
+<Course course={course} title={course.title} description={course.tagline}>
+  <article>
+    <p class="crumb">{course.chapters.length} chapters in {course.parts.length} parts</p>
+    <h1>{course.title}</h1>
+    <p class="lead">{course.tagline}</p>
+    <p><a class="btn" href={chapterHref(course, course.chapters[0].slug)} data-resume={course.chapters.map((c) => `${c.id}=${chapterHref(course, c.slug)}`).join(' ')}>Start at chapter 1</a></p>
+    {course.parts.map((p, i) => (
+      <section>
+        <h2>Part {i + 1}: {p.name}</h2>
+        <p class="hint">{p.blurb}</p>
+        <ol class="toc" start={p.chapters[0].number}>
+          {p.chapters.map((c) => <li><a href={chapterHref(course, c.slug)} data-nav-chapter={c.id}>{c.title}<span class="tick" hidden> (done)</span></a></li>)}
+        </ol>
+      </section>
+    ))}
+  </article>
+</Course>

@@ -1,0 +1,29 @@
+---
+import Base from '../layouts/Base.astro';
+import { getCourses, href } from '../lib/load';
+const courses = await getCourses();
+---
+<Base title="Your progress · Zero to Engineer" description="Export, import or erase your progress.">
+  <main id="main" class="home" tabindex="-1">
+    <p class="crumb"><a href={href('/')}>Zero to Engineer</a></p>
+    <h1>Your progress</h1>
+    <p class="lead">Your progress is kept in this browser on this device, and nowhere else. Nothing is sent to a server.</p>
+    {courses.map((c) => (
+      <div class="meter" data-meter={c.chapters.map((x) => x.id).join(' ')}>
+        <strong>{c.title}</strong>
+        <div class="bar"><i></i></div><span></span>
+      </div>
+    ))}
+    <h2>Save a copy</h2>
+    <p>Download a file containing your finished chapters, ticked exercises and quiz answers. Keep it as a backup, or use it to move to another browser or device.</p>
+    <p><button class="btn" type="button" id="exportBtn">Download my progress</button></p>
+    <h2>Restore from a copy</h2>
+    <p>Choose a file you downloaded earlier. It <strong>replaces</strong> the progress stored in this browser.</p>
+    <p><label for="importFile">Progress file</label><br /><input type="file" id="importFile" accept="application/json,.json" /></p>
+    <p><button class="btn" type="button" id="importBtn" disabled>Replace my progress with this file</button></p>
+    <h2>Start again</h2>
+    <p>Erase everything stored by this site in this browser. This cannot be undone, so download a copy first if you might want it back.</p>
+    <p><button class="btn ghost" type="button" id="resetBtn">Erase my progress</button></p>
+    <p id="progressMsg" class="note" role="status" hidden></p>
+  </main>
+</Base>

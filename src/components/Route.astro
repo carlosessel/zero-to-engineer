@@ -1,0 +1,14 @@
+---
+// The list of parts on a course's first chapter.
+import { pageContext, chapterHref } from '../lib/load';
+const { course } = await pageContext(Astro.url);
+if (!course) throw new Error('<Route /> can only be used inside a course.');
+---
+<ul class="roadmap" data-generated>
+  {course.parts.map((p) => (
+    <li>
+      <a href={chapterHref(course, p.chapters[0].slug)}><b>{p.name}</b></a>
+      <span>{p.blurb} ({p.chapters.length} {p.chapters.length === 1 ? 'chapter' : 'chapters'})</span>
+    </li>
+  ))}
+</ul>
