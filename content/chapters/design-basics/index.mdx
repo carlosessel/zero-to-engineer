@@ -1,0 +1,295 @@
+---
+title: "Design basics for developers"
+summary: "Spacing, alignment, type and colour choices that make a page look deliberate."
+prerequisites: [responsive-design]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will be able to take a page that works but looks amateur and make it look deliberate and calm, using a handful of rules about spacing, alignment, type and colour. You do not need to be an artist. Most of what makes a page look professional is consistency, and consistency is something developers are good at.
+
+Developers usually work from a designer's mock-up. But on small teams, side projects and portfolios, you are the designer, and even with a designer, knowing why a design works helps you build it faithfully and fill the gaps the mock-up leaves.
+
+## Hierarchy: what to look at first
+
+**Visual hierarchy** is the order in which the eye notices things. A page with good hierarchy makes the most important thing obvious, the next thing next, and so on. You create it with:
+
+- **size**: bigger is noticed first;
+- **font weight**: bold stands out from regular;
+- **colour and contrast**: a strong colour or dark text stands out from grey;
+- **space**: something with room round it stands out from something crowded.
+
+A common beginner mistake is to make everything stand out: many colours, many sizes, everything bold. Then nothing does. Use fewer differences, and make them count. For less important text, such as dates and captions, lighter colour or smaller size is often better than a third font or a new colour (keeping within the 4.5:1 contrast rule).
+
+## Space
+
+Space is the cheapest way to make a page look better. Two rules:
+
+1. **Be generous.** Beginners almost always crowd things. Add more padding inside boxes and more space between sections than feels necessary, then judge.
+2. **Use a scale.** Instead of picking any number each time (13px here, 22px there), choose a small set of spacing sizes and use only those. A common choice is multiples of a base unit: 4, 8, 12, 16, 24, 32, 48, 64 pixels (or the same in `rem`). The page then has a rhythm, and you spend less time deciding.
+
+**Proximity** carries meaning: things close together look related. Put a heading closer to the text it introduces than to the text above it, and a label closer to its field than to the field before.
+
+## Alignment
+
+Line things up. Every element should share an edge with something else: text left edges, card tops, button baselines. Ragged, almost-aligned edges look careless even when people cannot say why. Grid and Flexbox make alignment easy, which is part of their point. Left-align body text in left-to-right languages; centre only short things, such as a hero heading or a button.
+
+## Type
+
+- **Use one or two typefaces.** One family in several weights is often enough. A second, contrasting family for headings is the most you need.
+- **Body text at least `1rem`** (16 pixels by default), with `line-height` around 1.5.
+- **Keep lines a readable length.** Very long lines are tiring: the eye loses its place going back to the start of the next line. A widely used guideline is roughly 50 to 75 characters per line. CSS has a unit for it: `ch` is the width of the "0" character, so `max-width: 65ch` on text blocks keeps lines in range.
+- **A type scale.** As with spacing, choose a few font sizes and stick to them, for example 0.875rem for small text, 1rem body, 1.25rem, 1.5rem and 2rem for headings.
+
+## Colour
+
+- **Start with a neutral base**: near-black text on white or off-white. Most of the page should be neutral.
+- **One accent colour** for links, buttons and highlights, used consistently, so people learn what it means.
+- **A few shades** of each colour (a light one for backgrounds, a dark one for text) rather than many different colours.
+- **Contrast** at least 4.5:1 for text, as always.
+- **Colour never carries meaning alone.** An error is red *and* says "Error".
+
+## Consistency, with CSS variables
+
+The way to enforce all of this in code is to name your choices once and reuse the names. CSS **custom properties**, usually called **CSS variables**, do exactly that. You define them, usually on `:root` (the `html` element), with names starting `--`, and use them with `var()`:
+
+```css
+:root {
+  --color-text: #1f1f1f;
+  --color-muted: #595959;
+  --color-accent: #7a3e00;
+  --color-surface: #fffaf0;
+  --space-2: 8px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --radius: 8px;
+}
+
+.button {
+  background-color: var(--color-accent);
+  color: white;
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+}
+```
+
+Change `--color-accent` once and every button, link and highlight follows. These named choices are often called **design tokens**: the fixed vocabulary of a design.
+
+### A worked example: before and after
+
+The same card twice. The first is how many first attempts look. The second applies the rules above: a spacing scale, one accent, a muted secondary colour, a clear hierarchy, consistent alignment and a readable line length.
+
+<Playground>
+
+```html
+<div class="before">
+  <h2>Coconut bread</h2>
+  <p>Soft, lightly sweet bread made with fresh coconut. Baked every morning and best eaten the same day.</p>
+  <p>₵18</p>
+  <a href="#">Order now</a>
+</div>
+
+<div class="after">
+  <h2>Coconut bread</h2>
+  <p class="description">Soft, lightly sweet bread made with fresh coconut. Baked every morning and best eaten the same day.</p>
+  <p class="price">₵18</p>
+  <a class="button" href="#">Order now</a>
+</div>
+```
+
+```css
+.before {
+  border: 3px solid red;
+  margin-bottom: 40px;
+}
+
+.before h2 {
+  color: blue;
+  text-align: center;
+}
+
+.before p {
+  color: green;
+  font-weight: bold;
+}
+
+:root {
+  --color-text: #1f1f1f;
+  --color-muted: #595959;
+  --color-accent: #7a3e00;
+  --space-2: 8px;
+  --space-4: 16px;
+  --space-6: 24px;
+}
+
+.after {
+  max-width: 40ch;
+  padding: var(--space-6);
+  border: 1px solid #dddddd;
+  border-radius: 12px;
+  color: var(--color-text);
+  font-family: system-ui, sans-serif;
+  line-height: 1.5;
+}
+
+.after h2 {
+  margin: 0 0 var(--space-2);
+  font-size: 1.5rem;
+}
+
+.after .description {
+  margin: 0 0 var(--space-4);
+  color: var(--color-muted);
+}
+
+.after .price {
+  margin: 0 0 var(--space-4);
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.after .button {
+  display: inline-block;
+  padding: var(--space-2) var(--space-4);
+  border-radius: 8px;
+  background-color: var(--color-accent);
+  color: white;
+  text-decoration: none;
+}
+```
+
+</Playground>
+
+What changed, and why:
+
+- Three loud colours became one accent, used once, for the action.
+- Everything bold became one bold thing, the price, so it is noticed.
+- A centred heading over left-aligned text became one left edge for everything.
+- The description is muted (#595959, still 7:1 contrast) so the name and price lead.
+- Space comes from a scale (8, 16, 24), with the heading closer to its description than to the card's edge.
+- `max-width: 40ch` keeps the card's text lines short; the button is a real link, padded to an easy target.
+
+## Borrowing well
+
+You are allowed, and encouraged, to learn from sites you admire. Inspect them: what spacing do they use, how many font sizes, how many colours? Copy the *ideas* (generous space, one accent, a type scale), not their code or their brand. Design systems published by large organisations document these decisions in public and are good to read.
+
+## Common mistakes
+
+- **Too many colours, sizes and fonts.** Choose few and repeat them.
+- **Crowding.** Add space.
+- **Random spacing values.** Use a scale and variables.
+- **Centring everything.** Centre short things only.
+- **Long lines of text** across a wide screen. Limit with `max-width` in `ch`.
+- **Grey text that fails contrast** in the name of looking "clean".
+- **Decoration before structure.** Get the hierarchy and spacing right with plain styles first; shadows, gradients and animation last, if at all.
+
+## Practice
+
+**1. (warm-up)** Name four tools for creating visual hierarchy.
+
+<Solution>
+
+Size, weight, colour and contrast, and space.
+
+</Solution>
+
+**2. (warm-up)** Write a CSS variable called `--color-accent` set to `#0b6e4f` on `:root`, and a rule that uses it as the colour of links.
+
+<Solution>
+
+```css
+:root {
+  --color-accent: #0b6e4f;
+}
+
+a {
+  color: var(--color-accent);
+}
+```
+
+</Solution>
+
+**3. (warm-up)** Why might a heading need more space above it than below it?
+
+<Solution>
+
+Proximity: things close together look related. More space above separates the heading from the previous section; less below ties it to the text it introduces.
+
+</Solution>
+
+**4. (standard)** A page uses these spacing values: 5px, 7px, 10px, 13px, 18px, 22px, 30px. Replace them with a scale based on multiples of 8 (with 4 allowed for small gaps), choosing the nearest value for each.
+
+<Solution>
+
+5 → 4; 7 → 8; 10 → 8; 13 → 12 (or 16); 18 → 16; 22 → 24; 30 → 32. Several old values merge into one, which is the point: fewer, consistent steps.
+
+</Solution>
+
+**5. (standard)** A blog's paragraphs stretch the full width of a 1,400-pixel screen. What is wrong, and what CSS fixes it?
+
+<Solution>
+
+The lines are far too long to read comfortably; the eye loses its place moving back to the next line. Limit the width of the text column, for example `max-width: 65ch;` on the article (and centre it with `margin: 0 auto;`).
+
+</Solution>
+
+**6. (standard)** A card has a red title, a blue description, a green price and an orange button. Suggest a better colour plan.
+
+<Solution>
+
+Make the text neutral: a near-black title and price, and a muted dark grey for the description (with enough contrast). Use one accent colour, only on the button, so it is clearly the action. The hierarchy then comes from size and weight, not from four competing colours.
+
+</Solution>
+
+**7. (standard)** Why is centred text acceptable for a short hero heading but not for three paragraphs of body text?
+
+<Solution>
+
+With centred paragraphs, every line starts in a different place, so the eye has to search for the start of each one. A short heading is read at a glance, so its starting point does not matter.
+
+</Solution>
+
+**8. (standard)** Using the variables `--space-2: 8px`, `--space-4: 16px` and `--space-6: 24px`, write a rule for `.section` with 24 pixels of padding and 16 pixels of space below it.
+
+<Solution>
+
+```css
+.section {
+  padding: var(--space-6);
+  margin-bottom: var(--space-4);
+}
+```
+
+</Solution>
+
+**9. (stretch)** Pick a site you think looks good. Inspect it and list: how many font sizes its body and headings use, its main text colour, its accent colour, and three spacing values. What would you take from it for your own page?
+
+<Solution>
+
+Answers vary. Most well-designed sites turn out to use few font sizes (often four to six), near-black text rather than pure black, one main accent, and spacing values that repeat (often multiples of 4 or 8). The useful thing to take is the restraint and the system, not the particular colours.
+
+</Solution>
+
+**10. (stretch)** Restyle the "before" card in the worked example your own way, using only variables for colours and spacing, so that changing two variables would rebrand it completely.
+
+<Solution>
+
+One approach: define `--color-accent`, `--color-text`, `--color-muted` and a spacing scale on `:root`, and write every colour and spacing value in the card's CSS as `var(...)`. Then change `--color-accent` and the spacing base and the whole card changes. Check contrast after every colour change.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Hierarchy** comes from size, weight, colour and space. Use few differences, deliberately.
+- **Space** generously, on a **scale** (for example multiples of 4 and 8). Closeness shows relationship.
+- **Align** everything to shared edges. Left-align body text; centre only short things.
+- **Type**: one or two families, body text at least 1rem with line height about 1.5, lines around 50 to 75 characters (`max-width: 65ch`), a small set of sizes.
+- **Colour**: mostly neutral, one accent, a few shades, contrast at least 4.5:1, never colour alone.
+- Name your choices with **CSS variables** (`--name` on `:root`, used with `var()`), so they stay consistent and change in one place.
+
+## Go deeper
+
+- [MDN: Design for developers](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Design_for_developers), from Mozilla. The MDN Curriculum's design module: design theory, user-centred design and working with designers. When checked it was an outline of topics with links rather than a full course.
+- [MDN: CSS text styling](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Text_styling), from Mozilla. More on typography in CSS.

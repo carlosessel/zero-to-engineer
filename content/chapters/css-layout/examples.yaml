@@ -1,0 +1,113 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: html
+  check: browser
+  combine:
+  - 1
+  - 2
+  expect:
+  - (() => { const r = [...document.querySelectorAll('.item')].map(e => e.getBoundingClientRect()); return r[0].top === r[2].top && Math.round(r[1].left - r[0].right) === 12; })()
+  note: The three items sit in one row with exactly 12 pixels between them.
+- block: 2
+  lang: css
+  check: web
+- block: 3
+  lang: html
+  check: browser
+  combine:
+  - 3
+  - 4
+  expect:
+  - Math.round(document.querySelector('.logo').getBoundingClientRect().left - document.querySelector('.bar').getBoundingClientRect().left) === 16
+  - Math.round(document.querySelector('.bar').getBoundingClientRect().right - document.querySelector('.links li:last-child').getBoundingClientRect().right) === 16
+  - Math.abs((document.querySelector('.logo').getBoundingClientRect().top + document.querySelector('.logo').getBoundingClientRect().bottom) / 2 - (document.querySelector('.links').getBoundingClientRect().top + document.querySelector('.links').getBoundingClientRect().bottom) / 2) < 1
+  - (() => { const r = [...document.querySelectorAll('.links li')].map(e => e.getBoundingClientRect()); return r[0].top === r[2].top && Math.round(r[1].left - r[0].right) === 16; })()
+  - getComputedStyle(document.querySelector('.links li')).listStyleType === 'none'
+  note: The logo is at the left edge (inside 16 pixels of padding), the last link at the right, both vertically centred, and the links in a row 16 pixels apart with no bullets.
+- block: 4
+  lang: css
+  check: web
+- block: 5
+  lang: html
+  check: browser
+  combine:
+  - 5
+  - 6
+  expect:
+  - new Set([...document.querySelectorAll('.card')].map(e => e.getBoundingClientRect()).map(r => r.top)).size === 1
+  - '[...document.querySelectorAll(''.card'')].map(e => e.getBoundingClientRect()).every(r => r.width >= 200)'
+  note: 'At a 1000-pixel window all four cards fit on one row. The same example at phone width is checked by the next entry''s note: see block 16.'
+- block: 6
+  lang: css
+  check: web
+- block: 7
+  lang: html
+  check: browser
+  combine:
+  - 7
+  - 8
+  expect:
+  - '[...document.querySelectorAll(''.grid div'')].map(e => e.getBoundingClientRect()).slice(0, 3).every(r => Math.abs(r.width - 568 / 3) < 0.5)'
+  - (() => { document.querySelector('.grid').style.gridTemplateColumns = '2fr 1fr 1fr'; const r = [...document.querySelectorAll('.grid div')].map(e => e.getBoundingClientRect()); return Math.round(r[0].width) === 284 && Math.round(r[1].width) === 142; })()
+  note: 'Checks the worked arithmetic: about 189.3 pixels per column, and 284 and 142 with 2fr 1fr 1fr.'
+- block: 8
+  lang: css
+  check: web
+- block: 9
+  lang: html
+  check: browser
+  combine:
+  - 9
+  - 10
+  expect:
+  - document.querySelector('.top').getBoundingClientRect().width === document.querySelector('.layout').getBoundingClientRect().width
+  - document.querySelector('.side').getBoundingClientRect().width === 180
+  - Math.round(document.querySelector('.content').getBoundingClientRect().left - document.querySelector('.side').getBoundingClientRect().right) === 12
+  - document.querySelector('.bottom').getBoundingClientRect().width === document.querySelector('.layout').getBoundingClientRect().width
+  note: The header and footer span both columns; the menu column is 180 wide with a 12-pixel gap.
+- block: 10
+  lang: css
+  check: web
+- block: 11
+  lang: html
+  check: browser
+  combine:
+  - 11
+  - 12
+  expect:
+  - Math.abs((document.querySelector('.centred').getBoundingClientRect().top + document.querySelector('.centred').getBoundingClientRect().bottom) / 2 - (document.querySelector('.stage').getBoundingClientRect().top + document.querySelector('.stage').getBoundingClientRect().bottom) / 2) < 1
+  - Math.abs((document.querySelector('.centred').getBoundingClientRect().left + document.querySelector('.centred').getBoundingClientRect().right) / 2 - (document.querySelector('.stage').getBoundingClientRect().left + document.querySelector('.stage').getBoundingClientRect().right) / 2) < 1
+  note: The paragraph's centre is the stage's centre, both ways.
+- block: 12
+  lang: css
+  check: web
+- block: 13
+  lang: css
+  check: browser
+  expect:
+  - (() => { document.body.innerHTML = '<div class="buttons" style="width:500px"><button>A</button><button>B</button><button>C</button></div>'; const c = document.querySelector('.buttons').getBoundingClientRect(); const b = [...document.querySelectorAll('button')].map(e => e.getBoundingClientRect()); return b[2].right === c.right && Math.round(b[1].left - b[0].right) === 8; })()
+- block: 14
+  lang: css
+  check: browser
+  expect:
+  - (() => { document.body.innerHTML = '<div class="page" style="width:900px"><aside>s</aside><main>m</main></div>'; const a = document.querySelector('aside').getBoundingClientRect(), m = document.querySelector('main').getBoundingClientRect(); return a.width === 250 && Math.round(m.left - a.right) === 24 && Math.round(m.width) === 626; })()
+  note: 'In a 900-pixel container: a 250 sidebar, a 24 gap, and 626 for the content.'
+- block: 15
+  lang: css
+  check: browser
+  expect:
+  - (() => { document.body.innerHTML = '<nav><ul><li><a href="#">a</a></li><li><a href="#">b</a></li></ul></nav>'; const r = [...document.querySelectorAll('li')].map(e => e.getBoundingClientRect()); const ul = getComputedStyle(document.querySelector('ul')); return r[0].top === r[1].top && ul.paddingLeft === '0px' && getComputedStyle(document.querySelector('li')).listStyleType === 'none'; })()
+- block: 16
+  lang: css
+  check: browser
+  viewport:
+    width: 375
+    height: 700
+  expect:
+  - (() => { document.body.innerHTML = '<div class="products">' + '<div class="product">x</div>'.repeat(4) + '</div>'; const r = [...document.querySelectorAll('.product')].map(e => e.getBoundingClientRect()); return new Set(r.map(x => x.top)).size === 4; })()
+  note: At phone width (375 pixels) the four products wrap onto four rows, because two 200-pixel cards and a gap do not fit.
+- block: 17
+  lang: css
+  check: browser
+  expect:
+  - (() => { document.body.innerHTML = '<div class="layout"><header style="grid-area:header">h</header><div style="grid-area:a">a</div><div style="grid-area:b">b</div><div style="grid-area:c">c</div><footer style="grid-area:footer">f</footer></div>'; const L = document.querySelector('.layout').getBoundingClientRect(); const h = document.querySelector('header').getBoundingClientRect(); const a = document.querySelector('[style*="area:a"]').getBoundingClientRect(), c = document.querySelector('[style*="area:c"]').getBoundingClientRect(); return h.width === L.width && a.top === c.top && a.top > h.top; })()

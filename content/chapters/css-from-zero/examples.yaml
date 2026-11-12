@@ -1,0 +1,113 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: css
+  check: browser
+  expect:
+  - (() => { const e = document.createElement('h1'); e.className = ''; document.body.append(e); return getComputedStyle(e); })().color === 'rgb(0, 100, 0)'
+  - (() => { const e = document.createElement('h1'); e.className = ''; document.body.append(e); return getComputedStyle(e); })().fontSize === '32px'
+  note: 'An h1 is added to an empty page: dark green, and 2rem is 32px.'
+- block: 2
+  lang: html
+  check: browser
+  combine:
+  - 2
+  - 3
+  expect:
+  - getComputedStyle(document.querySelector('h1')).color === 'rgb(122, 62, 0)'
+  - getComputedStyle(document.querySelector('.price')).fontWeight === '700'
+  - getComputedStyle(document.querySelector('body')).backgroundColor === 'rgb(255, 250, 240)'
+  - getComputedStyle(document.querySelector('p')).color === 'rgb(34, 34, 34)'
+  note: The HTML and CSS of the worked example, rendered together.
+- block: 3
+  lang: css
+  check: web
+- block: 4
+  lang: html
+  check: browser
+  combine:
+  - 4
+  - 5
+  expect:
+  - getComputedStyle(document.querySelector('nav a')).color === 'rgb(255, 255, 255)'
+  - getComputedStyle(document.querySelector('p a')).color !== 'rgb(255, 255, 255)'
+  note: Only the links inside nav are white, as the chapter says.
+- block: 5
+  lang: css
+  check: web
+- block: 6
+  lang: html
+  check: browser
+  combine:
+  - 6
+  - 7
+  expect:
+  - getComputedStyle(document.querySelector('#first')).color === 'rgb(0, 128, 0)'
+  - getComputedStyle(document.querySelectorAll('.note')[1]).color === 'rgb(128, 0, 128)'
+  note: 'Checks the worked answer: the first paragraph is green and the second purple.'
+- block: 7
+  lang: css
+  check: web
+- block: 8
+  lang: css
+  check: browser
+  expect:
+  - new Set(['a','b','c','d'].map(c => { const e = document.createElement('p'); e.className = c; document.body.append(e); return getComputedStyle(e).color; })).size === 1
+  note: All four ways of writing orange give exactly the same colour.
+- block: 9
+  lang: html
+  check: browser
+  combine:
+  - 9
+  - 10
+  expect:
+  - getComputedStyle(document.querySelector('.big')).fontSize === '24px'
+  - getComputedStyle(document.querySelector('.small')).fontSize === '14px'
+  note: 'Checks the arithmetic: 1.5rem is 24px and 0.875rem is 14px.'
+- block: 10
+  lang: css
+  check: web
+- block: 11
+  lang: css
+  check: browser
+  expect:
+  - getComputedStyle(document.body).lineHeight === '24px'
+  - (() => { const e = document.createElement('h1'); e.className = ''; document.body.append(e); return getComputedStyle(e); })().textAlign === 'center'
+  - (() => { const e = document.createElement('h1'); e.className = ''; document.body.append(e); return getComputedStyle(e); })().fontWeight === '700'
+  note: line-height 1.5 on 16px text is 24px.
+- block: 12
+  lang: css
+  check: browser
+  expect:
+  - (() => { const e = document.createElement('p'); e.className = 'warning'; document.body.append(e); return getComputedStyle(e); })().color === 'rgb(255, 0, 0)'
+  - (() => { const e = document.createElement('p'); e.className = 'warning'; document.body.append(e); return getComputedStyle(e); })().fontWeight === '700'
+- block: 13
+  lang: css
+  check: browser
+  expect:
+  - (() => { const e = document.createElement('p'); e.className = 'intro'; document.body.append(e); return getComputedStyle(e); })().color === 'rgb(0, 128, 128)'
+  note: 'Checks the answer: teal.'
+- block: 14
+  lang: css
+  check: browser
+  expect:
+  - (() => { const e = document.createElement('p'); e.className = 'intro'; document.body.append(e); return getComputedStyle(e); })().color === 'rgb(255, 165, 0)'
+  note: 'Checks the answer: orange.'
+- block: 15
+  lang: css
+  check: browser
+  expect:
+  - (() => { document.body.innerHTML = '<footer><a href="#">x</a></footer><p><a href="#">y</a></p>'; return getComputedStyle(document.querySelector('footer a')).color === 'rgb(85, 85, 85)' && getComputedStyle(document.querySelector('p a')).color !== 'rgb(85, 85, 85)'; })()
+- block: 16
+  lang: css
+  check: browser
+  expect_problems:
+  - color
+  expect:
+  - (() => { const s = (() => { const e = document.createElement('p'); e.className = 'price'; document.body.append(e); return getComputedStyle(e); })(); return s.fontWeight === '400' && s.color === 'rgb(0, 0, 0)'; })()
+  note: Wrong on purpose (the practice problem). The validator finds the broken color declaration; the browser check confirms that an element with class price gets neither green nor bold, so the rule really does nothing.
+- block: 17
+  lang: css
+  check: browser
+  expect:
+  - (() => { const s = (() => { const e = document.createElement('p'); e.className = 'price'; document.body.append(e); return getComputedStyle(e); })(); return s.fontWeight === '700' && s.color === 'rgb(0, 128, 0)'; })()
+  note: The corrected rule works.

@@ -1,0 +1,41 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: css
+  check: browser
+  expect:
+  - getComputedStyle(document.documentElement).getPropertyValue('--space-4').trim() === '16px'
+  - (() => { document.body.innerHTML = '<a class="button" href="#">Go</a>'; const s = getComputedStyle(document.querySelector('.button')); return s.backgroundColor === 'rgb(122, 62, 0)' && s.paddingTop === '8px' && s.paddingLeft === '16px' && s.borderTopLeftRadius === '8px'; })()
+  note: The variables are defined, and a button picks up the accent colour, the spacing and the radius from them.
+- block: 2
+  lang: html
+  check: browser
+  combine:
+  - 2
+  - 3
+  expect:
+  - getComputedStyle(document.querySelector('.after .description')).color === 'rgb(89, 89, 89)'
+  - getComputedStyle(document.querySelector('.after .price')).fontWeight === '700'
+  - getComputedStyle(document.querySelector('.after h2')).marginBottom === '8px'
+  - getComputedStyle(document.querySelector('.after .button')).backgroundColor === 'rgb(122, 62, 0)'
+  - new Set([...document.querySelectorAll('.after *')].map(e => getComputedStyle(e).color)).size <= 3
+  - new Set([...document.querySelectorAll('.before *')].map(e => getComputedStyle(e).color)).size >= 3
+  - getComputedStyle(document.querySelector('.after')).textAlign !== 'center'
+  note: 'Checks what the chapter says changed: the muted description, one bold price, the 8-pixel heading gap from the scale, the accent on the button, and at most three text colours in the ''after'' card (the ''before'' card has at least three).'
+- block: 3
+  lang: css
+  check: web
+  note: The CSS of the worked example; rendered with its HTML in the entry for block 2.
+- block: 4
+  lang: css
+  check: browser
+  expect:
+  - (() => { const a = document.createElement('a'); a.href = '#'; document.body.append(a); return getComputedStyle(a).color === 'rgb(11, 110, 79)'; })()
+- block: 5
+  lang: css
+  check: browser
+  combine:
+  - 1
+  - 5
+  expect:
+  - (() => { const d = document.createElement('div'); d.className = 'section'; document.body.append(d); const s = getComputedStyle(d); return s.paddingTop === '24px' && s.marginBottom === '16px'; })()
+  note: Rendered with the variables the question defines (the first block of the chapter has the same ones).

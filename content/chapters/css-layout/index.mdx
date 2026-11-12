@@ -1,0 +1,439 @@
+---
+title: "Layout with Flexbox and Grid"
+summary: "Rows, columns and whole page layouts without fighting the browser."
+prerequisites: [css-box-model]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will be able to lay out anything you see on a typical website: a navigation bar, a row of cards, a sidebar beside content, a whole page with header and footer. You will use two tools built into CSS for exactly this: **Flexbox** for arranging things in a line, and **Grid** for arranging them in rows and columns at once.
+
+Every example is live. Edit the numbers and watch what happens; layout is learned far faster by poking than by reading.
+
+## Flexbox: one direction at a time
+
+Make an element a **flex container** with `display: flex`. Its children, the **flex items**, then line up in a row instead of stacking.
+
+<Playground>
+
+```html
+<div class="row">
+  <div class="item">One</div>
+  <div class="item">Two</div>
+  <div class="item">Three</div>
+</div>
+```
+
+```css
+.row {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background-color: #eef4ff;
+}
+
+.item {
+  padding: 12px;
+  background-color: #7a3e00;
+  color: white;
+}
+```
+
+</Playground>
+
+`gap` puts space between the items, and only between them, never at the edges. It replaces the old trick of margins on every item.
+
+Flexbox works along two **axes**:
+
+- The **main axis** runs the way the items flow. With `flex-direction: row` (the default) it runs left to right; with `flex-direction: column`, top to bottom.
+- The **cross axis** runs across it.
+
+Two properties line items up, one per axis:
+
+| Property | Lines items up along | Common values |
+| --- | --- | --- |
+| `justify-content` | the main axis | `flex-start`, `center`, `flex-end`, `space-between`, `space-around` |
+| `align-items` | the cross axis | `stretch` (default), `flex-start`, `center`, `flex-end` |
+
+Edit the example above: add `justify-content: space-between;` to `.row` and the items spread to the edges; add `height: 120px; align-items: center;` and they sit in the vertical middle.
+
+### A worked example: a navigation bar
+
+The most common use of Flexbox on the web: the site name on the left, links on the right, all vertically centred.
+
+<Playground>
+
+```html
+<header class="bar">
+  <a class="logo" href="#">Ama's Bakery</a>
+  <nav>
+    <ul class="links">
+      <li><a href="#">Menu</a></li>
+      <li><a href="#">Order</a></li>
+      <li><a href="#">Contact</a></li>
+    </ul>
+  </nav>
+</header>
+```
+
+```css
+.bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #7a3e00;
+}
+
+.bar a {
+  color: white;
+}
+
+.logo {
+  font-weight: 700;
+  font-size: 1.25rem;
+}
+
+.links {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+```
+
+</Playground>
+
+Two flex containers are at work. The header spreads its two children (the logo and the `nav`) to opposite ends with `space-between`, and centres them vertically with `align-items: center`. The list inside `nav` is a second flex container that puts the links in a row with gaps. `list-style: none` removes the bullets, and the margin and padding resets remove the space browsers add to lists by default. The HTML is still a proper list in a `nav`, so screen readers can announce it as navigation containing a list of three links. (Some browser and screen reader pairs, notably Safari with VoiceOver, stop calling it a list once the bullets are removed; the links and the navigation landmark still work.)
+
+### Growing, shrinking and wrapping
+
+By default, flex items are as wide as their content and stay on one line. Three properties change that:
+
+- `flex: 1` on an item makes it **grow** to fill the leftover space. Give several items `flex: 1` and they share it equally.
+- `flex-wrap: wrap` on the container lets items move onto new lines when they run out of room, instead of squashing.
+- `flex-basis` (or the shorthand `flex: 1 1 200px`) sets the size an item starts from before growing or shrinking.
+
+<Playground>
+
+```html
+<div class="cards">
+  <article class="card">Sugar bread</article>
+  <article class="card">Tea bread</article>
+  <article class="card">Brown bread</article>
+  <article class="card">Coconut bread</article>
+</div>
+```
+
+```css
+.cards {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.card {
+  flex: 1 1 200px;
+  padding: 16px;
+  border: 1px solid #cccccc;
+}
+```
+
+</Playground>
+
+Each card starts at 200 pixels and grows to share any extra space. When the row is too narrow for all four, they wrap onto the next line. Drag the corner of the result to make it narrower and watch them reflow. This one rule already makes a layout that works on phones.
+
+## Grid: rows and columns together
+
+Flexbox thinks in one line at a time. **Grid** thinks in both directions at once: you describe the columns (and if you like, the rows), and items fall into the cells.
+
+<Playground>
+
+```html
+<div class="grid">
+  <div>1</div>
+  <div>2</div>
+  <div>3</div>
+  <div>4</div>
+  <div>5</div>
+  <div>6</div>
+</div>
+```
+
+```css
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 16px;
+  width: 600px;
+}
+
+.grid div {
+  padding: 16px;
+  background-color: #eef4ff;
+}
+```
+
+</Playground>
+
+`grid-template-columns` lists the columns' widths. The unit `fr` means **a fraction of the free space**. Three `1fr` columns share the space equally.
+
+### A worked example: how wide is each column?
+
+The grid is 600 pixels wide with a 16-pixel gap. Three columns have two gaps between them: 2 × 16 = 32 pixels of gaps. That leaves 600 − 32 = 568 pixels, shared equally: 568 ÷ 3 ≈ **189.3 pixels** per column.
+
+Change the columns to `2fr 1fr 1fr` and the first takes two shares of four: 568 × 2 ÷ 4 = **284 pixels**, and the others 142 each. Mix units too: `200px 1fr` makes a fixed 200-pixel column and gives the rest to the second.
+
+`repeat(3, 1fr)` is a shorter way to write `1fr 1fr 1fr`.
+
+### Spanning several cells
+
+An item can cover more than one column or row with `grid-column: span 2` or `grid-row: span 2`. Add `grid-column: span 2;` to a rule for the first item above and it stretches across two columns, pushing the others along.
+
+### A worked example: a whole page layout
+
+Grid can name areas of the page, then put elements into them. The names are drawn in the CSS as a little map:
+
+<Playground>
+
+```html
+<div class="layout">
+  <header class="top">Header</header>
+  <nav class="side">Menu</nav>
+  <main class="content">Main content</main>
+  <footer class="bottom">Footer</footer>
+</div>
+```
+
+```css
+.layout {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  grid-template-areas:
+    "top    top"
+    "side   content"
+    "bottom bottom";
+  gap: 12px;
+}
+
+.top { grid-area: top; }
+.side { grid-area: side; }
+.content { grid-area: content; }
+.bottom { grid-area: bottom; }
+
+.layout > * {
+  padding: 16px;
+  background-color: #eef4ff;
+}
+```
+
+</Playground>
+
+Each quoted line in `grid-template-areas` is a row; each word is a cell. Writing `top` twice makes the header span both columns. `.layout > *` means "every direct child of `.layout`". Rearranging the page is now a matter of redrawing the map, which you will do for phones in the next chapter.
+
+## Centring anything
+
+The question every beginner searches for. With Grid, two lines centre a child both ways:
+
+<Playground>
+
+```html
+<div class="stage">
+  <p class="centred">I am in the middle</p>
+</div>
+```
+
+```css
+.stage {
+  display: grid;
+  place-items: center;
+  height: 200px;
+  background-color: #eef4ff;
+}
+```
+
+</Playground>
+
+`place-items: center` centres the items along both axes. The Flexbox equivalent is `display: flex; justify-content: center; align-items: center;`.
+
+## Which one?
+
+- **Flexbox** when you are arranging things in one line that may wrap: navigation bars, a row of buttons, a card's content, items whose size comes from their content.
+- **Grid** when you want rows and columns to line up: card grids, page layouts, anything that looks like a table without being data.
+
+They work together. A Grid page layout often contains Flexbox navigation, and a Grid card often uses Flexbox inside.
+
+## Seeing it: the developer tools
+
+Inspect a flex or grid container and the Elements panel shows a small `flex` or `grid` badge next to it. Click it to draw the lines, gaps and areas over the page. When a layout misbehaves, turn on that overlay first.
+
+## Common mistakes
+
+- **Putting `display: flex` on the item instead of the container.** It goes on the parent whose children you want to arrange.
+- **Expecting `justify-content` to work vertically.** It works along the main axis, which is horizontal in a row. Use `align-items` for the other direction, or switch `flex-direction`.
+- **`align-items: center` with nothing to centre in.** If the container is only as tall as its content, there is no extra height to centre within.
+- **Margins between every item** instead of `gap`.
+- **Forgetting the list resets** (`margin: 0; padding: 0; list-style: none`) on navigation lists.
+- **Fixed widths on everything.** Let `fr`, `flex: 1` and wrapping share the space, so layouts adapt.
+- **Changing the visual order with CSS** (for example `order` or placing grid items out of sequence) so it no longer matches the HTML. Keyboard and screen reader users follow the HTML order, so the two should agree.
+
+## Practice
+
+**1. (warm-up)** Which property turns an element into a flex container, and which turns it into a grid container?
+
+<Solution>
+
+`display: flex` and `display: grid`.
+
+</Solution>
+
+**2. (warm-up)** In a flex row, which property spreads the items out horizontally, and which centres them vertically?
+
+<Solution>
+
+`justify-content` (for example `space-between`) along the main axis; `align-items: center` across it.
+
+</Solution>
+
+**3. (warm-up)** What does `gap: 20px` do in a flex or grid container?
+
+<Solution>
+
+It puts 20 pixels of space between neighbouring items (and, in a grid, between rows), but not round the outside edges.
+
+</Solution>
+
+**4. (standard)** Write CSS to put three buttons in a row, aligned to the right of their container, with 8 pixels between them.
+
+<Solution>
+
+```css
+.buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+```
+
+</Solution>
+
+**5. (standard)** A grid is 900 pixels wide with `grid-template-columns: repeat(4, 1fr)` and `gap: 20px`. How wide is each column?
+
+<Solution>
+
+Four columns have three gaps: 3 × 20 = 60. That leaves 900 − 60 = 840, divided by 4 = **210 pixels** each.
+
+</Solution>
+
+**6. (standard)** Same grid width and gap, but `grid-template-columns: 300px 1fr 1fr`. How wide are the columns?
+
+<Solution>
+
+Two gaps: 40. Free space after the fixed column and gaps: 900 − 300 − 40 = 560, shared by two `1fr` columns: **280 pixels** each. So 300, 280, 280.
+
+</Solution>
+
+**7. (standard)** Write CSS for a page with a 250-pixel sidebar on the left and the main content filling the rest, with 24 pixels between them, using Grid.
+
+<Solution>
+
+```css
+.page {
+  display: grid;
+  grid-template-columns: 250px 1fr;
+  gap: 24px;
+}
+```
+
+</Solution>
+
+**8. (standard)** A navigation list shows bullets and is indented, and the links stack vertically. Write the CSS for the `ul` that fixes all three.
+
+<Solution>
+
+```css
+nav ul {
+  display: flex;
+  gap: 16px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+```
+
+`display: flex` puts the items in a row; the resets remove the indent and bullets.
+
+</Solution>
+
+**9. (standard)** You want four product cards that are at least 200 pixels wide, share the row equally, and wrap onto new lines when there is not room. Write the container and card CSS with Flexbox.
+
+<Solution>
+
+```css
+.products {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.product {
+  flex: 1 1 200px;
+}
+```
+
+</Solution>
+
+**10. (standard)** Draw a `grid-template-areas` map for: a header across the top, then three equal columns named `a`, `b` and `c`, then a footer across the bottom.
+
+<Solution>
+
+```css
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-areas:
+    "header header header"
+    "a      b      c"
+    "footer footer footer";
+}
+```
+
+Each element then gets its `grid-area` name.
+
+</Solution>
+
+**11. (stretch)** A designer asks for a card grid that is one column on phones, two on tablets and three on wide screens, without writing any breakpoints. You will meet the answer in the next chapter, but try: which Grid feature might let the number of columns depend on the space available?
+
+<Solution>
+
+`grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));` creates as many columns as fit at a minimum of 250 pixels each, and shares the leftover space. The next chapter explains it.
+
+</Solution>
+
+**12. (stretch)** A flex row has `align-items: center`, but the items still sit at the top. The container has no height set. Explain, and suggest two fixes.
+
+<Solution>
+
+Without a set height, the container is only as tall as its tallest item, so there is no spare height to centre within: every item is already "centred" in a space of its own size. Give the container a height (or a `min-height`), or check whether the items differ in height, which is when `align-items: center` makes a visible difference.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- `display: flex` lines children up along a main axis; `display: grid` arranges them in rows and columns.
+- Flexbox: `justify-content` aligns along the main axis, `align-items` across it, `gap` spaces items, `flex-wrap: wrap` lets them wrap, `flex: 1` makes them grow.
+- Grid: `grid-template-columns` sets columns; `fr` shares the free space after fixed sizes and gaps; `repeat()` shortens lists; `span` covers several cells; `grid-template-areas` draws a page map.
+- `place-items: center` on a grid centres a child both ways.
+- Flexbox for one line, Grid for two dimensions; they nest happily.
+- Keep the visual order the same as the HTML order.
+- The developer tools' flex and grid badges draw the layout over the page.
+
+## Go deeper
+
+- [MDN: CSS layout](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/CSS_layout), from Mozilla. The core module on normal flow, Flexbox, Grid, floats, positioning and responsive design.
+- [A Complete Guide to Flexbox](https://css-tricks.com/snippets/css/a-guide-to-flexbox/), by Chris Coyier on CSS-Tricks. Every Flexbox property with a picture. A page many developers keep open.
+- [A Complete Guide to CSS Grid](https://css-tricks.com/complete-guide-css-grid-layout/), by Chris House on CSS-Tricks. The same treatment for Grid.
+- [Flexbox Froggy](https://flexboxfroggy.com/) and [Grid Garden](https://cssgridgarden.com/), from Codepip. Free browser games where you write Flexbox and Grid CSS to solve puzzles. Good practice after this chapter.

@@ -1,0 +1,55 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: html
+  check: browser
+  expect_problems:
+  - wcag/h37
+  expect:
+  - '!document.querySelector(''label'')'
+  - document.querySelector('.button').tabIndex === -1
+  - document.querySelector('input').labels.length === 0
+  note: Wrong on purpose. The validator finds the missing alt text but NOT the unlabelled field or the div posing as a button; the browser check confirms those two problems. This is the chapter's point that automatic tools miss things.
+- block: 2
+  lang: html
+  check: browser
+  expect:
+  - document.querySelector('input').labels[0].textContent === 'Email'
+  - document.querySelector('button').tabIndex === 0
+  - document.querySelector('img').alt === "Ama's Bakery"
+  note: 'The corrected version: the field has its label and the button can be reached with Tab.'
+- block: 3
+  lang: text
+  check: illustration
+  note: 'Every ratio is recomputed with the WCAG contrast formula, and the pass and fail words checked against the 4.5:1 and 3:1 thresholds. Also checks the figure for #aaaaaa given in practice problem 4.'
+  verify: |
+    def lum(hex_):
+        r, g, b = (int(hex_[i:i + 2], 16) / 255 for i in (1, 3, 5))
+        f = lambda c: c / 12.92 if c <= 0.04045 else ((c + 0.055) / 1.055) ** 2.4
+        return 0.2126 * f(r) + 0.7152 * f(g) + 0.0722 * f(b)
+    def ratio(a, b):
+        hi, lo = sorted((lum(a), lum(b)), reverse=True)
+        return (hi + 0.05) / (lo + 0.05)
+    rows = [l.split() for l in block.splitlines()]
+    for row in rows:
+        fg, bg = row[0], row[row.index("on") + 1]
+        shown = float(next(w for w in row if w.endswith(":1"))[:-2])
+        real = ratio(fg, bg)
+        # The chapter gives one decimal place, rounded down, so a colour shown as 4.5 really reaches 4.5.
+        assert int(real * 10) / 10 == shown, (fg, real, shown)
+        assert any(w.startswith("passes") for w in row) == (real >= 4.5), (fg, real)
+    assert round(ratio("#aaaaaa", "#ffffff"), 1) == 2.3
+    assert ratio("#999999", "#ffffff") < 3       # also fails for large text, as the table says
+    assert ratio("#595959", "#ffffff") >= 7      # passes the stricter AAA level, as the table says
+- block: 4
+  lang: html
+  check: web
+  expect_problems:
+  - wcag/h37
+  - no-inline-style
+  note: Wrong on purpose (the practice problem). The validator finds the missing alt and the inline style; the low contrast and the vague link text are for the reader to spot, which is why the problem exists.
+- block: 5
+  lang: html
+  check: browser
+  expect:
+  - document.querySelector('button').type === 'button'
+  - document.querySelector('button').textContent === 'Add to basket'

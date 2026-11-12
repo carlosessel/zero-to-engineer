@@ -1,0 +1,84 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: html
+  check: web
+- block: 2
+  lang: html
+  check: web
+- block: 3
+  lang: html
+  check: browser
+  expect:
+  - Number(getComputedStyle(document.querySelector('strong')).fontWeight) >= 600
+  - document.querySelector('p > strong').textContent === 'baked today'
+  note: Checks the strong element sits inside the paragraph and that browsers show it bold, as the chapter says.
+- block: 4
+  lang: html
+  check: browser
+  expect:
+  - document.title === "Ama's Bakery"
+  - document.documentElement.lang === 'en'
+  - document.characterSet === 'UTF-8'
+  - document.compatMode === 'CSS1Compat'
+  note: CSS1Compat means the browser is in standards mode, which the doctype line is there to switch on.
+- block: 5
+  lang: html
+  check: web
+- block: 6
+  lang: html
+  check: browser
+  expect:
+  - document.querySelector('p').innerText === 'Monday to Saturday, 6am to 2pm.'
+  note: Checks the claim that the line break and runs of spaces show as single spaces.
+- block: 7
+  lang: html
+  check: browser
+  expect:
+  - getComputedStyle(document.querySelector('ul li')).listStyleType === 'disc'
+  - getComputedStyle(document.querySelector('ol li')).listStyleType === 'decimal'
+  note: Checks that browsers show bullets for ul and numbers for ol.
+- block: 8
+  lang: html
+  check: web
+- block: 9
+  lang: html
+  check: browser
+  expect:
+  - document.querySelector('img').naturalWidth === 0
+  - document.querySelector('img').getAttribute('width') === '600'
+  note: The image file does not exist, as the chapter says, so nothing loads (naturalWidth 0) and the alt text is shown instead.
+- block: 10
+  lang: html
+  check: browser
+  expect:
+  - document.querySelectorAll('h1').length === 1
+  - document.querySelectorAll('main').length === 1
+  - '!!document.querySelector(''header nav ul li a'')'
+  - '!!document.getElementById(''hours'')'
+  - document.querySelector('a[href="#hours"]').textContent === 'Opening hours'
+  - document.querySelector('footer a').getAttribute('href').startsWith('tel:')
+- block: 11
+  lang: html
+  check: web
+- block: 12
+  lang: html
+  check: web
+- block: 13
+  lang: html
+  check: web
+- block: 14
+  lang: html
+  check: browser
+  expect:
+  - document.querySelector('p').innerText === 'Line one Line two'
+  note: 'Checks the answer: the line break shows as a space.'
+- block: 15
+  lang: html
+  check: browser
+  expect:
+  - document.querySelectorAll('h1').length === 1
+  - document.querySelectorAll('ul li').length === 4
+  - document.querySelectorAll('ol li').length === 3
+  - document.querySelector('img').alt.length > 20
+  - document.querySelector('footer a').getAttribute('href') === 'index.html'
+  note: Checks the model answer has everything the question asks for.

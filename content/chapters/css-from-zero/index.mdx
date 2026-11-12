@@ -1,0 +1,409 @@
+---
+title: "CSS from zero: selectors, colours and text"
+summary: "How CSS chooses elements, the cascade, colours, fonts and units."
+prerequisites: [html-from-zero]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will be able to style a page: choose which elements to style, set colours and fonts, size things with the right units, and work out which rule wins when two disagree. You will also be able to use the developer tools to see exactly why something looks the way it does.
+
+The examples with a blue line down the left side are live: the result is shown underneath, and **Edit** lets you change the HTML and the CSS and watch the result change as you type.
+
+## What CSS is
+
+**CSS** (Cascading Style Sheets) says how HTML looks: colours, fonts, spacing, sizes, layout. HTML says what things are; CSS says how they appear. Keeping them apart means you can restyle a whole site by changing one file, and the HTML stays clean and meaningful.
+
+CSS is a list of **rules**. Each rule has a **selector**, which chooses the elements to style, and **declarations** inside curly brackets, each a **property** and a **value**:
+
+```css
+h1 {
+  color: darkgreen;
+  font-size: 2rem;
+}
+```
+
+Read it as: "for every `h1`, make the text colour dark green and the font size 2rem". Each declaration ends with a semicolon. Forget one and the next declaration is usually ignored.
+
+## Adding CSS to a page
+
+There are three ways, and you should almost always use the first:
+
+1. **A separate file**, linked from the `<head>`: `<link rel="stylesheet" href="style.css">`. One file can style every page of a site, and the browser downloads it once.
+2. **A `<style>` element** in the `<head>`, with the CSS inside. Handy for a single page or a quick test.
+3. **A `style` attribute** on one element: `<p style="color: red">`. Avoid it: it mixes look into content, cannot be reused, and is hard to override.
+
+### A worked example: styling a page
+
+<Playground>
+
+```html
+<h1>Ama's Bakery</h1>
+<p>Fresh bread every morning.</p>
+<p class="price">Sugar bread: ₵15</p>
+```
+
+```css
+body {
+  font-family: system-ui, sans-serif;
+  color: #222222;
+  background-color: #fffaf0;
+}
+
+h1 {
+  color: #7a3e00;
+}
+
+.price {
+  font-weight: bold;
+}
+```
+
+</Playground>
+
+Three rules: the whole `body` gets a font, a text colour and a cream background; the heading gets a brown colour; and anything with `class="price"` is bold. Try changing `#7a3e00` to `purple`, or adding `font-size: 3rem;` to the `h1` rule.
+
+## Selectors: choosing what to style
+
+| Selector | Chooses | Example |
+| --- | --- | --- |
+| `p` | Every element of that type | All paragraphs |
+| `.price` | Every element with `class="price"` | Prices |
+| `#hours` | The one element with `id="hours"` | The opening hours section |
+| `h1, h2` | Several selectors at once (a comma means "and also") | Both kinds of heading |
+| `nav a` | `a` elements anywhere inside a `nav` (a space means "inside") | Menu links only |
+| `a:hover` | Links while the mouse is over them | Hover effect |
+| `a:focus-visible` | Links when focused with the keyboard | A clear focus ring |
+
+**Classes** are the selector you will use most. An element can have several, separated by spaces: `class="price special"`. Class names should say what something *is* (`price`, `warning`, `card`), not how it looks (`red`, `big`), because the look will change and the name will not.
+
+An **id** must be unique on the page. Use ids for links that jump to a place (`href="#hours"`) and for labels (`for="email"`), and use classes for styling, for a reason explained in the next section.
+
+<Playground>
+
+```html
+<nav>
+  <a href="#">Home</a>
+  <a href="#">Menu</a>
+</nav>
+<p>Read our <a href="#">delivery terms</a>.</p>
+```
+
+```css
+nav a {
+  color: white;
+  background-color: #7a3e00;
+  padding: 4px 8px;
+}
+
+a:hover {
+  text-decoration: none;
+}
+
+a:focus-visible {
+  outline: 3px solid #ff9900;
+}
+```
+
+</Playground>
+
+Only the links inside `nav` turn white on brown; the link in the paragraph keeps the normal look. Move the mouse over any link and the underline disappears. Click in the result and press Tab to see the orange focus ring.
+
+## The cascade: which rule wins
+
+Often several rules set the same property on the same element. The browser decides between them with three ideas, which together are called **the cascade**:
+
+1. **Specificity.** A more specific selector beats a less specific one. Roughly: an id beats a class, and a class beats an element type. (Pseudo-classes such as `:hover` count as classes.)
+2. **Order.** If two selectors are equally specific, the one that comes **later** wins.
+3. **Importance.** A declaration marked `!important` beats everything else. Avoid it: once you use it, the only way to override it is another `!important`, and the styles become a fight.
+
+### A worked example: predict the colour
+
+<Playground>
+
+```html
+<p class="note" id="first">Which colour am I?</p>
+<p class="note">And me?</p>
+```
+
+```css
+#first {
+  color: green;
+}
+
+.note {
+  color: blue;
+}
+
+p {
+  color: red;
+}
+
+.note {
+  color: purple;
+}
+```
+
+</Playground>
+
+Work it out before looking at the result:
+
+- The first paragraph matches all four rules. The `#first` rule has an id, which beats the classes and the type, so it is **green**, even though it comes first.
+- The second paragraph matches `.note` twice and `p` once. Both `.note` rules beat `p`. Between the two `.note` rules, specificity is equal, so the later one wins: **purple**.
+
+This is why styling with ids causes trouble: their high specificity means you need another id, or `!important`, to change them later. Style with classes, and you can always override a rule with another class or by putting it later.
+
+## Inheritance
+
+Some properties pass down from an element to everything inside it. This is **inheritance**. Text properties inherit: set `color`, `font-family` or `font-size` on the `body`, and every paragraph and heading picks it up, unless a rule sets it on them directly. Box properties do not inherit: a `border` on a `div` does not give every paragraph inside it a border, which would be strange.
+
+That is why the worked example sets the font once, on `body`.
+
+## Colours
+
+CSS has several ways to write a colour. All of these are the same orange:
+
+```css
+.a { color: orange; }
+.b { color: #ffa500; }
+.c { color: rgb(255 165 0); }
+.d { color: hsl(38.8 100% 50%); }
+```
+
+- **Names**: over 140 named colours, such as `orange`, `darkgreen` and `white`. Easy to read; limited choice.
+- **Hex**: `#` then three pairs of hexadecimal digits for red, green and blue, each from `00` (none) to `ff` (full). `#000000` is black, `#ffffff` white, `#ff0000` pure red. Designers usually hand you colours this way.
+- **`rgb()`**: the same three amounts written from 0 to 255.
+- **`hsl()`**: hue (the position round the colour wheel, 0 to 360 degrees: 0 red, 120 green, 240 blue), saturation (0% grey to 100% vivid) and lightness (0% black to 100% white). Easy to make a lighter or darker version of a colour by changing only the lightness.
+
+A fourth number makes a colour see-through: `rgb(0 0 0 / 50%)` is half-transparent black.
+
+Remember the contrast rule from the accessibility chapter: at least 4.5:1 for normal text.
+
+## Units: how big is a 1?
+
+| Unit | Means | Use it for |
+| --- | --- | --- |
+| `px` | Pixels, a fixed size on screen | Borders, small fixed details |
+| `rem` | Multiples of the root (`html`) font size, usually 16px | Font sizes and most spacing |
+| `em` | Multiples of the current element's font size | Spacing that should grow with the text around it |
+| `%` | A percentage of the parent's size | Widths |
+| `vw`, `vh` | 1% of the viewport's width or height | Full-screen sections |
+
+**Prefer `rem` for font sizes.** Browsers let people choose a bigger default text size, often because they have low vision. Sizes in `rem` grow with that choice; sizes in `px` ignore it.
+
+### A worked example: rem arithmetic
+
+The browser's default root font size is 16px. So `1rem` is 16px, `1.5rem` is 16 × 1.5 = **24px**, and `0.875rem` is 16 × 0.875 = **14px**. If someone sets their browser to a 20px default, the same `1.5rem` becomes 30px, and the page grows with them.
+
+<Playground>
+
+```html
+<h2 class="big">Heading at 1.5rem</h2>
+<p class="small">Small print at 0.875rem</p>
+```
+
+```css
+.big {
+  font-size: 1.5rem;
+}
+
+.small {
+  font-size: 0.875rem;
+}
+```
+
+</Playground>
+
+## Text
+
+```css
+body {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+h1 {
+  font-family: system-ui, sans-serif;
+  font-weight: 700;
+  text-align: center;
+}
+
+a {
+  text-decoration: underline;
+}
+```
+
+- `font-family` is a list. The browser uses the first font it has, so always end with a generic family: `serif`, `sans-serif` or `monospace`. Font names with spaces go in quotes. `system-ui` means "the computer's own interface font", which looks at home on every device and needs no download.
+- `font-weight`: `400` is normal and `700` is bold.
+- `line-height: 1.5` puts one and a half lines of space per line of text, which is far easier to read than the cramped default. Write it with no unit, so it scales with the font size.
+- `text-align`: `left`, `center` or `right`. Keep paragraphs left-aligned: centred paragraphs are hard to read.
+- `text-decoration: underline` is the default for links. Keep links underlined in body text so people can find them without relying on colour.
+
+You can also load fonts from services such as Google Fonts with a `<link>`. Each font file is a download that slows the page, and the font service sees your visitors' requests, so use few, and consider hosting the files yourself.
+
+## Seeing why: the developer tools
+
+Right-click any element and choose **Inspect**. Beside the HTML, the **Styles** pane lists every rule that applies to that element, most specific first. Declarations that lost the cascade are **crossed out**. You can tick declarations off and on, edit values, and add new ones, and see the result at once. Nothing is saved to your file; it is a place to experiment. When CSS does not do what you expect, this is the first place to look.
+
+## Common mistakes
+
+- **A missing semicolon or curly bracket.** CSS ignores the broken declaration, and often the rest of the rule, without any error message. The Styles pane shows it crossed out or missing.
+- **Forgetting the dot or hash**: `price { … }` looks for a `<price>` element, which does not exist. Classes need `.price`.
+- **The stylesheet is not linked**, or linked with the wrong path. Check the Network panel for a red `style.css`.
+- **Using ids to style**, then fighting specificity. Style with classes.
+- **Reaching for `!important`** to win a fight. Find out why the other rule wins (the Styles pane) and fix that instead.
+- **Font sizes in `px`**, which ignore people's chosen text size.
+- **Pale grey text** that fails contrast.
+
+## Practice
+
+**1. (warm-up)** In `p { color: navy; }`, name the selector, the property and the value.
+
+<Solution>
+
+Selector `p`, property `color`, value `navy`.
+
+</Solution>
+
+**2. (warm-up)** Write a rule that makes every element with the class `warning` red and bold.
+
+<Solution>
+
+```css
+.warning {
+  color: red;
+  font-weight: bold;
+}
+```
+
+</Solution>
+
+**3. (warm-up)** How many pixels is `2rem`, if the root font size is the default?
+
+<Solution>
+
+The default root font size is 16px, so 2 × 16 = 32px.
+
+</Solution>
+
+**4. (standard)** A paragraph has `class="intro"`. These two rules both apply, in this order. What colour is it?
+
+```css
+.intro { color: teal; }
+p { color: black; }
+```
+
+<Solution>
+
+Teal. A class selector is more specific than an element selector, so it wins even though the `p` rule comes later.
+
+</Solution>
+
+**5. (standard)** And with these two, in this order?
+
+```css
+.intro { color: teal; }
+.intro { color: orange; }
+```
+
+<Solution>
+
+Orange. Equal specificity, so the later rule wins.
+
+</Solution>
+
+**6. (standard)** Write one rule that makes the links inside `footer` grey (`#555555`), without changing any other links.
+
+<Solution>
+
+```css
+footer a {
+  color: #555555;
+}
+```
+
+The space means "inside": only `a` elements within `footer` are chosen.
+
+</Solution>
+
+**7. (standard)** You set `color: darkblue` on `body`. Why do the paragraphs turn dark blue, but a `border` set on `body` does not appear round every paragraph?
+
+<Solution>
+
+`color` is inherited: elements inside take it from their parent unless they set their own. `border` is not inherited; it applies only to the element it is set on.
+
+</Solution>
+
+**8. (standard)** Write `#00ff00` as an `rgb()` colour, and say what colour it is.
+
+<Solution>
+
+`rgb(0 255 0)`: no red, full green, no blue. Pure, bright green.
+
+</Solution>
+
+**9. (standard)** A designer gives you these sizes in pixels: body text 16px, small print 12px, headings 40px. Convert them to `rem` with a 16px root.
+
+<Solution>
+
+16 ÷ 16 = `1rem`; 12 ÷ 16 = `0.75rem`; 40 ÷ 16 = `2.5rem`.
+
+</Solution>
+
+**10. (standard)** This rule does nothing. Find the two mistakes.
+
+```css
+price {
+  color: green
+  font-weight: bold;
+}
+```
+
+<Solution>
+
+The selector is missing its dot: `price` looks for a `<price>` element. It should be `.price`. And `color: green` has no semicolon, so the browser reads `green font-weight: bold` as one broken value and drops both declarations. Corrected:
+
+```css
+.price {
+  color: green;
+  font-weight: bold;
+}
+```
+
+</Solution>
+
+**11. (stretch)** A heading has `id="title"` and `class="headline"`. The CSS file has `#title { color: black; }` near the top, and a later `.headline { color: red; }` meant to make it red. It stays black. Explain, and give the cleanest fix.
+
+<Solution>
+
+The id selector is more specific than the class, so it wins regardless of order. The cleanest fix is to stop styling by id: change `#title` to a class selector (for example `.title`) in both the HTML and CSS, then the later `.headline` rule wins as intended. Adding `!important` to `.headline` would also "work" but starts a specificity fight.
+
+</Solution>
+
+**12. (stretch)** Why does `font-family: "Helvetica Neue", Arial, sans-serif;` list three fonts? What happens on a phone that has none of the first two?
+
+<Solution>
+
+The browser uses the first font in the list that the device has. If it has neither Helvetica Neue nor Arial, it uses its own default sans-serif font. Ending with a generic family guarantees a sensible choice everywhere.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- CSS is a list of **rules**: a **selector** and **declarations** (`property: value;`).
+- Link a separate stylesheet with `<link rel="stylesheet" href="style.css">`.
+- Select by type (`p`), class (`.price`), id (`#hours`), inside (`nav a`), and state (`:hover`, `:focus-visible`). Style with **classes**.
+- **The cascade**: more specific wins (id over class over type); if equal, later wins; avoid `!important`.
+- Text properties **inherit**; box properties do not.
+- Colours: names, hex, `rgb()`, `hsl()`. Keep contrast at least 4.5:1.
+- Use **`rem`** for font sizes (1rem is usually 16px) so text grows with people's settings.
+- `font-family` lists end with a generic family; `line-height: 1.5` aids reading.
+- The developer tools' Styles pane shows every rule and which ones lost.
+
+## Go deeper
+
+- [MDN: CSS styling basics](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Styling_basics), from Mozilla. The core module on selectors, the cascade, values and units, and the box model (the next chapter).
+- [MDN: CSS text styling](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Text_styling), from Mozilla. Fonts, text, lists, links and web fonts in depth.

@@ -1,0 +1,352 @@
+---
+title: "Forms and tables"
+summary: "Collecting input from people and showing data in rows and columns."
+prerequisites: [html-from-zero]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will be able to build forms people can fill in, labelled properly so everyone can use them, with the browser checking the input before it is sent. You will also be able to present data in tables that screen readers can read correctly.
+
+Forms are how almost every web application takes input: search boxes, sign-up pages, checkout, comments. In the examples below, **Show the result** gives you a working form. When you submit it, nothing is really sent anywhere; instead a message under the result shows exactly what the form *would* send. That message is the clearest way to see what each part of a form does.
+
+## How a form works
+
+A **form** is a group of **controls** (text boxes, checkboxes, menus, buttons) wrapped in a `<form>` element. When someone submits it, the browser gathers every control's value and sends them to a server. Each value is sent as a pair: the control's `name` and what was entered.
+
+```html
+<form action="/search" method="get">
+  <label for="q">Search the menu</label>
+  <input type="search" id="q" name="q">
+  <button type="submit">Search</button>
+</form>
+```
+
+- `action` is the address the data goes to. `method` says how: `get` puts the data in the address itself (`/search?q=bread`), which suits searches; `post` sends it hidden in the request, which suits anything that changes data, such as an order or a sign-up. Building the server that receives it comes in the back-end part of the course.
+- `<label>` is the text that says what the control is for. Its `for` attribute must match the control's `id`. That connection makes clicking the label move the cursor into the box, and makes screen readers announce "Search the menu, search field" when the box is selected.
+- `<input>` is the most common control. `type` decides what kind.
+- `name` decides what the value is called when sent. **A control with no `name` sends nothing.** This is the commonest form bug.
+- `<button type="submit">` submits the form. Pressing Enter in a text box does the same.
+
+## Input types
+
+The `type` attribute changes what a box accepts and, on phones, which keyboard appears.
+
+| Type | For | What changes |
+| --- | --- | --- |
+| `text` | Any short text | The default. |
+| `email` | An email address | The browser checks there is an `@` and something on each side; phones show a keyboard with `@`. |
+| `password` | A password | Characters are hidden as dots. |
+| `number` | A number | Only numbers; up and down arrows; `min`, `max` and `step` limit it. |
+| `tel` | A phone number | Phones show a number pad. No checking, because phone formats vary so much. |
+| `date` | A date | A date picker. |
+| `search` | A search query | Some browsers add a button to clear it. |
+| `checkbox` | Yes or no, or several choices | A tick box. |
+| `radio` | One choice from several | A round button; only one in a group can be chosen. |
+
+### A worked example: an order form
+
+```html
+<form action="/order" method="post">
+  <p>
+    <label for="name">Your name</label>
+    <input type="text" id="name" name="name" autocomplete="name" required>
+  </p>
+  <p>
+    <label for="email">Email</label>
+    <input type="email" id="email" name="email" autocomplete="email" required>
+  </p>
+  <p>
+    <label for="loaves">Number of loaves</label>
+    <input type="number" id="loaves" name="loaves" min="1" max="20" value="1">
+  </p>
+  <p>
+    <label for="bread">Bread</label>
+    <select id="bread" name="bread">
+      <option value="sugar">Sugar bread</option>
+      <option value="tea">Tea bread</option>
+      <option value="brown">Brown bread</option>
+    </select>
+  </p>
+  <p>
+    <label for="notes">Anything else?</label>
+    <textarea id="notes" name="notes" rows="3"></textarea>
+  </p>
+  <button type="submit">Place order</button>
+</form>
+```
+
+Try it: submit it empty first. The browser stops you and points at the first required field. Fill in a name and a made-up email, then submit. The message shows something like `name = "Ama", email = "ama@example.com", loaves = "1", bread = "sugar", notes = ""`.
+
+Three new pieces:
+
+- `<select>` is a drop-down menu. Each `<option>` has a `value`, which is what gets sent, and visible text, which is what people see. They can differ, as here.
+- `<textarea>` is a box for longer text, over several lines. Unlike `<input>`, it has a closing tag; anything between the tags is its starting text.
+- `autocomplete="name"` and `autocomplete="email"` tell the browser what the field is, so it can offer to fill it in from what it already knows. This saves people typing and helps people with motor or memory difficulties.
+
+## Checkboxes, radio buttons and groups
+
+Radio buttons in the same group share a `name`; that is what makes them a group, so choosing one unchooses the others. Each has its own `value` and its own label.
+
+A **fieldset** wraps related controls, and its **legend** is the group's question. Screen readers read the legend with each option, so "Delivery or collection? Delivery, radio button" makes sense.
+
+```html
+<form action="/order" method="post">
+  <fieldset>
+    <legend>Delivery or collection?</legend>
+    <input type="radio" id="collect" name="how" value="collect" checked>
+    <label for="collect">I will collect</label>
+    <input type="radio" id="deliver" name="how" value="deliver">
+    <label for="deliver">Deliver to me</label>
+  </fieldset>
+  <p>
+    <input type="checkbox" id="news" name="news" value="yes">
+    <label for="news">Email me about new bread</label>
+  </p>
+  <button type="submit">Continue</button>
+</form>
+```
+
+`checked` makes an option chosen to begin with. A checkbox that is not ticked sends nothing at all; a ticked one sends its `value` (or `on` if it has none). Submit the example twice, once with the box ticked and once without, and compare the messages.
+
+## Letting the browser check the input
+
+Browsers can check input before submitting, with no code from you. This is called **form validation**:
+
+| Attribute | Means |
+| --- | --- |
+| `required` | Must not be empty. |
+| `minlength`, `maxlength` | Text must be at least or at most this many characters. |
+| `min`, `max` | A number or date must be within this range. |
+| `pattern` | Text must match a pattern, such as five digits. |
+| `type="email"`, `type="url"` | Must look like an email address or web address. |
+
+```html
+<form action="/signup" method="post">
+  <p>
+    <label for="user">Username (3 to 15 letters or numbers)</label>
+    <input type="text" id="user" name="user" required minlength="3" maxlength="15" pattern="[A-Za-z0-9]+">
+  </p>
+  <p>
+    <label for="pw">Password (at least 12 characters)</label>
+    <input type="password" id="pw" name="pw" required minlength="12" autocomplete="new-password">
+  </p>
+  <button type="submit">Create account</button>
+</form>
+```
+
+Two important truths about this checking:
+
+1. **It is a convenience for the person filling in the form, not protection.** Anyone can switch it off or send data to your server without using your page. The server must check everything again. You will do that in the back-end chapters.
+2. **Put the rules in the label**, as above. People should not have to fail first to find out what you want.
+
+Notice there is no `placeholder` text standing in for the labels. A **placeholder** is grey hint text inside an empty box. It disappears as soon as you type, so you can no longer see what the box was for; it is often too faint to read; and some screen readers ignore it. Use a real `<label>` every time. A placeholder can add an example, never replace the label.
+
+## Buttons
+
+`<button>` has three types, and you should always write the one you mean:
+
+- `type="submit"` submits the form. It is the default inside a form, which surprises people who add a button for something else.
+- `type="button"` does nothing by itself. You will attach JavaScript to it in the JavaScript part.
+- `type="reset"` clears the whole form. Avoid it: it is easy to press by mistake and throws away everything typed.
+
+## Tables
+
+A **table** shows data that has rows and columns, such as a price list, a timetable or results. Each row is a `<tr>` (table row); in it, `<th>` cells are headings and `<td>` cells are data.
+
+```html
+<table>
+  <caption>Bread prices, November 2026</caption>
+  <thead>
+    <tr>
+      <th scope="col">Bread</th>
+      <th scope="col">Small</th>
+      <th scope="col">Large</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th scope="row">Sugar bread</th>
+      <td>₵15</td>
+      <td>₵25</td>
+    </tr>
+    <tr>
+      <th scope="row">Tea bread</th>
+      <td>₵12</td>
+      <td>₵20</td>
+    </tr>
+  </tbody>
+</table>
+```
+
+- `<caption>` is the table's title. Screen readers announce it first, so people know what the table is before they explore it.
+- `<thead>` holds the heading row; `<tbody>` holds the data rows.
+- `scope="col"` says a heading belongs to its column; `scope="row"` says it belongs to its row. With these, when a screen reader user reaches the cell "₵20", it can announce "Tea bread, Large, ₵20". Without them, a blind reader gets a stream of numbers with no idea which is which.
+
+Tables are for data only. In the early days of the web, people used tables to arrange whole pages into columns. Never do that: screen readers announce every cell, and layouts made of tables cannot adapt to phones. Page layout is a job for CSS, coming soon.
+
+## Common mistakes
+
+- **A control with no `name`.** It looks fine and sends nothing. Check the submit message: every field should appear in it.
+- **A label whose `for` does not match the `id`**, often after copying a field and changing one but not the other. Click the label: if the cursor does not jump into the box, they are not connected.
+- **Placeholder instead of label.**
+- **Radio buttons with different `name`s.** Each one becomes its own group, and people can choose all of them.
+- **A button that submits when you did not mean it to,** because `submit` is the default type. Always write `type`.
+- **Trusting browser validation.** The server must check again.
+- **Tables for layout,** or tables with no `th` cells.
+
+## Practice
+
+**1. (warm-up)** A sign-up form has `<input type="email" id="email">` and a matching label. The form submits, but the server never receives the email. Why?
+
+<Solution>
+
+The input has no `name`, so its value is not sent. Add `name="email"`.
+
+</Solution>
+
+**2. (warm-up)** Which input type for: (a) a quantity; (b) a phone number; (c) a date of birth; (d) a secret PIN?
+
+<Solution>
+
+(a) `number`; (b) `tel`; (c) `date`; (d) `password`.
+
+</Solution>
+
+**3. (warm-up)** What does `<label for="city">` need on the input for the two to be connected?
+
+<Solution>
+
+The input needs `id="city"`. The label's `for` must equal the input's `id` exactly, including capital letters.
+
+</Solution>
+
+**4. (standard)** Write a form that sends a search to `/books` in the web address, with one labelled search box whose value is sent as `title`.
+
+<Solution>
+
+```html
+<form action="/books" method="get">
+  <label for="title">Book title</label>
+  <input type="search" id="title" name="title">
+  <button type="submit">Search</button>
+</form>
+```
+
+`method="get"` puts the search in the address: `/books?title=...`.
+
+</Solution>
+
+**5. (standard)** Three radio buttons for a T-shirt size: small, medium and large. People must choose exactly one, and medium should be chosen to begin with. Write the HTML, including a question for the group.
+
+<Solution>
+
+```html
+<fieldset>
+  <legend>T-shirt size</legend>
+  <input type="radio" id="size-s" name="size" value="s">
+  <label for="size-s">Small</label>
+  <input type="radio" id="size-m" name="size" value="m" checked>
+  <label for="size-m">Medium</label>
+  <input type="radio" id="size-l" name="size" value="l">
+  <label for="size-l">Large</label>
+</fieldset>
+```
+
+They share `name="size"`, so only one can be chosen. Each has its own `id` for its label.
+
+</Solution>
+
+**6. (standard)** A form has `<input type="checkbox" name="terms" value="agreed">`. What is sent if it is ticked, and if it is not?
+
+<Solution>
+
+Ticked: `terms = "agreed"`. Not ticked: nothing at all for `terms`; the server simply does not receive that name. Servers must treat "missing" as "not ticked".
+
+</Solution>
+
+**7. (standard)** Make a field for an order reference that must be exactly six digits. Write the input and a label that tells people the rule.
+
+<Solution>
+
+```html
+<label for="ref">Order reference (6 digits)</label>
+<input type="text" id="ref" name="ref" required pattern="[0-9]{6}" inputmode="numeric">
+```
+
+`pattern="[0-9]{6}"` means six characters, each a digit. `type="text"` with `inputmode="numeric"` gives a number keypad on phones without the up and down arrows that `type="number"` adds, which make no sense for a reference. The rule is in the label.
+
+</Solution>
+
+**8. (standard)** A friend says: "My form has `required` on every field, so my server doesn't need to check for empty values." What do you tell them?
+
+<Solution>
+
+Browser checks can be bypassed: someone can remove `required` with the developer tools, use an old browser, or send data straight to the server with a program. The server must check every value itself. Browser checks are for the person's convenience.
+
+</Solution>
+
+**9. (standard)** Why is `<input placeholder="Email">` with no label a problem? Give two reasons.
+
+<Solution>
+
+The placeholder disappears once someone types, so they can no longer see what the field was for (hard for anyone, especially people with memory difficulties); placeholder text is often low contrast and hard to read; and some screen readers do not announce it, so the field has no name. Use a `<label>`.
+
+</Solution>
+
+**10. (standard)** Write a table, with a caption, of three football teams and their points, with column headings "Team" and "Points" and each team's name as a row heading.
+
+<Solution>
+
+```html
+<table>
+  <caption>League table</caption>
+  <thead>
+    <tr>
+      <th scope="col">Team</th>
+      <th scope="col">Points</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr><th scope="row">Hearts of Oak</th><td>42</td></tr>
+    <tr><th scope="row">Asante Kotoko</th><td>40</td></tr>
+    <tr><th scope="row">Medeama</th><td>37</td></tr>
+  </tbody>
+</table>
+```
+
+</Solution>
+
+**11. (stretch)** In the order form above, someone types "abc" into "Number of loaves". What happens, and why?
+
+<Solution>
+
+Nothing appears: a `type="number"` box will not accept letters in most browsers, and if a non-number gets in, the browser treats the field as invalid and will not submit. (`min="1"` and `max="20"` also stop 0 or 21.) That is the browser's built-in checking for number fields.
+
+</Solution>
+
+**12. (stretch)** A page lays out a photo on the left and text on the right using a one-row, two-cell table. Explain the problem to its author, and say what to use instead.
+
+<Solution>
+
+A screen reader announces it as a table of one row and two columns, which is confusing because it is not data. Table layouts also cannot rearrange themselves on a narrow phone screen. Use ordinary elements (for example a `<figure>` or two `<div>`s, or better, semantic elements) and arrange them side by side with CSS Flexbox or Grid, which can stack them on phones. That comes in the CSS layout chapter.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A `<form>` sends each control's `name` and value to its `action` using its `method`: `get` for searches, `post` for changes.
+- **No `name`, nothing sent.**
+- Every control needs a `<label>` whose `for` matches the control's `id`. Placeholders are not labels.
+- Choose the right `type`: `email`, `number`, `tel`, `date`, `password`, `checkbox`, `radio`.
+- Radio buttons in a group share a `name`. Wrap groups in `<fieldset>` with a `<legend>`.
+- `required`, `minlength`, `pattern`, `min` and `max` let the browser check input, as a convenience. The server must check again.
+- Always write a button's `type`.
+- Tables are for data: `caption`, `thead`, `tbody`, `th` with `scope`, `td`. Never for layout.
+
+## Go deeper
+
+- [MDN: Web forms](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Forms), from Mozilla. A full module on building, styling and validating forms.
+- [MDN: HTML table basics](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Structuring_content/HTML_table_basics), from Mozilla. Tables from the start, followed by a page on making them accessible.

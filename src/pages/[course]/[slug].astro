@@ -7,6 +7,7 @@ import Ref from '../../components/Ref.astro';
 import Only from '../../components/Only.astro';
 import Note from '../../components/Note.astro';
 import Solution from '../../components/Solution.astro';
+import Playground from '../../components/Playground.astro';
 import Exercises from '../../components/Exercises.astro';
 import Demo from '../../components/Demo.astro';
 import Route from '../../components/Route.astro';
@@ -55,7 +56,7 @@ const codeText = codeStatus(getExampleChecks(chapterId));
     </p>
     <div class="body" data-migrated-body data-pagefind-body data-pagefind-meta={`course:${course.title}`}>
       <p class="lead">{entry.data.summary}</p>
-      <Content components={{ Ref, Only, Note, Solution, Exercises, Demo, Route, GlossaryList }} />
+      <Content components={{ Ref, Only, Note, Solution, Playground, Exercises, Demo, Route, GlossaryList }} />
     </div>
     {quiz.length > 0 && <Quiz chapter={chapterId} questions={quiz} />}
     <TutorPrompt course={course.title} chapter={chapter.title} />
@@ -72,4 +73,5 @@ const codeText = codeStatus(getExampleChecks(chapterId));
 </Course>
 <script>
   import '../../scripts/runner.ts';
+  import '../../scripts/playground.ts';
 </script>

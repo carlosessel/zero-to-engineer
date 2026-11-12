@@ -1,0 +1,442 @@
+---
+title: "HTML from zero: structure and meaning"
+summary: "Elements, headings, text, lists, links and images, and why the right tag matters."
+prerequisites: [web-setup]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will be able to write a complete web page by hand: headings, paragraphs, lists, links and images, organised into the sections every page has. You will also know why choosing the right element matters to the people and programs that read your page.
+
+Every example in this chapter has a **Show the result** button. Press it to see the page the code makes, then **Edit** to change the code and watch the result update as you type.
+
+## What HTML is
+
+**HTML** (HyperText Markup Language) describes what is on a page and what each part *is*: this is a heading, this is a paragraph, this is a list, this is a link. It does not describe how things look; that is CSS's job, in a later chapter. A browser reads the HTML and builds the page from it.
+
+HTML is made of **elements**. Most elements have three parts:
+
+```html
+<p>Fresh bread every morning.</p>
+```
+
+- `<p>` is the **opening tag**. The `p` names the element: a paragraph.
+- `Fresh bread every morning.` is the **content**.
+- `</p>` is the **closing tag**: the same name with a forward slash.
+
+Elements can carry extra information in **attributes**, written inside the opening tag as `name="value"`:
+
+```html
+<a href="https://developer.mozilla.org">Read MDN</a>
+```
+
+Here the `a` element (a link) has an attribute called `href` whose value is the address to go to. The content, `Read MDN`, is the text people click.
+
+A few elements have no content and no closing tag. They are called **void elements**. The commonest are `<img>` (an image), `<br>` (a line break), `<input>` (a form field) and `<meta>` (information about the page).
+
+### Nesting
+
+Elements go inside other elements. The rule: close them in the reverse order you opened them, like boxes inside boxes.
+
+```html
+<p>Our bread is <strong>baked today</strong>.</p>
+```
+
+`<strong>` opens inside `<p>`, so it closes before `</p>`. Writing `<p><strong>…</p></strong>` is a mistake: the boxes overlap. Browsers try to guess what you meant, and they often guess differently from you.
+
+## The skeleton of every page
+
+Every HTML page starts the same way. Type this once by hand and you will remember it:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ama's Bakery</title>
+  </head>
+  <body>
+    <h1>Ama's Bakery</h1>
+    <p>Fresh bread every morning.</p>
+  </body>
+</html>
+```
+
+Line by line:
+
+| Line | Meaning |
+| --- | --- |
+| `<!DOCTYPE html>` | "This is a modern HTML page." Without it, browsers fall back to an old, quirky way of drawing pages. |
+| `<html lang="en">` | The whole page. `lang` says the page is in English, so screen readers pronounce it correctly and translators know what to translate from. |
+| `<head>` | Information *about* the page, not shown in it. |
+| `<meta charset="utf-8">` | The text uses UTF-8, the encoding that can show every language's letters, accents and emoji. |
+| `<meta name="viewport" …>` | "Fit the page to the width of the phone." Without it, phones draw the page as if on a wide screen and shrink it. |
+| `<title>` | The name shown on the browser tab, in bookmarks and in search results. |
+| `<body>` | Everything that appears on the page. |
+
+The indentation (spaces at the start of lines) is for people; browsers ignore it. Indent each element inside its parent by two spaces so you can see the nesting at a glance.
+
+## Text: headings and paragraphs
+
+Headings run from `<h1>` (the most important) to `<h6>`. They are not about size; they are an outline of the page, like chapter and section titles in a book.
+
+```html
+<h1>Ama's Bakery</h1>
+<p>A family bakery in Accra since 2009.</p>
+
+<h2>Our bread</h2>
+<p>Every loaf is shaped by hand.</p>
+
+<h3>Sugar bread</h3>
+<p>Soft, sweet, and gone by noon.</p>
+
+<h3>Tea bread</h3>
+<p>A firm loaf for butter and jam.</p>
+
+<h2>Opening hours</h2>
+<p>Monday to Saturday, 6am to 2pm.</p>
+```
+
+Rules for headings:
+
+- One `<h1>` per page, naming what the page is about.
+- Do not skip levels on the way down: an `<h3>` belongs inside an `<h2>` section.
+- Never choose a heading because of its size. If you want big text that is not a heading, that is a job for CSS.
+
+Inside text, `<strong>` marks something as important (browsers show it bold) and `<em>` marks stress, the way you would emphasise a word aloud (shown in italics). There are also `<b>` and `<i>`, which only change the look; prefer `<strong>` and `<em>` when you mean importance or stress.
+
+### Spaces and line breaks in HTML
+
+The browser collapses any run of spaces, tabs and line breaks in your text into **one space**. This surprises everyone once:
+
+```html
+<p>Monday to Saturday,
+   6am      to     2pm.</p>
+```
+
+shows as "Monday to Saturday, 6am to 2pm." on one line. To start a new paragraph, use a new `<p>`. For a line break inside a paragraph, such as in an address or a poem, use `<br>`, but not to add space between things; spacing is CSS's job.
+
+### Special characters
+
+Because `<` starts a tag, you cannot type it directly in text. Write it as `&lt;` (less than). Likewise `&gt;` for `>` and `&amp;` for `&`. These codes are called **character references**. Most other characters, including `é`, `₵` and emoji, can be typed directly because of the UTF-8 line in the head.
+
+## Lists
+
+There are two everyday kinds. An **unordered list**, `<ul>`, is for items where order does not matter; browsers show bullets. An **ordered list**, `<ol>`, is for steps or rankings; browsers show numbers. Each item is an `<li>` (list item).
+
+```html
+<h2>Today's bread</h2>
+<ul>
+  <li>Sugar bread</li>
+  <li>Tea bread</li>
+  <li>Brown bread</li>
+</ul>
+
+<h2>How to order</h2>
+<ol>
+  <li>Call us before 10am.</li>
+  <li>Tell us what you want.</li>
+  <li>Collect it after noon.</li>
+</ol>
+```
+
+Lists can go inside list items, for example a list of breads under a category. The inner list goes *inside* the `<li>`, before its `</li>`.
+
+## Links
+
+The `<a>` element (for "anchor") makes a link. Its `href` says where it goes.
+
+- An **absolute URL** includes the whole address: `https://www.example.com/menu.html`. Use these for other sites.
+- A **relative URL** is a path from the current page: `menu.html` means "the file `menu.html` in the same folder"; `about/team.html` means "inside the `about` folder"; `../index.html` means "one folder up". Use these between pages of your own site.
+- `href="#hours"` jumps to the element on the same page with `id="hours"`.
+- `href="mailto:hello@example.com"` opens an email to that address.
+
+```html
+<p>See our <a href="menu.html">full menu</a> or
+<a href="https://www.openstreetmap.org">find us on a map</a>.</p>
+<p><a href="#hours">Jump to opening hours</a></p>
+<h2 id="hours">Opening hours</h2>
+```
+
+Write link text that makes sense on its own. Screen reader users often move through a page from link to link, hearing only the link text: "full menu" tells them where it goes; "click here" does not.
+
+## Images
+
+```html
+<img src="sugar-bread.jpg" alt="A round, golden loaf of sugar bread on a wooden board" width="600" height="400">
+```
+
+- `src` is the image file's address, relative or absolute.
+- `alt` is the **alternative text**: a description read aloud by screen readers, shown if the image fails to load, and read by search engines. Describe what the image shows that matters in context. If an image is purely decoration, write `alt=""` (empty), so screen readers skip it. Never leave `alt` out.
+- `width` and `height` are the image's natural size in pixels. They let the browser keep the right space for the image before it has loaded, so the page does not jump about as images arrive.
+
+If you press **Show the result** on that example, there is no image: the file does not exist here. What you see instead is the alt text, which is exactly what someone gets when the image cannot load.
+
+## Organising a page: semantic sections
+
+Most pages have the same regions: a top area with the site's name, some navigation, the main content, and a footer. HTML has an element for each. Using them is called **semantic HTML**: the element says what the content *means*, not how it looks.
+
+| Element | Use it for |
+| --- | --- |
+| `<header>` | The introductory area: the site name or logo, often the navigation. |
+| `<nav>` | A block of main navigation links. |
+| `<main>` | The main content of this page. Exactly one per page. |
+| `<article>` | A self-contained piece that would make sense on its own: a blog post, a product card, a comment. |
+| `<section>` | A themed part of the page, usually with its own heading. |
+| `<aside>` | Something related but separate: a side note, a box of related links. |
+| `<footer>` | The closing area: contact details, copyright, small print. |
+| `<div>` | A box with no meaning, for when nothing above fits (usually so CSS can style a group). |
+| `<span>` | The same, but for a few words inside a line of text. |
+
+### A worked example: a complete page
+
+Here is the bakery's home page, using everything so far. Show the result, then try the exercises below on it.
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Ama's Bakery, Accra</title>
+  </head>
+  <body>
+    <header>
+      <p>Ama's Bakery</p>
+      <nav>
+        <ul>
+          <li><a href="index.html">Home</a></li>
+          <li><a href="menu.html">Menu</a></li>
+          <li><a href="#hours">Opening hours</a></li>
+        </ul>
+      </nav>
+    </header>
+    <main>
+      <h1>Fresh bread every morning</h1>
+      <p>A family bakery in Accra since 2009. Every loaf is <strong>shaped by hand</strong>.</p>
+      <section>
+        <h2>Today's bread</h2>
+        <ul>
+          <li>Sugar bread</li>
+          <li>Tea bread</li>
+          <li>Brown bread</li>
+        </ul>
+      </section>
+      <section>
+        <h2 id="hours">Opening hours</h2>
+        <p>Monday to Saturday, 6am to 2pm.<br>Closed on Sunday.</p>
+      </section>
+    </main>
+    <footer>
+      <p>Call us on <a href="tel:+233300000000">030 000 0000</a>.</p>
+    </footer>
+  </body>
+</html>
+```
+
+Why this structure matters even though it looks plain:
+
+- A screen reader user can jump straight to the navigation, to the main content or between headings, because the elements say where they are.
+- Search engines understand which text is the main content and which headings organise it.
+- When you style it with CSS later, every region already has an element to attach styles to.
+
+### Comments
+
+`<!-- like this -->` is a **comment**: a note for people, ignored by the browser. Use comments to explain something surprising, not to repeat what the code says.
+
+## Checking your HTML
+
+Browsers never show HTML errors; they quietly guess. That is why mistakes survive. Two checks catch them:
+
+- The **W3C Markup Validation Service** (validator.w3.org) reads your HTML and lists every error, such as an unclosed element or a missing `alt`.
+- The browser's developer tools **Elements** panel shows the page as the browser actually understood it. If an element is not where you expected, the browser had to guess.
+
+## Common mistakes
+
+- **Leaving out the closing tag**, or closing in the wrong order. The page may look fine and still be wrong; the validator will say.
+- **Forgetting quotes round attribute values with spaces**: `<img alt=A loaf>` gives `alt` the value `A`, and `loaf` becomes a separate, meaningless attribute. Always quote attribute values.
+- **Choosing headings by size.** A small heading in the footer is still an `<h2>` or lower, and a big sentence that is not a heading is a `<p>`, styled with CSS.
+- **Using `<br>` to make space.** Use paragraphs for paragraphs, and CSS for spacing.
+- **Images without `alt`.** Screen readers then read the file name, such as "IMG underscore 4 0 2 1 dot jpg".
+- **"Click here" links.** Say where the link goes.
+- **Spaces or capitals in file names.** `Menu Page.html` makes links fragile. Use `menu.html`.
+- **Wrapping everything in `<div>`.** It works visually and throws away all the meaning. Reach for a semantic element first.
+
+## Practice
+
+**1. (warm-up)** Name the three parts of `<h2>Our bread</h2>`.
+
+<Solution>
+
+`<h2>` is the opening tag, `Our bread` is the content, and `</h2>` is the closing tag. Together they are one `h2` element: a second-level heading.
+
+</Solution>
+
+**2. (warm-up)** What is wrong here, and how do you fix it? `<p>Bread is <em>warm</p></em>`
+
+<Solution>
+
+The tags overlap: `<em>` was opened inside `<p>` but closed after it. Close in reverse order: `<p>Bread is <em>warm</em></p>`.
+
+</Solution>
+
+**3. (warm-up)** Which list element would you use for (a) the steps of a recipe; (b) the ingredients?
+
+<Solution>
+
+(a) `<ol>`: the steps happen in order, so they are numbered. (b) `<ul>`: the ingredients have no order.
+
+</Solution>
+
+**4. (standard)** Write the HTML for a link with the text "our menu" that goes to `menu.html` in a folder called `pages`, which is in the same folder as the current page.
+
+<Solution>
+
+```html
+<a href="pages/menu.html">our menu</a>
+```
+
+A relative path: from the current folder, go into `pages`, then `menu.html`.
+
+</Solution>
+
+**5. (standard)** The current page is `blog/2026/bread.html`. Write a relative link to `index.html`, which is in the top folder (the one containing `blog`).
+
+<Solution>
+
+```html
+<a href="../../index.html">Home</a>
+```
+
+`..` means "the folder above". From `blog/2026`, one `..` reaches `blog` and a second reaches the top folder.
+
+</Solution>
+
+**6. (standard)** Write good `alt` text for each image: (a) the bakery's logo, which is the words "Ama's Bakery" in fancy lettering, used as a link to the home page; (b) a decorative wavy line between sections; (c) a photo of the shop front on a page about how to find the shop.
+
+<Solution>
+
+(a) `alt="Ama's Bakery home"` or `alt="Ama's Bakery"`: the image is a link, so the alt text should say what the link is or where it goes. Repeat the words in the image. (b) `alt=""`: decoration should be silent for screen readers. (c) Something that helps someone find the shop, for example `alt="The shop front: a yellow building with a green door, next to a pharmacy"`. The same photo on a page about the shop's history might need a different description. Alt text depends on why the image is there.
+
+</Solution>
+
+**7. (standard)** Put these headings into the right levels for a page about a school: the school's name; "Admissions"; "Fees"; "How to apply"; "Contact us". "Fees" and "How to apply" are both parts of admissions.
+
+<Solution>
+
+```html
+<h1>Asante Academy</h1>
+<h2>Admissions</h2>
+<h3>Fees</h3>
+<h3>How to apply</h3>
+<h2>Contact us</h2>
+```
+
+(Any school name works for the `h1`.) Fees and How to apply are inside the Admissions section, so they are one level below it.
+
+</Solution>
+
+**8. (standard)** How will this show in the browser, and why?
+
+```html
+<p>Line one
+Line two</p>
+```
+
+<Solution>
+
+As "Line one Line two" on a single line. HTML collapses the line break and any spaces into one space. For two lines, use two paragraphs, or a `<br>` if they belong in one paragraph, such as lines of an address.
+
+</Solution>
+
+**9. (standard)** You want to show the text `a < b` in a paragraph. What do you write?
+
+<Solution>
+
+`<p>a &lt; b</p>`. A bare `<` might be read as the start of a tag, so it is written as the character reference `&lt;`.
+
+</Solution>
+
+**10. (standard)** Which semantic element would you use for: (a) a blog post; (b) the copyright line at the bottom; (c) the list of links to the site's main pages; (d) a box of "related articles" beside a post?
+
+<Solution>
+
+(a) `<article>`; (b) `<footer>`; (c) `<nav>` (usually with a `<ul>` of links inside); (d) `<aside>`.
+
+</Solution>
+
+**11. (stretch)** A friend's page uses `<div class="header">`, `<div class="nav">`, `<div class="main">` and `<div class="footer">`. It looks fine. Give two concrete reasons to change it, and say what to change it to.
+
+<Solution>
+
+Replace them with `<header>`, `<nav>`, `<main>` and `<footer>`. Reasons: screen readers let people jump to the navigation and the main content only when those elements exist, so with `div`s that is impossible; search engines and browser reading modes use them to find the main content; and the code becomes easier to read because the elements explain themselves. The CSS can target the new elements instead of the classes.
+
+</Solution>
+
+**12. (stretch)** Write a complete page, from `<!DOCTYPE html>` to `</html>`, for a single recipe: a title, a one-sentence introduction, an ingredients list, numbered steps, a photo with good alt text, and a footer with a link back to the home page. Check it with the validator.
+
+<Solution>
+
+One correct answer:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Jollof rice: a simple recipe</title>
+  </head>
+  <body>
+    <main>
+      <article>
+        <h1>Jollof rice</h1>
+        <p>A one-pot rice dish cooked in a spiced tomato sauce.</p>
+        <img src="jollof.jpg" alt="A plate of red-orange jollof rice with fried plantain on the side" width="800" height="533">
+        <h2>Ingredients</h2>
+        <ul>
+          <li>2 cups of long-grain rice</li>
+          <li>4 tomatoes</li>
+          <li>1 onion</li>
+          <li>2 cups of stock</li>
+        </ul>
+        <h2>Method</h2>
+        <ol>
+          <li>Blend the tomatoes and onion.</li>
+          <li>Fry the mixture until it darkens.</li>
+          <li>Add the rice and stock, cover, and cook gently until the rice is soft.</li>
+        </ol>
+      </article>
+    </main>
+    <footer>
+      <p><a href="index.html">Back to all recipes</a></p>
+    </footer>
+  </body>
+</html>
+```
+
+Check: one `h1`, headings in order, the right list types, alt text that describes the dish, and every element closed.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- HTML says what each part of a page **is**. CSS, later, says how it looks.
+- An **element** is usually an opening tag, content and a closing tag. **Attributes** in the opening tag add information. **Void elements** such as `<img>` have no closing tag.
+- Close nested elements in reverse order.
+- Every page has the same skeleton: doctype, `html` with `lang`, a `head` with charset, viewport and title, and a `body`.
+- Headings `h1` to `h6` are an outline: one `h1`, no skipped levels, never chosen for size.
+- `ul` for unordered lists, `ol` for ordered ones, `li` for items.
+- Links use `<a href>`, absolute for other sites and relative within yours, with text that makes sense alone.
+- Every image needs `alt`: a description, or `alt=""` for decoration.
+- Use semantic elements (`header`, `nav`, `main`, `article`, `section`, `aside`, `footer`) before reaching for `div`.
+- Browsers hide HTML errors; the validator and the Elements panel find them.
+
+## Go deeper
+
+- [MDN: Structuring content with HTML](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Structuring_content), from Mozilla. The free module this chapter's topics line up with, with more examples and challenges.
+- [MDN: HTML elements reference](https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements). Every HTML element, what it means and when to use it. Keep it bookmarked.
+- [W3C Markup Validation Service](https://validator.w3.org/). Paste your HTML or a link to your page and it lists every error.

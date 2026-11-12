@@ -90,7 +90,7 @@ Some checks are skipped unless you ask for them, because they are slow or need s
 | `EXAMPLES_DOCKER=1` | the Dockerfile example (builds and starts a container) |
 | `EXAMPLES_HEAVY=1` | PyTorch and model-download examples (install `tests/examples/requirements-heavy.txt` and PyTorch first) |
 
-The kinds of check, and what each proves, are described at the top of `tests/examples/harness.py`. In short: Python runs through the same runner the website uses; SQL runs in SQLite; shell and Git commands run in an empty temporary folder with a throwaway Git identity; the JavaScript, HTML, CSS and React examples are tested in `tests/web-examples.test.ts`; model API examples talk to a stand-in server (`tests/examples/fake_anthropic.py`) that returns scripted replies. That last kind proves the code and its handling of replies are right, not what a real model would say.
+The kinds of check, and what each proves, are described at the top of `tests/examples/harness.py`. In short: Python runs through the same runner the website uses; SQL runs in SQLite; shell and Git commands run in an empty temporary folder with a throwaway Git identity; HTML and CSS examples are validated (`tests/web-blocks.test.ts`, using html-validate and css-tree) and, where the chapter makes a claim about how they look or behave, rendered in real Chrome and measured (`e2e/examples.e2e.ts`); the older JavaScript and React examples are tested in `tests/web-examples.test.ts`; model API examples talk to a stand-in server (`tests/examples/fake_anthropic.py`) that returns scripted replies. That last kind proves the code and its handling of replies are right, not what a real model would say.
 
 To add a chapter with code, run `.venv/bin/python scripts/examples_draft.py your-chapter-id`. It writes a draft `examples.yaml` recording what each Python block printed. **Read every recorded output against what the chapter claims** before relying on it; the draft is a starting point, and the tests refuse an entry still marked as a draft.
 
@@ -181,6 +181,10 @@ Pieces you can use inside a chapter, with no import needed:
 | `<Exercises />` | The tick-off list from `exercises.yaml` |
 | `<Demo name="line" />` | An interactive demo from `src/demos/html/` |
 | `<Only course="ai">` … `</Only>` | Text shown in one course only, inside a shared chapter |
+| `<Solution>` … `</Solution>` | A practice answer hidden until the learner opens it |
+| `<Playground>` … `</Playground>` | Wraps an example's `html`, `css` and `js` code blocks into one live, editable preview |
+
+Every `html` code block gets a "Show the result" button even outside a `<Playground>`. Previews run in a sandboxed frame: they cannot read the site's storage, and submitting a form shows what would be sent instead of sending it.
 
 Writing rules: British spelling; plain words; define a term the first time it appears; teach in original words and link out rather than copying from other courses.
 

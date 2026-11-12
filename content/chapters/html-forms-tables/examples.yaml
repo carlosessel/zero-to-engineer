@@ -1,0 +1,82 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: html
+  check: browser
+  expect:
+  - document.querySelector('label').control === document.getElementById('q')
+  - new FormData(document.querySelector('form')).has('q')
+  note: Checks the label is connected to the box and the box is sent as q.
+- block: 2
+  lang: html
+  check: browser
+  expect:
+  - document.querySelector('form').checkValidity() === false
+  note: An empty form is invalid because of the required fields, so the browser will not submit it.
+- block: 3
+  lang: html
+  check: browser
+  actions:
+  - click: '#news'
+  expect:
+  - new FormData(document.querySelector('form')).get('how') === 'collect'
+  - new FormData(document.querySelector('form')).get('news') === 'yes'
+  - Array.from(document.querySelectorAll('input')).every(i => i.labels.length === 1)
+  note: Collect is chosen to begin with; after ticking the box, news is sent as yes; every control has exactly one label.
+- block: 4
+  lang: html
+  check: browser
+  actions:
+  - fill:
+    - '#user'
+    - a!b
+  - fill:
+    - '#pw'
+    - correct horse battery
+  expect:
+  - document.getElementById('user').validity.patternMismatch === true
+  - document.getElementById('pw').validity.valid === true
+  - document.getElementById('pw').type === 'password'
+  note: A username with a symbol breaks the pattern; a 21-character password is accepted.
+- block: 5
+  lang: html
+  check: browser
+  expect:
+  - document.querySelector('caption').textContent.startsWith('Bread prices')
+  - document.querySelectorAll('th[scope=col]').length === 3
+  - document.querySelectorAll('th[scope=row]').length === 2
+  - document.querySelectorAll('tbody tr')[1].cells[2].textContent === '₵20'
+  note: 'Checks the cell the chapter discusses: Tea bread, Large, is ₵20.'
+- block: 6
+  lang: html
+  check: browser
+  actions:
+  - fill:
+    - '#title'
+    - Things Fall Apart
+  expect:
+  - new URLSearchParams(new FormData(document.querySelector('form'))).toString() === 'title=Things+Fall+Apart'
+  note: Checks the value is sent as title, as the question asks.
+- block: 7
+  lang: html
+  check: browser
+  expect:
+  - document.querySelectorAll('input[name=size]:checked').length === 1
+  - document.querySelector('input[name=size]:checked').value === 'm'
+  - document.querySelector('legend').textContent === 'T-shirt size'
+- block: 8
+  lang: html
+  check: browser
+  actions:
+  - fill:
+    - '#ref'
+    - '12345'
+  expect:
+  - document.getElementById('ref').validity.patternMismatch === true
+  - (document.getElementById('ref').value = '123456', document.getElementById('ref').validity.valid) === true
+  note: Five digits are rejected and six accepted.
+- block: 9
+  lang: html
+  check: browser
+  expect:
+  - document.querySelectorAll('tbody th[scope=row]').length === 3
+  - document.querySelector('caption').textContent === 'League table'

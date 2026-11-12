@@ -55,7 +55,9 @@ def draft(chapter):
             e["check"] = "pip" if all(l.startswith("pip install") for l in code.strip().splitlines()) else "shell"
         elif lang == "sql":
             e["check"] = "sql"
-        elif lang in ("js", "jsx", "html", "css"):
+        elif lang in ("html", "css"):
+            e["check"] = "web"
+        elif lang in ("js", "jsx"):
             e["check"] = "vitest"
             e["test"] = f"{chapter} block {i}"
         elif lang == "text":

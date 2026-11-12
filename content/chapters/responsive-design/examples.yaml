@@ -1,0 +1,131 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: html
+  check: web
+  note: Validated as HTML. Its effect is on phone browsers, which an automatic test can only simulate; the device toolbar section explains how to see it.
+- block: 2
+  lang: css
+  check: browser
+  viewport:
+    width: 375
+    height: 700
+  expect:
+  - '(async () => { const r = await (() => { document.body.innerHTML = ''<div><img src="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%271600%27 height=%27800%27/%3E" alt=""></div>''; return new Promise(r => { const i = document.querySelector(''img''); const done = () => r(i.getBoundingClientRect()); i.complete ? done() : i.onload = done; }); })(); return r.width === 359 && r.height === 179.5; })()'
+  note: 'A 1,600 by 800 image on a 375-pixel screen: it shrinks to the 359-pixel container (375 minus the body''s 8-pixel margins) and keeps its 2:1 shape.'
+- block: 3
+  lang: css
+  check: browser
+  viewport:
+    width: 375
+    height: 700
+  expect:
+  - (() => { document.body.innerHTML = '<div class="cards">' + '<div>x</div>'.repeat(3) + '</div>'; return new Set([...document.querySelectorAll('.cards div')].map(e => e.getBoundingClientRect().left)).size; })() === 1
+  also_at:
+  - viewport:
+      width: 700
+      height: 700
+    expect:
+    - (() => { document.body.innerHTML = '<div class="cards">' + '<div>x</div>'.repeat(3) + '</div>'; return new Set([...document.querySelectorAll('.cards div')].map(e => e.getBoundingClientRect().left)).size; })() === 2
+  - viewport:
+      width: 1000
+      height: 700
+    expect:
+    - (() => { document.body.innerHTML = '<div class="cards">' + '<div>x</div>'.repeat(3) + '</div>'; return new Set([...document.querySelectorAll('.cards div')].map(e => e.getBoundingClientRect().left)).size; })() === 3
+  note: One column at 375 pixels, two at 700, three at 1000, as the queries say.
+- block: 4
+  lang: html
+  check: browser
+  combine:
+  - 4
+  - 5
+  viewport:
+    width: 375
+    height: 700
+  expect:
+  - document.querySelector('.side').getBoundingClientRect().top > document.querySelector('.top').getBoundingClientRect().bottom
+  - document.querySelector('.content').getBoundingClientRect().top > document.querySelector('.side').getBoundingClientRect().bottom
+  - document.querySelector('.side').getBoundingClientRect().width === document.querySelector('.layout').getBoundingClientRect().width
+  also_at:
+  - viewport:
+      width: 1000
+      height: 700
+    expect:
+    - document.querySelector('.side').getBoundingClientRect().top === document.querySelector('.content').getBoundingClientRect().top
+    - document.querySelector('.side').getBoundingClientRect().width === 180
+  note: At phone width everything stacks in HTML order; at 1000 pixels the menu sits beside the content.
+- block: 5
+  lang: css
+  check: web
+- block: 6
+  lang: html
+  check: browser
+  combine:
+  - 6
+  - 7
+  expect:
+  - new Set([...document.querySelectorAll('.auto-cards div')].map(e => e.getBoundingClientRect().left)).size === 4
+  also_at:
+  - viewport:
+      width: 600
+      height: 700
+    expect:
+    - new Set([...document.querySelectorAll('.auto-cards div')].map(e => e.getBoundingClientRect().left)).size === 2
+  - viewport:
+      width: 375
+      height: 700
+    expect:
+    - new Set([...document.querySelectorAll('.auto-cards div')].map(e => e.getBoundingClientRect().left)).size === 1
+  note: Four columns at 1000 pixels, two at 600 and one at 375, as the chapter says.
+- block: 7
+  lang: css
+  check: web
+- block: 8
+  lang: css
+  check: browser
+  expect:
+  - (() => { const h = document.createElement('h1'); document.body.append(h); return getComputedStyle(h).fontSize; })() === '46px'
+  also_at:
+  - viewport:
+      width: 375
+      height: 700
+    expect:
+    - (() => { const h = document.createElement('h1'); document.body.append(h); return getComputedStyle(h).fontSize; })() === '28px'
+  - viewport:
+      width: 1400
+      height: 700
+    expect:
+    - (() => { const h = document.createElement('h1'); document.body.append(h); return getComputedStyle(h).fontSize; })() === '48px'
+  note: 'At 1000 pixels: 16 + 30 = 46. At 375 the minimum, 1.75rem = 28. At 1400 the maximum, 3rem = 48.'
+- block: 9
+  lang: css
+  check: web
+- block: 10
+  lang: css
+  check: browser
+  viewport:
+    width: 375
+    height: 700
+  expect:
+  - '(async () => { const r = await (() => { document.body.innerHTML = ''<div><img src="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 width=%271600%27 height=%27800%27/%3E" alt=""></div>''; return new Promise(r => { const i = document.querySelector(''img''); const done = () => r(i.getBoundingClientRect()); i.complete ? done() : i.onload = done; }); })(); return r.width === 359; })()'
+- block: 11
+  lang: css
+  check: browser
+  viewport:
+    width: 375
+    height: 700
+  expect:
+  - '(() => { document.body.innerHTML = ''<ul class="nav-links"><li>a</li><li>b</li></ul>''; const r = [...document.querySelectorAll(''li'')].map(e => e.getBoundingClientRect()); return r[0].top === r[1].top ? ''row'' : ''column''; })() === ''column'''
+  also_at:
+  - viewport:
+      width: 700
+      height: 700
+    expect:
+    - '(() => { document.body.innerHTML = ''<ul class="nav-links"><li>a</li><li>b</li></ul>''; const r = [...document.querySelectorAll(''li'')].map(e => e.getBoundingClientRect()); return r[0].top === r[1].top ? ''row'' : ''column''; })() === ''row'''
+- block: 12
+  lang: css
+  check: browser
+  color_scheme: dark
+  expect:
+  - getComputedStyle(document.body).backgroundColor === 'rgb(17, 17, 17)'
+  - getComputedStyle(document.body).color === 'rgb(238, 238, 238)'
+  note: 'Checked with the browser set to dark mode. The solution''s contrast claim: #eeeeee on #111111 is about 16:1.'

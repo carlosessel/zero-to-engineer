@@ -4,6 +4,21 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: Zero to Web Developer, part 2 (HTML and CSS)
+
+Added
+- Eight chapters: HTML from zero; forms and tables; accessibility; CSS from zero; the box model and positioning; layout with Flexbox and Grid; responsive design; design basics. About 17,000 words, 93 practice problems with hidden solutions, 51 quiz questions, 37 exercises, 25 resources opened and recorded (plus one source of a statistic).
+- **Live examples.** Every HTML example has "Show the result"; examples wrapped in `<Playground>` combine HTML, CSS and JavaScript into one preview shown straight away. Edit to change the code and watch the result update. Previews run in a sandboxed frame that cannot read the site's storage; console messages and errors appear under the preview; submitting a form shows what it would send instead of sending it; previews grow to fit their content.
+- **Two new kinds of example check.** `web`: HTML is validated with html-validate and CSS with css-tree (`tests/web-blocks.test.ts`). `browser`: the example is rendered in real Chrome and the chapter's claims are measured, at several screen widths and in dark mode where the chapter says so (`e2e/examples.e2e.ts`). 64 of part 2's 95 code blocks have browser checks. Examples that are wrong on purpose declare the problem they should trigger, so the check proves it is real.
+- 41 glossary terms. `scripts/glossary_update.py` now prints a warning whenever a bold word matches a term from another course.
+
+Fixed (found by the new checks before publishing)
+- A centred-column example said "never wider than 400 pixels" but was 432, because its padding was added to the width: the exact mistake the chapter teaches. A practice solution had the same problem at 720 pixels.
+- "weight" (font weight) in the design chapter matched the AI glossary's "Parameter (weight)", and "breakpoint" and "inheritance" each have two meanings across the courses. The entries now give both meanings, and the design chapter says "font weight".
+- Two example previews contained their own `<main>`, which gave those chapter pages two main landmarks for screen reader users; one now uses a `<div>`. The site's accessibility check now excludes example previews, because examples are the learner's code and some are inaccessible on purpose; they are checked separately.
+- A sentence claimed screen readers always announce a styled navigation list as a list; Safari with VoiceOver does not when the bullets are removed. Reworded.
+- Two figures I had written without a source were removed or sourced: the share of problems automatic accessibility tools find (removed), and colour-blindness rates (sourced to Colour Blind Awareness).
+
 ### 2026-11-12: Zero to Web Developer, part 1
 
 Added

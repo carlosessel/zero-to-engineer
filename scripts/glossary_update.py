@@ -7,6 +7,11 @@ NEW_TERMS.yaml is a list of {term, definition, courses} entries to add. Then,
 for every course, any glossary term that a chapter of that course puts in
 **bold** gets that course added to its `courses` list, so the term shows in
 the course's glossary. The file is rewritten sorted, in the existing style.
+
+Each time an existing term is added to another course, a CHECK THE MEANING
+line is printed: the same word can mean different things in different
+courses (weight, prompt, breakpoint), and then the definition must give
+both meanings or the chapter must use a different word.
 """
 import json
 import re
@@ -46,6 +51,9 @@ def main():
             for bold in re.findall(r"\*\*(.+?)\*\*", text):
                 e = lookup.get(bold.strip().lower())
                 if e is not None and course["id"] not in e["courses"]:
+                    if e["courses"]:
+                        # An existing term from another course: the same word may mean something else here.
+                        print(f"CHECK THE MEANING: {e['term']!r} (from {', '.join(e['courses'])}) now also in {course['id']}, because {chapter} has **{bold}**")
                     e["courses"].append(course["id"])
 
     lines = []

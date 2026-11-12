@@ -185,14 +185,21 @@ test('@phone the chapter menu opens and closes, and nothing overflows sideways',
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-const AXE_PAGES = ['/', '/ai/', '/web/', '/web/web-the-map/', '/web/web-setup/', '/web/git-basics/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
+const AXE_PAGES = ['/', '/ai/', '/web/', '/web/web-the-map/', '/web/web-setup/', '/web/git-basics/', '/web/html-from-zero/', '/web/html-forms-tables/', '/web/web-accessibility/', '/web/css-from-zero/', '/web/css-box-model/', '/web/css-layout/', '/web/responsive-design/', '/web/design-basics/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
 for (const theme of ['light', 'dark'] as const) {
   test(`accessibility checks pass in ${theme} mode`, async ({ page }) => {
     test.slow();
     await page.emulateMedia({ colorScheme: theme });
     for (const path of AXE_PAGES) {
       await page.goto(path);
-      const results = await new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice']).analyze();
+      // The live previews show learners' example code, which is sometimes a whole page
+      // with its own header and main, and sometimes wrong on purpose (the accessibility
+      // chapter's broken form). They are checked separately (tests/web-blocks.test.ts and
+      // e2e/examples.e2e.ts), so this check covers the site itself, not the examples.
+      const results = await new AxeBuilder({ page })
+        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'best-practice'])
+        .exclude('.playground-result iframe')
+        .analyze();
       expect(results.violations.map((v) => `${path}: ${v.id} (${v.nodes.length}) ${v.nodes[0].html.slice(0, 100)}`)).toEqual([]);
     }
   });
@@ -220,4 +227,60 @@ test('Python runs in the browser, including input() and errors @network', async 
   await page.locator('.runner-editor').fill('total = 2 * 21\nprint("The answer is", total)');
   await first.getByRole('button', { name: 'Run' }).click();
   await expect(first.locator('.runner-out')).toHaveText('The answer is 42\n');
+});
+
+test('an HTML example shows a live result that can be edited, with console messages', async ({ page }) => {
+  await page.goto('/se/javascript/');
+  const box = page.locator('.playground-result').first();
+  await box.getByRole('button', { name: 'Show the result' }).click();
+  const frame = box.frameLocator('iframe');
+  await frame.getByRole('button', { name: 'Like' }).click();
+  await frame.getByRole('button', { name: 'Like' }).click();
+  await expect(frame.locator('#count')).toHaveText('2');
+
+  await box.getByRole('button', { name: 'Edit' }).click();
+  const editor = page.locator('.runner-editor').first();
+  await editor.fill('<p id="out">changed</p>\n<script>console.log("hello from the example", 2 + 3); document.querySelector("#nope").remove();</script>');
+  await expect(frame.locator('#out')).toHaveText('changed');
+  await expect(box.locator('.playground-console')).toContainText('hello from the example 5');
+  await expect(box.locator('.playground-console .error')).toContainText('Error:');
+
+  // The example cannot read the site's saved progress.
+  await editor.fill('<script>try { localStorage.getItem("zte-progress"); console.log("read it"); } catch (e) { console.log("blocked"); }</script>');
+  await expect(box.locator('.playground-console')).toHaveText('blocked');
+
+  await box.getByRole('button', { name: 'Reset' }).click();
+  await expect(page.locator('.runner-editor')).toHaveCount(0);
+  await expect(frame.getByRole('button', { name: 'Like' })).toBeVisible();
+});
+
+test('a form example shows what it would send instead of sending it', async ({ page }) => {
+  await page.goto('/web/html-forms-tables/');
+  const box = page.locator('.playground-result').nth(1);
+  await box.getByRole('button', { name: 'Show the result' }).click();
+  const frame = box.frameLocator('iframe');
+  await frame.getByLabel('Your name').fill('Ama');
+  await frame.getByLabel('Email').fill('ama@example.com');
+  await frame.getByRole('button', { name: 'Place order' }).click();
+  await expect(box.locator('.playground-console')).toHaveText(
+    'The form would send: name = "Ama", email = "ama@example.com", loaves = "1", bread = "sugar", notes = ""',
+  );
+});
+
+test('a CSS example with HTML shows its result straight away and updates as you edit', async ({ page }) => {
+  await page.goto('/web/css-from-zero/');
+  const group = page.locator('[data-playground]').first();
+  const box = page.locator('.playground-result').first();
+  const frame = box.frameLocator('iframe');
+  await expect(frame.locator('h1')).toHaveCSS('color', 'rgb(122, 62, 0)');
+  await box.getByRole('button', { name: 'Edit' }).click();
+  const css = group.locator('textarea').nth(1);
+  await css.fill('h1 { color: rgb(0, 0, 255); }');
+  await expect(frame.locator('h1')).toHaveCSS('color', 'rgb(0, 0, 255)');
+});
+
+test('a preview grows to fit its example', async ({ page }) => {
+  await page.goto('/web/design-basics/');
+  const frame = page.locator('.playground-result iframe').first();
+  await expect.poll(async () => (await frame.boundingBox())?.height ?? 0).toBeGreaterThan(400);
 });

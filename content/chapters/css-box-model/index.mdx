@@ -1,0 +1,377 @@
+---
+title: "The box model and positioning"
+summary: "Margins, borders, padding, sizing, and placing things where you want them."
+prerequisites: [css-from-zero]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will be able to predict exactly how big any element will be, space things apart and centre them, and take elements out of the normal flow to pin them where you want. This is the chapter that explains most of the "why is this the wrong size?" moments in CSS.
+
+## Every element is a box
+
+The browser draws every element as a rectangle. Each box has four layers, from the inside out:
+
+```text
++-------------------------------------------+
+|                  margin                   |
+|   +-----------------------------------+   |
+|   |              border               |   |
+|   |   +---------------------------+   |   |
+|   |   |          padding          |   |   |
+|   |   |   +-------------------+   |   |   |
+|   |   |   |      content      |   |   |   |
+|   |   |   +-------------------+   |   |   |
+|   |   +---------------------------+   |   |
+|   +-----------------------------------+   |
++-------------------------------------------+
+```
+
+- **Content**: the text or image itself.
+- **Padding**: space inside the box, between the content and the border. It takes the box's background colour.
+- **Border**: a line round the padding.
+- **Margin**: space outside the border, pushing other boxes away. It is always transparent.
+
+The **box model** is these four layers together. Open the developer tools, select any element, and the Computed pane shows a diagram of its box with the exact numbers.
+
+### A worked example: how wide is this box?
+
+<Playground>
+
+```html
+<div class="card">A card</div>
+```
+
+```css
+.card {
+  width: 300px;
+  padding: 20px;
+  border: 5px solid #7a3e00;
+  margin: 10px;
+  background-color: #fffaf0;
+}
+```
+
+</Playground>
+
+You asked for 300 pixels, but the visible box is wider. By default, `width` sets the width of the **content** only. Padding and border are added on top:
+
+```text
+left border    5
+left padding  20
+content      300
+right padding 20
+right border   5
+total        350 pixels, plus 10 of margin on each side
+```
+
+So the card is 350 pixels wide on screen. This default is called `content-box` sizing, and it trips up almost everyone.
+
+## box-sizing: border-box
+
+One line changes the arithmetic so that `width` means the whole visible box, border included:
+
+<Playground>
+
+```html
+<div class="card">A card</div>
+```
+
+```css
+.card {
+  box-sizing: border-box;
+  width: 300px;
+  padding: 20px;
+  border: 5px solid #7a3e00;
+  background-color: #fffaf0;
+}
+```
+
+</Playground>
+
+Now the card is exactly 300 pixels wide, and the content shrinks to fit: 300 − 2 × 5 − 2 × 20 = **250 pixels** of content. Almost every modern stylesheet starts by switching every element to this easier rule:
+
+```css
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+```
+
+`*` selects every element. (`::before` and `::after` are extra boxes CSS can add; you will meet them later.) Put this at the top of every stylesheet you write.
+
+## Writing margin and padding
+
+`margin` and `padding` take one to four values, going clockwise from the top:
+
+| You write | Means |
+| --- | --- |
+| `padding: 10px;` | 10 on all four sides |
+| `padding: 10px 20px;` | 10 top and bottom, 20 left and right |
+| `padding: 10px 20px 30px;` | 10 top, 20 left and right, 30 bottom |
+| `padding: 10px 20px 30px 40px;` | top, right, bottom, left (clockwise, like a clock from 12) |
+| `padding-top: 10px;` | One side only |
+
+`border` usually takes three values: width, style and colour, such as `border: 2px solid black`. The style can be `solid`, `dashed`, `dotted` and others. `border-radius` rounds the corners.
+
+## Centring a block
+
+A block with a set width can be centred in its parent by making its left and right margins `auto`, which shares the leftover space equally. This is the standard way to centre a page's content column:
+
+<Playground>
+
+```html
+<div class="page">This column is centred and never wider than 400 pixels.</div>
+```
+
+```css
+.page {
+  box-sizing: border-box;
+  max-width: 400px;
+  margin: 0 auto;
+  padding: 16px;
+  background-color: #eef4ff;
+}
+```
+
+</Playground>
+
+`box-sizing: border-box` is there so the padding counts inside the 400 pixels; without it the column would be 432 pixels wide. `max-width` rather than `width` is deliberate: the column is 400 pixels on wide screens but shrinks to fit a narrow phone instead of spilling off the side. Prefer `max-width` for widths.
+
+## When margins collapse
+
+Here is a rule that surprises everyone once. When a box with a bottom margin sits directly above a box with a top margin, the gap between them is **not** the two added together. It is the **larger** of the two. The margins are said to **collapse**.
+
+<Playground>
+
+```html
+<p class="one">First paragraph</p>
+<p class="two">Second paragraph</p>
+```
+
+```css
+p {
+  margin: 0;
+  background-color: #eef4ff;
+}
+
+.one {
+  margin-bottom: 20px;
+}
+
+.two {
+  margin-top: 30px;
+}
+```
+
+</Playground>
+
+The gap is 30 pixels, not 50. This only happens to vertical margins between boxes in normal flow, not to padding, not to horizontal margins, and not inside Flexbox or Grid layouts. If you need predictable spacing, a common habit is to put margins on one side only, for example only `margin-bottom`.
+
+## Block and inline
+
+Boxes behave in one of two main ways, set by the `display` property:
+
+- **Block** boxes (`display: block`) start on a new line and stretch across the full width of their parent. Headings, paragraphs, lists, `div`, `section` and the other structural elements are block by default. Width, height, margins and padding all work as described above.
+- **Inline** boxes (`display: inline`) sit within a line of text, like words. `a`, `strong`, `em` and `span` are inline. Setting `width` or `height` on them does nothing, and top and bottom margins do not push other lines away.
+- `display: inline-block` sits in the line like inline, but accepts width, height and vertical spacing like a block. Useful for buttons made from links.
+- `display: none` removes the element completely, as if it were not in the page. Screen readers skip it too.
+
+The next chapter adds two more, `flex` and `grid`, which are how you lay out pages.
+
+## Overflow
+
+If content is bigger than its box, it spills out (`overflow: visible`, the default). `overflow: auto` adds scroll bars when needed; `overflow: hidden` cuts it off. The best fix is usually not to give boxes a fixed `height` at all: let them grow with their content.
+
+## Positioning
+
+Normally boxes follow each other down the page; this is called the **normal flow**. The `position` property takes boxes out of it or nudges them:
+
+| Value | What it does |
+| --- | --- |
+| `static` | The default: normal flow. |
+| `relative` | Stays in the flow, but can be nudged with `top`, `left` and so on. Mostly used to become the reference point for an `absolute` child. |
+| `absolute` | Taken out of the flow. Placed using `top`, `right`, `bottom`, `left`, measured from the nearest ancestor that has a position other than `static`. |
+| `fixed` | Taken out of the flow and pinned to the browser window, so it stays put when you scroll. |
+| `sticky` | Behaves normally until you scroll it to a set point, then sticks there, like a heading that stays at the top. |
+
+### A worked example: a badge in the corner of a card
+
+<Playground>
+
+```html
+<div class="product">
+  <span class="badge">New</span>
+  <h2>Coconut bread</h2>
+  <p>Soft and lightly sweet.</p>
+</div>
+```
+
+```css
+.product {
+  position: relative;
+  max-width: 280px;
+  padding: 16px;
+  border: 1px solid #cccccc;
+}
+
+.badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  padding: 2px 8px;
+  background-color: #7a3e00;
+  color: white;
+}
+```
+
+</Playground>
+
+The badge is `absolute`, so it is placed 8 pixels from the top and right of its nearest positioned ancestor. That is the card, because the card is `position: relative`. Remove `position: relative` from `.product` and the badge jumps to the top right of the whole page, because there is no positioned ancestor any more. That one line is the usual answer to "why is my absolute element in the wrong place?".
+
+When positioned boxes overlap, `z-index` decides which is in front: higher numbers in front. It only works on positioned elements.
+
+Use positioning sparingly. For arranging things in rows, columns and grids, the next chapter's Flexbox and Grid are far easier and adapt to screen sizes.
+
+## Common mistakes
+
+- **Forgetting that padding and border add to `width`.** Use `box-sizing: border-box` everywhere.
+- **Fixed heights.** Text grows when people enlarge it or translate the page, and spills out of a fixed-height box. Let height follow content.
+- **Setting width or height on an inline element** such as a `span` or `a` and wondering why nothing happens. Make it `inline-block` or `block`.
+- **Expecting two vertical margins to add up.** They collapse to the larger.
+- **An `absolute` element in the wrong place** because no ancestor is positioned. Add `position: relative` to the box it belongs to.
+- **Using `position: absolute` to build whole layouts.** It breaks as soon as content or screen size changes.
+
+## Practice
+
+**1. (warm-up)** Name the four layers of the box model from the inside out.
+
+<Solution>
+
+Content, padding, border, margin.
+
+</Solution>
+
+**2. (warm-up)** Which layer takes the element's background colour: padding or margin?
+
+<Solution>
+
+Padding. Margin is always transparent.
+
+</Solution>
+
+**3. (warm-up)** What does `margin: 0 auto;` do to a block with a `max-width`?
+
+<Solution>
+
+No margin on the top and bottom, and equal automatic margins on the left and right, which centres the block horizontally.
+
+</Solution>
+
+**4. (standard)** With the default `content-box` sizing, how wide on screen is a box with `width: 200px; padding: 10px; border: 2px solid;`?
+
+<Solution>
+
+200 + 10 + 10 + 2 + 2 = **224 pixels**.
+
+</Solution>
+
+**5. (standard)** The same box, but with `box-sizing: border-box`. How wide on screen, and how wide is the content area?
+
+<Solution>
+
+**200 pixels** on screen. The content area is 200 − 2 × 2 − 2 × 10 = **176 pixels**.
+
+</Solution>
+
+**6. (standard)** Write `padding: 5px 10px 15px 20px;` as four separate properties.
+
+<Solution>
+
+```css
+.box {
+  padding-top: 5px;
+  padding-right: 10px;
+  padding-bottom: 15px;
+  padding-left: 20px;
+}
+```
+
+Clockwise from the top.
+
+</Solution>
+
+**7. (standard)** A heading has `margin-bottom: 24px` and the paragraph after it has `margin-top: 16px`. How big is the gap between them?
+
+<Solution>
+
+**24 pixels.** Vertical margins between neighbouring blocks collapse to the larger of the two.
+
+</Solution>
+
+**8. (standard)** You set `width: 200px` on a `span` and nothing changes. Why, and what is the fix?
+
+<Solution>
+
+A `span` is inline, and inline boxes ignore `width`. Add `display: inline-block` (to keep it in the line) or `display: block`.
+
+</Solution>
+
+**9. (standard)** Write CSS for a page column that is centred, never wider than 720 pixels, and has 16 pixels of space inside on every side.
+
+<Solution>
+
+```css
+.page {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 16px;
+}
+```
+
+This assumes the `border-box` rule from earlier in the chapter is at the top of the stylesheet. Without it, the padding is added and the column becomes 752 pixels wide.
+
+</Solution>
+
+**10. (standard)** What is the difference between `display: none` and making something transparent with `opacity: 0`?
+
+<Solution>
+
+`display: none` removes the element entirely: it takes no space, cannot be clicked, and screen readers skip it. `opacity: 0` makes it invisible, but it still takes up its space, can still be clicked, and screen readers still read it.
+
+</Solution>
+
+**11. (stretch)** A "Close" button inside a pop-up box has `position: absolute; top: 10px; right: 10px;`, but it appears in the top right corner of the whole page instead of the pop-up. What is missing?
+
+<Solution>
+
+The pop-up box needs a position other than `static`, usually `position: relative`. An absolute element is placed relative to its nearest positioned ancestor; with none, it uses the whole page.
+
+</Solution>
+
+**12. (stretch)** A designer's mock-up shows three cards, each 300 pixels wide, with 20 pixels of padding and a 1-pixel border, side by side with 24 pixels between them, inside a container. Using `border-box` sizing, how wide must the container be to fit them exactly? How wide would it need to be with `content-box` sizing and `width: 300px` on each card?
+
+<Solution>
+
+With `border-box`, each card is 300 wide, so 3 × 300 + 2 × 24 = **948 pixels**. With `content-box`, each card is 300 + 2 × 20 + 2 × 1 = 342 wide, so 3 × 342 + 2 × 24 = **1,074 pixels**. This is why `border-box` is easier: the number in the mock-up is the number in the CSS.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Every element is a box: content, padding, border, margin.
+- By default `width` sets the content only; padding and border are added. `box-sizing: border-box` makes `width` the whole box; set it on every element.
+- `margin` and `padding` take one to four values, clockwise from the top.
+- `max-width` plus `margin: 0 auto` centres a column and lets it shrink on small screens.
+- Vertical margins between neighbouring blocks collapse to the larger one.
+- Block boxes stack and take the full width; inline boxes sit in text and ignore width and height.
+- Avoid fixed heights; let boxes grow with their content.
+- `position: absolute` is placed relative to the nearest positioned ancestor, usually one you give `position: relative`. Use positioning sparingly.
+
+## Go deeper
+
+- [MDN: Introduction to the CSS box model](https://developer.mozilla.org/en-US/docs/Web/CSS/Guides/Box_model/Introduction), from Mozilla. The box model reference, with diagrams.
+- [MDN: CSS styling basics](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Styling_basics), from Mozilla. Its box model lesson has interactive examples and a skills test.

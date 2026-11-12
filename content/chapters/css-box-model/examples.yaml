@@ -1,0 +1,98 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: text
+  check: illustration
+  note: A diagram, not code. The layers it shows are the ones the browser checks below measure.
+- block: 2
+  lang: html
+  check: browser
+  combine:
+  - 2
+  - 3
+  expect:
+  - document.querySelector('.card').offsetWidth === 350
+  - document.querySelector('.card').getBoundingClientRect().left === 18
+  note: 'Measured in Chrome: 350 pixels wide, as the arithmetic says. The left edge is at 18 because the page body has the browser''s default 8-pixel margin, plus the card''s 10.'
+- block: 3
+  lang: css
+  check: web
+- block: 4
+  lang: text
+  check: illustration
+  verify: |
+    nums = [int(l.split()[-1].replace('pixels', '').strip()) if l.split()[-1].isdigit() else int(l.split()[1]) for l in block.splitlines()]
+    assert sum(nums[:5]) == nums[5] == 350, nums
+  note: The sum is recomputed.
+- block: 5
+  lang: html
+  check: browser
+  combine:
+  - 5
+  - 6
+  expect:
+  - document.querySelector('.card').offsetWidth === 300
+  - document.querySelector('.card').clientWidth - 40 === 250
+  note: 'Measured in Chrome: 300 pixels wide with 250 of content (clientWidth excludes the border, then subtract 2 × 20 padding).'
+- block: 6
+  lang: css
+  check: web
+- block: 7
+  lang: css
+  check: browser
+  expect:
+  - '(() => { const d = document.createElement(''div''); d.style.cssText = ''width: 200px; padding: 10px; border: 2px solid''; document.body.append(d); return d.offsetWidth === 200; })()'
+  note: With the rule in place, a div given width 200, padding 10 and border 2 is 200 pixels wide.
+- block: 8
+  lang: html
+  check: browser
+  combine:
+  - 8
+  - 9
+  expect:
+  - document.querySelector('.page').offsetWidth === 400
+  - Math.round(document.querySelector('.page').getBoundingClientRect().left) === 300
+  note: 'At 1000 pixels wide: the column is 400 wide and centred (8-pixel body margin + (984 − 400) ÷ 2 = 300).'
+- block: 9
+  lang: css
+  check: web
+- block: 10
+  lang: html
+  check: browser
+  combine:
+  - 10
+  - 11
+  expect:
+  - document.querySelector('.two').getBoundingClientRect().top - document.querySelector('.one').getBoundingClientRect().bottom === 30
+  note: 'Measured in Chrome: the gap is 30, not 50.'
+- block: 11
+  lang: css
+  check: web
+- block: 12
+  lang: html
+  check: browser
+  combine:
+  - 12
+  - 13
+  expect:
+  - document.querySelector('.product').getBoundingClientRect().right - document.querySelector('.badge').getBoundingClientRect().right === 9
+  - document.querySelector('.badge').getBoundingClientRect().top - document.querySelector('.product').getBoundingClientRect().top === 9
+  - (() => { document.querySelector('.product').style.position = 'static'; return document.querySelector('.badge').getBoundingClientRect().top === 8; })()
+  note: 'The badge sits 8 pixels inside the card''s 1-pixel border (9 from its outer edge). With position: relative removed, it jumps to 8 pixels from the top of the page, as the chapter says.'
+- block: 13
+  lang: css
+  check: web
+- block: 14
+  lang: css
+  check: browser
+  expect:
+  - (() => { const d = document.createElement('div'); d.className = 'box'; document.body.append(d); const s = getComputedStyle(d); return s.padding === '5px 10px 15px 20px'; })()
+  note: The four separate properties give the same result as the shorthand in the question.
+- block: 15
+  lang: css
+  check: browser
+  combine:
+  - 7
+  - 15
+  expect:
+  - (() => { const m = document.createElement('main'); m.className = 'page'; document.body.append(m); return m.offsetWidth === 720; })()
+  note: 'Rendered together with the border-box rule, as the solution says it assumes: exactly 720 wide at a 1000-pixel window.'

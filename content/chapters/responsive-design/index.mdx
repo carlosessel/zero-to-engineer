@@ -1,0 +1,352 @@
+---
+title: "Responsive design"
+summary: "One page that works from a phone to a wide screen: media queries and flexible sizes."
+prerequisites: [css-layout]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will be able to build pages that rearrange themselves to suit any screen, from a small phone to a wide monitor, using one set of HTML and CSS. Many websites now get more visits from phones than from computers, so this is not an extra: it is how every page is built.
+
+**Responsive design** means a page adapts to the space it has, rather than having separate "mobile" and "desktop" versions. It rests on four habits:
+
+1. a viewport tag, so phones do not pretend to be wide screens;
+2. flexible sizes instead of fixed ones;
+3. images that shrink to fit;
+4. media queries for the few places where the layout must change.
+
+## 1. The viewport tag
+
+You have typed it in every page since the HTML chapter:
+
+```html
+<meta name="viewport" content="width=device-width, initial-scale=1">
+```
+
+Without it, phone browsers assume the page was designed for a wide screen, draw it about 980 pixels wide, and shrink the whole thing to fit, so the text is tiny. With it, the page's width is the phone's actual width, and your CSS decides what happens.
+
+## 2. Flexible sizes
+
+Most responsiveness comes free if you avoid fixed widths:
+
+- Use `max-width` instead of `width` for containers, so they shrink on small screens.
+- Use `fr`, percentages, `flex: 1` and wrapping (from the layout chapter) to share space.
+- Use `rem` for text and spacing, so they follow people's text-size settings.
+- Never give text boxes a fixed `height`.
+
+## 3. Images that fit
+
+An image's natural size might be 1,600 pixels wide; a phone is perhaps 375. One rule stops images overflowing:
+
+```css
+img {
+  max-width: 100%;
+  height: auto;
+}
+```
+
+`max-width: 100%` means "never wider than your container"; `height: auto` keeps the proportions as it shrinks. Put this near the top of every stylesheet, next to the `border-box` rule.
+
+## 4. Media queries
+
+A **media query** applies CSS only when a condition is true, usually about the width of the window. The condition goes in an `@media` block:
+
+```css
+.cards {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 600px) {
+  .cards {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 900px) {
+  .cards {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+```
+
+Read it from the top: one column always; from 600 pixels wide, two columns; from 900 pixels, three. The width where the layout changes is called a **breakpoint**.
+
+### Mobile first
+
+The example above is written **mobile first**: the CSS outside any media query is for the smallest screens, and `min-width` queries add to it as the screen grows. This is the usual approach because:
+
+- small screens get the simplest CSS, with nothing to undo;
+- the narrow layout is usually a single column, which is what the HTML gives you before any layout at all;
+- each query only adds, so it is easier to follow.
+
+The opposite, starting wide and using `max-width` queries to take things away, works too, but leads to more overriding.
+
+### Choosing breakpoints
+
+Do not choose breakpoints from a list of phone and tablet models: there are thousands of screen sizes and they change every year. Instead, start narrow, widen the window slowly, and add a breakpoint where **your content** starts to look wrong: lines too long, cards too wide, a menu that no longer fits. Your content's breakpoints are the right ones.
+
+### A worked example: a page that rearranges
+
+The page layout from the last chapter, rebuilt mobile first. On a narrow screen everything is one column in HTML order; from 700 pixels the menu moves beside the content.
+
+<Playground>
+
+```html
+<div class="layout">
+  <header class="top">Ama's Bakery</header>
+  <nav class="side">Menu</nav>
+  <main class="content">Fresh bread every morning.</main>
+  <footer class="bottom">Call us on 030 000 0000</footer>
+</div>
+```
+
+```css
+.layout {
+  display: grid;
+  gap: 12px;
+  grid-template-areas:
+    "top"
+    "side"
+    "content"
+    "bottom";
+}
+
+@media (min-width: 700px) {
+  .layout {
+    grid-template-columns: 180px 1fr;
+    grid-template-areas:
+      "top    top"
+      "side   content"
+      "bottom bottom";
+  }
+}
+
+.top { grid-area: top; }
+.side { grid-area: side; }
+.content { grid-area: content; }
+.bottom { grid-area: bottom; }
+
+.layout > * {
+  padding: 16px;
+  background-color: #eef4ff;
+}
+```
+
+</Playground>
+
+The result frame is narrower than 700 pixels on most screens, so you probably see one column. Drag the frame's bottom-right corner, or open the developer tools' device toolbar (next section), to watch it switch.
+
+## Layouts that need no media queries
+
+Grid can choose the number of columns by itself:
+
+<Playground>
+
+```html
+<div class="auto-cards">
+  <div>Sugar bread</div>
+  <div>Tea bread</div>
+  <div>Brown bread</div>
+  <div>Coconut bread</div>
+  <div>Butter bread</div>
+  <div>Wheat bread</div>
+</div>
+```
+
+```css
+.auto-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.auto-cards div {
+  padding: 16px;
+  background-color: #eef4ff;
+}
+```
+
+</Playground>
+
+`minmax(200px, 1fr)` means "at least 200 pixels, and share any extra". `repeat(auto-fit, …)` means "as many columns as fit". So a 1,000-pixel container gets four columns, a 600-pixel one two, and a phone one. No breakpoints, and it works in any container, not just at certain window sizes. Use this pattern for card grids.
+
+### Text that scales
+
+`clamp()` picks a size between a minimum and a maximum, scaling in between:
+
+```css
+h1 {
+  font-size: clamp(1.75rem, 1rem + 3vw, 3rem);
+}
+```
+
+The heading is never smaller than 1.75rem or larger than 3rem; in between, it grows with the window width (`vw` is 1% of the window's width). Keep body text at a steady `1rem` or so; scaling suits headings.
+
+## Touch, and other conditions
+
+- **Touch targets.** Fingers are less precise than mouse pointers. WCAG 2.2 asks that targets be at least 24 by 24 pixels (or have enough space round them), and many design guides recommend around 44 pixels for main buttons. Give links in menus generous padding.
+- **No hover on touch screens.** Do not hide anything important behind `:hover`; phones have no mouse to hover with.
+- Media queries can test more than width. `@media (prefers-color-scheme: dark)` applies when someone has chosen dark mode on their device, and `@media (prefers-reduced-motion: reduce)` when they have asked for less animation, which matters to people who feel ill from movement on screen.
+
+```css
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none;
+    transition: none;
+  }
+}
+```
+
+## Testing responsive pages
+
+- **Drag the window narrower and wider** slowly, watching for the moment anything breaks.
+- **The device toolbar** in the developer tools (the phone-and-tablet icon in Chrome, or "Responsive Design Mode" in Firefox) shows the page at any width, and simulates phones' screens.
+- **Zoom to 200%**, as in the accessibility chapter. Zooming in narrows the page in CSS pixels, so it also tests your narrow layout.
+- **A real phone.** Nothing replaces it: touch, small text and real network speeds only show up there.
+- **Look for sideways scrolling.** If the page scrolls left and right on a phone, something is too wide: usually a fixed width, an image without `max-width: 100%`, or a long word or web address. The developer tools' Elements panel helps find the culprit.
+
+## Common mistakes
+
+- **Forgetting the viewport tag.** Everything looks tiny on phones.
+- **Fixed widths** (`width: 960px`) on containers.
+- **Images without `max-width: 100%`.**
+- **Breakpoints chosen from device lists** instead of from where your content breaks.
+- **Hiding content on mobile** with `display: none` because it does not fit. Phone users want the same information; rearrange it instead.
+- **Menus that only open on hover.**
+- **Testing only by dragging the browser window** and never on a real phone.
+
+## Practice
+
+**1. (warm-up)** What goes wrong on phones if a page has no viewport tag?
+
+<Solution>
+
+The phone draws the page as if the screen were about 980 pixels wide and shrinks it to fit, so text and buttons are tiny and the CSS for small screens never applies.
+
+</Solution>
+
+**2. (warm-up)** Write the two declarations that stop images overflowing their container while keeping their shape.
+
+<Solution>
+
+```css
+img {
+  max-width: 100%;
+  height: auto;
+}
+```
+
+</Solution>
+
+**3. (warm-up)** In mobile-first CSS, are media queries usually `min-width` or `max-width`?
+
+<Solution>
+
+`min-width`: the base CSS is for small screens, and each query adds styles from a width upwards.
+
+</Solution>
+
+**4. (standard)** Write mobile-first CSS that makes a `.nav-links` list stack vertically on small screens and line up in a row from 640 pixels wide.
+
+<Solution>
+
+```css
+.nav-links {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+@media (min-width: 640px) {
+  .nav-links {
+    flex-direction: row;
+  }
+}
+```
+
+</Solution>
+
+**5. (standard)** With `grid-template-columns: repeat(auto-fit, minmax(200px, 1fr))` and `gap: 16px`, how many columns are there in a container 760 pixels wide? And 860?
+
+<Solution>
+
+Each column needs at least 200, and each extra column adds a 16-pixel gap. Three columns need 3 × 200 + 2 × 16 = 632; four need 4 × 200 + 3 × 16 = 848. So 760 pixels gives **three** columns (four would need 848), and 860 gives **four**.
+
+</Solution>
+
+**6. (standard)** A phone page scrolls sideways. List three likely causes and how to find which one it is.
+
+<Solution>
+
+A container with a fixed `width` larger than the screen; an image without `max-width: 100%`; a long unbroken piece of text such as a web address. In the developer tools, set a narrow width in the device toolbar, then hover over elements in the Elements panel to find the one that sticks out past the right edge.
+
+</Solution>
+
+**7. (standard)** Why should breakpoints be chosen by watching your content rather than by phone and tablet sizes?
+
+<Solution>
+
+There are thousands of screen sizes and new ones every year, so device lists are never complete and soon out of date. What matters is where your particular layout starts to look wrong, which only your content can tell you.
+
+</Solution>
+
+**8. (standard)** `font-size: clamp(1.5rem, 1rem + 2vw, 2.5rem)`. In a window 1,000 pixels wide with a 16-pixel root size, what size is the text? And at 200 pixels wide?
+
+<Solution>
+
+At 1,000 pixels: 1rem + 2vw = 16 + 20 = 36 pixels, which is between 24 (1.5rem) and 40 (2.5rem), so **36 pixels**. At 200 pixels: 16 + 4 = 20, below the minimum, so it is clamped to **24 pixels** (1.5rem).
+
+</Solution>
+
+**9. (standard)** A designer hid the "Opening hours" section on phones "because it didn't fit". What do you suggest?
+
+<Solution>
+
+Phone users need opening hours as much as anyone, probably more. Rearrange rather than hide: stack it below the main content in one column, or make it a shorter list. Hidden content is lost content.
+
+</Solution>
+
+**10. (stretch)** Write a media query that gives the page a dark background and light text when the person's device is set to dark mode.
+
+<Solution>
+
+```css
+@media (prefers-color-scheme: dark) {
+  body {
+    background-color: #111111;
+    color: #eeeeee;
+  }
+}
+```
+
+Check the contrast of the dark colours too: #eeeeee on #111111 is well above 4.5:1.
+
+</Solution>
+
+**11. (stretch)** The bakery's menu links are 16-pixel text with no padding. On a phone, people keep tapping the wrong one. What do you change, and how big should the targets be?
+
+<Solution>
+
+Add padding to the links (and make them `display: inline-block` or flex items so the padding counts), so each tap area is larger, and add space between them. WCAG 2.2 asks for at least 24 by 24 pixels; around 44 pixels is a common recommendation for main navigation.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Responsive pages adapt to any screen with one set of HTML and CSS.
+- Always include the viewport tag.
+- Prefer flexible sizes: `max-width`, `fr`, `flex`, wrapping, `rem`. Avoid fixed widths and heights.
+- `img { max-width: 100%; height: auto; }` keeps images inside their containers.
+- Media queries apply CSS from a width (`@media (min-width: 700px)`). Write mobile first, and choose breakpoints where your content breaks.
+- `repeat(auto-fit, minmax(200px, 1fr))` makes grids that choose their own column count; `clamp()` makes headings scale.
+- Make touch targets large, never hide essentials behind hover, and respect dark mode and reduced-motion settings.
+- Test by resizing, with the device toolbar, at 200% zoom, and on a real phone.
+
+## Go deeper
+
+- [MDN: Responsive design](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/CSS_layout/Responsive_Design), from Mozilla. The history and techniques of responsive design, with examples.
+- [Can I use](https://caniuse.com/). Look up any CSS feature, such as `clamp` or `container queries`, to see which browsers support it.

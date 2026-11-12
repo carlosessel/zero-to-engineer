@@ -1,0 +1,259 @@
+---
+title: "Accessibility: pages everyone can use"
+summary: "Screen readers, keyboards, alt text, contrast and labels, and how to test them."
+prerequisites: [html-from-zero, html-forms-tables]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know who relies on accessible pages, how they use the web, the habits that make most pages accessible, and how to test your own pages with a keyboard, a browser tool and a screen reader.
+
+## What accessibility means
+
+A page is **accessible** when people can use it whatever their abilities and however they use their device. That includes people who:
+
+- are blind or have low vision, and use a **screen reader** (software that reads the page aloud and lets them move around it with the keyboard or gestures) or zoom the page a long way;
+- are colour-blind, which affects about one in twelve men and one in two hundred women;
+- are deaf or hard of hearing, and need captions on videos;
+- cannot use a mouse because of a motor disability, a tremor or an injury, and use a keyboard, a switch, or their voice;
+- have dyslexia, a learning disability, or difficulty concentrating, and need clear language and predictable pages.
+
+Disability is not rare, and it is often temporary or situational: a broken wrist, glare on a phone screen in the sun, a noisy train, a slow connection, getting older. Accessible pages are better pages for everyone. In many countries the law also requires many organisations' websites to be accessible.
+
+The international standard is the **Web Content Accessibility Guidelines** (**WCAG**), published by the W3C. The current version is WCAG 2.2. Its guidelines have three levels: A (the minimum), AA and AAA. Most laws and policies that set a target ask for AA. You do not need to read the standard to start: the habits in this chapter cover a large part of it.
+
+## Most of it is good HTML
+
+The single most effective thing you can do is the previous two chapters: use the right element for the job.
+
+- A `<button>` can be reached with the Tab key, pressed with Enter or Space, and is announced as "button". A `<div>` made to look like a button can do none of that until you write a lot of JavaScript to imitate it, and most people who try get it wrong.
+- Headings let screen reader users jump through a page by its outline, the way sighted people skim.
+- `<nav>`, `<main>` and the other regions (screen readers call them **landmarks**) let people jump straight to the part they want.
+- A `<label>` gives a form field a name.
+- `lang="en"` on `<html>` makes the screen reader use the right pronunciation.
+
+### A worked example: the same thing, inaccessible and accessible
+
+This is wrong on purpose. It looks like a sign-up form, but a screen reader announces the field only as "edit text", the image as its file name, and the "button" as plain text that cannot be reached with Tab:
+
+```html
+<img src="logo.png">
+<div>Email</div>
+<input type="email" id="email" name="email">
+<div class="button" onclick="signUp()">Sign up</div>
+```
+
+The same thing, done properly:
+
+```html
+<img src="logo.png" alt="Ama's Bakery">
+<label for="email">Email</label>
+<input type="email" id="email" name="email" autocomplete="email">
+<button type="button">Sign up</button>
+```
+
+Nothing about the second version is harder to write. It is just the right elements.
+
+## Keyboards and focus
+
+Many people use only the keyboard. Try it now on any site: put your mouse aside and press **Tab** to move forwards through links, buttons and form fields, **Shift+Tab** to move back, **Enter** to follow a link or press a button, **Space** to tick a box or press a button, and the arrow keys inside menus and radio groups.
+
+The element the keyboard is on has **focus**, and browsers draw a ring round it, the **focus indicator**. Three rules:
+
+- **Everything you can click must be reachable and usable with the keyboard.** Using real links, buttons and form controls does this for you.
+- **Never remove the focus ring without a replacement.** The CSS `outline: none` makes the page unusable for keyboard users, because they can no longer see where they are.
+- **The order of Tab should follow the order of the page.** It does, as long as the HTML is in a sensible order.
+
+A **skip link** is a link at the very top of a page, visible when it gets focus, that jumps to the main content, so keyboard users need not Tab through the whole menu on every page. This site has one: press Tab once on any page.
+
+## Images and alternatives
+
+From the HTML chapter: every image needs `alt`. Some guidance for writing it:
+
+- Say what the image shows that matters **here**. A photo of a loaf on the menu page might be "Sugar bread: a round golden loaf"; the same photo on a page about baking might need "dough risen to twice its size".
+- Do not start with "image of"; screen readers already say it is an image.
+- A decorative image gets `alt=""`.
+- An image that is a link or a button describes the action: an envelope icon that opens email is `alt="Email us"`, not `alt="Envelope"`.
+- An image containing text gives that text. Better still, use real text, which can be resized, translated and searched.
+
+Videos need **captions** (the words spoken, shown on screen) and audio-only content needs a **transcript**.
+
+## Colour and contrast
+
+Text must stand out clearly from its background. **Contrast** is measured as a ratio from 1:1 (the same colour) to 21:1 (black on white). WCAG at level AA asks for at least **4.5:1** for normal text and **3:1** for large text (about 24 pixels, or about 19 pixels if bold).
+
+Some greys on a white background, a common source of failure:
+
+```text
+#000000 (black)       on #ffffff (white)   21.0:1   passes
+#595959 (dark grey)   on #ffffff           7.0:1    passes, even the stricter AAA level
+#767676 (mid grey)    on #ffffff           4.5:1    just passes AA for normal text
+#999999 (light grey)  on #ffffff           2.8:1    fails for normal text, and for large text
+```
+
+You do not need to calculate these yourself: a contrast checker such as WebAIM's does it, and the browser's developer tools show the contrast of any text when you inspect it.
+
+Also: **never use colour as the only way to show something.** "Fields marked in red are required" fails for colour-blind people and screen reader users. Add a word or a symbol: "Required", or an asterisk explained at the top of the form.
+
+## Clear content
+
+- Write **link text** that makes sense alone. Screen reader users often list all the links on a page.
+- Use **plain words** and short sentences. Explain abbreviations the first time.
+- Give every page a unique, descriptive `<title>`; it is the first thing a screen reader says.
+- Make **error messages** say what is wrong and how to fix it, next to the field: "Enter an email address like name@example.com", not just "Invalid".
+- Do not make anything move, flash or play sound by itself. Flashing more than three times a second can trigger seizures.
+
+## ARIA, and why you rarely need it
+
+**ARIA** (Accessible Rich Internet Applications) is a set of HTML attributes, such as `aria-label` and `role`, that tell assistive technology what something is when HTML alone cannot. You will meet it in code. The first rule of ARIA, from the W3C itself: if a native HTML element does the job, use it instead. A `<button>` beats `<div role="button">` every time, because the native element comes with keyboard support that ARIA does not add. ARIA used wrongly makes pages worse. Learn it later, when you build something HTML has no element for.
+
+## How to test
+
+1. **Keyboard only.** Put the mouse away. Can you reach and use everything? Can you always see where focus is?
+2. **An automatic checker.** In Chrome's developer tools, the **Lighthouse** panel has an accessibility audit; there are similar extensions for every browser. Automatic tools catch missing alt text, missing labels, low contrast and more, but only some kinds of problem; they cannot tell whether alt text is *useful*.
+3. **The validator.** Invalid HTML is a common source of accessibility bugs.
+4. **Zoom to 200%** (Ctrl and +, or Cmd and + on a Mac). Is everything still readable without scrolling sideways?
+5. **A screen reader.** Every major system has one free: **VoiceOver** is built into macOS and iPhones, **Narrator** into Windows, **TalkBack** into Android phones, and **NVDA** is a free download for Windows. Learn three commands and listen to your page. It feels slow and strange at first; that is the point.
+
+## Common mistakes
+
+- **Buttons made from `div`s or links that act like buttons.** Use `<button>` for actions and `<a href>` for going somewhere.
+- **Removing the focus outline** for looks.
+- **Missing or useless alt text**: none, the file name, or "image".
+- **Light grey text** that looks elegant and fails contrast.
+- **Placeholder text instead of labels.**
+- **Colour as the only signal.**
+- **Automatic tools treated as the whole test.** They find only certain kinds of problem; testing with the keyboard and a screen reader finds many they miss.
+- **Adding ARIA to fix what the wrong element broke,** instead of using the right element.
+
+## Practice
+
+**1. (warm-up)** Name three groups of people who benefit from accessible web pages, apart from blind people.
+
+<Solution>
+
+Any three of: people with low vision who zoom; colour-blind people; deaf and hard-of-hearing people (captions); people who cannot use a mouse; people with dyslexia or learning disabilities (clear language); older people; anyone in a temporary or situational limit, such as a broken arm, bright sunlight or a noisy place.
+
+</Solution>
+
+**2. (warm-up)** Which keys do keyboard users press to: move to the next control; move back; press a button; tick a checkbox?
+
+<Solution>
+
+Tab; Shift+Tab; Enter or Space; Space.
+
+</Solution>
+
+**3. (warm-up)** What contrast ratio does WCAG AA require for normal-size text?
+
+<Solution>
+
+At least 4.5:1. (3:1 for large text.)
+
+</Solution>
+
+**4. (standard)** Find every accessibility problem in this snippet and say how to fix each:
+
+```html
+<img src="cart.png" onclick="openCart()">
+<p style="color:#aaa">Free delivery on orders over ₵100</p>
+<a href="/terms">Click here</a> to read our terms.
+```
+
+<Solution>
+
+The image is used as a button but is not a button: it cannot be reached with Tab, is not announced as a button, and has no alt text. Use `<button type="button">` with the image inside it, and give the image `alt="Open cart"`. The grey `#aaa` on white is about 2.3:1, far below 4.5:1: use a darker grey such as `#595959`. "Click here" says nothing on its own: make the link text "Read our terms" or "our delivery terms".
+
+</Solution>
+
+**5. (standard)** Write alt text for a photo of a smiling woman holding a tray of bread, used (a) on the "About us" page as the founder's portrait, under the heading "Meet Ama"; (b) as a background behind the page title, purely for decoration.
+
+<Solution>
+
+(a) Something like `alt="Ama, the founder, holding a tray of fresh sugar bread"`. The page is about her, so say who she is. (b) `alt=""`: decoration should be skipped.
+
+</Solution>
+
+**6. (standard)** A form shows required fields only by making their labels red. Why is this a problem, and what is a better design?
+
+<Solution>
+
+Colour-blind people may not see the difference, and screen readers do not announce colour. Add text: write "(required)" in each required label, or mark them with an asterisk and say at the top "Fields marked * are required". Also add the `required` attribute, which screen readers announce.
+
+</Solution>
+
+**7. (standard)** A designer wants to remove the outline that appears round links when you press Tab, because it "looks ugly". What do you say?
+
+<Solution>
+
+Without a focus indicator, keyboard users cannot see where they are on the page, so they cannot use it. Offer to restyle it instead: a thicker, on-brand outline that only appears for keyboard focus (CSS `:focus-visible`, in the CSS chapters) keeps the page usable and can look good.
+
+</Solution>
+
+**8. (standard)** Rank these greys on white from best to worst contrast and say which pass AA for normal text: `#999999`, `#595959`, `#767676`.
+
+<Solution>
+
+`#595959` (about 7:1, passes), `#767676` (about 4.5:1, just passes), `#999999` (about 2.8:1, fails). Darker grey on white means more contrast.
+
+</Solution>
+
+**9. (standard)** Why is `<button>` better than `<div role="button" onclick="save()">`?
+
+<Solution>
+
+The real button can be focused with Tab, pressed with Enter and Space, and is announced as a button, all built in. The `div` with `role="button"` is announced as a button but cannot be reached with Tab or pressed with the keyboard unless you add `tabindex` and keyboard event code yourself. The first rule of ARIA: use the native element.
+
+</Solution>
+
+**10. (standard)** An automatic checker reports no problems on your page. Is the page accessible?
+
+<Solution>
+
+Not necessarily. Automatic tools find only some kinds of problem. They cannot judge whether alt text is useful, whether the Tab order makes sense, whether error messages are clear, or whether the page works with a screen reader. Test with the keyboard and a screen reader too.
+
+</Solution>
+
+**11. (stretch)** Turn on your system's screen reader (VoiceOver on a Mac: Cmd+F5; Narrator on Windows: Windows key+Ctrl+Enter), open the bakery page from the HTML chapter, and list three things you noticed. Then turn it off with the same keys.
+
+<Solution>
+
+Answers vary. Typical observations: the page title is read first; headings are announced with their level ("heading level 2, Today's bread"); lists are announced with how many items they have; links say "link"; the image is described by its alt text. Many people are surprised by how much the structure, rather than the look, decides what they hear.
+
+</Solution>
+
+**12. (stretch)** A product page has a "Buy" button that is an image of the word "Buy" with no alt text, inside a link with `href="#"` and JavaScript that adds the item to the basket. List every problem and write a better version.
+
+<Solution>
+
+Problems: the image has no alt, so the button has no name; a link is used for an action rather than navigation; `href="#"` jumps to the top of the page if the JavaScript fails; text in an image cannot be resized or translated. Better:
+
+```html
+<button type="button">Add to basket</button>
+```
+
+with JavaScript attached to the button, and CSS for the look.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Accessible pages work for people with all kinds of abilities and situations, and are better for everyone. WCAG 2.2 level AA is the usual target.
+- Most accessibility comes from the right HTML: real buttons, links, labels, headings, landmarks and `lang`.
+- Everything must work with the keyboard, and focus must always be visible.
+- Every image has useful `alt` text, or `alt=""` if decorative. Videos need captions.
+- Text contrast of at least 4.5:1 (3:1 for large text). Never use colour alone to carry meaning.
+- Clear titles, link text, language and error messages.
+- Use native HTML before ARIA.
+- Test with the keyboard, an automatic checker, the validator, zoom, and a screen reader.
+
+## Go deeper
+
+- [W3C: Introduction to Web Accessibility](https://www.w3.org/WAI/fundamentals/accessibility-intro/). From the W3C's Web Accessibility Initiative: what accessibility is and why it matters.
+- [W3C: WCAG overview](https://www.w3.org/WAI/standards-guidelines/wcag/). What WCAG is and which version is current.
+- [The A11Y Project checklist](https://www.a11yproject.com/checklist/). A practical checklist based on WCAG, grouped by topic: content, keyboard, images, forms, colour and more.
+- [WebAIM contrast checker](https://webaim.org/resources/contrastchecker/). Enter two colours and it tells you whether they pass. WebAIM is based at Utah State University.
+- [MDN: Accessibility](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Accessibility), from Mozilla. A longer module covering HTML, CSS, JavaScript, ARIA and multimedia.
+- [W3C: Web accessibility tutorials](https://www.w3.org/WAI/tutorials/). Step-by-step guidance on images, forms, tables and page structure.

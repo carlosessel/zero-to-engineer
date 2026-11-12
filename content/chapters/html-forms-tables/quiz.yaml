@@ -1,0 +1,47 @@
+- question: "A form field has no name attribute. What happens when the form is submitted?"
+  options:
+    - "Its value is sent with the name \"field\""
+    - "Its value is not sent at all"
+    - "The form cannot be submitted"
+  answer: 1
+  explanation: "Only controls with a name are sent. This is the commonest form bug: everything looks right and the data never arrives."
+- question: "What connects a <label> to its input?"
+  options:
+    - "The label's for attribute matching the input's id"
+    - "The label's name matching the input's name"
+    - "Putting the label above the input"
+  answer: 0
+  explanation: "for must equal the input's id. Then clicking the label focuses the input and screen readers announce the label with the field."
+- question: "Which method suits a form that places an order?"
+  options:
+    - "get"
+    - "post"
+  answer: 1
+  explanation: "post sends the data inside the request rather than in the address, and is used for anything that changes data. get suits searches."
+- question: "How do you make three radio buttons into one group where only one can be chosen?"
+  options:
+    - "Give them the same id"
+    - "Give them the same name"
+    - "Put them in the same paragraph"
+  answer: 1
+  explanation: "Radio buttons sharing a name form a group. Each still needs its own id for its label."
+- question: "Your form uses required on every field. Does the server still need to check the values?"
+  options:
+    - "No, the browser already checked"
+    - "Yes, because browser checks can be switched off or bypassed"
+  answer: 1
+  explanation: "Browser validation is a convenience for the person filling in the form. Anyone can send data to the server without using your page."
+- question: "What is scope=\"col\" on a <th> for?"
+  options:
+    - "It makes the column wider"
+    - "It tells screen readers the heading belongs to its column"
+    - "It sorts the column"
+  answer: 1
+  explanation: "With scope, a screen reader can announce each data cell together with its row and column headings."
+- question: "What type does a <button> inside a form have if you do not write one?"
+  options:
+    - "button"
+    - "submit"
+    - "reset"
+  answer: 1
+  explanation: "The default is submit, which is why a button meant for something else can unexpectedly submit the form. Always write the type."
