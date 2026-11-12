@@ -1,0 +1,14 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: text
+  check: illustration
+  verify: |
+    a, b = [1, 2], [3, 1]
+    assert [a[0] + b[0], a[1] + b[1]] == [4, 3]
+    assert [2 * v for v in a] == [2, 4]
+    assert a[0] * b[0] + a[1] * b[1] == 5
+- block: 2
+  lang: text
+  check: illustration
+  verify: |
+    assert 1 * 5 + 2 * 6 == 17 and 3 * 5 + 4 * 6 == 39

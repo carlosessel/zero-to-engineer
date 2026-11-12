@@ -17,7 +17,7 @@ const chapters = defineCollection({
     summary: z.string().min(1),
     prerequisites: z.array(z.string()).default([]),
     estimated_minutes: z.number().int().positive(),
-    status: z.enum(['migrated', 'deepened', 'code-verified', 'resources-verified']),
+    status: z.enum(['migrated', 'corrected', 'deepened', 'code-verified', 'resources-verified']),
   }),
 });
 

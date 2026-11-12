@@ -1,0 +1,21 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: sql
+  check: sql
+  database: shop.db
+  verify: |
+    q = lambda s: db.execute(s).fetchall()
+    assert q("SELECT name, city FROM customers ORDER BY id") == [('Ama', 'Tema'), ('Kofi', 'Kumasi')]
+    assert q("SELECT c.name, o.amount FROM orders o JOIN customers c ON c.id = o.customer_id") == [('Ama', 120.0)]
+    assert q("SELECT c.city, COUNT(*), SUM(o.amount) FROM orders o JOIN customers c ON c.id = o.customer_id GROUP BY c.city HAVING SUM(o.amount) > 100") == [('Tema', 1, 120.0)]
+- block: 2
+  lang: python
+  check: python
+  stdin:
+  - Kumasi
+  note: Uses the shop.db file that the SQL block above creates, as the chapter's exercise has the learner do.
+  verify: |
+    assert ns['rows'] == [('Kofi',)]
+    # The point of the ? placeholder: text that looks like SQL is treated as plain text.
+    evil = "x' OR '1'='1"
+    assert ns['db'].execute("SELECT name FROM customers WHERE city = ?", (evil,)).fetchall() == []

@@ -3,7 +3,7 @@ title: "NumPy and pandas: thinking in arrays"
 summary: "Every model input and output is an array of numbers. NumPy is how you hold and transform them without writing loops."
 prerequisites: []
 estimated_minutes: 75
-status: migrated
+status: corrected
 ---
 
 ## Arrays and shape
@@ -38,6 +38,10 @@ This is vectorisation: one operation over the whole array, executed in fast comp
 
 ```python
 import pandas as pd
+
+# A tiny file to practise on. Normally you would already have a CSV.
+with open("sales.csv", "w") as f:
+    f.write("region,price,qty\nNorth,20,3\nSouth,50,4\nNorth,35,2\nSouth,8,1\n")
 
 df = pd.read_csv("sales.csv")
 df.head()                          # first rows

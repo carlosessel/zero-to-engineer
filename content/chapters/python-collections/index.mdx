@@ -3,7 +3,7 @@ title: "Python from zero: lists, dictionaries, files and errors"
 summary: "Real programs handle many things at once. Lists and dictionaries are how Python holds them, and they are the shape of almost all data you will send to an AI model."
 prerequisites: []
 estimated_minutes: 95
-status: migrated
+status: corrected
 ---
 
 ## Lists: things in order
@@ -89,10 +89,11 @@ with open("student.json") as f:
 Traceback (most recent call last):
   File "shop.py", line 7, in <module>
     print(prices["bread"])
+          ~~~~~~^^^^^^^^^
 KeyError: 'bread'
 ```
 
-Read it from the bottom. The last line is the kind of error and the detail: there is no key called bread. The lines above say where: file `shop.py`, line 7. The errors you will meet most: `SyntaxError` (a typo in the code’s structure), `NameError` (a variable that does not exist, often misspelt), `TypeError` (wrong kind of value, such as text plus number), `IndexError` and `KeyError` (asking for an item that is not there), `IndentationError` (spaces do not line up).
+Read it from the bottom. The last line is the kind of error and the detail: there is no key called bread. The lines above say where: file `shop.py`, line 7. The row of `~` and `^` marks points at the exact part of the line that failed. The errors you will meet most: `SyntaxError` (a typo in the code’s structure), `NameError` (a variable that does not exist, often misspelt), `TypeError` (wrong kind of value, such as text plus number), `IndexError` and `KeyError` (asking for an item that is not there), `IndentationError` (spaces do not line up).
 
 ```python
 try:

@@ -1,0 +1,22 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python-fake-api
+  before: |
+    import anthropic
+    MODEL = "claude-sonnet-5-5"
+    client = anthropic.Anthropic()
+
+    def reply_text(msg):
+        return "".join(block.text for block in msg.content if block.type == "text")
+  replies:
+  - text: 'pricing
+
+      The customer asks what a repair costs.'
+  note: 'Run against a stand-in server on the test machine, not the live API: this proves the SDK calls are valid and the reply is handled correctly, not what a real model would answer. The hidden setup defines client, MODEL and reply_text exactly as the chapter ''Your first model call'' does; the code comment tells the reader they come from there.'
+  verify: |
+    answer = ns['classify']("How much for a new battery?")
+    assert answer.splitlines()[0] == "pricing"
+    r = requests[0]
+    assert r["messages"] == [{"role": "user", "content": "<message>How much for a new battery?</message>"}]
+    assert "temperature" not in r and "<examples>" in r["system"]

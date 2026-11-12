@@ -3,7 +3,7 @@ title: "Tool use: giving the model hands"
 summary: "A model can only produce text. Tool use lets it ask your code to do things: query a database, call an API, run a calculation."
 prerequisites: []
 estimated_minutes: 45
-status: migrated
+status: corrected
 ---
 
 ## The loop
@@ -14,6 +14,7 @@ status: migrated
 4. You send the result back, and the model continues.
 
 ```python
+# Uses client, MODEL and reply_text from "Your first model call".
 tools = [{
     "name": "get_order_status",
     "description": "Look up the current status of a customer order by its ID.",
@@ -29,7 +30,7 @@ def get_order_status(order_id: str) -> str:
 
 messages = [{"role": "user", "content": "Where is order B42?"}]
 while True:
-    msg = client.messages.create(model=MODEL, max_tokens=500,
+    msg = client.messages.create(model=MODEL, max_tokens=1000,
                                  tools=tools, messages=messages)
     messages.append({"role": "assistant", "content": msg.content})
     if msg.stop_reason != "tool_use":
@@ -42,7 +43,7 @@ while True:
                             "tool_use_id": block.id, "content": out})
     messages.append({"role": "user", "content": results})
 
-print(msg.content[0].text)
+print(reply_text(msg))
 ```
 
 ## Designing good tools

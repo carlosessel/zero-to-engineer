@@ -3,7 +3,7 @@ title: "Sampling: where the randomness comes from"
 summary: "The model outputs probabilities for the next token. How you pick from them changes the personality of the output."
 prerequisites: []
 estimated_minutes: 40
-status: migrated
+status: corrected
 ---
 
 <Demo name="temperature" />
@@ -16,6 +16,12 @@ status: migrated
 - **top\_p**: only sample from the smallest set of tokens whose probabilities add up to p. Change this or temperature, not both.
 - **max\_tokens**: a hard limit on output length. Output cut off mid-sentence usually means you hit it.
 - **stop sequences**: strings that end generation when produced.
+
+<Note>
+
+Not every provider lets you change these. When this chapter was last checked (12 November 2026), Anthropic's current Claude models rejected `temperature`, `top_p` and `top_k`, and its Python SDK no longer had them as settings, so the code in this course does not send them. The ideas still describe what happens inside every language model, and you can set them yourself on open models and with some other providers. Always check your provider's documentation.
+
+</Note>
 
 <Note>
 

@@ -1,0 +1,52 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: pip
+- block: 2
+  lang: python
+  check: python-fake-api
+  before: |
+    import anthropic
+    MODEL = "claude-sonnet-5-5"
+    client = anthropic.Anthropic()
+
+    def reply_text(msg):
+        return "".join(block.text for block in msg.content if block.type == "text")
+  note: 'Run against a stand-in server on the test machine, not the live API: this proves the SDK calls are valid and the reply is handled correctly, not what a real model would answer. The hidden setup defines client, MODEL and reply_text exactly as the chapter ''Your first model call'' does; the code comment tells the reader they come from there. Four situations are scripted: clean JSON, JSON wrapped in a code fence, a bad reply followed by a good one, and three bad replies.'
+  verify: |
+    import json
+    good = {"vendor": "Kasa Phones", "total": 120.5, "currency": "GHS", "due_date": None}
+    extract = ns['extract']
+
+    fake.replies[:] = [{"text": json.dumps(good)}]
+    inv = extract("Invoice from Kasa Phones, total GHS 120.50")
+    assert (inv.vendor, inv.total, inv.currency, inv.due_date) == ("Kasa Phones", 120.5, "GHS", None)
+    assert "temperature" not in requests[0]
+
+    fake.replies[:] = [{"text": chr(96) * 3 + "json\n" + json.dumps(good) + "\n" + chr(96) * 3}]
+    assert extract("x").currency == "GHS"
+
+    fake.replies[:] = [{"text": "Here you go: not JSON"}, {"text": json.dumps(good)}]
+    assert extract("x").vendor == "Kasa Phones"
+    retry = requests[-1]["messages"]
+    assert len(retry) == 3 and retry[1] == {"role": "assistant", "content": "Here you go: not JSON"}
+    assert retry[2]["content"].startswith("That was invalid")
+
+    fake.replies[:] = [{"text": "nope"}] * 3
+    try:
+        extract("x")
+    except ValueError:
+        pass
+    else:
+        raise AssertionError("three bad replies should raise ValueError")
+- block: 3
+  lang: python
+  check: python-fake-api
+  note: 'Run against a stand-in server on the test machine, not the live API: this proves the SDK calls are valid and the reply is handled correctly, not what a real model would answer.'
+  verify: |
+    import json
+    fake.replies[:] = [{"text": json.dumps({"vendor": "Kasa Phones", "total": 120.5, "currency": "GHS", "due_date": "2026-12-01"})}]
+    inv = ns['extract_strict']("Invoice from Kasa Phones, total GHS 120.50, due 1 December 2026")
+    assert type(inv).__name__ == "Invoice" and inv.due_date == "2026-12-01"
+    sent = requests[-1]["output_config"]["format"]
+    assert sent["type"] == "json_schema" and set(sent["schema"]["properties"]) == {"vendor", "total", "currency", "due_date"}

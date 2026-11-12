@@ -3,7 +3,7 @@ title: "Beyond text: images, audio and documents"
 summary: "Modern models read images and documents, listen, speak, and generate pictures. The engineering patterns you know carry over."
 prerequisites: [rag]
 estimated_minutes: 65
-status: migrated
+status: corrected
 ---
 
 ## Vision input
@@ -11,10 +11,11 @@ status: migrated
 Multimodal models accept images in the same messages list as text. Uses include reading screenshots, charts, receipts, handwriting and photos.
 
 ```python
+# Uses client, MODEL and reply_text from "Your first model call".
 import base64
 data = base64.standard_b64encode(open("receipt.jpg", "rb").read()).decode()
 
-msg = client.messages.create(model=MODEL, max_tokens=400, messages=[{
+msg = client.messages.create(model=MODEL, max_tokens=1000, messages=[{
     "role": "user",
     "content": [
         {"type": "image", "source": {"type": "base64",

@@ -3,7 +3,7 @@ title: "Architecture, cost and speed"
 summary: "A prototype answers one user in a notebook. A product answers thousands, quickly, affordably, and keeps working when a provider is slow."
 prerequisites: []
 estimated_minutes: 70
-status: migrated
+status: corrected
 ---
 
 ## The basic shape
@@ -15,6 +15,7 @@ pip install fastapi uvicorn
 ```
 
 ```python
+# Uses client, MODEL and reply_text from "Your first model call".
 from fastapi import FastAPI
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -27,7 +28,7 @@ class Ask(BaseModel):
 @app.post("/ask")
 def ask(body: Ask):
     def gen():
-        with client.messages.stream(model=MODEL, max_tokens=800,
+        with client.messages.stream(model=MODEL, max_tokens=2000,
                 messages=[{"role": "user", "content": body.question}]) as s:
             for text in s.text_stream:
                 yield text

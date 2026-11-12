@@ -1,0 +1,35 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    (2, 3)
+    array([[10., 20., 30.],
+           [40., 50., 60.]])
+    array([2.5, 3.5, 4.5])
+    array([[1., 4.],
+           [2., 5.],
+           [3., 6.]])
+    array([[14., 32.],
+           [32., 77.]])
+    array([1., 4.])
+    array([3., 4., 5., 6.])
+- block: 2
+  lang: python
+  check: python
+  output: |2+
+
+  verify: |
+    n = ns['normalised']
+    assert abs(n.mean(axis=0)).max() < 1e-9 and abs(n.std(axis=0) - 1).max() < 1e-9
+- block: 3
+  lang: python
+  check: python
+  output_contains:
+  - 'RangeIndex: 4 entries'
+  - region
+  verify: |
+    df = ns['df']
+    assert list(df['total']) == [60, 200, 70, 8]
+    assert df[df['total'] > 100]['region'].tolist() == ['South']
+    assert df.groupby('region')['total'].sum().to_dict() == {'North': 130, 'South': 208}

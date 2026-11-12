@@ -1,0 +1,22 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: pip
+- block: 2
+  lang: python
+  check: python
+  note: 'The API is exercised through FastAPI''s test client: create, list, read, a missing task, delete, and a request with no title.'
+  verify: |
+    from fastapi.testclient import TestClient
+    web = TestClient(ns['app'])
+    assert web.get("/tasks").json() == []
+    made = web.post("/tasks", json={"title": "Buy bread"})
+    assert made.status_code == 201 and made.json() == {"id": 1, "title": "Buy bread", "done": False}
+    assert web.post("/tasks", json={"title": "Call Ama", "done": True}).json()["id"] == 2
+    assert [t["id"] for t in web.get("/tasks").json()] == [1, 2]
+    assert web.get("/tasks/2").json()["title"] == "Call Ama"
+    assert web.get("/tasks/99").status_code == 404
+    assert web.post("/tasks", json={"done": True}).status_code == 422
+    gone = web.delete("/tasks/1")
+    assert gone.status_code == 204 and gone.content == b""
+    assert [t["id"] for t in web.get("/tasks").json()] == [2]

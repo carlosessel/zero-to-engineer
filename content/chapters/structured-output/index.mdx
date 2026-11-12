@@ -3,7 +3,7 @@ title: "Structured output"
 summary: "Software cannot use a paragraph. To connect a model to code, you need output in a shape your program can parse and trust."
 prerequisites: []
 estimated_minutes: 50
-status: migrated
+status: corrected
 ---
 
 ## Ask for JSON, then validate
@@ -13,6 +13,7 @@ pip install pydantic
 ```
 
 ````python
+# Uses client, MODEL and reply_text from "Your first model call".
 import json
 from pydantic import BaseModel, ValidationError
 
@@ -32,13 +33,12 @@ due_date (YYYY-MM-DD or null if absent).
 def extract(text: str, tries: int = 3) -> Invoice:
     messages = [{"role": "user", "content": PROMPT.format(text=text)}]
     for _ in range(tries):
-        msg = client.messages.create(model=MODEL, max_tokens=300,
-                                     temperature=0, messages=messages)
-        raw = msg.content[0].text.strip().removeprefix("```json").removesuffix("```")
+        msg = client.messages.create(model=MODEL, max_tokens=1000, messages=messages)
+        raw = reply_text(msg).strip().removeprefix("```json").removesuffix("```")
         try:
             return Invoice(**json.loads(raw))
         except (json.JSONDecodeError, ValidationError) as e:
-            messages += [{"role": "assistant", "content": msg.content[0].text},
+            messages += [{"role": "assistant", "content": reply_text(msg)},
                          {"role": "user", "content": f"That was invalid: {e}. Reply with corrected JSON only."}]
     raise ValueError("could not extract invoice")
 ````
@@ -46,6 +46,18 @@ def extract(text: str, tries: int = 3) -> Invoice:
 Three ideas are at work: a schema defines the contract, validation catches bad output before it reaches the rest of your system, and a retry feeds the error back so the model can fix it.
 
 ## Stronger guarantees
+
+Anthropic's SDK can do the schema, the parsing and the checking in one call. You pass the Pydantic class, and the reply comes back already turned into a validated object:
+
+```python
+def extract_strict(text: str) -> Invoice:
+    msg = client.messages.parse(
+        model=MODEL, max_tokens=1000,
+        messages=[{"role": "user", "content": PROMPT.format(text=text)}],
+        output_format=Invoice,
+    )
+    return msg.parsed_output
+```
 
 Most providers offer features that constrain output to a JSON schema, and tool use (next chapter) is another reliable route to structured data. Check your provider’s documentation and prefer those when available. Validate anyway: well-formed JSON can still contain wrong values.
 

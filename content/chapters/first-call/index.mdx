@@ -3,7 +3,7 @@ title: "Your first model call"
 summary: "A model API is an HTTP endpoint: you send a list of messages, you get text back. That is the entire primitive you will build on."
 prerequisites: []
 estimated_minutes: 75
-status: migrated
+status: corrected
 ---
 
 ```python
@@ -14,15 +14,21 @@ load_dotenv()
 MODEL = "claude-sonnet-5-5"       # check the provider docs for current names
 client = anthropic.Anthropic()    # reads ANTHROPIC_API_KEY
 
+def reply_text(msg):
+    """A reply is a list of blocks. Join the ones that are text."""
+    return "".join(block.text for block in msg.content if block.type == "text")
+
 msg = client.messages.create(
     model=MODEL,
-    max_tokens=500,
+    max_tokens=1000,
     system="You are a patient tutor. Answer in at most three sentences.",
     messages=[{"role": "user", "content": "What is overfitting?"}],
 )
-print(msg.content[0].text)
+print(reply_text(msg))
 print(msg.usage)                  # tokens in and out: this is your bill
 ```
+
+A reply is not one piece of text. `msg.content` is a list of blocks, and current models often put a `thinking` block, their private working, before the answer. Reading `msg.content[0].text` therefore fails whenever the first block is not text. The small `reply_text` function collects the text blocks, and the later chapters use it too. The thinking counts towards `max_tokens`, so do not set that limit very low.
 
 The examples use Anthropic’s Python SDK; current details are at [docs.claude.com](https://docs.claude.com). Other providers have almost the same shape: a model name, a system instruction, and alternating user and assistant messages.
 
@@ -34,8 +40,8 @@ Each call is independent. A chat “remembers” because your code resends the w
 history = []
 while True:
     history.append({"role": "user", "content": input("> ")})
-    msg = client.messages.create(model=MODEL, max_tokens=800, messages=history)
-    reply = msg.content[0].text
+    msg = client.messages.create(model=MODEL, max_tokens=2000, messages=history)
+    reply = reply_text(msg)
     history.append({"role": "assistant", "content": reply})
     print(reply)
 ```
@@ -47,7 +53,7 @@ As the history grows, each call costs more and eventually exceeds the context wi
 Users should see words appear as they are generated, not wait for the whole answer.
 
 ```python
-with client.messages.stream(model=MODEL, max_tokens=800,
+with client.messages.stream(model=MODEL, max_tokens=2000,
         messages=[{"role": "user", "content": "Explain attention simply."}]) as stream:
     for text in stream.text_stream:
         print(text, end="", flush=True)

@@ -3,7 +3,7 @@ title: "Python habits you will use in AI code"
 summary: "You know the basics now. These are the shorter, more compact ways of writing Python that you will see in every AI codebase."
 prerequisites: []
 estimated_minutes: 75
-status: migrated
+status: corrected
 ---
 
 ## Compact Python
@@ -46,6 +46,10 @@ class Doc:
 
     def words(self) -> int:
         return len(self.text.split())
+
+# A small file to read. Normally you would already have one.
+with open("docs.json", "w") as f:
+    json.dump([{"title": "Refunds", "text": "Refunds are available within 30 days."}], f)
 
 with open("docs.json") as f:          # closes the file for you
     docs = [Doc(**d) for d in json.load(f)]

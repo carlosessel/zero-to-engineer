@@ -1,0 +1,23 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python-fake-api
+  before: |
+    import anthropic
+    MODEL = "claude-sonnet-5-5"
+    client = anthropic.Anthropic()
+
+    def reply_text(msg):
+        return "".join(block.text for block in msg.content if block.type == "text")
+
+    # A tiny stand-in file. Any bytes will do: the stand-in server does not look at the picture.
+    open("receipt.jpg", "wb").write(bytes([0xFF, 0xD8, 0xFF, 0xE0]) + b"fake jpeg" + bytes([0xFF, 0xD9]))
+  replies:
+  - text: '[{"item": "Bread", "price": 12.0}]'
+  note: 'Run against a stand-in server on the test machine, not the live API: this proves the SDK calls are valid and the reply is handled correctly, not what a real model would answer. The hidden setup defines client, MODEL and reply_text exactly as the chapter ''Your first model call'' does; the code comment tells the reader they come from there. The setup also creates a small placeholder receipt.jpg; no real image is read by anything.'
+  verify: |
+    import base64
+    image, text = requests[0]["messages"][0]["content"]
+    assert image["type"] == "image" and image["source"]["media_type"] == "image/jpeg"
+    assert base64.standard_b64decode(image["source"]["data"]).startswith(bytes([0xFF, 0xD8]))
+    assert text == {"type": "text", "text": "List each item and its price as JSON."}

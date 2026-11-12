@@ -3,7 +3,7 @@ title: "RAG: answering from your own data"
 summary: "Retrieval-augmented generation means: find the relevant passages first, then hand them to the model with the question. It is how you get answers grounded in documents the model was never trained on."
 prerequisites: []
 estimated_minutes: 65
-status: migrated
+status: corrected
 ---
 
 <Demo name="retrieval" />
@@ -20,11 +20,16 @@ status: migrated
 6. **Generate**: put the chunks in the prompt and instruct the model to answer only from them and cite which ones it used.
 
 ```python
+# Uses client, MODEL and reply_text from "Your first model call".
 import numpy as np
 from sentence_transformers import SentenceTransformer
 embedder = SentenceTransformer("all-MiniLM-L6-v2")
 
-chunks = [...]                                   # your passages
+chunks = [                                       # your passages go here
+    "Refunds are available within 30 days of purchase if you have your receipt.",
+    "Standard delivery takes three to five working days.",
+    "Our shop is open Monday to Saturday from 9am to 6pm.",
+]
 index = embedder.encode(chunks, normalize_embeddings=True)
 
 def answer(question: str, k: int = 4) -> str:
@@ -32,11 +37,11 @@ def answer(question: str, k: int = 4) -> str:
     top = np.argsort(index @ q)[::-1][:k]
     context = "\n\n".join(f"<doc id='{i}'>{chunks[i]}</doc>" for i in top)
     msg = client.messages.create(
-        model=MODEL, max_tokens=600,
+        model=MODEL, max_tokens=2000,
         system="Answer using only the documents provided. Cite doc ids. "
                "If the answer is not in them, say you do not know.",
         messages=[{"role": "user", "content": f"{context}\n\nQuestion: {question}"}])
-    return msg.content[0].text
+    return reply_text(msg)
 ```
 
 ## Where RAG goes wrong

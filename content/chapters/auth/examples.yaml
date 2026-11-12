@@ -1,0 +1,16 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    True
+  verify: |
+    from argon2.exceptions import VerifyMismatchError
+    assert ns['stored'].startswith('$argon2')
+    assert ns['ph'].hash('correct horse battery staple') != ns['stored'], 'a fresh salt should give a different hash'
+    try:
+        ns['ph'].verify(ns['stored'], 'wrong password')
+    except VerifyMismatchError:
+        pass
+    else:
+        raise AssertionError('a wrong password should raise')

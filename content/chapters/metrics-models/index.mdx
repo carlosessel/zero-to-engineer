@@ -3,7 +3,7 @@ title: "Metrics and the classic models"
 summary: "Accuracy lies when classes are unbalanced. Know which number to trust, and know that a small classic model often beats a large one."
 prerequisites: [ml-idea]
 estimated_minutes: 45
-status: migrated
+status: corrected
 ---
 
 ## Classification metrics
@@ -18,6 +18,8 @@ Suppose 1% of transactions are fraud. A model that always says “not fraud” i
 Which matters more depends on the cost of each mistake. A cancer screen wants high recall. A spam filter wants high precision.
 
 ```python
+# Continues from the model you trained in "Learning from examples":
+# y_test holds the true answers and preds holds the model's predictions.
 from sklearn.metrics import classification_report, confusion_matrix
 print(confusion_matrix(y_test, preds))
 print(classification_report(y_test, preds))

@@ -1,0 +1,63 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    'mango'
+    'orange'
+    3
+    True
+    MANGO
+    BANANA
+    ORANGE
+    PAWPAW
+- block: 2
+  lang: python
+  check: python
+  output: |
+    'Ama'
+    name -> Ama
+    age -> 21
+    courses -> ['Maths', 'ICT']
+    city -> Accra
+- block: 3
+  lang: python
+  check: python
+  output: |
+    Accra.
+- block: 4
+  lang: python
+  check: python
+  output_contains:
+  - '7.0'
+  verify: |
+    first = int(out.split()[0])
+    assert 1 <= first <= 6, first
+- block: 5
+  lang: python
+  check: python
+  output: |
+    First line
+    Second line
+  verify: |
+    assert ns['loaded'] == ns['student']
+    assert (tmp / 'notes.txt').read_text() == 'First line\nSecond line\n'
+- block: 6
+  lang: text
+  check: illustration
+  note: 'Reproduced for real: a seven-line shop.py is run and Python''s own traceback is compared with the one shown.'
+  verify: |
+    import re, subprocess, sys
+    (tmp / "shop.py").write_text("prices = {}\n" + "# filler\n" * 5 + 'print(prices["bread"])\n')
+    real = subprocess.run([sys.executable, "shop.py"], cwd=tmp, capture_output=True, text=True).stderr
+    strip = lambda t: [l.rstrip() for l in t.strip().splitlines()]
+    real_lines = [re.sub(r'File ".*shop\.py"', 'File "shop.py"', l) for l in strip(real)]
+    assert real_lines == strip(block), "\n".join(real_lines)
+- block: 7
+  lang: python
+  check: python
+  output: |
+    Age: abc
+    Please type a number.
+  stdin:
+  - abc

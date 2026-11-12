@@ -1,0 +1,19 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: pip
+- block: 2
+  lang: python
+  check: shell
+  note: The block shows two files, cart.py and test_cart.py. The check splits it at the '# test_cart.py' line, writes both files and runs pytest.
+  script: |
+    python - <<'PY'
+    import os
+    text = open(os.environ["BLOCK"]).read()
+    cart, tests = text.split("# test_cart.py")
+    open("cart.py", "w").write(cart)
+    open("test_cart.py", "w").write(tests)
+    PY
+    python -m pytest -q test_cart.py
+  output_contains:
+  - 4 passed

@@ -3,7 +3,7 @@ title: "Prompt engineering"
 summary: "A prompt is a specification. Write it the way you would brief a capable new colleague who knows nothing about your project."
 prerequisites: []
 estimated_minutes: 65
-status: migrated
+status: corrected
 ---
 
 ## The techniques that do most of the work
@@ -16,6 +16,7 @@ status: migrated
 6. **Say what to do**, not only what to avoid.
 
 ```python
+# Uses client, MODEL and reply_text from "Your first model call".
 SYSTEM = """You classify customer messages for a phone repair shop.
 
 Categories: booking, pricing, complaint, other.
@@ -33,10 +34,10 @@ The customer asks what a repair costs.
 
 def classify(message: str) -> str:
     msg = client.messages.create(
-        model=MODEL, max_tokens=100, temperature=0, system=SYSTEM,
+        model=MODEL, max_tokens=1000, system=SYSTEM,
         messages=[{"role": "user",
                    "content": f"<message>{message}</message>"}])
-    return msg.content[0].text
+    return reply_text(msg)
 ```
 
 ## Prompts are code
