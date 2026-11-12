@@ -64,10 +64,14 @@ for (const course of COURSES) {
 
     if (doc.querySelector('h1')?.textContent !== art.dataset.title) fail(`${where}: title differs`);
     if (!doc.querySelector('.crumb')?.textContent.includes(`Chapter ${i + 1} of ${articles.length}, ${art.dataset.part}`)) fail(`${where}: chapter number or part differs`);
-    const boxes = [...art.querySelectorAll('input[type=checkbox]')].length;
-    if (body.querySelectorAll('input[type=checkbox]').length !== boxes) fail(`${where}: expected ${boxes} exercise tick-boxes`);
-    if (body.querySelectorAll('pre').length !== art.querySelectorAll('pre').length) fail(`${where}: number of code blocks differs`);
-    if (body.querySelectorAll('a[href^="http"]').length !== art.querySelectorAll('a[href^="http"]').length) fail(`${where}: number of outside links differs`);
+    // A chapter still marked "migrated" must match exactly; an edited one may only grow.
+    const same = status === 'migrated';
+    const compare = (what, built, orig) => {
+      if (same ? built !== orig : built < orig) fail(`${where}: ${built} ${what}, the original had ${orig}`);
+    };
+    compare('exercise tick-boxes', body.querySelectorAll('input[type=checkbox]').length, art.querySelectorAll('input[type=checkbox]').length);
+    compare('code blocks', body.querySelectorAll('pre').length, art.querySelectorAll('pre').length);
+    compare('outside links', body.querySelectorAll('a[href^="http"]').length, art.querySelectorAll('a[href^="http"]').length);
 
     const want = QUIZ[slug] ?? [];
     const got = [...doc.querySelectorAll('.quiz .q')].map((q) => ({

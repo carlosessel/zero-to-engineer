@@ -2,3 +2,9 @@
 - block: 1
   lang: python
   check: heavy
+  note: Needs PyTorch or a model download, so it runs only in the weekly heavy job (EXAMPLES_HEAVY=1), not on every push. Downloads the pretrained ResNet-18 weights.
+  verify: |
+    m = ns['model']
+    assert m.fc.out_features == 2
+    trainable = [n for n, p in m.named_parameters() if p.requires_grad]
+    assert trainable == ['fc.weight', 'fc.bias'], trainable

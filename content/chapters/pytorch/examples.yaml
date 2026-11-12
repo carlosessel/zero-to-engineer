@@ -5,6 +5,13 @@
 - block: 2
   lang: python
   check: heavy
+  output: |
+    tensor(-14.)
+  note: Needs PyTorch or a model download, so it runs only in the weekly heavy job (EXAMPLES_HEAVY=1), not on every push.
 - block: 3
   lang: python
   check: heavy
+  note: Needs PyTorch or a model download, so it runs only in the weekly heavy job (EXAMPLES_HEAVY=1), not on every push. Downloads MNIST and trains for three passes on a processor, which takes a few minutes. The chapter says to expect about 97%; the check requires at least 95%.
+  verify: |
+    last = out.strip().splitlines()[-1].split()
+    assert last[0] == "2" and float(last[1]) > 0.95, out

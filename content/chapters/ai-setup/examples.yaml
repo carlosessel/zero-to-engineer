@@ -2,12 +2,42 @@
 - block: 1
   lang: bash
   check: shell
+  note: The folder, the virtual environment and its activation are run for real. The pip line is resolved without installing, and only when the network is allowed (EXAMPLES_NETWORK=1).
+  script: |
+    head -3 "$BLOCK" > steps.sh
+    cat >> steps.sh <<'SH'
+    python -c "import sys; assert sys.prefix != sys.base_prefix, 'the virtual environment is not active'"
+    test "$(basename "$PWD")" = ai-course
+    if [ "$EXAMPLES_NETWORK" = 1 ]; then
+      python -m pip install --dry-run --quiet numpy pandas matplotlib scikit-learn jupyter
+    fi
+    SH
+    bash -e steps.sh
 - block: 2
   lang: bash
   check: shell
+  note: Run in a fresh folder. 'git push' only works once a repository is linked, as the comment says, so the check links a local stand-in for GitHub before running that line.
+  script: |
+    mkdir work && cd work
+    echo 'print("hello")' > hello.py
+    head -3 "$BLOCK" | bash -e                    # git init, git add ., git commit
+    git init -q --bare ../origin.git              # a stand-in for GitHub
+    git remote add origin ../origin.git
+    git push -q -u origin HEAD                    # the one-off "linking"
+    echo '# a change' >> hello.py && git commit -q -am "Change the script"
+    sed -n '4p' "$BLOCK" | bash -e                # git push
+    test "$(git rev-parse HEAD)" = "$(git --git-dir=../origin.git rev-parse HEAD)"
+    git log --oneline
+  output_contains:
+  - Add first script
 - block: 3
   lang: bash
-  check: shell
+  check: illustration
+  note: The contents of a .env file, not commands. Checked by loading it with python-dotenv, the library the chapter installs.
+  verify: |
+    from dotenv import dotenv_values
+    (tmp / ".env").write_text(block + "\n")
+    assert dict(dotenv_values(tmp / ".env")) == {"ANTHROPIC_API_KEY": "your-key-here"}
 - block: 4
   lang: bash
   check: pip

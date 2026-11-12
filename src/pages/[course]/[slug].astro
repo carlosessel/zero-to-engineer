@@ -10,7 +10,8 @@ import Exercises from '../../components/Exercises.astro';
 import Demo from '../../components/Demo.astro';
 import Route from '../../components/Route.astro';
 import GlossaryList from '../../components/GlossaryList.astro';
-import { getCourses, getQuiz, chapterHref } from '../../lib/load';
+import { getCourses, getQuiz, chapterHref, getExampleChecks } from '../../lib/load';
+import { codeStatus } from '../../lib/code-status';
 import { coursesContaining } from '../../lib/model';
 
 export async function getStaticPaths() {
@@ -33,11 +34,13 @@ const sharedWith = coursesContaining(courses, chapterId).filter((c) => c.id !== 
 const hours = entry.data.estimated_minutes / 60;
 const time = hours < 1 ? `${entry.data.estimated_minutes} minutes` : `${hours.toFixed(1).replace('.0', '')} ${hours === 1 ? 'hour' : 'hours'}`;
 const statusText = {
-  migrated: 'Moved from the prototype unchanged. Not yet deepened; code not yet run; resources not yet checked.',
-  deepened: 'Deepened. Code not yet run under test.',
+  migrated: 'Moved from the prototype unchanged. Not yet deepened; resources not yet checked.',
+  corrected: 'Moved from the prototype, with code examples corrected where running them showed a problem. Not yet deepened; resources not yet checked.',
+  deepened: 'Deepened. Resources not yet checked.',
   'code-verified': 'Deepened, and every code example runs under test.',
   'resources-verified': 'Deepened, code tested, and every linked resource opened and checked.',
 }[entry.data.status];
+const codeText = codeStatus(getExampleChecks(chapterId));
 ---
 <Course course={course} current={chapterId} title={`${chapter.title} · ${course.title}`} description={entry.data.summary}>
   <article data-chapter={chapterId}>
@@ -47,6 +50,7 @@ const statusText = {
       <span>About {time} with the exercises (a rough estimate)</span>
       {sharedWith.map((c) => <span>Also part of <a href={chapterHref(c, c.chapters.find((x) => x.id === chapterId)!.slug)}>{c.title}</a>; your progress counts in both</span>)}
       <span class="status">{statusText}</span>
+      {codeText && <span class="status">{codeText}</span>}
     </p>
     <div class="body" data-migrated-body data-pagefind-body data-pagefind-meta={`course:${course.title}`}>
       <p class="lead">{entry.data.summary}</p>

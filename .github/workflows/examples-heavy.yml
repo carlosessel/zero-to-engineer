@@ -1,0 +1,28 @@
+name: Heavy examples
+# The chapter examples that need PyTorch or download models. Too slow for
+# every push, so they run weekly and on request.
+on:
+  schedule:
+    - cron: '41 5 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  heavy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+      - run: pip install -r tests/examples/requirements.txt
+      - run: pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install -r tests/examples/requirements-heavy.txt
+      - name: Heavy chapter examples
+        run: python -m pytest tests/examples -q -rs
+        env:
+          EXAMPLES_HEAVY: "1"
+          EXAMPLES_NETWORK: "1"

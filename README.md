@@ -12,7 +12,7 @@ The two courses share their beginner chapters (the terminal and Python from zero
 This project is **under construction**. Read this before relying on it.
 
 - The chapters are currently short first drafts, moved word for word from two single-page prototypes (kept in `legacy/`). They are a spine, not yet a full course.
-- **No code example in the chapters has been run under test yet.**
+- Every code example in the chapters is now checked automatically, but in different ways, and each chapter page says which. Model API examples run against a stand-in server, **not the live API**.
 - The linked resources respond when opened, but their contents have not been reviewed.
 - No subject expert has reviewed any chapter.
 - The projects section is planned and **not built yet**.
@@ -61,6 +61,38 @@ npx playwright install chromium
 Or, to use Chrome if it is already on your computer, run them as `PW_CHANNEL=chrome npm run test:e2e`.
 
 They cover saved progress, export and import, the review queue, the planner, search, glossary links, the tutor box, demos, keyboard use, the phone menu, automated accessibility checks (axe) on 15 page types in light and dark mode, and running Python. The Python test needs an internet connection.
+
+## Testing the code in the chapters
+
+Every fenced code block in every chapter has an entry in that chapter's `examples.yaml` saying how it is checked. The test reads the code straight from the chapter, so what a learner reads is exactly what is tested. A new code block with no entry fails the tests.
+
+Set up once (needs Python 3.12 or newer):
+
+```bash
+python3 -m venv .venv
+```
+
+```bash
+.venv/bin/pip install -r tests/examples/requirements.txt
+```
+
+Then run:
+
+```bash
+.venv/bin/python -m pytest tests/examples
+```
+
+Some checks are skipped unless you ask for them, because they are slow or need something extra:
+
+| Set this | To also run |
+| --- | --- |
+| `EXAMPLES_NETWORK=1` | `pip install` lines (resolved, not installed) |
+| `EXAMPLES_DOCKER=1` | the Dockerfile example (builds and starts a container) |
+| `EXAMPLES_HEAVY=1` | PyTorch and model-download examples (install `tests/examples/requirements-heavy.txt` and PyTorch first) |
+
+The kinds of check, and what each proves, are described at the top of `tests/examples/harness.py`. In short: Python runs through the same runner the website uses; SQL runs in SQLite; shell and Git commands run in an empty temporary folder with a throwaway Git identity; the JavaScript, HTML, CSS and React examples are tested in `tests/web-examples.test.ts`; model API examples talk to a stand-in server (`tests/examples/fake_anthropic.py`) that returns scripted replies. That last kind proves the code and its handling of replies are right, not what a real model would say.
+
+To add a chapter with code, run `.venv/bin/python scripts/examples_draft.py your-chapter-id`. It writes a draft `examples.yaml` recording what each Python block printed. **Read every recorded output against what the chapter claims** before relying on it; the draft is a starting point, and the tests refuse an entry still marked as a draft.
 
 ## How it is organised
 
@@ -176,7 +208,8 @@ The workflow asks GitHub for the site's address and passes it to the build as `S
 
 ## Checks that run automatically
 
-- **CI** (`ci.yml`), on every push and pull request: type and content checks, unit tests, a full build, the no-lost-text check, the internal link check, and the end-to-end tests in a real browser.
+- **CI** (`ci.yml`), on every push and pull request: type and content checks, unit tests, a full build, the no-lost-text check, the internal link check, the end-to-end tests in a real browser, and every chapter code example (including package installs and the Docker build).
+- **Heavy examples** (`examples-heavy.yml`), every Monday and on request: the PyTorch and model-download examples.
 - **Outside links** (`links.yml`), when content changes and every Monday: opens every link to another site.
 
 ## Licence

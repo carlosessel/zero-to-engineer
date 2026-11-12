@@ -97,6 +97,8 @@ def problems_with_spec(chapter: str) -> list[str]:
             out.append(f"{where}: not-run needs a reason")
         if kind == "illustration" and not (entry.get("verify") or entry.get("note")):
             out.append(f"{where}: illustration needs verify or note")
+        if "DRAFT_PROBLEM" in entry or "TODO" in str(entry.get("reason", "")):
+            out.append(f"{where}: still a draft (DRAFT_PROBLEM or a TODO reason)")
         if kind == "vitest" and not entry.get("test"):
             out.append(f"{where}: vitest needs the test name")
     return out

@@ -2,3 +2,15 @@
 - block: 1
   lang: python
   check: heavy
+  before: |
+    from transformers import AutoModelForCausalLM
+    # The chapter leaves the base model to the learner. A very small open model whose
+    # attention layers are named q_proj and v_proj, as the example assumes:
+    base_model = AutoModelForCausalLM.from_pretrained("HuggingFaceTB/SmolLM2-135M")
+  output_contains:
+  - trainable params
+  note: Needs PyTorch or a model download, so it runs only in the weekly heavy job (EXAMPLES_HEAVY=1), not on every push. The chapter does not load a base model; the hidden setup loads a small open one (SmolLM2-135M) so the example has something to wrap.
+  verify: |
+    trainable = sum(p.numel() for p in ns['model'].parameters() if p.requires_grad)
+    total = sum(p.numel() for p in ns['model'].parameters())
+    assert 0 < trainable / total < 0.01, trainable / total   # "a fraction of a percent"

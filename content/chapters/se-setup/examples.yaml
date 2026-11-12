@@ -2,6 +2,17 @@
 - block: 1
   lang: bash
   check: shell
+  output_contains:
+  - Python 3
+  - git version
 - block: 2
   lang: bash
   check: shell
+  note: The comment line that says to create hello.py in the editor is replaced by a command that creates it; everything else runs as written.
+  script: |
+    sed 's|^# ... create a file hello.py in VS Code ...$|echo "print(1)" > hello.py|' "$BLOCK" > steps.sh
+    grep -q 'hello.py' steps.sh
+    bash -e steps.sh
+  output_contains:
+  - Add hello script
+  - nothing to commit

@@ -5,3 +5,9 @@
 - block: 2
   lang: python
   check: heavy
+  output_contains:
+  - (3, 384)
+  note: Needs PyTorch or a model download, so it runs only in the weekly heavy job (EXAMPLES_HEAVY=1), not on every push.
+  verify: |
+    s = ns['vecs'] @ ns['vecs'].T
+    assert s[0, 1] > s[0, 2] and s[0, 1] > s[1, 2], s   # the two refund sentences are the closest pair

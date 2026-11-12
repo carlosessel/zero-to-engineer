@@ -1,8 +1,39 @@
 # How each code block in index.mdx is checked. See tests/examples/harness.py.
 - block: 1
   lang: dockerfile
-  check: not-run
-  reason: TODO
+  check: docker
+  note: Built for real with Docker, beside a two-line requirements.txt and a minimal main.py.
+  script: |
+    mkdir -p app && cd app
+    cp "$BLOCK" Dockerfile
+    printf 'fastapi\nuvicorn\n' > requirements.txt
+    cat > main.py <<'PY'
+    from fastapi import FastAPI
+
+    app = FastAPI()
+
+
+    @app.get("/health")
+    def health():
+        return {"ok": True}
+    PY
+    docker build -q -t zte-example-task-api .
+  timeout: 900
 - block: 2
   lang: bash
-  check: shell
+  check: docker
+  note: 'The build line runs as written. The run line is changed in two ways so a test can finish: it runs in the background, and it uses port 18000 on the test machine. The check then asks the running container for a page.'
+  script: |
+    cd app
+    sed -n '1p' "$BLOCK" | bash -e                 # docker build -t task-api .
+    docker rm -f zte-example-run >/dev/null 2>&1 || true
+    docker run -d --rm --name zte-example-run -p 18000:8000 task-api >/dev/null
+    trap 'docker rm -f zte-example-run >/dev/null 2>&1' EXIT
+    for i in $(seq 1 30); do
+      if curl -fsS http://localhost:18000/health; then exit 0; fi
+      sleep 1
+    done
+    echo "the container never answered"; exit 1
+  output_contains:
+  - '{"ok":true}'
+  timeout: 900

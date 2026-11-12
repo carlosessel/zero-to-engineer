@@ -78,6 +78,16 @@ export function getExercises(chapter: string): ExerciseSet[] {
   return sets;
 }
 
+export interface ExampleCheck {
+  block: number;
+  lang: string;
+  check: string;
+}
+
+export function getExampleChecks(chapter: string): ExampleCheck[] {
+  return readYaml<ExampleCheck[]>(`chapters/${chapter}/examples.yaml`) ?? [];
+}
+
 export function getGlossary(): GlossaryEntry[] {
   return readYaml<GlossaryEntry[]>('glossary.yaml') ?? [];
 }

@@ -42,3 +42,22 @@ jobs:
           name: site
           path: dist
           retention-days: 3
+
+  examples:
+    # Runs every code example in the chapters (see tests/examples/harness.py).
+    # Package installs and the Docker example run here too; the PyTorch and
+    # model-download examples run weekly in examples-heavy.yml.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: tests/examples/requirements.txt
+      - run: pip install -r tests/examples/requirements.txt
+      - name: Chapter code examples
+        run: python -m pytest tests/examples -q -rs
+        env:
+          EXAMPLES_NETWORK: "1"
+          EXAMPLES_DOCKER: "1"

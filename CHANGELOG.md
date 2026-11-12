@@ -4,6 +4,23 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: Phase 4, code examples verified
+
+Added
+- `tests/examples`: every one of the 93 code blocks in the chapters (108 in the two prototypes, fewer now that shared chapters exist once, plus one new block) has an entry in its chapter's `examples.yaml` saying how it is checked, and a test that reads the code from the chapter and runs it. A code block with no entry, or an entry still marked as a draft, fails.
+- The browser runner's Python moved into `src/runner/zte_runner.py`; the website and the tests use the same file.
+- A stand-in Anthropic API server for the model API examples (scripted replies, streaming, tool calls). It is not the live API.
+- `tests/web-examples.test.ts` for the JavaScript, HTML, CSS and React examples.
+- Each chapter page now states how its code was checked.
+- CI runs every example on every push (including package installs and the Docker build); a weekly job runs the PyTorch and model-download examples.
+
+Fixed in the chapters (status changed to "corrected")
+- **The model API examples would have failed.** They passed `temperature=0`, which Anthropic's current Python SDK rejects with an error, and read replies as `msg.content[0].text`, which fails when a reply begins with a thinking block, as replies from current models can. Affected: Your first model call, Prompt engineering, Structured output, Tool use, RAG. They now use a small `reply_text` helper, introduced in "Your first model call", and `max_tokens` values with room for the model's thinking.
+- The sampling chapter now says, in a note, that Anthropic's current models no longer accept `temperature`, `top_p` and `top_k`.
+- Structured output gained a short example of the SDK's built-in schema parsing (`messages.parse`).
+- Five examples used a file or a name the chapter never created: `docs.json` (Python habits), `sales.csv` (NumPy and pandas), `y_test`/`preds` (Metrics), `classify` (Evals), the passages list (RAG). The files are now created in the example; the others say in a comment which chapter they continue from.
+- The sample traceback in "Python from zero: lists, dictionaries, files and errors" lacked the line of `~` and `^` marks that current Python prints, and the text now explains it. The check produces the traceback for real and compares.
+
 ### 2026-11-11: Phase 3, learning system
 
 Added

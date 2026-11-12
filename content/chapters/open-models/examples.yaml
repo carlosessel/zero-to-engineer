@@ -2,6 +2,10 @@
 - block: 1
   lang: python
   check: heavy
+  output_contains:
+  - POSITIVE
+  note: Needs PyTorch or a model download, so it runs only in the weekly heavy job (EXAMPLES_HEAVY=1), not on every push. Downloads the library's default sentiment model.
 - block: 2
   lang: bash
-  check: shell
+  check: not-run
+  reason: 'A placeholder command: the learner replaces <model-name> with a model from the Ollama library. Ollama is a separate program that is not installed on the test machines.'
