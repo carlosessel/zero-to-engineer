@@ -4,6 +4,7 @@
 //   output:          exactly what it prints (one line per console.log)
 //   output_contains: pieces the output must contain
 //   throws:          the name of the error it must stop with, such as TypeError
+//   stack_contains:  lines its stack trace must contain, in order (Node uses V8, as Chrome does)
 //   expect:          JavaScript expressions, run afterwards in the same context, each true
 //   before, fetch_json, wait_ms: see tests/js-runner.ts
 //
@@ -23,6 +24,7 @@ interface Entry extends RunOptions {
   output?: string;
   output_contains?: string[];
   throws?: string;
+  stack_contains?: string[];
   expect?: string[];
 }
 
@@ -50,6 +52,15 @@ describe('JavaScript examples', () => {
         expect(result.error?.name, `expected it to stop with ${entry.throws}`).toBe(entry.throws);
       } else {
         expect(result.error, `it stopped with an error. Output so far:\n${result.output}`).toBeNull();
+      }
+      if (entry.stack_contains) {
+        const stack = result.error?.stack ?? '';
+        let from = 0;
+        for (const part of entry.stack_contains) {
+          const at = stack.indexOf(part, from);
+          expect(at, `stack trace should contain "${part}" after the earlier lines:\n${stack}`).toBeGreaterThanOrEqual(0);
+          from = at + part.length;
+        }
       }
       if (entry.output !== undefined) expect(tidy(result.output)).toBe(tidy(entry.output));
       for (const part of entry.output_contains ?? []) expect(result.output).toContain(part);

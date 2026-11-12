@@ -1,0 +1,809 @@
+---
+title: "JavaScript from zero: decisions, loops and functions"
+summary: "Making choices, repeating work, and naming pieces of work as functions."
+prerequisites: [js-values-variables]
+estimated_minutes: 330
+status: resources-verified
+---
+
+By the end of this chapter your programs will be able to make decisions, repeat work without repeating code, and be organised into named, reusable pieces called functions. These three ideas are most of programming. Everything later in the course, including React and servers, is built from them.
+
+As before: run every example, then edit it and predict what changes before running it again.
+
+## Comparing values
+
+A **comparison** asks a question whose answer is a boolean, `true` or `false`:
+
+```js
+console.log(5 > 3);
+console.log(5 < 3);
+console.log(5 >= 5);
+console.log(4 <= 3);
+console.log(5 === 5);
+console.log(5 !== 5);
+console.log("ama" === "Ama");
+```
+
+| Operator | Asks |
+| --- | --- |
+| `>` `<` | greater than, less than |
+| `>=` `<=` | greater than or equal, less than or equal |
+| `===` | are these **equal**, and the same type? |
+| `!==` | are these **not** equal? |
+
+Two warnings:
+
+- **One `=` stores; three `===` compare.** Writing `if (score = 50)` stores 50 in `score` rather than asking a question.
+- **Use `===`, not `==`.** JavaScript also has a "loose" equality, `==`, which converts types before comparing, so `"5" == 5` is `true` and `0 == ""` is `true`. Those conversions cause bugs. `===` compares without converting: `"5" === 5` is `false`. Always use `===` and `!==`.
+
+Strings compare letter by letter, and capitals differ from small letters, so `"ama" === "Ama"` is `false`. To compare text people typed, convert both sides first: `typed.toLowerCase() === "yes"`.
+
+## Combining conditions: and, or, not
+
+```js
+const age = 20;
+const hasTicket = true;
+
+console.log(age >= 18 && hasTicket);
+console.log(age < 12 || age >= 65);
+console.log(!hasTicket);
+```
+
+- `&&` means **and**: true only if both sides are true.
+- `||` means **or**: true if either side is true (or both).
+- `!` means **not**: turns true into false and false into true.
+
+## Making decisions with if
+
+An `if` statement runs a block of code only when a condition is true:
+
+```js
+const temperature = 31;
+
+if (temperature > 30) {
+  console.log("It is hot. Drink water.");
+}
+
+console.log("Done.");
+```
+
+The condition goes in round brackets; the code to run goes in curly brackets, called a **block**, indented by two spaces so you can see what belongs to the `if`. The last line is outside the block, so it always runs.
+
+Add `else` for what to do otherwise, and `else if` for more choices:
+
+```js
+const score = 72;
+
+if (score >= 80) {
+  console.log("Excellent");
+} else if (score >= 50) {
+  console.log("Pass");
+} else {
+  console.log("Try again");
+}
+```
+
+The conditions are checked **in order**, and only the **first** true one runs. With 72, `score >= 80` is false, `score >= 50` is true, so it prints `Pass` and skips the rest. Order matters: if `score >= 50` came first, 95 would also print `Pass`.
+
+### A worked example: delivery charges
+
+A bakery charges ₵10 delivery, free on orders of ₵100 or more, and does not deliver orders under ₵20.
+
+```js
+const orderTotal = 45;
+let message;
+
+if (orderTotal < 20) {
+  message = "Sorry, the minimum order for delivery is ₵20.";
+} else if (orderTotal >= 100) {
+  message = "Free delivery!";
+} else {
+  message = `Delivery costs ₵10. Total: ₵${orderTotal + 10}.`;
+}
+
+console.log(message);
+```
+
+Trace it with 45: not under 20, not 100 or more, so the `else` runs and builds `Delivery costs ₵10. Total: ₵55.`. Edit `orderTotal` to 15, then 100, then 20, and check each branch. Testing the edges (exactly 20, exactly 100) is how you catch `<` written where `<=` was meant.
+
+`let message;` creates a variable with no value yet (it is `undefined`), so each branch can give it one.
+
+### Truthy and falsy
+
+`if` does not need a real boolean. Any value works, and JavaScript treats these as false, called **falsy**: `false`, `0`, `""` (an empty string), `null`, `undefined` and `NaN`. Everything else is **truthy**, including `"0"` and `"false"` (non-empty strings).
+
+```js
+const name = "";
+
+if (name) {
+  console.log(`Hello, ${name}`);
+} else {
+  console.log("Please enter your name.");
+}
+```
+
+This is a common, short way to check that something was typed. Be careful when `0` is a real answer: `if (quantity)` treats a quantity of 0 as "nothing given".
+
+### A short form: the conditional operator
+
+For choosing between two values, there is a one-line form, `condition ? valueIfTrue : valueIfFalse`:
+
+```js
+const items = 1;
+console.log(`You have ${items} ${items === 1 ? "item" : "items"}.`);
+```
+
+Use it for small choices like this one. For anything longer, `if` is clearer.
+
+## Repeating with loops
+
+A **loop** runs a block of code several times. The most common is the `for` loop:
+
+```js
+for (let i = 1; i <= 5; i++) {
+  console.log(`Step ${i}`);
+}
+```
+
+The three parts in the brackets, separated by semicolons:
+
+1. `let i = 1` runs once at the start: make a counter.
+2. `i <= 5` is checked before every pass: keep going while this is true.
+3. `i++` runs after every pass: add one to the counter.
+
+So `i` is 1, 2, 3, 4, 5, and the loop stops when `i` becomes 6. Each pass through a loop is called an **iteration**. `i` is the traditional name for a loop counter.
+
+### A worked example: a running total
+
+Add up the whole numbers from 1 to 100:
+
+```js
+let total = 0;
+
+for (let n = 1; n <= 100; n++) {
+  total += n;
+}
+
+console.log(total);
+```
+
+Before the loop, `total` is 0. The loop adds 1, then 2, then 3, and so on to 100. It prints `5050`. This pattern, a variable before the loop that the loop updates, is called an **accumulator**, and you will use it constantly.
+
+### while loops
+
+A `while` loop repeats as long as its condition is true. Use it when you do not know in advance how many times:
+
+```js
+let savings = 100;
+let years = 0;
+
+while (savings < 200) {
+  savings = savings * 1.1;
+  years++;
+}
+
+console.log(`It takes ${years} years to double at 10% a year.`);
+```
+
+Something inside the loop must eventually make the condition false. If not, the loop never ends: an **infinite loop**. In the browser that freezes the tab (close it); in the terminal press Ctrl+C. Here, `savings` grows each year, so the loop ends after 8 years.
+
+### break and continue
+
+`break` leaves a loop at once; `continue` skips to the next iteration.
+
+```js
+for (let n = 1; n <= 10; n++) {
+  if (n % 2 === 0) {
+    continue;
+  }
+  if (n > 7) {
+    break;
+  }
+  console.log(n);
+}
+```
+
+Even numbers are skipped, and the loop stops at the first odd number above 7, so it prints 1, 3, 5 and 7.
+
+## Functions: naming a piece of work
+
+A **function** is a named block of code you can run whenever you want, as often as you want, with different inputs. You have already used functions others wrote: `console.log`, `Math.round`, `Number`. Now you write your own.
+
+```js
+function greet(name) {
+  return `Hello, ${name}!`;
+}
+
+console.log(greet("Ama"));
+console.log(greet("Kofi"));
+```
+
+- `function greet(name)` **declares** a function called `greet` with one **parameter**, `name`: a variable that receives whatever is passed in.
+- `return` sends a value back to whoever **called** the function, and ends the function.
+- `greet("Ama")` **calls** the function. The value passed in, `"Ama"`, is called an **argument**.
+
+### return is not console.log
+
+This is the most common confusion with functions:
+
+```js
+function addReturning(a, b) {
+  return a + b;
+}
+
+function addPrinting(a, b) {
+  console.log(a + b);
+}
+
+const x = addReturning(2, 3);
+const y = addPrinting(2, 3);
+console.log(x, y);
+```
+
+`addReturning` gives back 5, which is stored in `x`. `addPrinting` prints 5 itself and gives back nothing, so `y` is `undefined`. Printing shows a value to a person; returning hands it to the rest of the program. Functions should usually **return** their result and let the caller decide what to do with it.
+
+### Several parameters and default values
+
+```js
+function priceWithTax(price, rate = 0.15) {
+  return price + price * rate;
+}
+
+console.log(priceWithTax(100));
+console.log(priceWithTax(100, 0.2));
+```
+
+`rate = 0.15` is a **default**: used when no second argument is given. The first call gives 115, the second 120.
+
+### A worked example: functions that use functions
+
+```js
+function isEven(n) {
+  return n % 2 === 0;
+}
+
+function describe(n) {
+  if (isEven(n)) {
+    return `${n} is even`;
+  }
+  return `${n} is odd`;
+}
+
+for (let i = 1; i <= 4; i++) {
+  console.log(describe(i));
+}
+```
+
+`isEven` returns a boolean, which `describe` uses in an `if`. Once `return` runs, the function ends, so the second `return` only runs when the number is odd and no `else` is needed. Breaking a problem into small functions with clear names, each doing one thing, is how all large programs are written.
+
+### Arrow functions
+
+There is a shorter way to write a function, called an **arrow function**, which you will see everywhere in modern JavaScript:
+
+```js
+const double = (n) => n * 2;
+const add = (a, b) => a + b;
+const shout = (text) => {
+  const loud = text.toUpperCase();
+  return `${loud}!`;
+};
+
+console.log(double(4), add(2, 3), shout("hello"));
+```
+
+`(n) => n * 2` means "a function taking `n` and returning `n * 2`". With a single expression after the arrow, the result is returned automatically. With curly brackets, it works like a normal function and needs `return`. The arrow function is stored in a `const` like any other value. Use whichever form you find clearer; both are everywhere.
+
+## Scope: where a variable exists
+
+A variable created inside a block (curly brackets) exists only inside that block. This is called its **scope**.
+
+```js
+const shop = "Ama's Bakery";
+
+function welcome() {
+  const greeting = "Welcome to";
+  return `${greeting} ${shop}`;
+}
+
+console.log(welcome());
+console.log(typeof greeting);
+```
+
+`shop` is created outside any block, so everything can use it, including the function. `greeting` is created inside the function, so it exists only there: outside, it is not defined (`typeof` gives `"undefined"` instead of an error). Keeping variables inside the function that needs them means different parts of a program cannot accidentally change each other's values.
+
+## Common mistakes
+
+- **`=` instead of `===`** in a condition.
+- **`==` instead of `===`**, letting JavaScript convert types.
+- **Missing curly brackets**, or brackets that do not match. Let VS Code's formatter indent your code; wrong indentation shows the mistake.
+- **Off-by-one loops**: `i < 5` runs 5 times starting at 0, `i <= 5` runs 6. Check the first and last values.
+- **Infinite loops**: nothing inside the loop changes the condition.
+- **Printing instead of returning** from a function, then getting `undefined`.
+- **Calling without brackets**: `greet` is the function itself; `greet()` runs it.
+- **Using a variable outside the block it was made in.**
+- **`else if` conditions in the wrong order**, so a broad condition catches what a narrower one should have.
+
+## Practice
+
+Write each answer as code and run it. The solutions show one way; any code that gives the right result for every case is right.
+
+### Warm-up
+
+**1.** What do these print? `10 === "10"`, `10 !== 9`, `"a" < "b"`.
+
+<Solution>
+
+`false` (different types), `true`, `true` (letters compare in alphabetical order, roughly).
+
+</Solution>
+
+**2.** What does `true && false || true` give?
+
+<Solution>
+
+`true`. `&&` is worked out first: `true && false` is `false`; then `false || true` is `true`.
+
+</Solution>
+
+**3.** Which of these are falsy: `0`, `"0"`, `""`, `" "`, `null`, `[]`?
+
+<Solution>
+
+`0`, `""` and `null`. `"0"` and `" "` are non-empty strings, so truthy. `[]` (an empty list, next chapter) is truthy too, which surprises people.
+
+</Solution>
+
+**4.** How many times does this print? `for (let i = 0; i < 3; i++) { console.log(i); }` And what?
+
+<Solution>
+
+Three times: 0, 1 and 2.
+
+</Solution>
+
+**5.** Write a function `square(n)` that returns `n` times itself.
+
+<Solution>
+
+```js
+function square(n) {
+  return n * n;
+}
+console.log(square(7));
+```
+
+Prints `49`.
+
+</Solution>
+
+**6.** Rewrite `square` as an arrow function.
+
+<Solution>
+
+```js
+const square = (n) => n * n;
+console.log(square(7));
+```
+
+</Solution>
+
+**7.** What does this print? `const x = 5; console.log(x > 3 ? "big" : "small");`
+
+<Solution>
+
+`big`.
+
+</Solution>
+
+**8.** A function has `return` on its third line. What happens to code on its fourth line?
+
+<Solution>
+
+It never runs (unless the `return` is inside an `if` that was false). `return` ends the function.
+
+</Solution>
+
+**9.** Write a loop that prints the numbers 10 down to 1.
+
+<Solution>
+
+```js
+for (let i = 10; i >= 1; i--) {
+  console.log(i);
+}
+```
+
+`i--` subtracts one each time.
+
+</Solution>
+
+**10.** Fix this condition: `if (answer = "yes") { console.log("Agreed"); }`
+
+<Solution>
+
+`=` stores `"yes"` in `answer` instead of comparing. Use `===`: `if (answer === "yes")`. (If `answer` is a `const`, the original even stops with a `TypeError`.)
+
+</Solution>
+
+### Standard
+
+**11.** Write `isAdult(age)` that returns `true` if `age` is 18 or more.
+
+<Solution>
+
+```js
+const isAdult = (age) => age >= 18;
+console.log(isAdult(17), isAdult(18), isAdult(40));
+```
+
+Prints `false true true`. A comparison is already a boolean, so there is no need for `if` with `return true` and `return false`.
+
+</Solution>
+
+**12.** Write `grade(score)` returning `"A"` for 70 and above, `"B"` for 60 to 69, `"C"` for 50 to 59, and `"F"` below 50. Test it with 70, 69, 50 and 49.
+
+<Solution>
+
+```js
+function grade(score) {
+  if (score >= 70) return "A";
+  if (score >= 60) return "B";
+  if (score >= 50) return "C";
+  return "F";
+}
+console.log(grade(70), grade(69), grade(50), grade(49));
+```
+
+Prints `A B C F`. When the body of an `if` is a single `return`, it can sit on one line without curly brackets; many teams still prefer brackets every time. Each `return` ends the function, so later checks only run if earlier ones failed.
+
+</Solution>
+
+**13.** Print the even numbers from 2 to 20 using a loop with `%`.
+
+<Solution>
+
+```js
+for (let n = 1; n <= 20; n++) {
+  if (n % 2 === 0) {
+    console.log(n);
+  }
+}
+```
+
+Another way: start at 2 and use `n += 2`.
+
+</Solution>
+
+**14.** Write `sumTo(n)` that returns 1 + 2 + … + n. Check `sumTo(100)` is 5050.
+
+<Solution>
+
+```js
+function sumTo(n) {
+  let total = 0;
+  for (let i = 1; i <= n; i++) {
+    total += i;
+  }
+  return total;
+}
+console.log(sumTo(100), sumTo(1), sumTo(0));
+```
+
+Prints `5050 1 0`. Checking the edge cases (1 and 0) catches off-by-one mistakes.
+
+</Solution>
+
+**15.** FizzBuzz, a classic: print the numbers 1 to 15, but print `Fizz` for multiples of 3, `Buzz` for multiples of 5, and `FizzBuzz` for multiples of both.
+
+<Solution>
+
+```js
+for (let n = 1; n <= 15; n++) {
+  if (n % 15 === 0) {
+    console.log("FizzBuzz");
+  } else if (n % 3 === 0) {
+    console.log("Fizz");
+  } else if (n % 5 === 0) {
+    console.log("Buzz");
+  } else {
+    console.log(n);
+  }
+}
+```
+
+The check for both must come first; otherwise 15 would print `Fizz`.
+
+</Solution>
+
+**16.** Write `maxOfThree(a, b, c)` without using `Math.max`.
+
+<Solution>
+
+```js
+function maxOfThree(a, b, c) {
+  let biggest = a;
+  if (b > biggest) biggest = b;
+  if (c > biggest) biggest = c;
+  return biggest;
+}
+console.log(maxOfThree(3, 9, 4), maxOfThree(9, 3, 4), maxOfThree(3, 4, 9));
+```
+
+Prints `9 9 9`. Testing with the largest in each position catches mistakes.
+
+</Solution>
+
+**17.** Write `celsiusToFahrenheit(c)` (F = C × 9 ÷ 5 + 32) and print a table for 0, 10, 20, 30 and 40 °C.
+
+<Solution>
+
+```js
+const celsiusToFahrenheit = (c) => (c * 9) / 5 + 32;
+for (let c = 0; c <= 40; c += 10) {
+  console.log(`${c}°C = ${celsiusToFahrenheit(c)}°F`);
+}
+```
+
+0 → 32, 10 → 50, 20 → 68, 30 → 86, 40 → 104.
+
+</Solution>
+
+**18.** Print the 7 times table from 7 × 1 to 7 × 12, in the form `7 × 3 = 21`.
+
+<Solution>
+
+```js
+for (let i = 1; i <= 12; i++) {
+  console.log(`7 × ${i} = ${7 * i}`);
+}
+```
+
+</Solution>
+
+**19.** Write `countVowels(text)` that counts a, e, i, o and u, in capitals or not. (Hint: loop over positions, and use `"aeiou".includes(letter)`.)
+
+<Solution>
+
+```js
+function countVowels(text) {
+  let count = 0;
+  const lower = text.toLowerCase();
+  for (let i = 0; i < lower.length; i++) {
+    if ("aeiou".includes(lower[i])) {
+      count++;
+    }
+  }
+  return count;
+}
+console.log(countVowels("Programming in Accra"));
+```
+
+Prints `6`: o, a, i, i, A, a.
+
+</Solution>
+
+**20.** Write `reverse(text)` that returns the text backwards, using a loop.
+
+<Solution>
+
+```js
+function reverse(text) {
+  let result = "";
+  for (let i = text.length - 1; i >= 0; i--) {
+    result += text[i];
+  }
+  return result;
+}
+console.log(reverse("bread"));
+```
+
+Prints `daerb`. The loop starts at the last position and counts down to 0.
+
+</Solution>
+
+**21.** What does this print, and why?
+
+```js
+function check(n) {
+  if (n > 10) {
+    return "big";
+  }
+}
+console.log(check(5));
+```
+
+<Solution>
+
+`undefined`. For 5 the `if` is false, so the function reaches its end without a `return`, and a function that returns nothing gives `undefined`. Add a final `return "small";`.
+
+</Solution>
+
+**22.** A leap year is divisible by 4, except years divisible by 100, unless they are also divisible by 400. Write `isLeapYear(year)` and test 2024, 2026, 1900 and 2000.
+
+<Solution>
+
+```js
+function isLeapYear(year) {
+  return (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+}
+console.log(isLeapYear(2024), isLeapYear(2026), isLeapYear(1900), isLeapYear(2000));
+```
+
+Prints `true false false true`.
+
+</Solution>
+
+**23.** Using a `while` loop, find how many times you must halve 1000 (with `/ 2`) before the value is below 1.
+
+<Solution>
+
+```js
+let value = 1000;
+let halvings = 0;
+while (value >= 1) {
+  value = value / 2;
+  halvings++;
+}
+console.log(halvings);
+```
+
+Prints `10`: after 9 halvings it is about 1.95, after 10 about 0.98.
+
+</Solution>
+
+**24.** Write `canVote(age, isCitizen)` that returns `true` only for citizens aged 18 or over, and print the result for (17, true), (18, false) and (30, true).
+
+<Solution>
+
+```js
+const canVote = (age, isCitizen) => age >= 18 && isCitizen;
+console.log(canVote(17, true), canVote(18, false), canVote(30, true));
+```
+
+Prints `false false true`.
+
+</Solution>
+
+### Stretch
+
+**25.** Write `isPrime(n)`: a prime is a whole number above 1 divisible only by 1 and itself. Then print every prime below 30.
+
+<Solution>
+
+```js
+function isPrime(n) {
+  if (n < 2) return false;
+  for (let d = 2; d * d <= n; d++) {
+    if (n % d === 0) return false;
+  }
+  return true;
+}
+
+let primes = "";
+for (let n = 1; n < 30; n++) {
+  if (isPrime(n)) primes += n + " ";
+}
+console.log(primes.trim());
+```
+
+Prints `2 3 5 7 11 13 17 19 23 29`. The loop only checks divisors up to the square root (`d * d <= n`): if `n` had a larger divisor, it would also have a smaller one, already checked.
+
+</Solution>
+
+**26.** Write `isPalindrome(text)`: true if the text reads the same backwards, ignoring capitals and spaces. Test `"Never odd or even"` and `"Accra"`. Reuse your `reverse` idea.
+
+<Solution>
+
+```js
+function isPalindrome(text) {
+  const clean = text.toLowerCase().replaceAll(" ", "");
+  let backwards = "";
+  for (let i = clean.length - 1; i >= 0; i--) backwards += clean[i];
+  return clean === backwards;
+}
+console.log(isPalindrome("Never odd or even"), isPalindrome("Accra"));
+```
+
+Prints `true false`. `replaceAll(" ", "")` removes every space.
+
+</Solution>
+
+**27.** A loan of ₵1,000 grows by 5% a year. Write code that prints the amount at the end of each year until it passes ₵1,500, rounded to two decimal places.
+
+<Solution>
+
+```js
+let amount = 1000;
+let year = 0;
+while (amount <= 1500) {
+  amount *= 1.05;
+  year++;
+  console.log(`Year ${year}: ₵${amount.toFixed(2)}`);
+}
+```
+
+It prints 9 lines, ending `Year 9: ₵1551.33`.
+
+</Solution>
+
+**28.** Write a function `stars(n)` that returns a triangle of stars as one string with new lines, so `console.log(stars(3))` prints:
+
+```text
+*
+**
+***
+```
+
+<Solution>
+
+```js
+function stars(n) {
+  let lines = "";
+  for (let row = 1; row <= n; row++) {
+    lines += "*".repeat(row);
+    if (row < n) lines += "\n";
+  }
+  return lines;
+}
+console.log(stars(3));
+```
+
+`"*".repeat(row)` makes a string of `row` stars. Without `repeat`, use a second loop inside the first: a loop inside a loop is called a **nested loop**.
+
+</Solution>
+
+**29.** Predict the output, then run it:
+
+```js
+let message = "outside";
+function test() {
+  let message = "inside";
+  return message;
+}
+console.log(test(), message);
+```
+
+<Solution>
+
+`inside outside`. The `let message` inside the function is a different variable that only exists there; it hides the outer one inside the function but does not change it.
+
+</Solution>
+
+**30.** The number of steps to reach 1 in the "3n + 1" puzzle: if n is even, halve it; if odd, multiply by 3 and add 1. Write `collatzSteps(n)` and find the steps for 6 and for 27.
+
+<Solution>
+
+```js
+function collatzSteps(n) {
+  let steps = 0;
+  while (n !== 1) {
+    n = n % 2 === 0 ? n / 2 : 3 * n + 1;
+    steps++;
+  }
+  return steps;
+}
+console.log(collatzSteps(6), collatzSteps(27));
+```
+
+Prints `8 111`. Nobody has proved that every starting number reaches 1, though every number ever tested does.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Comparisons (`>`, `<`, `>=`, `<=`, `===`, `!==`) give booleans. Use `===`, never `==`. One `=` stores.
+- `&&` (and), `||` (or) and `!` (not) combine conditions.
+- `if`, `else if` and `else` choose between blocks; only the first true branch runs, so order matters. `condition ? a : b` chooses between two values.
+- Falsy values: `false`, `0`, `""`, `null`, `undefined`, `NaN`. Everything else is truthy.
+- `for` loops count; `while` loops repeat until something changes. Make sure loops end. `break` leaves, `continue` skips.
+- An **accumulator** is a variable before a loop that the loop updates.
+- **Functions** take parameters, are called with arguments, and **return** a result. Returning is not printing. Defaults fill in missing arguments. Arrow functions are a shorter form.
+- Variables exist only inside the block where they are made (**scope**).
+
+## Go deeper
+
+- [MDN: Dynamic scripting with JavaScript](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting), from Mozilla. Its lessons on conditionals, loops and functions cover this chapter with more examples.
+- [The Modern JavaScript Tutorial](https://javascript.info/), by Ilya Kantor. In "JavaScript Fundamentals", the lessons on comparisons, conditional branching, logical operators, loops and functions each end with tasks and solutions.
+- [MDN: JavaScript Guide](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide), from Mozilla. A more formal guide to the language, useful once the basics feel familiar.

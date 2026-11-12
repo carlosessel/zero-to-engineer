@@ -1,0 +1,173 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: html
+  check: browser
+  combine:
+  - 1
+  - 2
+  - 3
+  actions:
+  - click: '#close'
+  expect:
+  - document.querySelector('.status').textContent === 'Sorry, we are closed.'
+  - document.querySelector('.status').classList.contains('closed')
+  - getComputedStyle(document.querySelector('.status')).color === 'rgb(179, 38, 30)'
+  - document.querySelector('#close').disabled === true
+  note: Clicks the button and checks all three changes the chapter lists.
+- block: 2
+  lang: css
+  check: web
+  note: Rendered with its HTML and JavaScript in the entry for block 1.
+- block: 3
+  lang: js
+  check: illustration
+  note: The JavaScript of the first worked example; run in a real browser with its HTML in the entry for block 1.
+- block: 4
+  lang: js
+  check: illustration
+  note: The general pattern, with a placeholder element; every worked example in the chapter uses it and is run.
+- block: 5
+  lang: html
+  check: browser
+  combine:
+  - 5
+  - 6
+  actions:
+  - fill:
+    - '#message'
+    - Hello
+  expect:
+  - document.querySelector('#count').textContent === '95 characters left'
+  - document.querySelector('#count').getAttribute('aria-live') === 'polite'
+  note: Typing five characters leaves 95.
+- block: 6
+  lang: js
+  check: illustration
+  note: Run with its HTML in the entry for block 5.
+- block: 7
+  lang: html
+  check: browser
+  combine:
+  - 7
+  - 8
+  actions:
+  - fill:
+    - '#name'
+    - '  Ama '
+  - click: button[type=submit]
+  expect:
+  - document.querySelector('#greeting').textContent === 'Hello, Ama!'
+  - document.querySelector('#name').value === ''
+  - document.querySelector('#greet-form').checkValidity() === false
+  note: Submitting greets by the trimmed name, then the form is reset (so, being required, it is empty and invalid again).
+- block: 8
+  lang: js
+  check: illustration
+  note: Run with its HTML in the entry for block 7.
+- block: 9
+  lang: js
+  check: illustration
+  note: 'A minimal pattern that needs a #list element; the to-do example builds items the same way and is run.'
+- block: 10
+  lang: html
+  check: browser
+  combine:
+  - 10
+  - 11
+  - 12
+  actions:
+  - fill:
+    - '#task'
+    - Buy flour
+  - click: '#todo-form button'
+  - fill:
+    - '#task'
+    - Call Kofi
+  - click: '#todo-form button'
+  - click: '#todo-list li:first-child .toggle'
+  expect:
+  - document.querySelectorAll('#todo-list li').length === 2
+  - document.querySelector('#summary').textContent === '1 of 2 done.'
+  - document.querySelector('#todo-list li:first-child').classList.contains('done')
+  - getComputedStyle(document.querySelector('.done span')).textDecorationLine === 'line-through'
+  - (() => { document.querySelector('#todo-list li:last-child .delete').click(); return document.querySelectorAll('#todo-list li').length === 1 && document.querySelector('#summary').textContent === '1 of 1 done.'; })()
+  - document.querySelector('#todo-list li').textContent.startsWith('Buy flour')
+  note: Adds two tasks, ticks the first, deletes the second, and checks the list and summary after each.
+- block: 11
+  lang: css
+  check: web
+  note: Rendered with the to-do example in the entry for block 10.
+- block: 12
+  lang: js
+  check: illustration
+  note: The to-do JavaScript; run in a real browser in the entry for block 10.
+- block: 13
+  lang: js
+  check: js
+  before: |
+    globalThis.localStorage = (() => { const m = {}; return { getItem: (k) => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, removeItem: (k) => { delete m[k]; } }; })();
+  output: |
+    ["Buy flour", "Call Kofi"]
+  note: Run in Node with a small stand-in for localStorage, as in the chapter's previews.
+- block: 14
+  lang: html
+  check: web
+- block: 15
+  lang: html
+  check: browser
+  combine:
+  - 15
+  - 16
+  actions:
+  - click: '#theme'
+  expect:
+  - document.body.classList.contains('dark')
+  - getComputedStyle(document.body).backgroundColor === 'rgb(17, 17, 17)'
+  - (() => { document.querySelector('#theme').click(); return !document.body.classList.contains('dark'); })()
+- block: 16
+  lang: css
+  check: web
+- block: 17
+  lang: html
+  check: browser
+  actions:
+  - click: '#minus'
+  - click: '#plus'
+  - click: '#plus'
+  - click: '#plus'
+  - click: '#minus'
+  expect:
+  - document.querySelector('#value').textContent === '2'
+  note: Pressing − at 0 leaves 0; three + and one − gives 2.
+- block: 18
+  lang: html
+  check: browser
+  actions:
+  - fill:
+    - '#words'
+    - akwaaba
+  expect:
+  - document.querySelector('#loud').textContent === 'AKWAABA'
+- block: 19
+  lang: html
+  check: browser
+  expect:
+  - '[...document.querySelectorAll(''#breads li'')].map((li) => li.textContent).join('','') === ''sugar bread,tea bread,brown bread'''
+- block: 20
+  lang: js
+  check: illustration
+  note: The safe pattern from the solution; the to-do example uses exactly this and is run.
+- block: 21
+  lang: html
+  check: browser
+  actions:
+  - fill:
+    - '#email'
+    - ama@example.com
+  - click: button[type=submit]
+  expect:
+  - document.querySelector('#thanks').textContent === 'Thanks, we will write to ama@example.com.'
+- block: 22
+  lang: js
+  check: illustration
+  note: 'A fragment that extends the to-do example and needs a #clear-done button added to its HTML, so it is not run on its own.'

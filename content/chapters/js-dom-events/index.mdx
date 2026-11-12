@@ -1,0 +1,499 @@
+---
+title: "Changing the page: the DOM and events"
+summary: "Finding elements, changing them, and responding to clicks and typing."
+prerequisites: [js-arrays-objects, html-forms-tables]
+estimated_minutes: 300
+status: resources-verified
+---
+
+By the end of this chapter you will be able to make pages respond: find elements, change their text and styles, add and remove them, and run code when people click, type and submit forms. You will build a working to-do list. This is where HTML, CSS and JavaScript finally work together.
+
+The examples here are live, like the CSS ones: the result appears straight away, and you can click in it. Edit the JavaScript and the result restarts with your changes.
+
+## The DOM: the page as objects
+
+When a browser reads HTML, it builds a tree of objects in memory, one for each element, with parents and children just like the nesting in the HTML. This tree is the **DOM** (Document Object Model). JavaScript changes the page by changing the DOM; the browser redraws whatever changed.
+
+The whole tree is available as `document`. Find elements with **CSS selectors**, the same ones you wrote in the CSS chapters:
+
+- `document.querySelector("selector")` returns the **first** matching element, or `null` if none matches.
+- `document.querySelectorAll("selector")` returns **all** matching elements, as a list you can loop over with `for…of`.
+
+### A worked example: changing text and classes
+
+<Playground>
+
+```html
+<h1 id="title">Ama's Bakery</h1>
+<p class="status">We are open.</p>
+<button type="button" id="close">Close the shop</button>
+```
+
+```css
+.closed {
+  color: #b3261e;
+  font-weight: 700;
+}
+```
+
+```js
+const status = document.querySelector(".status");
+const closeButton = document.querySelector("#close");
+
+closeButton.addEventListener("click", () => {
+  status.textContent = "Sorry, we are closed.";
+  status.classList.add("closed");
+  closeButton.disabled = true;
+});
+```
+
+</Playground>
+
+Press the button in the result. Three changes happen:
+
+- `textContent` sets the text inside an element.
+- `classList.add("closed")` adds a class, so the CSS rule for `.closed` now applies. `classList.remove` takes it away and `classList.toggle` switches it on or off. **Change the look by changing classes**, and keep the look itself in CSS.
+- `disabled = true` turns the button off. Many HTML attributes are properties you can set like this: `input.value`, `link.href`, `image.src`, `image.alt`.
+
+## Events: running code when something happens
+
+An **event** is something that happens on the page: a click, a key press, typing in a box, a form being submitted, the page finishing loading. `addEventListener` connects a function to an event on an element:
+
+```js
+element.addEventListener("click", () => {
+  // runs every time the element is clicked
+});
+```
+
+The function is called an **event handler** (or listener). It runs later, each time the event happens, not when `addEventListener` runs. The most common events:
+
+| Event | Happens when |
+| --- | --- |
+| `click` | The element is clicked, tapped, or pressed with Enter or Space (on buttons and links) |
+| `input` | The value of a text box, slider or menu changes as the person types or chooses |
+| `change` | A checkbox, radio button or menu is changed, or a text box loses focus after changing |
+| `submit` | A form is submitted |
+| `keydown` | A key is pressed |
+
+### A worked example: a live character counter
+
+<Playground>
+
+```html
+<label for="message">Your message (100 characters at most)</label>
+<textarea id="message" maxlength="100" rows="3"></textarea>
+<p id="count" aria-live="polite">100 characters left</p>
+```
+
+```js
+const message = document.querySelector("#message");
+const count = document.querySelector("#count");
+
+message.addEventListener("input", () => {
+  const left = 100 - message.value.length;
+  count.textContent = `${left} characters left`;
+});
+```
+
+</Playground>
+
+Type in the box. Every change fires `input`, and the handler reads `message.value`, the text typed so far, and updates the count. `aria-live="polite"` on the paragraph tells screen readers to announce its new text when it changes, so people who cannot see the count still hear it.
+
+### The event object
+
+The handler receives an **event object** describing what happened. Two parts you will use:
+
+- `event.target` is the element the event happened on.
+- `event.preventDefault()` stops the browser's normal action for that event, such as a form submitting and reloading the page.
+
+## Forms with JavaScript
+
+When a form is handled by JavaScript rather than sent to a server, listen for `submit` on the form and call `preventDefault()`. This keeps all the good form behaviour from the forms chapter (labels, Enter to submit, `required` checks) while your code decides what happens.
+
+<Playground>
+
+```html
+<form id="greet-form">
+  <label for="name">Your name</label>
+  <input type="text" id="name" name="name" required>
+  <button type="submit">Greet me</button>
+</form>
+<p id="greeting"></p>
+```
+
+```js
+const form = document.querySelector("#greet-form");
+const nameInput = document.querySelector("#name");
+const greeting = document.querySelector("#greeting");
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const name = nameInput.value.trim();
+  greeting.textContent = `Hello, ${name}!`;
+  form.reset();
+});
+```
+
+</Playground>
+
+Notice the browser still refuses an empty name, because of `required`, before your code runs. `form.reset()` clears the form afterwards.
+
+## Creating and removing elements
+
+To add something new to the page, create an element, fill it in, and attach it:
+
+```js
+const item = document.createElement("li");
+item.textContent = "Buy flour";
+document.querySelector("#list").append(item);
+```
+
+`append` adds it as the last child of the chosen element; `prepend` adds it as the first. `element.remove()` takes an element off the page.
+
+### textContent, not innerHTML
+
+You will see code that sets `element.innerHTML = "<b>Hi</b>"`, which reads the string as HTML. Avoid it for anything that includes text people typed. If someone types `<img src=x onerror="…">` into your to-do list and you put it in `innerHTML`, the browser runs their code on your page. This attack is called **cross-site scripting** (XSS), and it is one of the commonest security holes on the web. `textContent` always treats text as text, so it is safe. Build elements with `createElement` and `textContent`.
+
+## A worked example: a to-do list
+
+Everything so far, in one small application. Add tasks, tick them off, and delete them.
+
+<Playground>
+
+```html
+<form id="todo-form">
+  <label for="task">New task</label>
+  <input type="text" id="task" required autocomplete="off">
+  <button type="submit">Add</button>
+</form>
+<ul id="todo-list"></ul>
+<p id="summary" aria-live="polite">No tasks yet.</p>
+```
+
+```css
+#todo-list {
+  padding: 0;
+  list-style: none;
+}
+
+#todo-list li {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 0;
+}
+
+.done span {
+  text-decoration: line-through;
+  color: #595959;
+}
+```
+
+```js
+const form = document.querySelector("#todo-form");
+const input = document.querySelector("#task");
+const list = document.querySelector("#todo-list");
+const summary = document.querySelector("#summary");
+
+function updateSummary() {
+  const total = list.children.length;
+  const done = list.querySelectorAll(".done").length;
+  summary.textContent = total === 0 ? "No tasks yet." : `${done} of ${total} done.`;
+}
+
+form.addEventListener("submit", (event) => {
+  event.preventDefault();
+  const item = document.createElement("li");
+
+  const text = document.createElement("span");
+  text.textContent = input.value.trim();
+
+  const doneButton = document.createElement("button");
+  doneButton.type = "button";
+  doneButton.textContent = "Done";
+  doneButton.className = "toggle";
+
+  const deleteButton = document.createElement("button");
+  deleteButton.type = "button";
+  deleteButton.textContent = "Delete";
+  deleteButton.className = "delete";
+
+  item.append(text, doneButton, deleteButton);
+  list.append(item);
+  form.reset();
+  input.focus();
+  updateSummary();
+});
+
+list.addEventListener("click", (event) => {
+  const item = event.target.closest("li");
+  if (event.target.classList.contains("toggle")) {
+    item.classList.toggle("done");
+  } else if (event.target.classList.contains("delete")) {
+    item.remove();
+  }
+  updateSummary();
+});
+```
+
+</Playground>
+
+How it works:
+
+- **Adding**: on submit, build an `li` with a `span` of text and two real `<button>`s (so they work with the keyboard), add it to the list, clear and refocus the box, and update the summary.
+- **One listener for the whole list.** Instead of attaching a listener to every new button, there is one on the `ul`. Clicks on the buttons inside **bubble up** to it: an event on an element also happens on each of its ancestors. The handler checks which button was clicked with `event.target`, and finds its `li` with `closest("li")`, which searches upwards from an element for the nearest match. This is called **event delegation**, and it works for items added later, without extra code.
+- **The summary** is recalculated from the page each time, so it can never disagree with what is shown.
+
+Reload the page and the tasks are gone: they only lived in the DOM. The next section fixes that.
+
+## Remembering things: localStorage
+
+`localStorage` stores small pieces of text in the browser, which survive closing the page. It keeps strings only, so store arrays and objects as JSON:
+
+```js
+const tasks = ["Buy flour", "Call Kofi"];
+localStorage.setItem("tasks", JSON.stringify(tasks));
+
+const saved = JSON.parse(localStorage.getItem("tasks")) ?? [];
+console.log(saved);
+```
+
+`getItem` returns `null` if nothing was saved under that name, and `?? []` means "or an empty list if that is `null`". (`??` is called the **nullish coalescing** operator: it uses the value on the right only when the left is `null` or `undefined`.) This very site keeps your progress this way.
+
+In the previews on this page, examples get a temporary stand-in for `localStorage` that lasts until you reload, because previews are deliberately cut off from the site's own storage. In your own files, it persists.
+
+## Where the script goes
+
+In your own pages, put the `<script>` at the end of the `<body>`, or in the `<head>` with the `defer` attribute:
+
+```html
+<script src="app.js" defer></script>
+```
+
+Either way, the script runs after the HTML has been read, so the elements it looks for exist. A script in the `<head>` without `defer` runs before the body exists, and `querySelector` returns `null`. The next part of the course uses `type="module"`, which also waits.
+
+## Common mistakes
+
+- **`Cannot read properties of null`.** `querySelector` found nothing: the selector is wrong (a missing `#` or `.`), or the script ran before the element existed. Log the result of `querySelector` to check.
+- **Calling the handler instead of passing it**: `button.addEventListener("click", save())` runs `save` once, immediately. Pass the function itself: `save`, or `() => save()`.
+- **Forgetting `preventDefault()`** on a form you handle, so the page reloads and your changes vanish.
+- **Reading `value` once, outside the handler.** Read it inside, so you get what was typed at the moment of the event.
+- **`innerHTML` with text people typed.** Use `textContent`.
+- **`<div>`s or `<span>`s with click handlers** instead of `<button>`s, which keyboards and screen readers cannot use.
+- **Changing `style` directly for everything.** Toggle classes and keep looks in CSS.
+- **A listener on every item** added in a loop, instead of one delegated listener.
+
+## Practice
+
+Write each answer in a `<Playground>`-style setup of your own (an HTML file with a script), or edit the examples above.
+
+**1. (warm-up)** Write a line that finds the first `<h1>` on the page and changes its text to `Welcome`.
+
+<Solution>
+
+`document.querySelector("h1").textContent = "Welcome";`
+
+</Solution>
+
+**2. (warm-up)** Which method finds every element with class `price`, and how do you loop over them?
+
+<Solution>
+
+`document.querySelectorAll(".price")`, then `for (const el of document.querySelectorAll(".price")) { … }`.
+
+</Solution>
+
+**3. (warm-up)** What is wrong with `button.addEventListener("click", showMenu());`?
+
+<Solution>
+
+`showMenu()` runs `showMenu` straight away and passes its result (probably `undefined`) as the handler. Pass the function itself: `button.addEventListener("click", showMenu);`.
+
+</Solution>
+
+**4. (standard)** Make a button that toggles a class `dark` on the `<body>`, with CSS that gives `.dark` a dark background and light text.
+
+<Solution>
+
+```html
+<button type="button" id="theme">Switch theme</button>
+<script>
+  document.querySelector("#theme").addEventListener("click", () => {
+    document.body.classList.toggle("dark");
+  });
+</script>
+```
+
+```css
+.dark {
+  background-color: #111111;
+  color: #eeeeee;
+}
+```
+
+`toggle` adds the class if it is missing and removes it if present.
+
+</Solution>
+
+**5. (standard)** Make a counter: a number starting at 0 and two buttons, `+` and `−`, that change it. It must not go below 0.
+
+<Solution>
+
+```html
+<p>Count: <span id="value">0</span></p>
+<button type="button" id="minus">−</button>
+<button type="button" id="plus">+</button>
+<script>
+  let count = 0;
+  const shown = document.querySelector("#value");
+  const show = () => (shown.textContent = count);
+  document.querySelector("#plus").addEventListener("click", () => {
+    count++;
+    show();
+  });
+  document.querySelector("#minus").addEventListener("click", () => {
+    if (count > 0) count--;
+    show();
+  });
+</script>
+```
+
+The number lives in a variable, `count`; the page only shows it. Keeping the data in a variable and drawing the page from it is the idea behind front-end frameworks such as React.
+
+</Solution>
+
+**6. (standard)** Given a text box and a paragraph, show what is being typed in capital letters in the paragraph, as the person types.
+
+<Solution>
+
+```html
+<label for="words">Type something</label>
+<input type="text" id="words">
+<p id="loud"></p>
+<script>
+  const words = document.querySelector("#words");
+  words.addEventListener("input", () => {
+    document.querySelector("#loud").textContent = words.value.toUpperCase();
+  });
+</script>
+```
+
+</Solution>
+
+**7. (standard)** Given `const breads = ["sugar", "tea", "brown"];` and an empty `<ul id="breads">`, add an `li` for each bread.
+
+<Solution>
+
+```html
+<ul id="breads"></ul>
+<script>
+  const breads = ["sugar", "tea", "brown"];
+  const list = document.querySelector("#breads");
+  for (const bread of breads) {
+    const li = document.createElement("li");
+    li.textContent = `${bread} bread`;
+    list.append(li);
+  }
+</script>
+```
+
+</Solution>
+
+**8. (standard)** Why is `list.innerHTML += "<li>" + typedText + "</li>";` dangerous? Rewrite it safely.
+
+<Solution>
+
+If `typedText` contains HTML, such as an image with a script in its `onerror` attribute, the browser runs it: cross-site scripting. Safe version:
+
+```js
+const li = document.createElement("li");
+li.textContent = typedText;
+list.append(li);
+```
+
+</Solution>
+
+**9. (standard)** A page shows `Uncaught TypeError: Cannot read properties of null (reading 'addEventListener')`. The script is in the `<head>`. Give two fixes.
+
+<Solution>
+
+The script ran before the body was read, so `querySelector` returned `null`. Move the `<script>` to the end of the `<body>`, or add `defer` to it (for a separate file, `<script src="app.js" defer></script>`). Also check the selector itself is right.
+
+</Solution>
+
+**10. (standard)** Make a form with an email box that, on submit, shows `Thanks, we will write to …` with the address, without reloading the page.
+
+<Solution>
+
+```html
+<form id="signup">
+  <label for="email">Email</label>
+  <input type="email" id="email" required>
+  <button type="submit">Sign up</button>
+</form>
+<p id="thanks"></p>
+<script>
+  const formEl = document.querySelector("#signup");
+  formEl.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const email = document.querySelector("#email").value;
+    document.querySelector("#thanks").textContent = `Thanks, we will write to ${email}.`;
+  });
+</script>
+```
+
+</Solution>
+
+**11. (stretch)** Add a "Clear done" button to the to-do list that removes every task marked done.
+
+<Solution>
+
+```js
+document.querySelector("#clear-done").addEventListener("click", () => {
+  for (const item of list.querySelectorAll(".done")) {
+    item.remove();
+  }
+  updateSummary();
+});
+```
+
+with `<button type="button" id="clear-done">Clear done</button>` in the HTML. `querySelectorAll` on the list finds only its own done items.
+
+</Solution>
+
+**12. (stretch)** Make the to-do list remember its tasks with `localStorage`: save the tasks' text and done state whenever they change, and rebuild the list when the page loads. Describe the approach, then build it in your own file.
+
+<Solution>
+
+Keep the tasks as data, not just as elements: an array like `[{ text: "Buy flour", done: false }]`. Write one function `render()` that empties the list (`list.replaceChildren()`) and builds an `li` for each task from the array, and one `save()` that does `localStorage.setItem("tasks", JSON.stringify(tasks))`. Every action (add, toggle, delete) changes the array, then calls `save()` and `render()`. On load, read the array with `JSON.parse(localStorage.getItem("tasks")) ?? []` and call `render()`. Store an `id` on each task (for example `Date.now()`) and put it on the `li` as `item.dataset.id`, so the click handler can find which task in the array to change. This "data, then draw from it" shape is exactly what React does for you in the next part.
+
+</Solution>
+
+**13. (stretch)** Why does one listener on the `ul` work for to-do items added after the page loaded, when a listener added to each button at load time would not?
+
+<Solution>
+
+Listeners added at load can only attach to buttons that exist then; later items have none. A click on any element bubbles up through its ancestors, including the `ul`, which exists from the start. The single listener on the `ul` therefore hears clicks from every item, whenever it was added, and uses `event.target` to tell which.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The **DOM** is the page as a tree of objects. `document.querySelector` finds the first match (or `null`); `querySelectorAll` finds all.
+- Change text with `textContent`, looks with `classList`, and attributes with properties such as `value`, `disabled` and `src`.
+- `addEventListener(event, handler)` runs a function each time an event happens: `click`, `input`, `change`, `submit`, `keydown`. Pass the function, do not call it.
+- The **event object** gives `target` and `preventDefault()`. Handle forms on `submit` with `preventDefault()`.
+- Create with `createElement`, add with `append`, remove with `remove()`.
+- Use `textContent`, not `innerHTML`, for anything people typed, to prevent **cross-site scripting**.
+- Events **bubble** up, so one listener on a parent (**event delegation**) handles all its children, even new ones.
+- `localStorage` keeps strings between visits; store data as JSON.
+- Put scripts at the end of the body or use `defer`.
+
+## Go deeper
+
+- [MDN: DOM scripting introduction](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/DOM_scripting), from Mozilla. Manipulating documents, step by step.
+- [MDN: Introduction to events](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting/Events), from Mozilla. Events, handlers, the event object, bubbling and delegation.
+- [MDN: Window.localStorage](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage), from Mozilla. The reference for saving data in the browser.
+- [The Modern JavaScript Tutorial](https://javascript.info/), by Ilya Kantor. Part 2, "Browser: Document, Events, Interfaces", goes deeper into the DOM and events.

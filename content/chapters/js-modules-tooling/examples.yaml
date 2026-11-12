@@ -1,0 +1,120 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: js
+  check: shell
+  script: |
+    mkdir -p modules-demo
+    cp "$BLOCK" modules-demo/prices.js
+    node --check modules-demo/prices.js
+  note: Saved as modules-demo/prices.js, as the chapter says; run by the block that runs app.js.
+- block: 2
+  lang: js
+  check: shell
+  script: |
+    cp "$BLOCK" modules-demo/app.js
+  note: Saved as modules-demo/app.js; run in the next block.
+- block: 3
+  lang: bash
+  check: shell
+  script: |
+    # First, the chapter's claim: without type=module, Node refuses.
+    before=$(cd modules-demo && npm init -y > /dev/null && node app.js 2>&1 || true)
+    echo "$before" | grep -q "Cannot use import statement outside a module"
+    rm modules-demo/package.json
+    bash -e "$BLOCK"
+  output_contains:
+  - VAT is 15%
+  - '
+
+    115
+
+    '
+  - '22.99'
+  note: 'Also checks the chapter''s claim that, before type=module is set, Node stops with an error about using import outside a module (npm now writes "type": "commonjs" into new projects).'
+- block: 4
+  lang: js
+  check: shell
+  script: |
+    mkdir -p default-demo && cd default-demo
+    cp "$BLOCK" format.js
+    printf 'import formatCedis from "./format.js";\nconsole.log(formatCedis(46.5));\n' > app.mjs
+    node app.mjs
+  output_contains:
+  - ₵46.50
+  note: Imported under its default name, as the chapter shows.
+- block: 5
+  lang: html
+  check: web
+- block: 6
+  lang: json
+  check: illustration
+  note: Example package.json contents. Checked to be valid JSON with the parts the chapter describes; the real file npm writes is checked by the npm blocks.
+  verify: |
+    import json
+    d = json.loads(block)
+    assert d['type'] == 'module' and d['scripts']['start'] == 'node app.js' and d['dependencies']['dayjs'].startswith('^1.')
+- block: 7
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    mkdir -p dates-demo && cd dates-demo && npm init -y > /dev/null && npm pkg set type=module
+    bash -e "$BLOCK"
+    test -d node_modules/dayjs && test -f package-lock.json
+    grep -q '"dayjs"' package.json
+  note: 'Installs for real (needs the network): checks node_modules, package-lock.json and the dependency in package.json, the three things the chapter lists.'
+- block: 8
+  lang: js
+  check: shell
+  needs: network
+  script: |
+    cd dates-demo
+    cp "$BLOCK" date.js
+    node date.js
+  output_contains:
+  - 19 November 2026
+- block: 9
+  lang: bash
+  check: shell
+  needs: network
+  timeout: 600
+  script: |
+    head -3 "$BLOCK" > steps.sh   # the last line starts a server that runs until stopped
+    bash -e steps.sh
+    cd my-site
+    test -f index.html && test -f src/main.js && test -f src/style.css && test -d public
+    node -e "const p = require('./package.json'); if (!p.scripts.dev || !p.scripts.build || !p.scripts.preview || !p.devDependencies.vite) process.exit(1)"
+  note: Creates and installs a real Vite project (needs the network) and checks the files and scripts the chapter's table lists. npm run dev starts a server that never stops by itself, so it is left out.
+- block: 10
+  lang: bash
+  check: shell
+  needs: network
+  timeout: 600
+  script: |
+    cd my-site
+    head -1 "$BLOCK" | bash -e
+    test -f dist/index.html
+    ls dist/assets | grep -q "\.js$"
+  note: Builds the project and checks dist holds the finished page and its JavaScript. npm run preview starts a server, so it is left out.
+- block: 11
+  lang: js
+  check: shell
+  script: |
+    mkdir -p units-demo && cd units-demo && npm init -y > /dev/null && npm pkg set type=module
+    cp "$BLOCK" units.js
+- block: 12
+  lang: js
+  check: shell
+  script: |
+    cd units-demo
+    cp "$BLOCK" main.js
+    node main.js
+  output_contains:
+  - '11.0'
+- block: 13
+  lang: json
+  check: illustration
+  note: A fragment of package.json; checked to be valid JSON with the script.
+  verify: |
+    import json
+    assert json.loads(block)['scripts']['greet'] == 'node greet.js'

@@ -60,8 +60,8 @@ def draft(chapter):
             e["check"] = "web"
         elif lang in ("js", "javascript"):
             e["check"] = "js"
-            out = subprocess.run(["node", "scripts/js_output.ts", chapter, str(i)], capture_output=True, text=True).stdout
-            body = out.split("\n", 1)
+            printed = subprocess.run(["node", "scripts/js_output.ts", chapter, str(i)], capture_output=True, text=True).stdout
+            body = printed.split("\n", 1)
             if "stopped with" in body[0]:
                 e["DRAFT_PROBLEM"] = body[0]
             e["output"] = Block(body[1] if len(body) > 1 else "")

@@ -46,7 +46,23 @@ export function bridgeScript(frameId: string): string {
     if (window.ResizeObserver) new ResizeObserver(size).observe(document.body);
     parent.postMessage({ zte: 'playground', id: id, level: 'loaded', text: '' }, '*');
   });
+  // The sandbox has no real storage (that is what keeps the site's own data private),
+  // so examples that save with localStorage get a stand-in that lasts until reload.
+  try { window.localStorage.length; } catch (err) {
+    var mem = {};
+    var stand = {
+      getItem: function (k) { return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null; },
+      setItem: function (k, v) { mem[k] = String(v); },
+      removeItem: function (k) { delete mem[k]; },
+      clear: function () { mem = {}; },
+      key: function (i) { return Object.keys(mem)[i] || null; },
+    };
+    Object.defineProperty(stand, 'length', { get: function () { return Object.keys(mem).length; } });
+    Object.defineProperty(window, 'localStorage', { value: stand, configurable: true });
+  }
   document.addEventListener('submit', function (e) {
+    // If the example's own code handled the submission, leave it alone.
+    if (e.defaultPrevented) return;
     e.preventDefault();
     var pairs = [];
     new FormData(e.target).forEach(function (value, name) { pairs.push(name + ' = ' + JSON.stringify(String(value))); });

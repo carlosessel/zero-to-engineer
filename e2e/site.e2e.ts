@@ -185,10 +185,10 @@ test('@phone the chapter menu opens and closes, and nothing overflows sideways',
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-const AXE_PAGES = ['/', '/ai/', '/web/', '/web/web-the-map/', '/web/web-setup/', '/web/git-basics/', '/web/html-from-zero/', '/web/html-forms-tables/', '/web/web-accessibility/', '/web/css-from-zero/', '/web/css-box-model/', '/web/css-layout/', '/web/responsive-design/', '/web/design-basics/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
+const AXE_PAGES = ['/', '/ai/', '/web/', '/web/web-the-map/', '/web/web-setup/', '/web/git-basics/', '/web/html-from-zero/', '/web/html-forms-tables/', '/web/web-accessibility/', '/web/css-from-zero/', '/web/css-box-model/', '/web/css-layout/', '/web/responsive-design/', '/web/design-basics/', '/web/js-values-variables/', '/web/js-logic-functions/', '/web/js-arrays-objects/', '/web/js-dom-events/', '/web/js-debugging/', '/web/js-async-fetch/', '/web/js-modules-tooling/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
 for (const theme of ['light', 'dark'] as const) {
   test(`accessibility checks pass in ${theme} mode`, async ({ page }) => {
-    test.slow();
+    test.setTimeout(300_000); // many pages, each analysed in full
     await page.emulateMedia({ colorScheme: theme });
     for (const path of AXE_PAGES) {
       await page.goto(path);
@@ -249,8 +249,9 @@ test('an HTML example shows a live result that can be edited, with console messa
   await expect(box.locator('.playground-console .error')).toContainText('Error:');
 
   // The example cannot read the site's saved progress.
-  await editor.fill('<script>try { localStorage.getItem("zte-progress"); console.log("read it"); } catch (e) { console.log("blocked"); }</script>');
-  await expect(box.locator('.playground-console')).toHaveText('blocked');
+  // Examples get their own temporary storage: they cannot see the site's saved progress.
+  await editor.fill('<script>localStorage.setItem("x", "1"); console.log(localStorage.getItem("zte-progress") === null ? "cannot see progress" : "saw progress", localStorage.getItem("x"));</script>');
+  await expect(box.locator('.playground-console')).toHaveText('cannot see progress 1');
 
   await box.getByRole('button', { name: 'Reset' }).click();
   await expect(page.locator('.runner-editor')).toHaveCount(0);

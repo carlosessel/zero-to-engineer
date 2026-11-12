@@ -1,0 +1,381 @@
+---
+title: "Waiting for things: promises, async and fetch"
+summary: "Getting data from other servers without freezing the page."
+prerequisites: [js-debugging]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will be able to get data from other servers and show it on a page, send data to them, and handle the slow, unreliable reality of networks: waiting, failing, and trying again. This is how almost every web application gets its information.
+
+Some examples here talk to real public services on the internet, so they need a connection when you press Run.
+
+## Why waiting is different
+
+Most code runs straight through, line by line, each line finishing before the next starts. That is called **synchronous** code. But some things take time: asking a server for data can take a second or more, and a slow phone connection far longer. If JavaScript simply stopped and waited, the whole page would freeze: no scrolling, no clicking, no typing, until the reply came.
+
+So JavaScript does slow things **asynchronously**: it starts them, carries on with other work, and runs some code of yours later, when the result is ready.
+
+The simplest asynchronous tool is a timer:
+
+```js
+console.log("First");
+
+setTimeout(() => {
+  console.log("Third, about a second later");
+}, 1000);
+
+console.log("Second");
+```
+
+`setTimeout(function, milliseconds)` asks JavaScript to run the function after a delay (1000 milliseconds is one second). It does not wait: the next line runs straight away, so `Second` prints before `Third`. The function passed to `setTimeout` is a callback, like the ones you gave to `map` and `addEventListener`.
+
+## Promises: a value that will arrive later
+
+Modern asynchronous code is built on **promises**. A **promise** is an object standing for a result that is not ready yet. It is in one of three states:
+
+- **pending**: still waiting;
+- **fulfilled**: the result arrived;
+- **rejected**: something went wrong, and there is an error instead.
+
+The function you will use most, `fetch`, returns a promise. You will almost always work with promises using two keywords, `async` and `await`.
+
+## async and await
+
+Inside a function marked `async`, the word `await` pauses *that function* until a promise settles, then gives you its result. The rest of the page carries on while it waits.
+
+```js
+async function showUser() {
+  const response = await fetch("https://api.github.com/users/octocat");
+  const user = await response.json();
+  console.log(user.name, "has", user.public_repos, "public repositories");
+}
+
+showUser();
+console.log("Asked GitHub. Waiting…");
+```
+
+Run it: `Asked GitHub. Waiting…` prints first, and the user's details a moment later, once GitHub replies. Step by step:
+
+1. `fetch(address)` sends a request to the address and returns a promise of a **response**.
+2. `await` waits for the response to arrive. It has the status (whether it worked) and the body still to be read.
+3. `response.json()` reads the body and turns the JSON into an object. Reading takes time too, so it also returns a promise, and needs `await`.
+4. Now `user` is an ordinary object, and you use it like the objects in the arrays chapter.
+
+`await` only works inside an `async` function. An `async` function always returns a promise itself, so code calling it does not wait unless it also uses `await`.
+
+## When things go wrong
+
+Networks fail all the time: no signal, a server down, a wrong address, a limit reached. Robust code expects this. There are two different kinds of failure, and `fetch` treats them differently:
+
+1. **The request never completed**: no connection, or the server could not be reached. `fetch` **rejects**, and `await` throws an error.
+2. **The server answered, but with an error status**, such as 404 (not found) or 500 (server error). `fetch` does **not** throw. It gives you a response whose `ok` property is `false`. You must check it yourself.
+
+```js
+async function getUser(username) {
+  try {
+    const response = await fetch(`https://api.github.com/users/${username}`);
+    if (!response.ok) {
+      throw new Error(`GitHub answered with status ${response.status}`);
+    }
+    const user = await response.json();
+    return user.name ?? user.login;
+  } catch (error) {
+    console.log("Could not get the user:", error.message);
+    return null;
+  }
+}
+
+async function main() {
+  console.log(await getUser("octocat"));
+  console.log(await getUser("this-user-should-not-exist-zz9"));
+}
+
+main();
+```
+
+The first call prints the name. The second gets a 404: `response.ok` is false, so the code throws its own error, which the `catch` reports, and the function returns `null`. Without the `ok` check, the code would try to read a name from GitHub's "Not Found" reply and quietly show `undefined`.
+
+The pattern, which you will write again and again:
+
+1. `try` the request.
+2. Check `response.ok`; throw if it is false.
+3. Read the body with `.json()`.
+4. `catch` any error and decide what the person sees.
+
+## Showing loading and error states
+
+On a page, people need to know what is happening while they wait, and what went wrong if it fails. Every screen that loads data has three states: **loading**, **error** and **success**. Show each one.
+
+### A worked example: looking up a GitHub user
+
+<Playground>
+
+```html
+<form id="lookup">
+  <label for="username">GitHub username</label>
+  <input type="text" id="username" value="octocat" required>
+  <button type="submit">Look up</button>
+</form>
+<p id="status" role="status"></p>
+<div id="profile" hidden>
+  <h2 id="profile-name">Profile</h2>
+  <p id="profile-repos"></p>
+</div>
+```
+
+```js
+const form = document.querySelector("#lookup");
+const input = document.querySelector("#username");
+const status = document.querySelector("#status");
+const profile = document.querySelector("#profile");
+
+form.addEventListener("submit", async (event) => {
+  event.preventDefault();
+  const username = input.value.trim();
+  const button = form.querySelector("button");
+
+  status.textContent = "Loading…";
+  profile.hidden = true;
+  button.disabled = true;
+
+  try {
+    const response = await fetch(`https://api.github.com/users/${encodeURIComponent(username)}`);
+    if (response.status === 404) {
+      throw new Error(`There is no GitHub user called ${username}.`);
+    }
+    if (!response.ok) {
+      throw new Error("GitHub could not answer just now. Please try again later.");
+    }
+    const user = await response.json();
+    document.querySelector("#profile-name").textContent = user.name ?? user.login;
+    document.querySelector("#profile-repos").textContent = `${user.public_repos} public repositories`;
+    profile.hidden = false;
+    status.textContent = "";
+  } catch (error) {
+    status.textContent = error.message;
+  } finally {
+    button.disabled = false;
+  }
+});
+```
+
+</Playground>
+
+Press **Look up**, then try a name that does not exist. Things to notice:
+
+- The handler is an `async` function, so it can `await` inside.
+- **Loading**: the status says so, the old profile is hidden, and the button is disabled so it cannot be pressed twice.
+- **Error**: a 404 gets a specific, helpful message; anything else gets a general one; a network failure lands in `catch` too. All of them are shown to the person, not just logged.
+- **Success**: fill in the profile and show it.
+- `finally` runs whether the `try` succeeded or failed, so the button is always switched back on.
+- `encodeURIComponent` makes typed text safe to put in a web address: a space or a `?` in a username would otherwise change the meaning of the address.
+- `role="status"` means screen readers announce the messages.
+
+GitHub allows 60 requests an hour from one internet address without signing in. If you press the button many times you will see the general error: that is the error state doing its job.
+
+## Sending data
+
+`fetch` sends a `GET` request unless told otherwise. To create something, send a `POST` with a JSON body. JSONPlaceholder is a free practice service that accepts requests and replies as a real API would, without saving anything:
+
+```js
+async function createTodo(title) {
+  const response = await fetch("https://jsonplaceholder.typicode.com/todos", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, completed: false, userId: 1 }),
+  });
+  if (!response.ok) {
+    throw new Error(`Status ${response.status}`);
+  }
+  return response.json();
+}
+
+createTodo("Buy flour").then((todo) => console.log("Created", todo));
+```
+
+The second argument to `fetch` is an object of options: the `method`, **headers** (extra information about the request; `Content-Type` says the body is JSON), and the `body`, which must be text, so the object is turned into JSON with `JSON.stringify`. The service replies with the new item, including the `id` it gave it.
+
+Notice `{ title, completed: false }`: when a property has the same name as a variable, you can write just the name. `{ title }` means `{ title: title }`.
+
+The last line uses `.then`, the older way of using a promise without `await`: "when this promise is fulfilled, call this function with the result". You will see `.then` and `.catch` in a lot of existing code; `async` and `await` do the same job and read more like ordinary code.
+
+## Doing several things at once
+
+`await` one request after another and each waits for the one before. When requests do not depend on each other, start them all and wait for all of them together with `Promise.all`:
+
+```js
+async function compareUsers(names) {
+  const responses = await Promise.all(
+    names.map((name) => fetch(`https://api.github.com/users/${name}`)),
+  );
+  const users = await Promise.all(responses.map((r) => r.json()));
+  for (const user of users) {
+    console.log(user.login, user.public_repos);
+  }
+}
+
+compareUsers(["octocat", "torvalds"]);
+```
+
+`map` turns the names into an array of promises, all started at once; `Promise.all` waits until every one is fulfilled and gives an array of results, in the same order. If any one fails, the whole `Promise.all` rejects.
+
+## Why some requests are blocked: CORS
+
+Browsers protect people by stopping a page from reading replies from another site unless that site allows it. The server says which sites may read its replies with a header called `Access-Control-Allow-Origin`; this system is called **CORS** (Cross-Origin Resource Sharing). GitHub's public API allows any site, which is why the examples work. Many services do not, and calling them from a page fails with a CORS error in the Console, even though the same request works from Node or the terminal. The usual fix is to call such services from your own server instead, which the back-end part of the course covers. It is also how you keep API keys secret: never put a key in browser code, where anyone can read it.
+
+## Common mistakes
+
+- **Forgetting `await`**: `const response = fetch(url);` gives you a promise, not a response, and `response.json` is undefined.
+- **Using `await` outside an `async` function.**
+- **Not checking `response.ok`**, so a 404 page is treated as data.
+- **No loading or error state**, so people see nothing and click again.
+- **Forgetting the second `await`** on `response.json()`.
+- **Awaiting independent requests one by one** when `Promise.all` could run them together.
+- **Putting user input straight into a URL** without `encodeURIComponent`.
+- **API keys in front-end code.** Anyone can read them in the developer tools.
+
+## Practice
+
+**1. (warm-up)** In what order do these print? `console.log("A"); setTimeout(() => console.log("B"), 0); console.log("C");`
+
+<Solution>
+
+`A`, `C`, `B`. Even with a delay of 0, the timer's callback runs only after the code that is already running has finished.
+
+</Solution>
+
+**2. (warm-up)** Name the three states a promise can be in.
+
+<Solution>
+
+Pending, fulfilled and rejected.
+
+</Solution>
+
+**3. (warm-up)** What is wrong here? `const data = fetch(url).json();`
+
+<Solution>
+
+`fetch(url)` returns a promise, which has no `json` method. Await it first, then await the body: `const response = await fetch(url); const data = await response.json();`, inside an `async` function.
+
+</Solution>
+
+**4. (standard)** A request returns status 500. Does `fetch` throw? What should your code do?
+
+<Solution>
+
+No. `fetch` only rejects when the request cannot complete at all. A 500 is a response with `ok` set to `false`. Check `response.ok`, and throw or show an error yourself.
+
+</Solution>
+
+**5. (standard)** Write `wait(ms)`, a function returning a promise that is fulfilled after `ms` milliseconds, so you can write `await wait(500);`.
+
+<Solution>
+
+```js
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function demo() {
+  console.log("Waiting half a second…");
+  await wait(500);
+  console.log("Done");
+}
+demo();
+```
+
+`new Promise(…)` makes a promise; calling `resolve` fulfils it. Here the timer calls `resolve` when it fires.
+
+</Solution>
+
+**6. (standard)** Write `getTodo(id)` that fetches `https://jsonplaceholder.typicode.com/todos/` followed by the id, checks `ok`, and returns the to-do's title. Print the title of to-do 1.
+
+<Solution>
+
+```js
+async function getTodo(id) {
+  const response = await fetch(`https://jsonplaceholder.typicode.com/todos/${id}`);
+  if (!response.ok) {
+    throw new Error(`Status ${response.status}`);
+  }
+  const todo = await response.json();
+  return todo.title;
+}
+
+getTodo(1).then((title) => console.log(title));
+```
+
+It prints `delectus aut autem` (JSONPlaceholder's practice data is in Latin-like filler text).
+
+</Solution>
+
+**7. (standard)** Add a "try again" button to the look-up example, shown only in the error state, that repeats the last request. Describe what you would change.
+
+<Solution>
+
+Add `<button type="button" id="retry" hidden>Try again</button>`. Move the fetching code out of the submit handler into an `async function lookUp(username)`, called by the submit handler. In the `catch`, show the retry button; at the start of `lookUp`, hide it. Give the retry button a click handler that calls `lookUp` with the same username again. Keeping the request in its own function is what makes it reusable.
+
+</Solution>
+
+**8. (standard)** These three requests do not depend on each other. Rewrite them to run at the same time.
+
+```js
+const a = await fetch(urlA);
+const b = await fetch(urlB);
+const c = await fetch(urlC);
+```
+
+<Solution>
+
+```js
+const [a, b, c] = await Promise.all([fetch(urlA), fetch(urlB), fetch(urlC)]);
+```
+
+All three start at once; the total wait is about as long as the slowest, not the sum. The square brackets on the left take the results apart in order.
+
+</Solution>
+
+**9. (standard)** Why must a button that starts a request be disabled until the request finishes?
+
+<Solution>
+
+Otherwise an impatient person presses it again and again, sending several requests: for a search, wasted work and replies arriving out of order; for a payment or an order, possibly several orders. Disable it while loading and re-enable it in `finally`.
+
+</Solution>
+
+**10. (stretch)** The same search box sends a request on every key press. Replies can arrive out of order, so a slow reply for "br" can overwrite a fast one for "bread". Describe a simple fix.
+
+<Solution>
+
+Remember which request is the latest, and ignore replies to older ones. For example, keep a counter: increase it before each request, store its value in a local variable, and when the reply arrives, only show it if the local value still equals the counter. (Browsers also offer `AbortController` to cancel the older request.) Waiting until the person pauses typing for a moment before sending, called **debouncing**, also reduces requests.
+
+</Solution>
+
+**11. (stretch)** A friend's page calls a weather service with an API key in the JavaScript, and it fails in the browser with a CORS error, though it works in the terminal with `curl`. Explain both problems and the fix.
+
+<Solution>
+
+The CORS error means the weather service does not allow other sites' pages to read its replies; `curl` is not a browser, so the rule does not apply there. Separately, the key in the JavaScript is visible to anyone who opens the developer tools, and could be copied and used up. The fix for both is a small server of their own: the page asks their server, and their server calls the weather service with the key, which never leaves the server. The back-end part of the course builds exactly this.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Asynchronous** code starts slow work and carries on; your callback or `await` picks up the result later, so the page never freezes.
+- A **promise** is pending, then fulfilled or rejected.
+- In an `async` function, `await` waits for a promise. `fetch(url)` gives a response; `await response.json()` gives the data.
+- `fetch` rejects only when the request fails entirely. **Check `response.ok`** for error statuses.
+- Use `try`/`catch`/`finally`, and show **loading**, **error** and **success** states. Disable buttons while loading.
+- `POST` with `method`, a `Content-Type: application/json` header and a `JSON.stringify` body.
+- `Promise.all` runs independent requests together.
+- **CORS** decides which sites' pages may read a server's replies. Keep API keys on a server, never in the browser.
+
+## Go deeper
+
+- [MDN: Asynchronous JavaScript](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Async_JS), from Mozilla. Why asynchronous code exists, promises, async and await, with exercises.
+- [MDN: Using the Fetch API](https://developer.mozilla.org/en-US/docs/Web/API/Fetch_API/Using_Fetch), from Mozilla. Requests, responses, headers, sending data and handling errors, in detail.
+- [Public APIs](https://github.com/public-apis/public-apis). A large community-maintained list of free APIs to practise with (it showed about 498,000 GitHub stars when checked). Check each API's rules and whether it needs a key.

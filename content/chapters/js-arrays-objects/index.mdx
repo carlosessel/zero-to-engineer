@@ -1,0 +1,759 @@
+---
+title: "JavaScript from zero: arrays and objects"
+summary: "Lists and records of data, and the array methods you will use every day."
+prerequisites: [js-logic-functions]
+estimated_minutes: 330
+status: resources-verified
+---
+
+By the end of this chapter you will be able to hold many values in one place, describe things with named properties, and process whole lists of data in a line or two. Almost all real data, from a shopping basket to the reply from a server, is a list of records, so this chapter is where your programs start to look like real ones.
+
+A note on how output looks: when you print a list or a record with **Run**, it appears like `[1, 2, 3]` or `{ name: "Ama" }`. Your browser's Console shows the same values with small differences, such as the length first (`(3) [1, 2, 3]`) or single quotes; the values are the same.
+
+## Arrays: lists of values
+
+An **array** is an ordered list of values, written in square brackets and separated by commas:
+
+```js
+const breads = ["sugar bread", "tea bread", "brown bread"];
+
+console.log(breads);
+console.log(breads.length);
+console.log(breads[0]);
+console.log(breads[breads.length - 1]);
+```
+
+Each value in an array is an **element**, and its position is its **index**. As with the characters of a string, counting starts at 0: `breads[0]` is the first element and `breads[breads.length - 1]` the last. Asking for a position that does not exist, such as `breads[10]`, gives `undefined` rather than an error.
+
+Arrays can hold any values, mixed if you like, including other arrays: `[1, "two", true, [3, 4]]`. In practice, an array usually holds many values of the same kind.
+
+### Changing an array
+
+```js
+const basket = ["bread", "milk"];
+
+basket.push("eggs");
+console.log(basket);
+
+const last = basket.pop();
+console.log(last, basket);
+
+basket.unshift("butter");
+console.log(basket);
+
+basket[1] = "brown bread";
+console.log(basket);
+```
+
+- `push(value)` adds to the end; `pop()` removes the last element and returns it.
+- `unshift(value)` adds to the start; `shift()` removes the first and returns it.
+- `basket[1] = …` replaces the element at that position.
+
+Notice `basket` is a `const`, yet it changed. `const` stops the *name* being pointed at a different array; it does not freeze the array itself. That trips up almost everyone once.
+
+### Searching
+
+```js
+const prices = [15, 12, 20, 12];
+
+console.log(prices.includes(20));
+console.log(prices.indexOf(12));
+console.log(prices.indexOf(99));
+```
+
+`includes` answers yes or no. `indexOf` gives the position of the first match, or `-1` if there is none.
+
+### Looping over an array
+
+The clearest way to visit every element is `for…of`:
+
+```js
+const breads = ["sugar bread", "tea bread", "brown bread"];
+
+for (const bread of breads) {
+  console.log(`We sell ${bread}.`);
+}
+```
+
+Read it as "for each `bread` of `breads`". When you also need the position, use an ordinary `for` loop with an index, as in the last chapter.
+
+### A worked example: total and average
+
+```js
+const scores = [72, 85, 64, 90, 58];
+
+let total = 0;
+for (const score of scores) {
+  total += score;
+}
+const average = total / scores.length;
+
+console.log(`Total ${total}, average ${average}`);
+```
+
+The accumulator pattern again: 72 + 85 + 64 + 90 + 58 = 369, divided by 5 = 73.8. Add a score to the array and nothing else needs changing.
+
+### Other useful methods
+
+```js
+const letters = ["c", "a", "b"];
+console.log(letters.join(", "));
+console.log([1, 2, 3, 4, 5].slice(1, 3));
+console.log([...letters].sort());
+console.log(letters);
+console.log([10, 9, 100].sort());
+console.log([10, 9, 100].sort((a, b) => a - b));
+```
+
+- `join(", ")` makes one string from the elements, with the given text between them.
+- `slice(1, 3)` gives a new array of the elements from position 1 up to, not including, position 3. The original is unchanged.
+- `sort()` sorts **in place**: it changes the array itself. `[...letters]` makes a copy first (the three dots are the **spread** syntax: "all the elements of"), so the original stays as it was.
+- **A famous trap:** `sort()` with nothing in the brackets sorts as text, so `[10, 9, 100]` becomes `[10, 100, 9]`, because the text "10" comes before "9". To sort numbers, pass a comparing function: `(a, b) => a - b` for smallest first.
+
+## Doing something with every element: map, filter, reduce
+
+Loops work, but most JavaScript you read uses array **methods that take a function**. You pass a function, and the method calls it for each element. A function passed to another function like this is called a **callback**.
+
+```js
+const prices = [15, 12, 20];
+
+const doubled = prices.map((price) => price * 2);
+const cheap = prices.filter((price) => price < 16);
+const total = prices.reduce((sum, price) => sum + price, 0);
+
+console.log(doubled);
+console.log(cheap);
+console.log(total);
+console.log(prices);
+```
+
+- `map` makes a **new** array, the same length, by applying the function to each element: `[30, 24, 40]`.
+- `filter` makes a new array of only the elements for which the function returns true: `[15, 12]`.
+- `reduce` combines all the elements into one value. Its function gets the running result so far (`sum`) and the next element; `0` is where `sum` starts. This is the accumulator pattern in one line: 47.
+- None of them changes `prices`.
+
+Three more you will use constantly:
+
+```js
+const prices = [15, 12, 20];
+
+console.log(prices.find((p) => p > 13));
+console.log(prices.some((p) => p > 18));
+console.log(prices.every((p) => p > 10));
+prices.forEach((p, i) => console.log(`Item ${i + 1}: ₵${p}`));
+```
+
+`find` gives the first element that matches (or `undefined`); `some` asks "does any match?"; `every` asks "do all match?"; `forEach` runs the function for each element and gives nothing back, a method version of `for…of`. The callback can also receive the index, as `i` here.
+
+## Objects: records with named parts
+
+An array is good for a list. For one *thing* with several named pieces of information, use an **object**: a set of **properties**, each a name (its **key**) and a value, in curly brackets.
+
+```js
+const loaf = {
+  name: "sugar bread",
+  price: 15,
+  inStock: true,
+};
+
+console.log(loaf);
+console.log(loaf.name);
+console.log(loaf["price"]);
+```
+
+Read a property with a dot, `loaf.name`, or with square brackets and the key as a string, `loaf["price"]`. Use the dot normally; brackets are for when the key is in a variable or contains a space. The comma after the last property is allowed and makes adding lines easier.
+
+### Changing objects
+
+```js
+const loaf = { name: "sugar bread", price: 15 };
+
+loaf.price = 16;
+loaf.weight = 400;
+delete loaf.weight;
+console.log(loaf);
+
+const key = "name";
+console.log(loaf[key]);
+console.log(loaf.colour);
+```
+
+Assigning to a property changes it, or creates it if new. `delete` removes one. A missing property gives `undefined`, not an error. As with arrays, `const` does not stop the object's contents changing.
+
+### Looping over an object
+
+```js
+const stock = { sugar: 12, tea: 0, brown: 5 };
+
+console.log(Object.keys(stock));
+console.log(Object.values(stock));
+
+for (const [bread, count] of Object.entries(stock)) {
+  console.log(`${bread}: ${count}`);
+}
+```
+
+`Object.keys` gives an array of the keys, `Object.values` of the values, and `Object.entries` of `[key, value]` pairs. The loop takes each pair apart into `bread` and `count`; taking apart like this is called **destructuring**.
+
+### Functions inside objects
+
+A property can hold a function. It is then called a **method**, like `toUpperCase` on strings:
+
+```js
+const shop = {
+  name: "Ama's Bakery",
+  open: 6,
+  close: 14,
+  isOpenAt(hour) {
+    return hour >= this.open && hour < this.close;
+  },
+};
+
+console.log(shop.isOpenAt(9));
+console.log(shop.isOpenAt(15));
+```
+
+Inside a method, `this` means "the object the method was called on", so `this.open` is `shop.open`. You will use `this` more with classes later; for now, read it as "this object".
+
+## Arrays of objects: the shape of real data
+
+Put the two together and you have the most common data shape in all of programming: a list of records.
+
+```js
+const menu = [
+  { name: "sugar bread", price: 15, vegan: false },
+  { name: "tea bread", price: 12, vegan: true },
+  { name: "coconut bread", price: 18, vegan: true },
+  { name: "brown bread", price: 14, vegan: true },
+];
+```
+
+### A worked example: answering questions about the menu
+
+Each question is one or two method calls. Read each line aloud.
+
+```js
+const menu = [
+  { name: "sugar bread", price: 15, vegan: false },
+  { name: "tea bread", price: 12, vegan: true },
+  { name: "coconut bread", price: 18, vegan: true },
+  { name: "brown bread", price: 14, vegan: true },
+];
+
+const names = menu.map((item) => item.name);
+console.log(names);
+
+const veganNames = menu.filter((item) => item.vegan).map((item) => item.name);
+console.log(veganNames);
+
+const cheapest = [...menu].sort((a, b) => a.price - b.price)[0];
+console.log(cheapest.name);
+
+const coconut = menu.find((item) => item.name === "coconut bread");
+console.log(coconut.price);
+
+const average = menu.reduce((sum, item) => sum + item.price, 0) / menu.length;
+console.log(average);
+```
+
+- "The names of everything": `map` each item to its `name`.
+- "The vegan ones' names": `filter` to the vegan items, then `map` to names. Calling one method on the result of another is called **chaining**.
+- "The cheapest": copy, sort by price, take the first. (Copy first, because `sort` changes the array.)
+- "The price of coconut bread": `find` the item, then read its `price`.
+- "The average price": `reduce` to a total, then divide: (15 + 12 + 18 + 14) ÷ 4 = 14.75.
+
+This is what working with data from a server looks like, and the same methods do it.
+
+## Values and references
+
+Numbers, strings and booleans are copied when you assign them, as you saw in the first chapter. Arrays and objects are not: assigning one gives a second name for the **same** array or object.
+
+```js
+const a = [1, 2, 3];
+const b = a;
+b.push(4);
+console.log(a);
+
+const c = [...a];
+c.push(5);
+console.log(a, c);
+
+const original = { name: "Ama" };
+const copy = { ...original, name: "Kofi" };
+console.log(original.name, copy.name);
+```
+
+`b` is not a copy: it is the same array under another name, so pushing to `b` changes `a` too. The spread syntax makes a real copy: `[...a]` for arrays, `{ ...original }` for objects, and you can change properties as you copy, as in `{ ...original, name: "Kofi" }`. This matters most when you pass arrays and objects into functions: a function that changes them changes the caller's too. Many bugs, and much of how React works later, come down to this.
+
+## JSON: data as text
+
+**JSON** (JavaScript Object Notation) is a way to write arrays and objects as plain text, so they can be saved in a file or sent across the internet. It looks almost exactly like JavaScript, except keys and strings must use double quotes.
+
+```js
+const order = { bread: "tea bread", loaves: 2, paid: true };
+
+const text = JSON.stringify(order);
+console.log(text);
+console.log(typeof text);
+
+const back = JSON.parse(text);
+console.log(back.loaves + 1);
+```
+
+`JSON.stringify` turns a value into JSON text; `JSON.parse` turns JSON text back into a value. Nearly every web API sends and receives JSON, and the chapter after next will use both.
+
+## Common mistakes
+
+- **Counting from 1**: the first element is at index 0, the last at `length - 1`.
+- **Thinking `const` freezes an array or object.** It only stops reassigning the name.
+- **Sorting numbers without a comparing function.**
+- **Forgetting that `sort` changes the original.** Copy first with `[...array]`.
+- **Expecting `map`, `filter` or `reduce` to change the original.** They return new values; store the result.
+- **Forgetting `return` in a callback with curly brackets**: `arr.map((x) => { x * 2 })` gives `[undefined, …]`. Either drop the brackets or write `return`.
+- **Assuming `b = a` copies an array or object.** Use the spread syntax.
+- **Dot access with a variable**: `obj.key` looks for a property literally called `key`. Use `obj[key]`.
+
+## Practice
+
+### Warm-up
+
+**1.** Given `const colours = ["red", "green", "blue"];`, what are `colours.length`, `colours[1]` and `colours[3]`?
+
+<Solution>
+
+`3`, `"green"` and `undefined` (there is no position 3).
+
+</Solution>
+
+**2.** Write a line that adds `"yellow"` to the end of `colours`.
+
+<Solution>
+
+`colours.push("yellow");`
+
+</Solution>
+
+**3.** Make an object `student` with a name, an age and a list of two subjects.
+
+<Solution>
+
+```js
+const student = {
+  name: "Esi",
+  age: 17,
+  subjects: ["Maths", "ICT"],
+};
+console.log(student.subjects[1]);
+```
+
+Prints `ICT`. Any values work.
+
+</Solution>
+
+**4.** What does `[1, 2, 3].map((n) => n * 10)` give?
+
+<Solution>
+
+`[10, 20, 30]`.
+
+</Solution>
+
+**5.** What does `[5, 8, 2, 9].filter((n) => n > 4)` give?
+
+<Solution>
+
+`[5, 8, 9]`.
+
+</Solution>
+
+**6.** What does `["a", "b", "c"].join("-")` give?
+
+<Solution>
+
+The string `"a-b-c"`.
+
+</Solution>
+
+**7.** Given `const car = { make: "Toyota", year: 2019 };`, write two ways to read the make.
+
+<Solution>
+
+`car.make` and `car["make"]`.
+
+</Solution>
+
+**8.** What does `[3, 1, 2].includes(4)` give?
+
+<Solution>
+
+`false`.
+
+</Solution>
+
+**9.** What do `Object.keys({ a: 1, b: 2 })` and `Object.values({ a: 1, b: 2 })` give?
+
+<Solution>
+
+`["a", "b"]` and `[1, 2]`.
+
+</Solution>
+
+**10.** Is this allowed, and what is in `list` afterwards? `const list = []; list.push("x");`
+
+<Solution>
+
+Yes. `const` stops `list` being pointed at a different array, but the array can still change. It now holds `["x"]`.
+
+</Solution>
+
+### Standard
+
+**11.** Write `sum(numbers)` with a `for…of` loop, and again with `reduce`. Check both give 10 for `[1, 2, 3, 4]`.
+
+<Solution>
+
+```js
+function sumLoop(numbers) {
+  let total = 0;
+  for (const n of numbers) total += n;
+  return total;
+}
+const sumReduce = (numbers) => numbers.reduce((total, n) => total + n, 0);
+console.log(sumLoop([1, 2, 3, 4]), sumReduce([1, 2, 3, 4]), sumReduce([]));
+```
+
+Prints `10 10 0`. The `0` start value makes an empty array give 0 rather than an error.
+
+</Solution>
+
+**12.** Write `largest(numbers)` without `Math.max`, then with it. (Hint for the second: `Math.max(...numbers)`.)
+
+<Solution>
+
+```js
+function largest(numbers) {
+  let biggest = numbers[0];
+  for (const n of numbers) {
+    if (n > biggest) biggest = n;
+  }
+  return biggest;
+}
+console.log(largest([4, 17, 9]), Math.max(...[4, 17, 9]));
+```
+
+Prints `17 17`. `...numbers` spreads the array into separate arguments.
+
+</Solution>
+
+**13.** Sort `[25, 3, 100, 42]` from largest to smallest.
+
+<Solution>
+
+```js
+console.log([25, 3, 100, 42].sort((a, b) => b - a));
+```
+
+Prints `[100, 42, 25, 3]`. `b - a` puts larger numbers first.
+
+</Solution>
+
+**14.** Given `const words = ["Accra", "Tema", "Kumasi", "Ho"];`, make an array of the words with more than 3 letters, in capitals.
+
+<Solution>
+
+```js
+const words = ["Accra", "Tema", "Kumasi", "Ho"];
+console.log(words.filter((w) => w.length > 3).map((w) => w.toUpperCase()));
+```
+
+Prints `["ACCRA", "TEMA", "KUMASI"]`.
+
+</Solution>
+
+**15.** Count how many times `"tea"` appears in `["tea", "sugar", "tea", "brown", "tea"]` using `filter`.
+
+<Solution>
+
+```js
+const orders = ["tea", "sugar", "tea", "brown", "tea"];
+console.log(orders.filter((o) => o === "tea").length);
+```
+
+Prints `3`.
+
+</Solution>
+
+**16.** Using the menu array from the chapter, print the total price of one of everything, and the names of breads under ₵15.
+
+<Solution>
+
+```js
+const menu = [
+  { name: "sugar bread", price: 15, vegan: false },
+  { name: "tea bread", price: 12, vegan: true },
+  { name: "coconut bread", price: 18, vegan: true },
+  { name: "brown bread", price: 14, vegan: true },
+];
+console.log(menu.reduce((sum, item) => sum + item.price, 0));
+console.log(menu.filter((item) => item.price < 15).map((item) => item.name));
+```
+
+Prints `59` and `["tea bread", "brown bread"]`.
+
+</Solution>
+
+**17.** Write `countWords(text)` that returns an object counting each word, so `countWords("the cat and the hat")` gives `{ the: 2, cat: 1, and: 1, hat: 1 }`. (Hint: `text.split(" ")` makes an array of words.)
+
+<Solution>
+
+```js
+function countWords(text) {
+  const counts = {};
+  for (const word of text.split(" ")) {
+    counts[word] = (counts[word] || 0) + 1;
+  }
+  return counts;
+}
+console.log(countWords("the cat and the hat"));
+```
+
+`counts[word] || 0` gives the current count, or 0 the first time a word is seen (when `counts[word]` is `undefined`, which is falsy). This pattern, an object used as a tally, is one of the most useful in programming.
+
+</Solution>
+
+**18.** What does this print, and why?
+
+```js
+const a = { score: 1 };
+const b = a;
+b.score = 99;
+console.log(a.score);
+```
+
+<Solution>
+
+`99`. `b` is not a copy; `a` and `b` are two names for the same object. Use `const b = { ...a };` for a copy.
+
+</Solution>
+
+**19.** Write `removeItem(list, item)` that returns a **new** array without the given item, leaving the original unchanged.
+
+<Solution>
+
+```js
+const removeItem = (list, item) => list.filter((x) => x !== item);
+const basket = ["bread", "milk", "eggs"];
+console.log(removeItem(basket, "milk"), basket);
+```
+
+Prints `["bread", "eggs"] ["bread", "milk", "eggs"]`.
+
+</Solution>
+
+**20.** Fix this: `const doubled = [1, 2, 3].map((n) => { n * 2 });` gives `[undefined, undefined, undefined]`.
+
+<Solution>
+
+With curly brackets, an arrow function needs `return`: `(n) => { return n * 2; }`. Or drop the brackets: `(n) => n * 2`.
+
+```js
+const doubled = [1, 2, 3].map((n) => n * 2);
+console.log(doubled);
+```
+
+</Solution>
+
+**21.** Given `const people = [{ name: "Ama", age: 20 }, { name: "Kofi", age: 17 }, { name: "Esi", age: 25 }];`, check whether everyone is an adult, and whether anyone is.
+
+<Solution>
+
+```js
+const people = [{ name: "Ama", age: 20 }, { name: "Kofi", age: 17 }, { name: "Esi", age: 25 }];
+console.log(people.every((p) => p.age >= 18), people.some((p) => p.age >= 18));
+```
+
+Prints `false true`.
+
+</Solution>
+
+**22.** Turn `{ bread: "tea", loaves: 3 }` into JSON text, then back, and print the number of loaves plus one.
+
+<Solution>
+
+```js
+const text = JSON.stringify({ bread: "tea", loaves: 3 });
+console.log(text, JSON.parse(text).loaves + 1);
+```
+
+Prints `{"bread":"tea","loaves":3} 4`. The first value is a string, so it prints as it is.
+
+</Solution>
+
+**23.** Write a method `total()` on a `basket` object whose `items` property is an array of prices, so `basket.total()` returns their sum.
+
+<Solution>
+
+```js
+const basket = {
+  items: [15, 12, 20],
+  total() {
+    return this.items.reduce((sum, p) => sum + p, 0);
+  },
+};
+console.log(basket.total());
+```
+
+Prints `47`.
+
+</Solution>
+
+**24.** Print each person in `people` (from problem 21) as `Ama is 20`, using `forEach`.
+
+<Solution>
+
+```js
+const people = [{ name: "Ama", age: 20 }, { name: "Kofi", age: 17 }, { name: "Esi", age: 25 }];
+people.forEach((p) => console.log(`${p.name} is ${p.age}`));
+```
+
+</Solution>
+
+### Stretch
+
+**25.** Group the menu items by whether they are vegan, producing `{ vegan: [names…], notVegan: [names…] }`.
+
+<Solution>
+
+```js
+const menu = [
+  { name: "sugar bread", price: 15, vegan: false },
+  { name: "tea bread", price: 12, vegan: true },
+  { name: "coconut bread", price: 18, vegan: true },
+  { name: "brown bread", price: 14, vegan: true },
+];
+const groups = { vegan: [], notVegan: [] };
+for (const item of menu) {
+  const key = item.vegan ? "vegan" : "notVegan";
+  groups[key].push(item.name);
+}
+console.log(groups);
+```
+
+Prints `{ vegan: ["tea bread", "coconut bread", "brown bread"], notVegan: ["sugar bread"] }`.
+
+</Solution>
+
+**26.** Write `unique(list)` that returns the list without repeats, keeping the first of each. Test with `[3, 1, 3, 2, 1]`.
+
+<Solution>
+
+```js
+function unique(list) {
+  const result = [];
+  for (const x of list) {
+    if (!result.includes(x)) result.push(x);
+  }
+  return result;
+}
+console.log(unique([3, 1, 3, 2, 1]), [...new Set([3, 1, 3, 2, 1])]);
+```
+
+Both give `[3, 1, 2]`. The second uses a `Set`, a collection that keeps only one of each value, spread back into an array.
+
+</Solution>
+
+**27.** A basket is an array of `{ name, price, quantity }` objects. Write `basketTotal(basket)` and `mostExpensiveLine(basket)` (the line with the largest price × quantity). Test with three lines of your choice.
+
+<Solution>
+
+```js
+const basket = [
+  { name: "sugar bread", price: 15, quantity: 2 },
+  { name: "milk", price: 9, quantity: 1 },
+  { name: "eggs", price: 2, quantity: 12 },
+];
+const lineTotal = (line) => line.price * line.quantity;
+const basketTotal = (b) => b.reduce((sum, line) => sum + lineTotal(line), 0);
+const mostExpensiveLine = (b) => b.reduce((best, line) => (lineTotal(line) > lineTotal(best) ? line : best));
+console.log(basketTotal(basket), mostExpensiveLine(basket).name);
+```
+
+Prints `63 sugar bread` (30 + 9 + 24). `reduce` without a start value starts with the first element.
+
+</Solution>
+
+**28.** `const scores = { Ama: 72, Kofi: 85, Esi: 64 };` Print the name of the student with the highest score.
+
+<Solution>
+
+```js
+const scores = { Ama: 72, Kofi: 85, Esi: 64 };
+const [bestName] = Object.entries(scores).sort((a, b) => b[1] - a[1])[0];
+console.log(bestName);
+```
+
+Prints `Kofi`. `Object.entries` gives `[name, score]` pairs; sorting by score (position 1) puts the best first; destructuring takes its name.
+
+</Solution>
+
+**29.** Explain the bug and fix it:
+
+```js
+function addTax(prices) {
+  for (let i = 0; i < prices.length; i++) {
+    prices[i] = prices[i] * 1.15;
+  }
+  return prices;
+}
+const original = [100, 200];
+const withTax = addTax(original);
+console.log(original);
+```
+
+<Solution>
+
+The function changes the array it is given, and that array is the caller's `original` (arrays are passed by reference), so `original` becomes `[114.99999999999999, 229.99999999999997]` too. Return a new array instead:
+
+```js
+const addTax = (prices) => prices.map((p) => p * 1.15);
+const original = [100, 200];
+console.log(addTax(original), original);
+```
+
+Now `original` stays `[100, 200]`. (Round the taxed prices before showing them, as in the first chapter.)
+
+</Solution>
+
+**30.** Flatten `[[1, 2], [3], [4, 5]]` into `[1, 2, 3, 4, 5]` with `reduce` and spread, then find the built-in method that does it.
+
+<Solution>
+
+```js
+const nested = [[1, 2], [3], [4, 5]];
+console.log(nested.reduce((all, part) => [...all, ...part], []));
+console.log(nested.flat());
+```
+
+Both print `[1, 2, 3, 4, 5]`. `flat()` is the built-in way; MDN's Array reference lists every method like it.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- An **array** is an ordered list: index from 0, `length`, `push`/`pop`/`shift`/`unshift`, `includes`, `indexOf`, `slice`, `join`.
+- `for…of` visits each element.
+- `map` (transform each), `filter` (keep some), `reduce` (combine), `find`, `some`, `every` and `forEach` take a **callback** and do not change the original. Chain them.
+- `sort` changes the array and sorts as text unless given `(a, b) => a - b`.
+- An **object** groups named **properties**: read with `obj.key` or `obj[key]`; add, change, `delete`. `Object.keys`, `values`, `entries`.
+- A function stored in an object is a **method**; inside it, `this` is the object.
+- Arrays of objects are the shape of most real data.
+- `const` does not freeze arrays or objects. Assigning shares; **spread** (`[...a]`, `{ ...o }`) copies.
+- **JSON** is arrays and objects as text: `JSON.stringify` and `JSON.parse`.
+
+## Go deeper
+
+- [MDN: Array reference](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Array), from Mozilla. Every array method, with examples. Look up any you meet in other people's code.
+- [The Modern JavaScript Tutorial](https://javascript.info/), by Ilya Kantor. Its chapters on objects, arrays and array methods, with tasks.
+- [Eloquent JavaScript](https://eloquentjavascript.net/), by Marijn Haverbeke. Chapter 5, "Data Structures: Objects and Arrays", and chapter 6, "Higher-order Functions", cover this chapter and more.

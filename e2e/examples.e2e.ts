@@ -9,6 +9,8 @@
 //             { click: "selector" } or { fill: ["selector", "text"] }
 //   color_scheme: "dark" or "light", to test prefers-color-scheme
 //   also_at:  a list of { viewport, expect } to check the same page at other sizes
+//   fetch_json: address -> JSON reply, so examples that call web APIs get a fixed
+//             answer and the test never depends on the internet
 import fs from 'node:fs';
 import { expect, test } from '@playwright/test';
 import { parse } from 'yaml';
@@ -26,6 +28,7 @@ interface Entry {
   actions?: ({ click: string } | { fill: [string, string] })[];
   color_scheme?: 'dark' | 'light';
   also_at?: { viewport: { width: number; height: number }; expect: string[] }[];
+  fetch_json?: Record<string, unknown>;
 }
 
 const cases: { chapter: string; entry: Entry; blocks: [string, string][] }[] = [];
@@ -50,6 +53,16 @@ for (const { chapter, entry, blocks } of cases) {
     const errors: string[] = [];
     page.on('pageerror', (e) => errors.push(e.message));
     if (entry.color_scheme) await page.emulateMedia({ colorScheme: entry.color_scheme });
+    if (entry.fetch_json) {
+      // Anything else the example asks for fails, as an unknown address would. Added first,
+      // because Playwright tries the most recently added route first.
+      await page.route(/^https?:\/\/(?!localhost)/, (route) => route.fulfill({ status: 404, headers: { 'access-control-allow-origin': '*' }, body: '{"message":"Not Found"}' }));
+    }
+    for (const [url, body] of Object.entries(entry.fetch_json ?? {})) {
+      await page.route(url, (route) =>
+        route.fulfill({ status: 200, contentType: 'application/json', headers: { 'access-control-allow-origin': '*' }, body: JSON.stringify(body) }),
+      );
+    }
     const html = buildDocument(sources, 'test');
     const sizes = [{ viewport: entry.viewport ?? { width: 1000, height: 700 }, expect: entry.expect }, ...(entry.also_at ?? [])];
     for (const size of sizes) {

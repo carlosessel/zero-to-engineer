@@ -1,0 +1,45 @@
+- question: "Why does JavaScript not simply stop and wait for a server's reply?"
+  options:
+    - "The whole page would freeze until the reply arrived"
+    - "It cannot talk to servers"
+    - "Waiting uses too much memory"
+  answer: 0
+  explanation: "Asynchronous code starts slow work and carries on, so scrolling, clicking and typing keep working."
+- question: "Where can you use await?"
+  options:
+    - "Anywhere"
+    - "Inside an async function"
+    - "Only inside loops"
+  answer: 1
+  explanation: "await pauses an async function until a promise settles."
+- question: "fetch gets a 404 reply. What happens?"
+  options:
+    - "fetch throws an error"
+    - "fetch gives a response with ok set to false"
+  answer: 1
+  explanation: "fetch only rejects when the request cannot complete at all. Check response.ok yourself."
+- question: "What does response.json() return?"
+  options:
+    - "The data, immediately"
+    - "A promise of the data, so it needs await"
+  answer: 1
+  explanation: "Reading the body takes time too: await response.json()."
+- question: "What does the finally block do in try/catch/finally?"
+  options:
+    - "Runs only if there was an error"
+    - "Runs whether the try succeeded or failed"
+    - "Runs before the try"
+  answer: 1
+  explanation: "Useful for clean-up such as re-enabling a button."
+- question: "Three requests do not depend on each other. What is the fastest way to wait for them?"
+  options:
+    - "await each one in turn"
+    - "Promise.all with all three"
+  answer: 1
+  explanation: "Promise.all starts them together, so the wait is about as long as the slowest one."
+- question: "Where should a secret API key go?"
+  options:
+    - "In the page's JavaScript"
+    - "On your own server, never in browser code"
+  answer: 1
+  explanation: "Anyone can read browser code in the developer tools."

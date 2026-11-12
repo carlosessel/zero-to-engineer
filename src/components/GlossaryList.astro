@@ -5,7 +5,11 @@ const { course } = await pageContext(Astro.url);
 if (!course) throw new Error('<GlossaryList /> can only be used inside a course.');
 const entries = getGlossary()
   .filter((e) => e.courses.includes(course.id))
-  .map((e) => ({ term: e.term, definition: e.definitions?.[course.id] ?? e.definition ?? '' }));
+  .map((e) => {
+    const definition = e.definitions?.[course.id] ?? e.definition;
+    if (!definition) throw new Error(`content/glossary.yaml: "${e.term}" is used in course "${course.id}" but has no definition for it.`);
+    return { term: e.term, definition };
+  });
 const anchor = (term: string) => 'term-' + term.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 ---
 <dl class="gloss">

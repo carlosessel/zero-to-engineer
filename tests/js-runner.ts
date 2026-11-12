@@ -15,7 +15,7 @@ export interface RunOptions {
 
 export interface RunResult {
   output: string;
-  error: { name: string; message: string } | null;
+  error: { name: string; message: string; stack: string } | null;
   context: vm.Context;
 }
 
@@ -24,7 +24,7 @@ export async function runExample(code: string, opts: RunOptions = {}): Promise<R
   const record = (...args: unknown[]) => lines.push(showAll(args));
   let error: RunResult['error'] = null;
   const fail = (e: unknown) => {
-    if (!error) error = { name: (e as Error)?.name ?? 'Error', message: String((e as Error)?.message ?? e) };
+    if (!error) error = { name: (e as Error)?.name ?? 'Error', message: String((e as Error)?.message ?? e), stack: String((e as Error)?.stack ?? '') };
   };
 
   const fakeFetch = async (url: string) => {

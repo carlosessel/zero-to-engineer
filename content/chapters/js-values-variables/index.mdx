@@ -1,0 +1,639 @@
+---
+title: "JavaScript from zero: values and variables"
+summary: "Numbers, text, true and false, storing values, and running code in the console."
+prerequisites: [web-setup]
+estimated_minutes: 300
+status: resources-verified
+---
+
+By the end of this chapter you will be able to write and run small JavaScript programs: store information in variables, calculate with numbers, build and change text, and convert between the two. This is your first programming language, so the chapter goes slowly and has many practice problems. Do them all; this is where the habits form.
+
+Every example has a **Run** button. Press it and what the code prints appears underneath. Then press **Edit**, change something, and run it again. If you press Run and see an error, read it: the error is telling you something useful, and the chapter will teach you how to read it.
+
+## What JavaScript is, and where it runs
+
+**JavaScript** is a programming language: a precise way of writing instructions for a computer. It was created to make web pages respond, and every browser can run it. Thanks to **Node.js**, which you installed in the setup chapter, it also runs outside the browser.
+
+A **program** is a list of instructions, called **statements**, that run one after another, top to bottom. Here is a whole program:
+
+```js
+console.log("Hello, world");
+console.log(2 + 3);
+```
+
+`console.log(…)` means "print this". The first line prints the text `Hello, world`; the second works out `2 + 3` and prints `5`. Each statement ends with a semicolon. JavaScript can often guess where a missing semicolon goes, but not always, so this course always writes them.
+
+You can run JavaScript in three places, and they all print the same results:
+
+1. **Here, with Run.** Best for practising.
+2. **The browser's Console** (F12, then Console), as you did in the setup chapter. Type a line, press Enter.
+3. **A file run with Node.** Save the code as `hello.js` and run `node hello.js` in the terminal. This is how you will run bigger programs.
+
+Anything after `//` on a line is a **comment**: a note for people, ignored by the computer. Examples in this course use comments to show what a line prints.
+
+## Values and their types
+
+Programs work with **values**: pieces of information. Every value has a **type**, which decides what you can do with it. You need five types now:
+
+| Type | What it is | Examples |
+| --- | --- | --- |
+| number | Any number, whole or with a decimal point | `42`, `3.5`, `-7` |
+| string | Text, inside quotes | `"Ama"`, `'Accra'`, `"42"` |
+| boolean | One of two values: yes or no | `true`, `false` |
+| undefined | "No value has been given yet" | `undefined` |
+| null | "Deliberately empty" | `null` |
+
+`typeof` tells you a value's type:
+
+```js
+console.log(typeof 42);
+console.log(typeof "42");
+console.log(typeof true);
+console.log(typeof undefined);
+```
+
+Note that `42` and `"42"` are different: one is a number you can calculate with, the other is text that happens to contain two digit characters. That difference causes a large share of beginners' bugs, and this chapter keeps coming back to it.
+
+## Variables: giving values names
+
+A **variable** is a name that refers to a value, so you can use it later. You create one with `let` or `const`:
+
+```js
+let age = 20;
+const name = "Ama";
+console.log(name, age);
+
+age = 21;
+console.log(name, age);
+```
+
+Read `let age = 20;` as "let there be a variable called `age`, and store `20` in it". The `=` sign means **store**, not "equals" as in maths. `console.log` can print several values at once, separated by commas, and puts a space between them.
+
+The difference between the two keywords:
+
+- `const` (for "constant") cannot be given a new value later. Use it by default.
+- `let` can be given a new value. Use it only when the value must change, like a counter or a running total.
+
+Using `const` wherever you can is a professional habit: when you read `const`, you know the value never changes, which makes code easier to follow.
+
+You will also see `var` in older code and tutorials. It is the old way to make a variable, with confusing rules. Do not use it.
+
+### Naming variables
+
+- Names can contain letters, digits, `_` and `$`, but cannot start with a digit: `total2` is fine, `2total` is not.
+- JavaScript is **case-sensitive**: `name`, `Name` and `NAME` are three different variables.
+- The convention is **camelCase**: start lower-case, and start each later word with a capital, with no spaces: `firstName`, `totalPrice`, `isLoggedIn`.
+- Choose names that say what the value is. `totalPrice` beats `tp` and `x`. Code is read far more often than it is written.
+
+## Numbers and arithmetic
+
+```js
+console.log(7 + 2);
+console.log(7 - 2);
+console.log(7 * 2);
+console.log(7 / 2);
+console.log(7 % 2);
+console.log(7 ** 2);
+```
+
+| Operator | Means | `7 ? 2` |
+| --- | --- | --- |
+| `+` | add | 9 |
+| `-` | subtract | 5 |
+| `*` | multiply | 14 |
+| `/` | divide | 3.5 |
+| `%` | **remainder** after dividing | 1 |
+| `**` | to the power of | 49 |
+
+The **remainder** operator `%` is more useful than it looks: `n % 2` is `0` for even numbers and `1` for odd ones, and `minutes % 60` gives the minutes left over after taking out whole hours.
+
+JavaScript follows the usual order of operations: brackets first, then powers, then multiplication and division (and remainder), then addition and subtraction. So `2 + 3 * 4` is 14 and `(2 + 3) * 4` is 20.
+
+### A worked example: a shopping total
+
+```js
+const breadPrice = 15;
+const loaves = 3;
+const deliveryFee = 10;
+
+const subtotal = breadPrice * loaves;
+const total = subtotal + deliveryFee;
+
+console.log("Subtotal:", subtotal);
+console.log("Total:", total);
+```
+
+Step by step: `subtotal` is 15 × 3 = 45; `total` is 45 + 10 = 55. Each line uses values computed above it. Change `loaves` to 5 and run again: everything that depends on it changes too. That is the point of variables.
+
+### Changing a variable
+
+```js
+let count = 0;
+count = count + 1;
+count += 1;
+count++;
+console.log(count);
+```
+
+All three middle lines add one. `count = count + 1` reads "take the current `count`, add 1, and store the result back in `count`". `count += 1` is a shorter way to write the same thing (`-=`, `*=` and `/=` work the same way), and `count++` adds exactly one. After three additions, `count` is 3.
+
+### Decimals are not exact
+
+```js
+console.log(0.1 + 0.2);
+console.log((0.1 + 0.2).toFixed(2));
+console.log(Math.round(2.5));
+console.log(Math.round(2.4));
+```
+
+The first line prints `0.30000000000000004`, not `0.3`. This is not a JavaScript bug: computers store decimal numbers in binary, and most decimals, like 0.1, cannot be stored exactly, the same way 1/3 cannot be written exactly as a decimal. Every programming language has this. Two consequences:
+
+- When showing a decimal to people, round it. `toFixed(2)` gives two decimal places. Careful: it returns a **string**, not a number.
+- For money, professionals usually store whole numbers of the smallest unit (pesewas, pence, cents) to avoid these errors: ₵15.50 is stored as 1550.
+
+`Math` holds many useful functions: `Math.round` to the nearest whole number, `Math.floor` rounds down, `Math.ceil` rounds up, `Math.max` and `Math.min` find the largest and smallest of several numbers, `Math.random()` gives a random number from 0 up to (but not including) 1.
+
+## Strings: working with text
+
+A **string** is text, written inside quotes. Double quotes `"…"` and single quotes `'…'` work the same; pick one and be consistent. This course uses double quotes.
+
+### Joining strings
+
+`+` between strings **joins** them (programmers say **concatenates**):
+
+```js
+const firstName = "Kofi";
+const greeting = "Hello, " + firstName + "!";
+console.log(greeting);
+```
+
+Joining gets awkward with many pieces, so modern JavaScript has **template literals**: strings written with backticks `` ` `` instead of quotes, where `${…}` puts the value of any expression into the text:
+
+```js
+const item = "sugar bread";
+const price = 15;
+const quantity = 2;
+console.log(`${quantity} × ${item} costs ₵${price * quantity}.`);
+```
+
+Use template literals whenever you build text from values. They are easier to read and you do not lose spaces between pieces.
+
+### Looking inside strings
+
+```js
+const city = "Kumasi";
+console.log(city.length);
+console.log(city[0]);
+console.log(city[city.length - 1]);
+console.log(city.toUpperCase());
+console.log(city.includes("mas"));
+console.log(city.slice(0, 3));
+console.log("  Accra  ".trim());
+```
+
+- `length` is the number of characters: 6.
+- `city[0]` is the first character. **Counting starts at 0**, so the first character is at position 0 and the last at position `length - 1`. Every programming language you will meet counts this way.
+- `toUpperCase()` and `toLowerCase()` give a new string in capitals or small letters.
+- `includes("mas")` asks "does this string contain `mas`?" and answers `true` or `false`.
+- `slice(0, 3)` gives the characters from position 0 up to, but **not including**, position 3: `Kum`.
+- `trim()` removes spaces from both ends, which you will use on everything people type.
+
+Things like `toUpperCase()` are called **methods**: actions that belong to a value, written after a dot, with brackets at the end. Strings never change; methods give you a new string and leave the original as it was.
+
+To put a quote mark or a new line inside a string, use a backslash: `\"` is a double quote, `\n` is a new line.
+
+## Converting between strings and numbers
+
+What people type into a page always arrives as a string, even if it looks like a number. Before calculating, convert it:
+
+```js
+const typed = "25";
+console.log(typed + 5);
+console.log(Number(typed) + 5);
+console.log(String(42) + "!");
+console.log(Number("hello"));
+```
+
+- `"25" + 5` gives `"255"`: when either side of `+` is a string, `+` joins rather than adds. This is the single commonest JavaScript bug.
+- `Number("25")` converts to the number 25, so `Number(typed) + 5` is 30.
+- `String(42)` converts a number to text.
+- `Number("hello")` gives `NaN`, which stands for **Not a Number**: the result of a calculation or conversion that made no sense. `NaN` is, confusingly, of type number. Check for it with `Number.isNaN(value)`.
+
+JavaScript also converts types by itself in some places, which surprises everyone:
+
+```js
+console.log("6" * "2");
+console.log("6" - 2);
+console.log("6" + 2);
+```
+
+The first two print `12` and `4`: `*` and `-` only work on numbers, so JavaScript converts the strings. The third prints `62`, because `+` can join strings, so it does. Do not rely on any of this. Convert explicitly with `Number()` and your code says what it means.
+
+## Reading error messages
+
+When JavaScript cannot run a line, it stops and reports an **error**: what kind, a message, and the line. Three you will meet this week:
+
+```js
+const total = 10;
+total = 20;
+```
+
+This stops with `TypeError: Assignment to constant variable.` You tried to give a `const` a new value. Use `let` if it must change.
+
+```js
+console.log(totl);
+```
+
+This stops with `ReferenceError: totl is not defined`. There is no variable called `totl`: almost always a spelling mistake, or using a variable before creating it.
+
+```js
+console.log("Hello);
+```
+
+This is a `SyntaxError`: the code is not valid JavaScript at all (here, the string is never closed), so nothing in the file runs. The message often points at the line *after* the real mistake, because that is where JavaScript noticed.
+
+Read errors from left to right: the **type** of error (`TypeError`, `ReferenceError`, `SyntaxError`) tells you what kind of problem, the **message** says what, and the line number says where. Search the exact message online if it is new to you.
+
+## Common mistakes
+
+- **Joining instead of adding**: `"5" + 3` is `"53"`. Convert input with `Number()` first.
+- **Forgetting quotes**: `const name = Ama;` looks for a variable called `Ama` and fails with a `ReferenceError`.
+- **Changing a `const`.** Use `let` for values that change.
+- **Wrong capitals**: `console.Log` and `Console.log` do not exist; `console.log` does.
+- **Counting from 1**: the first character is at position 0.
+- **Expecting decimals to be exact**: round before showing them, and store money in whole units.
+- **Using `toFixed` and then calculating**: it returns a string, so a later `+` joins.
+- **Single `=` when you meant to compare.** `=` stores. Comparing comes in the next chapter.
+
+## Practice
+
+Try each problem before opening the solution. Use **Run** and **Edit** on any example above, or the browser's Console, to test your answers.
+
+### Warm-up
+
+**1.** What does `console.log(10 - 3 * 2);` print?
+
+<Solution>
+
+`4`. Multiplication first: 3 × 2 = 6, then 10 − 6 = 4.
+
+</Solution>
+
+**2.** What type is each value: `"true"`, `true`, `3.0`, `"3.0"`?
+
+<Solution>
+
+`"true"` is a string (it is in quotes); `true` is a boolean; `3.0` is a number; `"3.0"` is a string.
+
+</Solution>
+
+**3.** Which of these are valid variable names: `firstName`, `first name`, `2ndPlace`, `place2`, `total_price`, `let`?
+
+<Solution>
+
+Valid: `firstName`, `place2`, `total_price`. Not valid: `first name` (a space), `2ndPlace` (starts with a digit), `let` (a word JavaScript reserves for itself).
+
+</Solution>
+
+**4.** What does `17 % 5` give, and why?
+
+<Solution>
+
+`2`. 5 goes into 17 three times (15), leaving 2.
+
+</Solution>
+
+**5.** What is `"Accra".length`?
+
+<Solution>
+
+`5`. A, c, c, r, a.
+
+</Solution>
+
+**6.** What is `"Accra"[1]`?
+
+<Solution>
+
+`"c"`. Position 0 is `A`, position 1 is the first `c`.
+
+</Solution>
+
+**7.** Should `const` or `let` be used for: (a) a person's date of birth in a form you are processing; (b) the number of items in a basket as items are added?
+
+<Solution>
+
+(a) `const`: it does not change while the program runs. (b) `let`: it changes each time an item is added.
+
+</Solution>
+
+**8.** What does `console.log("2" + "2");` print?
+
+<Solution>
+
+`22`. Both are strings, so `+` joins them.
+
+</Solution>
+
+**9.** What does `console.log(2 ** 10);` print?
+
+<Solution>
+
+`1024`: 2 multiplied by itself 10 times.
+
+</Solution>
+
+**10.** Write one line that prints your name in capital letters, using a string method.
+
+<Solution>
+
+```js
+console.log("Esi Mensah".toUpperCase());
+```
+
+Any name works. It prints `ESI MENSAH`.
+
+</Solution>
+
+### Standard
+
+**11.** A pizza has 8 slices. 3 people share 2 pizzas equally. Write code that works out how many whole slices each person gets and how many are left over, using `Math.floor` and `%`.
+
+<Solution>
+
+```js
+const slices = 2 * 8;
+const people = 3;
+const each = Math.floor(slices / people);
+const leftOver = slices % people;
+console.log(`Each person gets ${each} slices. Slices left over: ${leftOver}.`);
+```
+
+16 slices: each gets 5 (15 slices), and 1 is left over.
+
+</Solution>
+
+**12.** Convert 150 minutes into hours and minutes, printing `2 hours and 30 minutes`.
+
+<Solution>
+
+```js
+const totalMinutes = 150;
+const hours = Math.floor(totalMinutes / 60);
+const minutes = totalMinutes % 60;
+console.log(`${hours} hours and ${minutes} minutes`);
+```
+
+</Solution>
+
+**13.** What does this print, and why?
+
+```js
+let score = 10;
+score += 5;
+score *= 2;
+console.log(score);
+```
+
+<Solution>
+
+`30`. Start at 10; `+= 5` makes 15; `*= 2` makes 30.
+
+</Solution>
+
+**14.** A form gives you `const typedAge = "19";`. Write a line that prints how old the person will be next year, as a number.
+
+<Solution>
+
+```js
+const typedAge = "19";
+console.log(Number(typedAge) + 1);
+```
+
+It prints `20`. Without `Number()`, `typedAge + 1` would be `"191"`.
+
+</Solution>
+
+**15.** What do these print? `console.log("8" - 3);` and `console.log("8" + 3);`
+
+<Solution>
+
+`5` and `83`. `-` only works on numbers, so `"8"` is converted; `+` joins when either side is a string.
+
+</Solution>
+
+**16.** Write a template literal that prints `Ama ordered 3 loaves for ₵45.` from the variables `name = "Ama"`, `loaves = 3` and `price = 15` (price per loaf).
+
+<Solution>
+
+```js
+const name = "Ama";
+const loaves = 3;
+const price = 15;
+console.log(`${name} ordered ${loaves} loaves for ₵${loaves * price}.`);
+```
+
+</Solution>
+
+**17.** Print the last character of `const word = "programming";` without counting the letters yourself.
+
+<Solution>
+
+```js
+const word = "programming";
+console.log(word[word.length - 1]);
+```
+
+`length` is 11, so the last position is 10: `g`.
+
+</Solution>
+
+**18.** Print the first three letters of `"November"` in capitals.
+
+<Solution>
+
+```js
+console.log("November".slice(0, 3).toUpperCase());
+```
+
+`slice(0, 3)` gives `Nov`, then `toUpperCase()` gives `NOV`. Methods can be chained: each works on the result of the one before.
+
+</Solution>
+
+**19.** What does `console.log((5.555).toFixed(1) + 1);` print, and why is it probably not what the author wanted?
+
+<Solution>
+
+`5.61`. `toFixed(1)` returns the string `"5.6"`, and `+ 1` joins it with 1. The author probably wanted 6.6: they should convert back with `Number()` first, or add before rounding.
+
+</Solution>
+
+**20.** Someone typed `"  ama@example.com "` into an email box. Write code that removes the spaces and makes it lower-case, then prints it.
+
+<Solution>
+
+```js
+const typed = "  Ama@Example.com ";
+console.log(typed.trim().toLowerCase());
+```
+
+It prints `ama@example.com`. Cleaning input like this before using it is a habit worth forming now.
+
+</Solution>
+
+**21.** Find and fix the two mistakes:
+
+```js
+const price = 20
+const discount = 5;
+price = price - discount;
+console.log(price);
+```
+
+<Solution>
+
+The first line lacks a semicolon (JavaScript copes here, but write it). The real error: `price` is a `const`, so `price = price - discount` fails with `TypeError: Assignment to constant variable.` Use a new variable:
+
+```js
+const price = 20;
+const discount = 5;
+const finalPrice = price - discount;
+console.log(finalPrice);
+```
+
+</Solution>
+
+**22.** What does `Number("12px")` give? What about `parseInt("12px")`? When might the second be useful?
+
+<Solution>
+
+`Number("12px")` gives `NaN`, because the whole string is not a number. `parseInt("12px")` gives `12`: it reads digits from the start and stops at the first non-digit. It is useful for values like CSS sizes, but it also quietly accepts nonsense like `"12 apples"`, so prefer `Number` for things people type, where you want to know if it is not a number.
+
+</Solution>
+
+**23.** Is `typeof NaN` "number" or something else? Why does that make sense, sort of?
+
+<Solution>
+
+`"number"`. `NaN` is a special number value meaning "the result of a numeric operation that failed", so it lives among the numbers even though it is not a real number.
+
+</Solution>
+
+**24.** A shop stores prices in pesewas (100 pesewas = 1 cedi). A loaf is 1550 pesewas. Write code that prints the price of 3 loaves as `₵46.50`.
+
+<Solution>
+
+```js
+const loafPesewas = 1550;
+const totalPesewas = loafPesewas * 3;
+console.log(`₵${(totalPesewas / 100).toFixed(2)}`);
+```
+
+3 × 1550 = 4650 pesewas = ₵46.50. The arithmetic happens in whole numbers, and only the final display uses a decimal.
+
+</Solution>
+
+### Stretch
+
+**25.** Write code that takes `const fullName = "kwame nkrumah";` and prints `Kwame Nkrumah`, assuming exactly two words separated by one space. (Hint: `indexOf(" ")` gives the position of the space.)
+
+<Solution>
+
+```js
+const fullName = "kwame nkrumah";
+const space = fullName.indexOf(" ");
+const first = fullName.slice(0, space);
+const last = fullName.slice(space + 1);
+const capital = (word) => word[0].toUpperCase() + word.slice(1);
+console.log(capital(first) + " " + capital(last));
+```
+
+The line starting `const capital` makes a small function, which the next chapter explains. Without it, write the capitalising twice: `first[0].toUpperCase() + first.slice(1)`, and the same for `last`.
+
+</Solution>
+
+**26.** The temperature in Fahrenheit is `const f = 98.6;`. Convert it to Celsius with C = (F − 32) × 5 ÷ 9 and print it to one decimal place. What do you get?
+
+<Solution>
+
+```js
+const f = 98.6;
+const c = (f - 32) * 5 / 9;
+console.log(c.toFixed(1));
+```
+
+`37.0`. The brackets matter: without them, only 32 would be multiplied.
+
+</Solution>
+
+**27.** Without running it, predict the output, then run it to check:
+
+```js
+let a = 3;
+let b = a;
+a = 10;
+console.log(a, b);
+```
+
+<Solution>
+
+`10 3`. `let b = a` copies the value 3 into `b`. Changing `a` afterwards does not change `b`. (Lists and objects, in a later chapter, behave differently, which is why this is worth noticing now.)
+
+</Solution>
+
+**28.** Swap the values of two variables `let x = 1; let y = 2;` so that `x` is 2 and `y` is 1, using a third variable.
+
+<Solution>
+
+```js
+let x = 1;
+let y = 2;
+const temp = x;
+x = y;
+y = temp;
+console.log(x, y);
+```
+
+Prints `2 1`. Without `temp`, writing `x = y` first would lose the original value of `x`.
+
+</Solution>
+
+**29.** `Math.random()` gives a number from 0 up to, but not including, 1. Write an expression for a random whole number from 1 to 6, like a die.
+
+<Solution>
+
+```js
+const roll = Math.floor(Math.random() * 6) + 1;
+console.log(roll);
+```
+
+`Math.random() * 6` is from 0 up to (not including) 6; `Math.floor` makes it 0 to 5; `+ 1` makes it 1 to 6. Run it several times.
+
+</Solution>
+
+**30.** Explain why `0.1 + 0.2 === 0.3` would be `false` (you meet `===`, "is equal to", next chapter), and suggest a safe way to check that a total of ₵0.10 and ₵0.20 is ₵0.30.
+
+<Solution>
+
+`0.1 + 0.2` is actually `0.30000000000000004`, because decimals are stored inexactly in binary, so it is not exactly equal to `0.3`. Work in whole units: 10 + 20 pesewas is exactly 30. (Another approach, for measurements rather than money, is to check the difference is tiny: `Math.abs(a - b) < 0.000001`.)
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A program is statements run top to bottom. `console.log(…)` prints; `//` starts a comment.
+- Values have **types**: number, string, boolean, undefined, null. `typeof` tells you which.
+- Variables name values. Use `const` by default and `let` when the value must change. Never `var`. Name in camelCase, and say what the value is.
+- Arithmetic: `+ - * / % **`, with the usual order. `%` is the remainder.
+- Decimals are not exact: round with `toFixed` (which gives a string) and keep money in whole units.
+- Strings: template literals with `${}`, `length`, positions from 0, and methods such as `toUpperCase`, `includes`, `slice`, `trim`.
+- `+` joins if either side is a string. Convert with `Number()` and `String()`. `NaN` means a number conversion failed.
+- Errors name a **type**, a **message** and a **line**. `TypeError`, `ReferenceError` and `SyntaxError` are the first you will meet.
+
+## Go deeper
+
+- [MDN: Dynamic scripting with JavaScript](https://developer.mozilla.org/en-US/docs/Learn_web_development/Core/Scripting), from Mozilla. The core JavaScript module of MDN's Learn web development, from first steps to objects.
+- [The Modern JavaScript Tutorial](https://javascript.info/), by Ilya Kantor. A free, thorough tutorial; its "JavaScript Fundamentals" section covers this chapter in more depth, with tasks.
+- [Eloquent JavaScript](https://eloquentjavascript.net/), by Marijn Haverbeke. A free book (fourth edition, 2024). Its first two chapters match this one; it moves faster than this course, so it is a good second explanation.

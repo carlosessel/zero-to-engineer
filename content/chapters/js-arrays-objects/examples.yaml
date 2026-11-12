@@ -1,0 +1,242 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: js
+  check: js
+  output: |
+    ["sugar bread", "tea bread", "brown bread"]
+    3
+    sugar bread
+    brown bread
+- block: 2
+  lang: js
+  check: js
+  output: |
+    ["bread", "milk", "eggs"]
+    eggs ["bread", "milk"]
+    ["butter", "bread", "milk"]
+    ["butter", "brown bread", "milk"]
+- block: 3
+  lang: js
+  check: js
+  output: |
+    true
+    1
+    -1
+- block: 4
+  lang: js
+  check: js
+  output: |
+    We sell sugar bread.
+    We sell tea bread.
+    We sell brown bread.
+- block: 5
+  lang: js
+  check: js
+  output: |
+    Total 369, average 73.8
+- block: 6
+  lang: js
+  check: js
+  output: |
+    c, a, b
+    [2, 3]
+    ["a", "b", "c"]
+    ["c", "a", "b"]
+    [10, 100, 9]
+    [9, 10, 100]
+- block: 7
+  lang: js
+  check: js
+  output: |
+    [30, 24, 40]
+    [15, 12]
+    47
+    [15, 12, 20]
+- block: 8
+  lang: js
+  check: js
+  output: |
+    15
+    true
+    true
+    Item 1: ₵15
+    Item 2: ₵12
+    Item 3: ₵20
+- block: 9
+  lang: js
+  check: js
+  output: |
+    { name: "sugar bread", price: 15, inStock: true }
+    sugar bread
+    15
+- block: 10
+  lang: js
+  check: js
+  output: |
+    { name: "sugar bread", price: 16 }
+    sugar bread
+    undefined
+- block: 11
+  lang: js
+  check: js
+  output: |
+    ["sugar", "tea", "brown"]
+    [12, 0, 5]
+    sugar: 12
+    tea: 0
+    brown: 5
+- block: 12
+  lang: js
+  check: js
+  output: |
+    true
+    false
+- block: 13
+  lang: js
+  check: js
+  output: |2+
+
+  note: Defines the menu used in the next example; it prints nothing by design.
+  expect:
+  - menu.length === 4
+  - menu.every((m) => typeof m.price === 'number')
+- block: 14
+  lang: js
+  check: js
+  output: |
+    ["sugar bread", "tea bread", "coconut bread", "brown bread"]
+    ["tea bread", "coconut bread", "brown bread"]
+    tea bread
+    18
+    14.75
+- block: 15
+  lang: js
+  check: js
+  output: |
+    [1, 2, 3, 4]
+    [1, 2, 3, 4] [1, 2, 3, 4, 5]
+    Ama Kofi
+- block: 16
+  lang: js
+  check: js
+  output: |
+    {"bread":"tea bread","loaves":2,"paid":true}
+    string
+    3
+- block: 17
+  lang: js
+  check: js
+  output: |
+    ICT
+- block: 18
+  lang: js
+  check: js
+  output: |
+    10 10 0
+- block: 19
+  lang: js
+  check: js
+  output: |
+    17 17
+- block: 20
+  lang: js
+  check: js
+  output: |
+    [100, 42, 25, 3]
+- block: 21
+  lang: js
+  check: js
+  output: |
+    ["ACCRA", "TEMA", "KUMASI"]
+- block: 22
+  lang: js
+  check: js
+  output: |
+    3
+- block: 23
+  lang: js
+  check: js
+  output: |
+    59
+    ["tea bread", "brown bread"]
+- block: 24
+  lang: js
+  check: js
+  output: |
+    { the: 2, cat: 1, and: 1, hat: 1 }
+- block: 25
+  lang: js
+  check: js
+  output: |
+    99
+- block: 26
+  lang: js
+  check: js
+  output: |
+    ["bread", "eggs"] ["bread", "milk", "eggs"]
+- block: 27
+  lang: js
+  check: js
+  output: |
+    [2, 4, 6]
+- block: 28
+  lang: js
+  check: js
+  output: |
+    false true
+- block: 29
+  lang: js
+  check: js
+  output: |
+    {"bread":"tea","loaves":3} 4
+- block: 30
+  lang: js
+  check: js
+  output: |
+    47
+- block: 31
+  lang: js
+  check: js
+  output: |
+    Ama is 20
+    Kofi is 17
+    Esi is 25
+- block: 32
+  lang: js
+  check: js
+  output: |
+    { vegan: ["tea bread", "coconut bread", "brown bread"], notVegan: ["sugar bread"] }
+- block: 33
+  lang: js
+  check: js
+  output: |
+    [3, 1, 2] [3, 1, 2]
+- block: 34
+  lang: js
+  check: js
+  output: |
+    63 sugar bread
+- block: 35
+  lang: js
+  check: js
+  output: |
+    Kofi
+- block: 36
+  lang: js
+  check: js
+  output: |
+    [114.99999999999999, 229.99999999999997]
+  note: 'The buggy code from practice problem 29: the check confirms the caller''s array really is changed, as the solution says.'
+  expect:
+  - original === withTax
+- block: 37
+  lang: js
+  check: js
+  output: |
+    [114.99999999999999, 229.99999999999997] [100, 200]
+- block: 38
+  lang: js
+  check: js
+  output: |
+    [1, 2, 3, 4, 5]
+    [1, 2, 3, 4, 5]

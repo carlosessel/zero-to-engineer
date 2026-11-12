@@ -1,0 +1,116 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: js
+  check: js
+  wait_ms: 1100
+  output: |
+    First
+    Second
+    Third, about a second later
+  note: Waits for the timer, and checks Second prints before Third.
+- block: 2
+  lang: js
+  check: js
+  fetch_json:
+    https://api.github.com/users/octocat:
+      login: octocat
+      name: The Octocat
+      public_repos: 8
+  wait_ms: 50
+  output: |
+    Asked GitHub. Waiting…
+    The Octocat has 8 public repositories
+  note: Run with saved replies (copied from the real services on 12 November 2026) instead of the internet, so the check does not depend on the network. Checks the waiting message prints first.
+- block: 3
+  lang: js
+  check: js
+  fetch_json:
+    https://api.github.com/users/octocat:
+      login: octocat
+      name: The Octocat
+      public_repos: 8
+  wait_ms: 50
+  output: |
+    The Octocat
+    Could not get the user: GitHub answered with status 404
+    null
+  note: Run with saved replies (copied from the real services on 12 November 2026) instead of the internet, so the check does not depend on the network. The unknown user gets a 404, as GitHub gives.
+- block: 4
+  lang: html
+  check: browser
+  combine:
+  - 4
+  - 5
+  fetch_json:
+    https://api.github.com/users/octocat:
+      login: octocat
+      name: The Octocat
+      public_repos: 8
+  actions:
+  - click: '#lookup button'
+  expect:
+  - (async () => { await new Promise((r) => setTimeout(r, 300)); return document.querySelector('#profile-name').textContent === 'The Octocat' && document.querySelector('#profile-repos').textContent === '8 public repositories' && !document.querySelector('#profile').hidden && document.querySelector('#status').textContent === '' && !document.querySelector('#lookup button').disabled; })()
+  - (async () => { document.querySelector('#username').value = 'nobody-zz9'; document.querySelector('#lookup').requestSubmit(); await new Promise((r) => setTimeout(r, 300)); return document.querySelector('#status').textContent === 'There is no GitHub user called nobody-zz9.' && document.querySelector('#profile').hidden; })()
+  note: Run with saved replies (copied from the real services on 12 November 2026) instead of the internet, so the check does not depend on the network. Looks up octocat (success state), then an unknown name (the 404 message).
+- block: 5
+  lang: js
+  check: illustration
+  note: The JavaScript of the look-up example; run in a real browser with its HTML in the entry for block 4.
+- block: 6
+  lang: js
+  check: js
+  fetch_json:
+    https://jsonplaceholder.typicode.com/todos:
+      title: Buy flour
+      completed: false
+      userId: 1
+      id: 201
+  wait_ms: 50
+  output: |
+    Created { title: "Buy flour", completed: false, userId: 1, id: 201 }
+  note: Run with saved replies (copied from the real services on 12 November 2026) instead of the internet, so the check does not depend on the network. The reply is the one JSONPlaceholder really sent for this request (status 201, id 201). The stand-in does not check the request body.
+- block: 7
+  lang: js
+  check: js
+  fetch_json:
+    https://api.github.com/users/octocat:
+      login: octocat
+      name: The Octocat
+      public_repos: 8
+    https://api.github.com/users/torvalds:
+      login: torvalds
+      name: Linus Torvalds
+      public_repos: 12
+  wait_ms: 50
+  output: |
+    octocat 8
+    torvalds 12
+  note: Run with saved replies (copied from the real services on 12 November 2026) instead of the internet, so the check does not depend on the network. Results come back in the order the names were given.
+- block: 8
+  lang: js
+  check: js
+  wait_ms: 600
+  output: |
+    Waiting half a second…
+    Done
+- block: 9
+  lang: js
+  check: js
+  fetch_json:
+    https://jsonplaceholder.typicode.com/todos/1:
+      userId: 1
+      id: 1
+      title: delectus aut autem
+      completed: false
+  wait_ms: 50
+  output: |
+    delectus aut autem
+  note: Run with saved replies (copied from the real services on 12 November 2026) instead of the internet, so the check does not depend on the network.
+- block: 10
+  lang: js
+  check: illustration
+  note: 'A fragment to rewrite: urlA, urlB and urlC are placeholders, and await needs an async function around it.'
+- block: 11
+  lang: js
+  check: illustration
+  note: A one-line answer using placeholders; the same Promise.all pattern is run in the compareUsers example (block 7).

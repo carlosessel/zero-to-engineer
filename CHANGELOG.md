@@ -4,6 +4,24 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: Zero to Web Developer, part 3 (JavaScript from zero)
+
+Added
+- Seven chapters: values and variables; decisions, loops and functions; arrays and objects; the DOM and events; debugging; promises, async and fetch; modules, npm and Vite. About 17,500 words, 135 practice problems (30 each in the first three chapters), 50 quiz questions, 33 exercises, 24 resource records.
+- **Run button for JavaScript.** Examples that are not part of a live preview get Run, Edit and Reset; output appears under the code in the same format the checks use; uncaught errors are reported plainly; a hint appears when nothing is printed. Examples using import or export get a note instead, because they need separate files.
+- **JavaScript checks.** `tests/js-blocks.test.ts` runs every `check: js` example in Node and compares its output (`output`, `throws`, `stack_contains`, `expect`), with saved replies for examples that call web APIs. Real-browser checks can also be given saved API replies, so no test depends on the internet. 172 code blocks in this part; 101 run as JavaScript, 10 as shell commands (including creating, installing and building a real Vite project when network checks are on), 10 in a real browser.
+- Previews get a temporary stand-in for localStorage (the real one stays out of reach), and leave form submissions alone when the example handles them itself.
+- 42 glossary terms. The build now fails if a glossary term used by a course has no wording for that course.
+
+Fixed (found by running the examples before publishing)
+- The debugging chapter's worked example gave a wrong printed number (2023360 instead of 202360) and a wrong middle line of output.
+- A practice problem said some buggy code "always returns 0"; it actually stops with a ReferenceError. The question and answer now say so and explain why.
+- An example printed "1 are left over".
+- The value formatter showed errors from the test sandbox as `{}`; it now recognises errors, maps, sets and dates from any frame.
+- Frames meant to stay hidden until asked for were showing as empty white boxes (a bug from part 2), and previews could measure their height before layout finished.
+- I had named two Eloquent JavaScript chapters from memory with the wrong numbers; corrected from the book's contents page. Two other claims (the size of the npm registry, Vite being "the most popular") were replaced with what the sources actually say.
+- Glossary: "parameter", "index", "object" and "method" each have two meanings across the courses; the entries now give both. API and JSON were missing a wording for the web course.
+
 ### 2026-11-12: Zero to Web Developer, part 2 (HTML and CSS)
 
 Added

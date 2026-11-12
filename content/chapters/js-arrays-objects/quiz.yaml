@@ -1,0 +1,53 @@
+- question: "What is [10, 20, 30][1]?"
+  options:
+    - "10"
+    - "20"
+    - "30"
+  answer: 1
+  explanation: "Indexes start at 0, so position 1 is the second element."
+- question: "What does [4, 5, 6].map((n) => n + 1) give?"
+  options:
+    - "[5, 6, 7]"
+    - "[4, 5, 6, 1]"
+    - "15"
+  answer: 0
+  explanation: "map applies the function to each element and returns a new array of the same length."
+- question: "What does [10, 9, 100].sort() give?"
+  options:
+    - "[9, 10, 100]"
+    - "[10, 100, 9]"
+    - "[100, 10, 9]"
+  answer: 1
+  explanation: "Without a comparing function, sort compares as text, and \"10\" comes before \"9\". Use .sort((a, b) => a - b) for numbers."
+- question: "const list = [1, 2]; list.push(3); What happens?"
+  options:
+    - "TypeError, because list is a const"
+    - "list becomes [1, 2, 3]"
+  answer: 1
+  explanation: "const stops the name being pointed at a different array; the array itself can still change."
+- question: "const a = { n: 1 }; const b = a; b.n = 5; What is a.n?"
+  options:
+    - "1"
+    - "5"
+  answer: 1
+  explanation: "b is another name for the same object, not a copy. Use { ...a } to copy."
+- question: "Which method answers \"is there at least one item under ₵10?\""
+  options:
+    - "every"
+    - "some"
+    - "filter"
+  answer: 1
+  explanation: "some returns true if any element matches. every needs all to match; filter returns a new array, not a yes or no."
+- question: "How do you read a property whose key is stored in a variable called key?"
+  options:
+    - "obj.key"
+    - "obj[key]"
+  answer: 1
+  explanation: "obj.key looks for a property literally called \"key\". Square brackets use the variable's value."
+- question: "What does JSON.parse do?"
+  options:
+    - "Turns JSON text into arrays and objects"
+    - "Turns arrays and objects into JSON text"
+    - "Checks a website"
+  answer: 0
+  explanation: "JSON.parse reads text; JSON.stringify writes it."

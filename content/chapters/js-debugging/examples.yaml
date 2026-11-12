@@ -1,0 +1,97 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: js
+  check: js
+  throws: TypeError
+  stack_contains:
+  - Cannot read properties of undefined (reading 'price')
+  - at lineTotal (example.js:2:15)
+  - at basketTotal (example.js:8:14)
+  - example.js:13:13
+  note: 'Checks the error and its stack trace: the functions, in order, with the line and column numbers the chapter shows (Node runs the same JavaScript engine as Chrome; the file is called example.js here and app.js in the chapter).'
+- block: 2
+  lang: text
+  check: illustration
+  note: The stack trace for the code above, as Chrome's Console shows it. The functions, lines and columns are checked by running that code (see block 1); Chrome also adds 'Uncaught' at the start.
+  verify: |
+    lines = block.splitlines()
+    assert lines[1].strip() == 'at lineTotal (app.js:2:15)' and lines[2].strip() == 'at basketTotal (app.js:8:14)' and lines[3].strip() == 'at app.js:13:13'
+- block: 3
+  lang: js
+  check: js
+  output: |
+    average 202360
+- block: 4
+  lang: js
+  check: js
+  output: |
+    total is 060 string
+    total is 06070 string
+    total is 0607080 string
+- block: 5
+  lang: js
+  check: js
+  output: |
+    average 70
+- block: 6
+  lang: js
+  check: js
+  output: |
+    ["Buy flour"]
+    Saved data was damaged: SyntaxError
+    []
+- block: 7
+  lang: js
+  check: js
+  output: |
+    70
+    Not enough money in the account
+- block: 8
+  lang: js
+  check: js
+  output: |
+    0
+    1
+    2
+    3
+    4
+- block: 9
+  lang: js
+  check: js
+  output: |
+    1
+    2
+    3
+    4
+    5
+- block: 10
+  lang: js
+  check: js
+  throws: ReferenceError
+  note: The buggy code from practice problem 5 stops with the error the question quotes.
+- block: 11
+  lang: js
+  check: js
+  output: |
+    2
+- block: 12
+  lang: js
+  check: js
+  output: |
+    42
+    Not a number: forty
+- block: 13
+  lang: js
+  check: illustration
+  note: 'A bad pattern shown on purpose: saveOrder and order are placeholders. Run, it prints nothing, which is exactly the problem the solution describes.'
+- block: 14
+  lang: js
+  check: js
+  output: |
+    NaN
+  note: 'The buggy version from practice problem 10: it really prints NaN.'
+- block: 15
+  lang: js
+  check: js
+  output: |
+    39

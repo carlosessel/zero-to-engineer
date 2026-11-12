@@ -1,0 +1,339 @@
+---
+title: "Modules, npm and build tools"
+summary: "Splitting code into files, installing packages, and running a project with Vite."
+prerequisites: [js-async-fetch, git-basics]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will be able to split a program into files that share code with each other, install code other people have written, and set up a project the way professional front-end developers do, with a build tool that reloads the page as you edit and prepares your site for publishing. This is the bridge between practice files and real projects.
+
+Most examples here are run in the terminal, not with a Run button: they involve several files or installing software. Type them into your own `web-course` folder.
+
+## Modules: splitting code into files
+
+As programs grow, one long file becomes hard to find your way around. **Modules** let you split code into files, each with a clear job, and choose what each file shares with the others.
+
+- `export` marks something in a file as available to other files.
+- `import` brings it into another file.
+
+Make a folder called `modules-demo` and, inside it, two files.
+
+`prices.js`:
+
+```js
+export const VAT_RATE = 0.15;
+
+export function withVat(price) {
+  return Math.round(price * (1 + VAT_RATE) * 100) / 100;
+}
+
+function secretHelper() {
+  return "not exported, so other files cannot use this";
+}
+```
+
+`app.js`:
+
+```js
+import { VAT_RATE, withVat } from "./prices.js";
+
+console.log(`VAT is ${VAT_RATE * 100}%`);
+console.log(withVat(100));
+console.log(withVat(19.99));
+```
+
+The import names the things it wants, in curly brackets, and the file they come from. `"./prices.js"` means "the file `prices.js` in this same folder"; the `./` at the start matters. `secretHelper` is not exported, so it stays private to `prices.js`: modules also stop files interfering with each other's variables.
+
+### Running modules with Node
+
+Node needs to be told these files are modules. Create a `package.json` file (explained in the next section) and mark the project as using modules, then run `app.js`:
+
+```bash
+cd modules-demo
+npm init -y
+npm pkg set type=module
+node app.js
+```
+
+It prints the VAT rate and the two prices. Without the `type=module` line, Node stops with an error saying it cannot use an import statement outside a module, because new projects are set up for Node's older module system (`require`), which you will see in older code.
+
+### Default exports
+
+A file can also have one **default export**, imported without curly brackets and under any name you like:
+
+```js
+export default function formatCedis(amount) {
+  return `₵${amount.toFixed(2)}`;
+}
+```
+
+and then `import formatCedis from "./format.js";`. Many packages are used this way. Named exports (with curly brackets) are clearer when a file shares several things.
+
+### Modules in the browser
+
+In a web page, load the main file with `type="module"`:
+
+```html
+<script type="module" src="app.js"></script>
+```
+
+Module scripts wait for the HTML to be read, like `defer`. One catch: browsers refuse to load modules from a file opened directly from your disk (an address starting `file://`); they must come from a web server. The build tool later in this chapter provides one.
+
+## npm: other people's code
+
+Nobody writes everything from scratch. Date formatting, charts, payments, testing: for almost any common job, someone has written and shared a **package**, a bundle of code with a name and a version. **npm** (which came with Node) downloads packages from the **npm registry**, which npm describes as the world's largest software registry, and keeps track of which your project uses.
+
+### package.json
+
+`npm init -y` creates a **package.json** file: the project's description, which npm reads and updates. A minimal one looks like this:
+
+```json
+{
+  "name": "modules-demo",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "start": "node app.js"
+  },
+  "dependencies": {
+    "dayjs": "^1.11.13"
+  }
+}
+```
+
+- `name` and `version` identify the project.
+- `"type": "module"` makes `.js` files modules, as above.
+- `scripts` are named commands. `npm run start` (or just `npm start`) runs `node app.js`. Projects use scripts so everyone runs things the same way: `npm run dev`, `npm run build`, `npm test`.
+- `dependencies` lists the packages the project uses.
+
+JSON is strict: double quotes everywhere and no comma after the last item.
+
+### Installing a package
+
+```bash
+npm install dayjs
+```
+
+This does three things:
+
+1. Downloads `dayjs` (a small library for working with dates) and anything it needs into a folder called `node_modules`.
+2. Adds it to `dependencies` in `package.json`, with the version.
+3. Writes `package-lock.json`, which records the exact version of every package installed, so the next person who runs `npm install` gets identical versions.
+
+Then use it like any module:
+
+```js
+import dayjs from "dayjs";
+
+const order = dayjs("2026-11-12");
+console.log(order.add(7, "day").format("D MMMM YYYY"));
+```
+
+It prints `19 November 2026`: a week after the order date, formatted for people. For a package installed with npm, you import by its name, with no `./`.
+
+### What goes in Git
+
+- Commit `package.json` and `package-lock.json`: together they say exactly what the project needs.
+- **Never commit `node_modules`.** It can hold thousands of files, and anyone can rebuild it from the two files above by running `npm install`. Add it to `.gitignore`, as in the Git chapter.
+
+When you clone a project, the first command is almost always `npm install`.
+
+### Versions
+
+`"^1.11.13"` is a version range. Versions usually follow **semantic versioning**: three numbers, `major.minor.patch`. A patch (`1.11.14`) fixes bugs; a minor version (`1.12.0`) adds features without breaking anything; a major version (`2.0.0`) may break code written for the old one. The `^` means "this version or any later one with the same major number", so updates that should be safe are allowed and breaking ones are not.
+
+### Dependencies and devDependencies
+
+Some packages are only needed while developing, not by the finished site: build tools, test runners, code formatters. Install those with `npm install --save-dev name` (or `-D`), and they go under `devDependencies`.
+
+### Choosing packages with care
+
+Every package you add is code written by strangers that runs in your project. Before installing one:
+
+- Check you actually need it. A few lines of your own may do.
+- Check it is widely used and still maintained: its page on npmjs.com shows weekly downloads and when it was last published.
+- Type the name exactly. Attackers publish packages with names one letter off popular ones.
+- Run `npm audit` now and then: it lists known security problems in your installed packages.
+
+`npx name` runs a package's command without installing it into your project, often used for one-off tools.
+
+## Vite: a development server and build tool
+
+So far you have opened HTML files straight from your disk. Real front-end projects use a **build tool**. **Vite** (French for "quick", pronounced like "veet") is a widely used one, and it does two jobs:
+
+- During development, it runs a small web server on your computer, so modules work, and it updates the page instantly when you save a file.
+- For publishing, it **builds** your project: it combines and shrinks your files into a few small, fast ones in a `dist` folder, ready to put on any web host.
+
+### A worked example: your first Vite project
+
+In your `web-course` folder:
+
+```bash
+npm create vite@latest my-site -- --template vanilla
+cd my-site
+npm install
+npm run dev
+```
+
+- `npm create vite@latest` downloads Vite's project starter and runs it. `my-site` is the folder to create, and `--template vanilla` asks for plain JavaScript, with no framework. (Run it without the template, and it asks you questions instead.)
+- `npm install` installs Vite itself into the project.
+- `npm run dev` starts the development server. It prints an address, usually `http://localhost:5173/`. Open it in your browser.
+
+Now open the folder in VS Code. Change some text in `src/main.js` or a colour in `src/style.css` and save: the browser updates by itself. Press Ctrl+C in the terminal to stop the server.
+
+Have a look at what was created:
+
+| File | What it is |
+| --- | --- |
+| `index.html` | The page. It loads `src/main.js` with `type="module"`. |
+| `src/main.js` | Where your JavaScript starts. It imports the CSS and another module, `counter.js`. |
+| `src/style.css` | Styles. Vite lets JavaScript import CSS; it handles it during the build. |
+| `public/` | Files copied to the finished site unchanged, such as icons. |
+| `package.json` | With `dev`, `build` and `preview` scripts, and Vite in `devDependencies`. |
+
+When you are ready to publish:
+
+```bash
+npm run build
+npm run preview
+```
+
+`npm run build` creates the `dist` folder: the finished site, small and fast. `npm run preview` serves `dist` so you can check the built version before publishing it. The deployment chapter puts a `dist` folder on the internet.
+
+Vite needs a recent version of Node (when checked, its guide said 20.19 or later, or 22.12 or later). If `npm create vite` complains about your Node version, install the current LTS version from nodejs.org.
+
+## Common mistakes
+
+- **Forgetting `./`** when importing your own file: `import … from "prices.js"` looks for a package called `prices.js`. Write `"./prices.js"`.
+- **Forgetting the `.js`** at the end of your own module's name. Node and browsers need the full file name.
+- **`Cannot use import statement outside a module`.** Add `"type": "module"` to `package.json`, or `type="module"` to the script tag.
+- **Opening a module page straight from disk** (`file://`), and getting an error about blocked requests. Use a development server such as Vite.
+- **Committing `node_modules`.**
+- **Running `npm` commands in the wrong folder.** They work on the `package.json` in the current folder. Check with `pwd`.
+- **Installing packages for things a line of code can do.**
+
+## Practice
+
+**1. (warm-up)** What is the difference between `export function greet()` and `function greet()` in a module?
+
+<Solution>
+
+The first can be imported by other files; the second can only be used inside its own file.
+
+</Solution>
+
+**2. (warm-up)** Which two files should you commit, and which folder should you never commit?
+
+<Solution>
+
+Commit `package.json` and `package-lock.json`; never commit `node_modules`.
+
+</Solution>
+
+**3. (warm-up)** You clone a JavaScript project from GitHub. What is usually the first command to run inside it?
+
+<Solution>
+
+`npm install`, which reads `package.json` and `package-lock.json` and recreates `node_modules`.
+
+</Solution>
+
+**4. (standard)** Write a module `units.js` that exports `kgToLb(kg)` (1 kg is about 2.20462 lb) and a module `main.js` that imports it and prints the result for 5 kg, rounded to one decimal place.
+
+<Solution>
+
+`units.js`:
+
+```js
+export function kgToLb(kg) {
+  return kg * 2.20462;
+}
+```
+
+`main.js`:
+
+```js
+import { kgToLb } from "./units.js";
+
+console.log(kgToLb(5).toFixed(1));
+```
+
+Run with `node main.js` in a folder whose `package.json` has `"type": "module"`. It prints `11.0`.
+
+</Solution>
+
+**5. (standard)** A version range says `"^2.4.1"`. Which of these would `npm install` accept: `2.4.3`, `2.9.0`, `3.0.0`, `2.3.9`?
+
+<Solution>
+
+`2.4.3` and `2.9.0`: same major number (2) and not older than 2.4.1. Not `3.0.0` (a new major version, which may break things), and not `2.3.9` (older than 2.4.1).
+
+</Solution>
+
+**6. (standard)** You need a test runner only while developing. How do you install it, and where does it appear in `package.json`?
+
+<Solution>
+
+`npm install --save-dev name` (or `npm install -D name`). It appears under `devDependencies`.
+
+</Solution>
+
+**7. (standard)** Add a script called `greet` to a `package.json` that runs `node greet.js`, and say how to run it.
+
+<Solution>
+
+```json
+{
+  "scripts": {
+    "greet": "node greet.js"
+  }
+}
+```
+
+Run it with `npm run greet`.
+
+</Solution>
+
+**8. (standard)** A page using `<script type="module" src="app.js">` works with Vite's development server but shows a blank page and a Console error when the HTML file is double-clicked. Why?
+
+<Solution>
+
+Browsers refuse to load modules from a page opened straight from the disk (`file://`), for security. Serve the folder from a development server, such as `npm run dev` with Vite.
+
+</Solution>
+
+**9. (stretch)** Turn your to-do list from the DOM chapter into a Vite project: create a vanilla Vite project, move the HTML into `index.html`, the CSS into `src/style.css`, and split the JavaScript into two modules: one for storage (save and load with `localStorage`) and one for the page. Then build it.
+
+<Solution>
+
+One way: `src/storage.js` exports `loadTasks()` and `saveTasks(tasks)`, which use `localStorage` and JSON; `src/main.js` imports `./style.css` and the two functions, holds the tasks array, and builds the list from it, as in practice problem 12 of the DOM chapter. Run `npm run dev` while working and `npm run build` at the end; the `dist` folder is the finished site. Commit the project with `node_modules` and `dist` in `.gitignore` (Vite's starter already ignores them).
+
+</Solution>
+
+**10. (stretch)** Find a package on npmjs.com for formatting numbers as money, and judge it: weekly downloads, last publish date, how many dependencies, and whether its repository looks maintained. Would you add it, or write the few lines yourself using what you know?
+
+<Solution>
+
+Answers vary. Note that JavaScript already has a built-in for this: `new Intl.NumberFormat("en-GH", { style: "currency", currency: "GHS" }).format(46.5)` formats money for a given country and currency, with no package at all. Checking for a built-in first is a good habit.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Modules** split code into files. `export` shares; `import { name } from "./file.js"` brings it in. Unexported code stays private.
+- Node needs `"type": "module"` in `package.json` (new projects start without it); browsers need `<script type="module">` and a web server.
+- **npm** installs **packages** from the registry. `package.json` describes the project (scripts, dependencies); `package-lock.json` pins exact versions; `node_modules` is never committed.
+- `npm install name`, `npm install -D name` for development tools, `npm run script`, `npm install` after cloning.
+- Versions are `major.minor.patch`; `^` allows updates within the same major version.
+- Choose packages carefully: needed, popular, maintained, spelt right. `npm audit` lists known problems.
+- **Vite** gives a development server that updates as you save (`npm run dev`) and builds a fast `dist` folder for publishing (`npm run build`).
+
+## Go deeper
+
+- [MDN: JavaScript modules](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Modules), from Mozilla. Exports, imports, default exports and modules in the browser, in depth.
+- [About npm](https://docs.npmjs.com/about-npm), from npm. What npm, the registry and the command-line tool are.
+- [Vite: Getting started](https://vite.dev/guide/), from the Vite team. Creating a project, the templates, and what Vite does.
+- [MDN: Understanding client-side web development tools](https://developer.mozilla.org/en-US/docs/Learn_web_development/Extensions/Client-side_tools), from Mozilla. A wider tour of the tools around front-end projects: package managers, build tools, formatters and linters.

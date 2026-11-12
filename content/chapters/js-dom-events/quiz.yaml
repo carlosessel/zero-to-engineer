@@ -1,0 +1,48 @@
+- question: "What does document.querySelector(\".price\") return when no element has class price?"
+  options:
+    - "An empty list"
+    - "null"
+    - "An error immediately"
+  answer: 1
+  explanation: "It returns null. The error comes later, when you try to use it: \"Cannot read properties of null\"."
+- question: "Which is the safe way to show text a person typed?"
+  options:
+    - "element.innerHTML = typed"
+    - "element.textContent = typed"
+  answer: 1
+  explanation: "innerHTML reads the text as HTML, so typed code could run (cross-site scripting). textContent always treats it as text."
+- question: "What is wrong with button.addEventListener(\"click\", save());"
+  options:
+    - "Nothing"
+    - "save runs once straight away, and its result is passed as the handler"
+    - "click is not an event"
+  answer: 1
+  explanation: "Pass the function itself: addEventListener(\"click\", save)."
+- question: "Why call event.preventDefault() in a form's submit handler?"
+  options:
+    - "To stop the browser sending the form and reloading the page"
+    - "To check the fields are filled in"
+    - "To clear the form"
+  answer: 0
+  explanation: "Your code then decides what happens. The browser's required checks still run before the submit event."
+- question: "One click listener on a <ul> handles clicks on buttons inside its list items. Why does that work?"
+  options:
+    - "Events bubble up from the clicked element through its ancestors"
+    - "Buttons copy their listeners to their parents"
+    - "It only works for the first item"
+  answer: 0
+  explanation: "This is event delegation. event.target tells you which element was actually clicked."
+- question: "What does localStorage store?"
+  options:
+    - "Any JavaScript value"
+    - "Strings, so arrays and objects are stored as JSON"
+    - "Only numbers"
+  answer: 1
+  explanation: "Use JSON.stringify to save and JSON.parse to read back."
+- question: "Your script in the <head> cannot find any elements. What fixes it?"
+  options:
+    - "Add defer to the script, or move it to the end of the body"
+    - "Use getElementById instead"
+    - "Reload the page twice"
+  answer: 0
+  explanation: "Without defer, a script in the head runs before the body has been read."

@@ -1,0 +1,40 @@
+- question: "What does export do in a module?"
+  options:
+    - "Makes a value or function available to other files"
+    - "Sends the file to a server"
+    - "Deletes the function"
+  answer: 0
+  explanation: "Anything not exported stays private to its own file."
+- question: "Which import is correct for your own file prices.js in the same folder?"
+  options:
+    - "import { withVat } from \"prices.js\";"
+    - "import { withVat } from \"./prices.js\";"
+  answer: 1
+  explanation: "Your own files need ./ (or ../). A bare name is looked up as an installed package."
+- question: "Node says \"Cannot use import statement outside a module\". What is the usual fix?"
+  options:
+    - "Add \"type\": \"module\" to package.json"
+    - "Rename the function"
+    - "Reinstall Node"
+  answer: 0
+  explanation: "New projects start in Node's older module system. npm pkg set type=module switches them."
+- question: "Why is node_modules never committed to Git?"
+  options:
+    - "It is huge and can be rebuilt exactly from package.json and package-lock.json with npm install"
+    - "Git cannot store JavaScript"
+  answer: 0
+  explanation: "Add it to .gitignore."
+- question: "A dependency is listed as \"^3.2.0\". Which update would npm install accept?"
+  options:
+    - "3.5.1"
+    - "4.0.0"
+    - "3.1.9"
+  answer: 0
+  explanation: "^ allows newer minor and patch versions within the same major version."
+- question: "What does npm run build do in a Vite project?"
+  options:
+    - "Starts the development server"
+    - "Creates the finished, optimised site in dist"
+    - "Installs Vite"
+  answer: 1
+  explanation: "npm run dev is the development server; npm run build makes dist for publishing."

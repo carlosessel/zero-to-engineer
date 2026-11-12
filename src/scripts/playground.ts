@@ -214,5 +214,14 @@ for (const pre of Array.from(document.querySelectorAll<HTMLElement>('.body pre[d
 // JavaScript examples on their own.
 for (const pre of Array.from(document.querySelectorAll<HTMLElement>('.body pre[data-language="js"], .body pre[data-language="javascript"]'))) {
   if (pre.closest('[data-playground]')) continue;
-  new Group([pre], pre.closest<HTMLElement>('.codewrap') ?? pre, 'run');
+  const anchor = pre.closest<HTMLElement>('.codewrap') ?? pre;
+  // Code with import or export is a module: it needs separate files, so it cannot run on its own here.
+  if (/^\s*(import|export)\s/m.test(pre.textContent ?? '')) {
+    const note = document.createElement('p');
+    note.className = 'hint runner-note';
+    note.textContent = 'This example uses import or export, so it needs its own files. Run it with Node or Vite as the chapter describes.';
+    anchor.after(note);
+    continue;
+  }
+  new Group([pre], anchor, 'run');
 }

@@ -1,0 +1,40 @@
+- question: "In a stack trace, which line shows where the error actually happened?"
+  options:
+    - "The first line under the message"
+    - "The last line"
+    - "Stack traces do not say"
+  answer: 0
+  explanation: "The innermost function comes first; the lines below show what called it, back to where it started."
+- question: "What does \"Cannot read properties of undefined (reading 'name')\" usually mean?"
+  options:
+    - "Something you expected to be an object was undefined when you read .name from it"
+    - "The property name is misspelt in the CSS"
+    - "name is a reserved word"
+  answer: 0
+  explanation: "Look for where that value came from: a missing property, an index past the end, or a function that returned nothing."
+- question: "Why fix the cause rather than where the error appears?"
+  options:
+    - "Errors often show up some distance from the mistake that caused them"
+    - "It is faster to type"
+  answer: 0
+  explanation: "Follow the stack trace back to where the bad value came from."
+- question: "In the debugger, what does a conditional breakpoint do?"
+  options:
+    - "Pauses only when an expression you give is true"
+    - "Pauses every other time"
+    - "Fixes the condition automatically"
+  answer: 0
+  explanation: "Useful inside loops: pause only on the iteration that goes wrong."
+- question: "What is wrong with an empty catch block?"
+  options:
+    - "Nothing; it stops errors"
+    - "It hides errors, so nobody notices when something fails"
+  answer: 1
+  explanation: "Catch errors you can handle sensibly, and at least log or report the rest."
+- question: "A total comes out as NaN. What should you look for?"
+  options:
+    - "An undefined or text value going into arithmetic"
+    - "A missing semicolon"
+    - "A CSS error"
+  answer: 0
+  explanation: "One NaN anywhere spreads to the result. Print each part of the calculation to find it."

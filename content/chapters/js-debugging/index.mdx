@@ -1,0 +1,393 @@
+---
+title: "Debugging JavaScript"
+summary: "Reading errors, using the browser's debugger, and a method for finding bugs."
+prerequisites: [js-dom-events]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will have a method for finding out why code does not do what you expect, and the tools to follow it: error messages and stack traces, well-placed `console.log` calls, and the browser's debugger, which pauses your code so you can look inside. You will spend more of your working life debugging than writing new code, so this chapter is worth as much as any other.
+
+## Two kinds of bug
+
+- **The code stops with an error.** JavaScript tells you the kind of problem, a message, and where. These are the easier kind: the computer has already pointed at the problem.
+- **The code runs but does the wrong thing.** No error; the total is wrong, the button does nothing, the list shows twice. Here you must find where what happens first differs from what you meant.
+
+## A method
+
+People who debug well follow roughly the same steps, whatever the language:
+
+1. **Reproduce it.** Find exact steps that make the bug happen every time. A bug you cannot reproduce, you cannot confirm you have fixed.
+2. **Read everything the computer told you.** The whole error message and the line it names.
+3. **Form one guess** about the cause, and decide what you would see if the guess were right.
+4. **Check the guess by looking at real values**, not by rereading the code. Code shows what you meant; values show what is happening.
+5. **Narrow it down.** If the values are right at one point and wrong at a later one, the bug is between the two. Keep halving the distance.
+6. **Fix the cause, not the symptom**, then repeat step 1 to confirm it is gone, and check nothing else broke.
+
+## Reading an error and its stack trace
+
+Run this:
+
+```js
+function lineTotal(line) {
+  return line.price * line.quantity;
+}
+
+function basketTotal(lines) {
+  let total = 0;
+  for (const line of lines) {
+    total += lineTotal(line);
+  }
+  return total;
+}
+
+console.log(basketTotal([{ price: 15, quantity: 2 }, undefined]));
+```
+
+It stops with `TypeError: Cannot read properties of undefined (reading 'price')`. In the browser's Console, the message is followed by a **stack trace** like this (the exact file names and numbers vary):
+
+```text
+Uncaught TypeError: Cannot read properties of undefined (reading 'price')
+    at lineTotal (app.js:2:15)
+    at basketTotal (app.js:8:14)
+    at app.js:13:13
+```
+
+Read it top down:
+
+- The **type** and **message**: something was `undefined` when the code tried to read `.price` from it.
+- The **stack trace** lists the functions that were running, innermost first: the error happened in `lineTotal` at line 2, which was called by `basketTotal` at line 8, which was called from line 13. The numbers are line and column. Click a line in the Console to jump to it.
+
+The error happened in `lineTotal`, but the cause is further back: someone passed a list containing `undefined`. Errors often show up some distance from their cause, and the stack trace is the trail back.
+
+The errors you will meet most, and what they usually mean:
+
+| Error | Usually means |
+| --- | --- |
+| `ReferenceError: x is not defined` | A misspelt name, or a variable used outside its scope or before it is created |
+| `TypeError: Cannot read properties of undefined (reading 'y')` or `… of null` | Something you expected to be an object or element was not there: a missing property, an index past the end, a `querySelector` that matched nothing |
+| `TypeError: x is not a function` | Calling something that is not a function: a misspelt method name, or a value where you expected a function |
+| `TypeError: Assignment to constant variable.` | Giving a `const` a new value |
+| `SyntaxError: …` | The code is not valid JavaScript: an unclosed bracket or quote, a missing comma. Nothing in the file runs |
+
+## Printing values: console.log, deliberately
+
+The quickest way to see real values is to print them. Do it with intent: print the value you have a guess about, with a label, at the point where you suspect things go wrong.
+
+### A worked example: a wrong average
+
+A form collects three scores. The average should be 70, but the code prints a strange number:
+
+```js
+const typed = ["60", "70", "80"];
+
+let total = 0;
+for (const score of typed) {
+  total += score;
+}
+console.log("average", total / typed.length);
+```
+
+It prints `average 202360`. Guess: something is wrong with `total`. Check it by printing `total` and its type inside the loop:
+
+```js
+const typed = ["60", "70", "80"];
+
+let total = 0;
+for (const score of typed) {
+  total += score;
+  console.log("total is", total, typeof total);
+}
+```
+
+The output shows `total is 060 string`, then `total is 06070 string`, then `total is 0607080 string`: the scores are strings, so `+=` joins them onto the starting 0. Dividing converts the text `"0607080"` to the number 607080, and 607080 ÷ 3 is 202360. The fix is the cause (convert each score) rather than the symptom:
+
+```js
+const typed = ["60", "70", "80"];
+
+let total = 0;
+for (const score of typed) {
+  total += Number(score);
+}
+console.log("average", total / typed.length);
+```
+
+Now it prints `average 70`. Remove the debugging lines when you are done; a habit some teams have is to search for `console.log` before committing.
+
+## The debugger: pausing your code
+
+Printing works, but each question means editing and rerunning. The browser's **debugger** lets you pause the program at any line and look at every value at that moment, then step forward one line at a time.
+
+In Chrome or Edge, open the developer tools and choose **Sources**; in Firefox, **Debugger**. Then:
+
+1. **Find your file** in the list on the left and open it.
+2. **Set a breakpoint**: click the line number where you want to pause. A marker appears. A **breakpoint** is a place where the program will pause.
+3. **Make the code run**, for example by clicking the button that triggers it. The page freezes at your line, which is highlighted.
+4. **Look around.** The **Scope** pane shows every variable and its current value. Hover over a variable in the code to see its value. The Console now runs in the paused moment: type any expression, such as `typeof total`, to evaluate it there.
+5. **Step**:
+   - **Step over** runs the current line and pauses on the next.
+   - **Step into** goes inside a function called on this line.
+   - **Step out** finishes the current function and pauses where it was called from.
+   - **Resume** continues until the next breakpoint.
+6. **Watch** expressions: add an expression such as `total` or `items.length` to the Watch pane, and it is shown at every pause.
+
+A few more tools worth knowing:
+
+- Right-click a line number for a **conditional breakpoint**, which pauses only when an expression is true, such as `i === 47`. Invaluable inside loops.
+- Under **Event Listener Breakpoints**, tick "click" to pause in whatever code runs when anything is clicked, useful when you do not know which function handles a button.
+- Writing the statement `debugger;` in your code pauses there whenever the developer tools are open. Remove it afterwards.
+
+Spend twenty minutes with the debugger on your to-do list from the last chapter: set a breakpoint in the submit handler, add a task, and step through. Seeing your own code run line by line is one of the fastest ways to understand it.
+
+## Handling errors on purpose: try and catch
+
+Some errors are not bugs but situations your program should expect: a person types something that is not valid, a file is damaged, the network is down. `try` and `catch` let a program recover instead of stopping:
+
+```js
+function readSavedTasks(text) {
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    console.log("Saved data was damaged:", error.name);
+    return [];
+  }
+}
+
+console.log(readSavedTasks('["Buy flour"]'));
+console.log(readSavedTasks("{oops"));
+```
+
+If anything in the `try` block throws an error, JavaScript jumps to `catch` with the error object, whose `name` and `message` describe it. Here, damaged saved data gives an empty list instead of a broken page.
+
+You can also raise your own errors with `throw`, to stop early when something is impossible:
+
+```js
+function withdraw(balance, amount) {
+  if (amount > balance) {
+    throw new Error("Not enough money in the account");
+  }
+  return balance - amount;
+}
+
+try {
+  console.log(withdraw(100, 30));
+  console.log(withdraw(100, 300));
+} catch (error) {
+  console.log(error.message);
+}
+```
+
+The first call prints 70. The second throws, so the rest of the `try` block is skipped and the `catch` prints the message.
+
+Two rules: catch only errors you can do something sensible about, and never write an empty `catch` block that hides errors silently. A hidden error is far harder to debug than a visible one.
+
+## When you are stuck
+
+- **Explain the code aloud**, line by line, to a person or to an object on your desk. Saying what each line does often reveals the line that does not do what you thought. Programmers call this **rubber duck debugging**, after the habit of explaining to a toy duck.
+- **Make the smallest example** that still shows the bug. Delete everything that is not needed. Often the bug becomes obvious; if not, you now have something you can show someone.
+- **Search the exact error message**, in quotes.
+- **Ask well**: say what you expected, what happened instead, the smallest code that shows it, and what you have already tried. People help those who show their working.
+- **Take a break.** Many bugs are solved on the walk back.
+- **Check the boring things**: is the file saved? Is the browser showing the file you are editing? Did you refresh?
+
+## Common mistakes
+
+- **Reading only the first word of the error.** Read the message and the line.
+- **Fixing where the error appears instead of where it was caused.** Follow the stack trace back.
+- **Changing several things at once.** Then you do not know which change fixed it, or broke something else.
+- **Guessing instead of looking.** Print or pause to see the real values.
+- **Leaving `console.log` and `debugger;` lines in finished code.**
+- **Empty `catch` blocks** that swallow errors.
+- **Not reproducing first**, so you cannot tell whether the fix worked.
+
+## Practice
+
+**1. (warm-up)** What is a stack trace, and which line of it shows where the error happened?
+
+<Solution>
+
+The list of functions that were running when the error happened, with their files and line numbers. The top line under the message is where the error happened; the lines below show what called it.
+
+</Solution>
+
+**2. (warm-up)** What does `TypeError: menu.sortt is not a function` most likely mean?
+
+<Solution>
+
+A misspelt method name: arrays have `sort`, not `sortt`, so `menu.sortt` is `undefined`, which cannot be called.
+
+</Solution>
+
+**3. (warm-up)** In the debugger, what is the difference between step over and step into?
+
+<Solution>
+
+Step over runs the whole current line, including any function it calls, and pauses on the next line. Step into goes inside the function called on the current line and pauses at its first line.
+
+</Solution>
+
+**4. (standard)** This should print the numbers 1 to 5 but prints 0 to 4. Find the bug without running it, then fix it.
+
+```js
+for (let i = 0; i < 5; i++) {
+  console.log(i);
+}
+```
+
+<Solution>
+
+The counter starts at 0. Start at 1 and go up to and including 5:
+
+```js
+for (let i = 1; i <= 5; i++) {
+  console.log(i);
+}
+```
+
+An off-by-one error: the commonest loop bug. Check the first and last values every time.
+
+</Solution>
+
+**5. (standard)** This function should return how many items cost more than ₵10, but it stops with `ReferenceError: Cannot access 'count' before initialization`. Find and fix the bug.
+
+```js
+function countExpensive(prices) {
+  let count = 0;
+  for (const price of prices) {
+    if (price > 10) {
+      let count = count + 1;
+    }
+  }
+  return count;
+}
+console.log(countExpensive([5, 12, 20]));
+```
+
+<Solution>
+
+`let count = count + 1;` inside the `if` creates a new, separate `count` that exists only in that block, and the right-hand side tries to read that new variable before it has been given a value, hence the error. Even if it worked, it would update the wrong variable. Remove `let` so the outer `count` is updated:
+
+```js
+function countExpensive(prices) {
+  let count = 0;
+  for (const price of prices) {
+    if (price > 10) {
+      count = count + 1;
+    }
+  }
+  return count;
+}
+console.log(countExpensive([5, 12, 20]));
+```
+
+It prints `2`.
+
+</Solution>
+
+**6. (standard)** A button does nothing when clicked, and the Console shows no errors. List three things to check, in order.
+
+<Solution>
+
+1. Is the listener attached at all? Add `console.log("clicked")` at the start of the handler, or tick the "click" Event Listener Breakpoint. 2. Is it attached to the right element, and did `querySelector` find it (log the element)? 3. Is the handler running but doing the wrong thing (step through it in the debugger)? Also check the file is saved and the page refreshed.
+
+</Solution>
+
+**7. (standard)** Write `safeNumber(text)` that returns the number in `text`, or throws an `Error` with the message `Not a number: …` (including the text) if it is not one. Test it inside `try`/`catch` with `"42"` and `"forty"`.
+
+<Solution>
+
+```js
+function safeNumber(text) {
+  const n = Number(text);
+  if (Number.isNaN(n)) {
+    throw new Error(`Not a number: ${text}`);
+  }
+  return n;
+}
+
+try {
+  console.log(safeNumber("42"));
+  console.log(safeNumber("forty"));
+} catch (error) {
+  console.log(error.message);
+}
+```
+
+Prints `42`, then `Not a number: forty`.
+
+</Solution>
+
+**8. (standard)** What is wrong with this, and why is it worse than no `try` at all?
+
+```js
+try {
+  saveOrder(order);
+} catch (error) {}
+```
+
+<Solution>
+
+The empty `catch` swallows every error silently. If saving fails, nobody finds out: the person thinks the order was saved, and the developer sees nothing in the Console. At the very least, log the error and tell the person something went wrong.
+
+</Solution>
+
+**9. (standard)** A loop over 10,000 items gives a wrong result only for one item, number 4,812. How would you pause at exactly that item in the debugger?
+
+<Solution>
+
+Set a conditional breakpoint inside the loop with the condition `i === 4812` (or whatever the loop counter is called). The program runs normally and pauses only on that iteration.
+
+</Solution>
+
+**10. (stretch)** This should print the total of the basket, but prints `NaN`. Use the method (guess, then print or pause to check) to find the cause.
+
+```js
+const basket = [
+  { name: "bread", price: 15, qty: 2 },
+  { name: "milk", price: 9, quantity: 1 },
+];
+const total = basket.reduce((sum, item) => sum + item.price * item.qty, 0);
+console.log(total);
+```
+
+<Solution>
+
+Print each line's value: `basket.map((item) => item.price * item.qty)` gives `[30, NaN]`. The second item has `quantity`, not `qty`, so `item.qty` is `undefined`, and `9 * undefined` is `NaN`, which then makes the whole sum `NaN`. Fix the data so every item uses the same property name:
+
+```js
+const basket = [
+  { name: "bread", price: 15, qty: 2 },
+  { name: "milk", price: 9, qty: 1 },
+];
+const total = basket.reduce((sum, item) => sum + item.price * item.qty, 0);
+console.log(total);
+```
+
+It prints `39`. One `NaN` anywhere in a calculation spreads to the result, so when you see `NaN`, look for an `undefined` going into arithmetic.
+
+</Solution>
+
+**11. (stretch)** Set a breakpoint in the to-do list's submit handler from the last chapter (in your own copy), add a task, and step through to the end of the handler. Write down the values of `input.value` and `list.children.length` at the first and last lines.
+
+<Solution>
+
+Answers depend on what you typed. You should see `input.value` holding your text at the start and an empty string after `form.reset()`, and `list.children.length` one higher at the end than at the start. If the values ever surprise you, you have found something worth understanding.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Two kinds of bug: errors that stop the code, and wrong behaviour without an error.
+- The method: reproduce, read, guess, check with real values, narrow down, fix the cause, confirm.
+- Errors give a **type**, a **message** and a **stack trace** (innermost function first). The cause is often further back than where the error appears.
+- Print deliberately: the value you are unsure of, with a label and its type.
+- The **debugger** (Sources in Chrome, Debugger in Firefox) pauses at **breakpoints** so you can inspect Scope, Watch expressions and the Console, and step over, into and out. Conditional and event listener breakpoints save time.
+- `try`/`catch` handles expected errors; `throw new Error(…)` raises your own. Never write an empty `catch`.
+- When stuck: explain it aloud, shrink it, search the message, ask well, take a break.
+
+## Go deeper
+
+- [Chrome DevTools: Debug JavaScript](https://developer.chrome.com/docs/devtools/javascript), from Google. A walk-through of breakpoints, stepping, Scope and Watch on a small buggy page (whose bug is the same string-joining one as this chapter's worked example).
+- [MDN: JavaScript error reference](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Errors), from Mozilla. An explanation of each error message JavaScript can give, with examples of what causes it.
