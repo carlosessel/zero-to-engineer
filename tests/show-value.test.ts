@@ -39,6 +39,13 @@ describe('showValue', () => {
   it('joins several values with spaces, like console.log', () => {
     expect(showAll(['Total:', 30, [1, 2]])).toBe('Total: 30 [1, 2]');
   });
+  it('fills in %s and similar markers, as browsers do', () => {
+    expect(showAll(['Each child needs a "key".%s See %s.', ' (in List)', 'the docs'])).toBe('Each child needs a "key". (in List) See the docs.');
+    expect(showAll(['%d items cost %s', '3.7', 5, 'extra'])).toBe('3 items cost 5 extra');
+    expect(showAll(['%c styled', 'color: red'])).toBe(' styled');
+    expect(showAll(['100% sure'])).toBe('100% sure');
+    expect(showAll(['%s and %s', 'one'])).toBe('one and %s');
+  });
 });
 
 describe('the copy inside previews', () => {

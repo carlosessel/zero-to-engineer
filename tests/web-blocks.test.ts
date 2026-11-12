@@ -41,12 +41,20 @@ export function cssProblems(code: string): string[] {
   const ast = csstree.parse(code, { positions: true, onParseError: (e) => out.push(`parse: ${e.message}`) });
   csstree.walk(ast, {
     visit: 'Declaration',
-    enter(node) {
+    enter(node, item, list) {
+      void item;
+      void list;
       if (node.property.startsWith('--')) return; // custom properties may hold anything
       // A value using var() is only known when the page runs, so it cannot be checked
       // here; the real-browser checks cover those (css-tree says so rather than guessing).
       if (csstree.find(node.value, (n) => n.type === 'Function' && n.name.toLowerCase() === 'var')) return;
-      const m = csstree.lexer.matchDeclaration(node);
+      // Inside @font-face and similar at-rules, src and font-display are descriptors of
+      // that at-rule, not properties, and are checked against its own grammar.
+      const atrule = (this as unknown as { atrule: csstree.Atrule | null }).atrule;
+      const descriptors = atrule && ['font-face', 'page', 'counter-style', 'property', 'font-palette-values'].includes(atrule.name.toLowerCase());
+      const m = descriptors
+        ? csstree.lexer.matchAtruleDescriptor(atrule!.name, node.property, node.value)
+        : csstree.lexer.matchDeclaration(node);
       if (m.error) out.push(`${node.property}: ${m.error.message.split('\n')[0]} (line ${node.loc?.start.line})`);
     },
   });

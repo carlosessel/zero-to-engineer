@@ -1,0 +1,48 @@
+- question: "An effect has the dependency array []. When does it run?"
+  options:
+    - "After every render"
+    - "Once, after the first render"
+    - "Never, because the array is empty"
+  answer: 1
+  explanation: "An empty array means no value can change, so the effect runs once after the component first appears (and its cleanup when it disappears)."
+- question: "What is the cleanup function of an effect for?"
+  options:
+    - "Stopping what the effect started, such as a timer, before the effect runs again or the component disappears"
+    - "Clearing the component's state"
+    - "Removing the component's HTML from the page"
+  answer: 0
+  explanation: "React calls the returned function before re-running the effect and when the component is removed."
+- question: "In development, a fetch in your effect appears twice in the Network panel. The most likely reason?"
+  options:
+    - "A bug in fetch"
+    - "StrictMode runs effects as setup, cleanup, setup in development to reveal missing cleanups"
+    - "The server replied twice"
+  answer: 1
+  explanation: "This happens only in development. With an ignore flag in the cleanup, the first reply is discarded."
+- question: "Why does the data-loading pattern use an ignore flag?"
+  options:
+    - "To stop a late reply for an old request being put into state over a newer one"
+    - "To ignore errors"
+    - "To make the request faster"
+  answer: 0
+  explanation: "When the dependency changes, the cleanup marks the old request's result as unwanted, preventing race conditions."
+- question: "Where should the code that sends an order to the server when Send is pressed go?"
+  options:
+    - "In a useEffect that watches a 'submitted' state"
+    - "In the form's submit handler"
+  answer: 1
+  explanation: "It happens because of an event, so it belongs in that event's handler. Effects are for things that must happen because the component is on screen."
+- question: "Why use <Link to=\"/about\"> rather than <a href=\"/about\"> inside a React Router app?"
+  options:
+    - "Link changes the page without reloading, so state is kept and only what changed is replaced"
+    - "<a> does not work in JSX"
+    - "Link is more accessible than <a>"
+  answer: 0
+  explanation: "Link renders a real <a> (so it is just as accessible) but handles the click itself instead of asking the server for a new page."
+- question: "With the route /orders/:id, at the address /orders/42, what does useParams().id give?"
+  options:
+    - "The number 42"
+    - "The text \"42\""
+    - "\"/orders/42\""
+  answer: 1
+  explanation: "URL parameters are always text. Convert with Number(id) before comparing with numeric ids."

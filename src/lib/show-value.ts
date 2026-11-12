@@ -46,7 +46,30 @@ export function showValue(value: unknown): string {
   return inner(value, 0);
 }
 
-/** How console.log joins several values: each shown, separated by spaces. */
+/**
+ * How console.log joins several values: each shown, separated by spaces.
+ * Like browsers, a first string containing %s, %d, %i, %f, %o, %O or %c takes
+ * the next values in its place (React's warnings are written this way).
+ * Self-contained, like showValue, because its source is copied into previews.
+ */
+export function formatArgs(values: ArrayLike<unknown>, show: (v: unknown) => string): string {
+  const rest = Array.prototype.slice.call(values) as unknown[];
+  let first = '';
+  if (typeof rest[0] === 'string' && /%[sdifoOc]/.test(rest[0] as string)) {
+    first = (rest.shift() as string).replace(/%([sdifoOc%])/g, (m, k: string) => {
+      if (k === '%') return '%';
+      if (!rest.length) return m;
+      const v = rest.shift();
+      if (k === 'c') return '';
+      if (k === 'd' || k === 'i') return String(parseInt(String(v), 10));
+      if (k === 'f') return String(parseFloat(String(v)));
+      return typeof v === 'string' ? v : show(v);
+    });
+    return [first, ...rest.map((v) => show(v))].join(' ');
+  }
+  return rest.map((v) => show(v)).join(' ');
+}
+
 export function showAll(values: ArrayLike<unknown>): string {
-  return Array.prototype.map.call(values, (v: unknown) => showValue(v)).join(' ');
+  return formatArgs(values, showValue);
 }

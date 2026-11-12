@@ -1,0 +1,238 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: jsx
+  check: react
+  steps:
+  - click: Add one
+  - click: Add one
+  - click: Add one
+  - printed: count is now 3
+  - text: Clicked 0 times
+  note: 'Wrong on purpose: the variable changes but the page does not.'
+- block: 2
+  lang: jsx
+  check: react
+  steps:
+  - click: Add one
+  - text: Clicked 1 times
+  - click: Add one
+  - text: Clicked 2 times
+- block: 3
+  lang: jsx
+  check: react
+  steps:
+  - text: Choose a size.
+  - click: Large
+  - text: You chose large.
+  - click: Small
+  - text: You chose small.
+- block: 4
+  lang: jsx
+  check: react
+  steps:
+  - click: Like (0)
+  - text: Unlike (1)
+  - expect: document.querySelector('button').getAttribute('aria-pressed') === 'true'
+  - click: Unlike (1)
+  - text: Like (0)
+- block: 5
+  lang: jsx
+  check: react
+  steps:
+  - click: Add three
+  - text: 'Score: 1'
+  note: Shows on purpose that the three lines add one.
+- block: 6
+  lang: jsx
+  check: react
+  steps:
+  - click: Add three
+  - text: 'Score: 3'
+  - click: Add three
+  - text: 'Score: 6'
+- block: 7
+  lang: js
+  check: js
+  output: |
+    ["Bread", "Milk"] ["Bread", "Milk", "Eggs"]
+    { name: "Ama", quantity: 2 } { name: "Ama", quantity: 3 }
+- block: 8
+  lang: jsx
+  check: react
+  steps:
+  - text: 1 of 3 done.
+  - type:
+    - '#task'
+    - Buy eggs
+  - click: Add
+  - expect: '[...document.querySelectorAll(''li'')].map(li => li.textContent).join(''|'').includes(''Buy eggs'')'
+  - text: 1 of 4 done.
+  - expect: document.querySelector('#task').value === ''
+  - click_selector: li:nth-child(2) input[type=checkbox]
+  - text: 2 of 4 done.
+  - expect: document.querySelector('li:nth-child(2) s').textContent === 'Call Kofi'
+  - click_selector: li:nth-child(1) button
+  - text: 1 of 3 done.
+  - expect: '!document.body.textContent.includes(''Order flour'')'
+  - type:
+    - '#task'
+    - '   '
+  - click: Add
+  - expect: document.querySelectorAll('li').length === 3
+- block: 9
+  lang: jsx
+  check: not-run
+  reason: One line of block 8, shown again so it can be explained; it is run and tested as part of block 8.
+- block: 10
+  lang: jsx
+  check: react
+  steps:
+  - type:
+    - '#name'
+    - Ama
+  - select:
+    - '#size'
+    - large
+  - click_selector: input[name=gift]
+  - click: Order
+  - text: Thank you, Ama. A large cake, gift wrapped, is on its way.
+- block: 11
+  lang: jsx
+  check: react
+  steps:
+  - click: Tell me
+  - text: Enter your email address.
+  - expect: document.querySelector('#email').getAttribute('aria-invalid') === 'true'
+  - type:
+    - '#email'
+    - ama
+  - text: An email address needs an @.
+  - type:
+    - '#email'
+    - '@example.com'
+  - click: Tell me
+  - text: Thanks! We will email ama@example.com when the shop opens.
+- block: 12
+  lang: jsx
+  check: react
+  steps:
+  - text: Your basket is empty.
+  - click: Add Sourdough loaf
+  - text: 1 item, total £4.50
+  - click: Add Cinnamon bun
+  - text: 2 items, total £7.25
+  - click: Empty basket
+  - text: Your basket is empty.
+- block: 13
+  lang: jsx
+  check: react
+  steps:
+  - click: Add one
+  - text: Clicked 1 time
+  - no_text: 1 times
+  - click: Add one
+  - text: Clicked 2 times
+- block: 14
+  lang: jsx
+  check: react
+  steps:
+  - expect: document.querySelectorAll('button')[0].disabled === true
+  - click: '+1'
+  - click: '+1'
+  - text: 'Count: 2'
+  - click: −1
+  - text: 'Count: 1'
+  - click: Reset
+  - text: 'Count: 0'
+  - expect: document.querySelectorAll('button')[0].disabled === true
+- block: 15
+  lang: jsx
+  check: react
+  steps:
+  - no_text: twice a day
+  - click: Show more
+  - text: We feed our starter twice a day
+  - text: Show less
+  - expect: document.querySelector('button').getAttribute('aria-expanded') === 'true'
+  - click: Show less
+  - no_text: twice a day
+- block: 16
+  lang: jsx
+  check: react
+  steps:
+  - text: 0 / 140
+  - type:
+    - '#review'
+    - Lovely bread
+  - text: 12 / 140
+  - type:
+    - '#review'
+    - xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+  - text: Too long by 3
+- block: 17
+  lang: js
+  check: js
+  output: |
+    ["Ama", "Priya"]
+    ["Ama B.", "Kofi", "Priya"]
+    ["Ama", "Kofi", "Priya"]
+- block: 18
+  lang: jsx
+  check: react
+  steps:
+  - expect: document.querySelector('p') === null
+  - type:
+    - '#c'
+    - '21'
+  - text: 21 °C is 69.8 °F
+- block: 19
+  lang: jsx
+  check: react
+  steps:
+  - expect: document.querySelector('button').disabled
+  - type:
+    - '#pw'
+    - bread123
+  - type:
+    - '#pw2'
+    - bread12
+  - text: The passwords do not match.
+  - expect: document.querySelector('button').disabled
+  - type:
+    - '#pw2'
+    - '3'
+  - no_text: do not match
+  - expect: '!document.querySelector(''button'').disabled'
+- block: 20
+  lang: jsx
+  check: react
+  steps:
+  - text: Set to 20 °C
+  - click: Cooler
+  - text: Set to 19 °C (eco)
+  - click: Warmer
+  - click: Warmer
+  - text: Set to 21 °C
+  - no_text: eco
+- block: 21
+  lang: jsx
+  check: react
+  steps:
+  - click: Add Cinnamon bun
+  - click: Add Cinnamon bun
+  - click: Add Rye loaf
+  - expect: '[...document.querySelectorAll(''li'')].map(li => li.textContent).join(''|'') === ''2 × Cinnamon bun|1 × Rye loaf'''
+  - text: Total £9.30
+- block: 22
+  lang: jsx
+  check: react
+  steps:
+  - click_selector: button
+  - expect: document.querySelector('button').textContent === '1'
+  note: 'Wrong on purpose: one click adds one.'
+- block: 23
+  lang: jsx
+  check: react
+  steps:
+  - click_selector: button
+  - expect: document.querySelector('button').textContent === '2'

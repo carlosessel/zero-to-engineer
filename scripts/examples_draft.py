@@ -65,9 +65,17 @@ def draft(chapter):
             if "stopped with" in body[0]:
                 e["DRAFT_PROBLEM"] = body[0]
             e["output"] = Block(body[1] if len(body) > 1 else "")
-        elif lang == "jsx":
-            e["check"] = "vitest"
-            e["test"] = f"{chapter} block {i}"
+        elif lang in ("jsx", "tsx") and re.search(r"^\s*export\s+default\b|\bcreateRoot\s*\(", code, re.M):
+            e["check"] = "react"
+            shown = subprocess.run(["node", "scripts/react_output.ts", chapter, str(i)], capture_output=True, text=True).stdout
+            e["DRAFT_SHOWN"] = Block(shown)
+            if "ERROR:" in shown or "WARNED:" in shown:
+                e["DRAFT_PROBLEM"] = "it stopped with an error or React warned; read DRAFT_SHOWN"
+        elif lang in ("ts", "tsx"):
+            e["check"] = "ts"
+        elif lang in ("jsx",):
+            e["check"] = "not-run"
+            e["reason"] = "TODO: a piece of a component, not a whole file; combine it or explain"
         elif lang == "text":
             e["check"] = "illustration"
         else:

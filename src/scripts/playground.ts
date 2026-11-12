@@ -3,13 +3,27 @@
 // - Code blocks inside <Playground> are one example: the HTML, CSS and JavaScript
 //   are combined into one page, and the preview is shown straight away.
 // - An HTML block on its own gets a "Show the result" button.
-// - A JavaScript block on its own gets a "Run" button that shows what it prints.
+// - A JavaScript or TypeScript block on its own gets a "Run" button that shows what it prints.
+// - A React (JSX or TSX) block that exports a component, or shows one with createRoot,
+//   gets a "Show the result" button. See src/lib/react-preview.ts for how it runs.
 // The preview is a sandboxed frame: its code cannot read this site's storage or
 // your progress, and nothing is sent anywhere.
-import { buildDocument, webNewline, type Sources } from '../lib/playground';
+import { buildDocument, webNewline, type ReactPart, type Sources } from '../lib/playground';
+import { compile, syntaxMessage, type Transform } from '../lib/react-preview';
 
-type Lang = keyof Sources;
-const LANG: Record<string, Lang> = { html: 'html', css: 'css', js: 'js', javascript: 'js' };
+type Lang = 'html' | 'css' | 'js' | 'ts' | 'jsx' | 'tsx';
+const LANG: Record<string, Lang> = { html: 'html', css: 'css', js: 'js', javascript: 'js', ts: 'ts', typescript: 'ts', jsx: 'jsx', tsx: 'tsx' };
+const NAME: Record<Lang, string> = { html: 'HTML', css: 'CSS', js: 'JavaScript', ts: 'TypeScript', jsx: 'React code', tsx: 'React code' };
+
+// Sucrase (which turns JSX and TypeScript into JavaScript) is loaded only when first needed.
+let sucrase: Promise<Transform> | null = null;
+const transformer = () => (sucrase ??= import('sucrase').then((m) => m.transform as unknown as Transform));
+const base = import.meta.env.BASE_URL.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL}/`;
+const runtimeUrl = () => new URL(`${base}vendor/react-runtime.js`, location.href).href;
+// In development the libraries go inline (see reactScripts); fetched once per page.
+let runtimeCode: Promise<string | undefined> | null = null;
+const devRuntime = () =>
+  (runtimeCode ??= import.meta.env.DEV ? fetch(runtimeUrl()).then((r) => r.text()) : Promise.resolve(undefined));
 let counter = 0;
 const groups = new Map<string, Group>();
 
@@ -80,18 +94,38 @@ class Group {
     if (immediate) this.render();
   }
 
-  sources(): Sources {
-    const s: Sources = { html: '', css: '', js: '' };
-    for (const b of this.blocks) s[b.lang] += (s[b.lang] ? '\n' : '') + (b.editor ? b.editor.value : b.original);
-    return s;
-  }
+  rendering = 0;
 
-  render() {
+  async render() {
     if (!this.active) return;
+    const turn = ++this.rendering;
     this.output.textContent = '';
     this.output.hidden = true;
     this.printed = false;
-    this.frame.srcdoc = buildDocument(this.sources(), this.id);
+    const s: Sources = { html: '', css: '', js: '' };
+    let react: ReactPart | undefined;
+    const add = (key: keyof Sources, code: string) => (s[key] += (s[key] ? '\n' : '') + code);
+    for (const b of this.blocks) {
+      const code = b.editor ? b.editor.value : b.original;
+      if (b.lang === 'html' || b.lang === 'css' || b.lang === 'js') { add(b.lang, code); continue; }
+      let transform: Transform;
+      try {
+        transform = await transformer();
+      } catch {
+        this.log('uncaught', 'The tool that runs this example did not load. Check your connection and reload the page.');
+        return;
+      }
+      try {
+        if (b.lang === 'ts') add('js', transform(code, { transforms: ['typescript'] }).code);
+        else react = { compiled: compile(code, b.lang, transform), runtimeUrl: runtimeUrl(), runtimeCode: await devRuntime() };
+      } catch (e) {
+        if (turn === this.rendering) this.log('uncaught', syntaxMessage(e));
+        return;
+      }
+    }
+    // Someone typed again while this was being prepared: the newer version wins.
+    if (turn !== this.rendering) return;
+    this.frame.srcdoc = buildDocument(s, this.id, react);
   }
 
   later() {
@@ -136,8 +170,8 @@ class Group {
       t.spellcheck = false;
       t.setAttribute('autocapitalize', 'off');
       t.setAttribute('aria-label', this.mode === 'run'
-        ? 'JavaScript you can change. Press Run, or Control and Enter, to run it. To leave with the keyboard, press Escape and then Tab.'
-        : `${b.lang.toUpperCase()} you can change; the result updates as you type. To leave with the keyboard, press Escape and then Tab.`);
+        ? `${NAME[b.lang]} you can change. Press Run, or Control and Enter, to run it. To leave with the keyboard, press Escape and then Tab.`
+        : `${NAME[b.lang]} you can change; the result updates as you type. To leave with the keyboard, press Escape and then Tab.`);
       t.rows = Math.max(3, b.original.split('\n').length + 1);
       t.addEventListener('input', () => this.later());
       t.addEventListener('keydown', (e) => this.key(e, t));
@@ -211,17 +245,30 @@ for (const pre of Array.from(document.querySelectorAll<HTMLElement>('.body pre[d
   if (pre.closest('[data-playground]')) continue;
   new Group([pre], pre.closest<HTMLElement>('.codewrap') ?? pre, 'show');
 }
-// JavaScript examples on their own.
-for (const pre of Array.from(document.querySelectorAll<HTMLElement>('.body pre[data-language="js"], .body pre[data-language="javascript"]'))) {
+function note(anchor: HTMLElement, text: string) {
+  const p = document.createElement('p');
+  p.className = 'hint runner-note';
+  p.textContent = text;
+  anchor.after(p);
+}
+
+// JavaScript and TypeScript examples on their own.
+for (const pre of Array.from(document.querySelectorAll<HTMLElement>('.body pre[data-language="js"], .body pre[data-language="javascript"], .body pre[data-language="ts"], .body pre[data-language="typescript"]'))) {
   if (pre.closest('[data-playground]')) continue;
   const anchor = pre.closest<HTMLElement>('.codewrap') ?? pre;
   // Code with import or export is a module: it needs separate files, so it cannot run on its own here.
   if (/^\s*(import|export)\s/m.test(pre.textContent ?? '')) {
-    const note = document.createElement('p');
-    note.className = 'hint runner-note';
-    note.textContent = 'This example uses import or export, so it needs its own files. Run it with Node or Vite as the chapter describes.';
-    anchor.after(note);
+    note(anchor, 'This example uses import or export, so it needs its own files. Run it with Node or Vite as the chapter describes.');
     continue;
   }
   new Group([pre], anchor, 'run');
+  if (LANG[pre.dataset.language ?? ''] === 'ts') note(anchor, 'Run removes the types and runs the JavaScript that is left. It does not check the types: your editor and tsc do that.');
+}
+
+// React examples on their own: only a whole component file can be shown.
+for (const pre of Array.from(document.querySelectorAll<HTMLElement>('.body pre[data-language="jsx"], .body pre[data-language="tsx"]'))) {
+  if (pre.closest('[data-playground]')) continue;
+  const code = pre.textContent ?? '';
+  if (!/^\s*export\s+default\b|\bcreateRoot\s*\(/m.test(code)) continue;
+  new Group([pre], pre.closest<HTMLElement>('.codewrap') ?? pre, 'show');
 }

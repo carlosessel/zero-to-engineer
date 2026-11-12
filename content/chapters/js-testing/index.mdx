@@ -1,0 +1,790 @@
+---
+title: "Testing JavaScript and React"
+summary: "Unit tests with Vitest, testing components, and what to test."
+prerequisites: [typescript-basics]
+estimated_minutes: 180
+status: deepened
+---
+
+By the end of this chapter you will be able to write automatic tests for your JavaScript functions and React components, run them with one command, and read what they tell you when something breaks. Tests are how professional teams change code without fear, and employers expect even junior developers to write them.
+
+## Why write tests?
+
+So far you have checked your code by running it and looking: click the button, see if the number goes up. That works once. But every change you make afterwards might break something you checked last week, and nobody has time to click through a whole app after every change.
+
+A **test** is a small piece of code that runs part of your program and checks that the result is what it should be. Once written, it runs in a fraction of a second, as often as you like. A project's collection of tests is called its **test suite**. Tests give you three things:
+
+- **Confidence to change code.** When you tidy up a function, the tests tell you within seconds whether it still does what it did. A feature that used to work and has stopped is called a **regression**, and catching regressions is the main job of a test suite.
+- **A description of what the code should do**, which stays true because it is checked every time.
+- **Faster work**, oddly. Checking a function by running its test is quicker than clicking through the app to reach it.
+
+This very site has more than 1,200 automatic tests (1,223 when this chapter was written), including checks of every code example in this course: that is how the examples in this chapter are known to work.
+
+## Vitest
+
+**Vitest** is a test runner: it finds your test files, runs them, and reports what passed and failed. It is made by the Vite team and works with Vite projects with no extra setup. (You may also meet **Jest**, an older test runner that Vitest copies closely: what you learn here mostly carries over.)
+
+In a Vite project, install it as a development dependency (<Ref to="js-modules-tooling" />):
+
+```bash
+npm install --save-dev vitest
+```
+
+Then add a `test` script to `package.json`, next to the ones Vite created:
+
+```json
+{
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "test": "vitest"
+  }
+}
+```
+
+`npm test` now starts Vitest in **watch mode**: it runs the tests, then waits, and runs them again whenever you save a file. Press `q` to stop it. `npx vitest run` runs them once and stops, which is what automated checks use.
+
+## Your first test
+
+Here is a small module with three functions about prices. Save it as `src/price.js`:
+
+```js
+export function lineTotal(price, quantity) {
+  return price * quantity;
+}
+
+export function formatPrice(amount) {
+  return `£${amount.toFixed(2)}`;
+}
+
+export function applyDiscount(price, percent) {
+  if (percent < 0 || percent > 100) {
+    throw new RangeError("The discount must be between 0 and 100 per cent");
+  }
+  return Math.round(price * (100 - percent)) / 100;
+}
+```
+
+And here are tests for it, in `src/price.test.js`. Vitest treats any file whose name ends in `.test.js` (or `.test.jsx`, `.test.ts`, `.test.tsx`) as a test file:
+
+```js
+import { describe, expect, it } from "vitest";
+import { applyDiscount, formatPrice, lineTotal } from "./price.js";
+
+describe("lineTotal", () => {
+  it("multiplies the price by the quantity", () => {
+    expect(lineTotal(2.75, 3)).toBe(8.25);
+  });
+
+  it("is zero when the quantity is zero", () => {
+    expect(lineTotal(4.5, 0)).toBe(0);
+  });
+});
+
+describe("formatPrice", () => {
+  it("adds a pound sign and two decimal places", () => {
+    expect(formatPrice(4.5)).toBe("£4.50");
+  });
+
+  it("rounds to the nearest penny", () => {
+    expect(formatPrice(3.456)).toBe("£3.46");
+  });
+});
+
+describe("applyDiscount", () => {
+  it("takes the percentage off", () => {
+    expect(applyDiscount(20, 25)).toBe(15);
+  });
+});
+```
+
+Reading it from the top:
+
+- The first line imports three functions from Vitest. The second imports the code being tested.
+- **`it("…", () => { … })`** defines one test: a sentence saying what should be true, and a function that checks it. (Vitest also accepts `test` instead of `it`; they are the same thing. `it` makes the name read as a sentence: "it multiplies the price by the quantity".)
+- **`describe("…", () => { … })`** groups related tests under a heading. It is optional, but it makes the report easier to read.
+- **`expect(value).toBe(expected)`** is an **assertion**: a check that must hold. `expect` takes the actual value; `toBe` says what it should be. If they differ, the test fails. `toBe` is one of many **matchers**, the methods that say what kind of check to make.
+
+Run `npx vitest run` and Vitest reports something like this:
+
+```text
+ ✓ src/price.test.js (5 tests) 4ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+```
+
+Every test passed. Notice that these tests check **behaviour**: what goes in and what comes out. They say nothing about *how* each function works inside, so you could rewrite `formatPrice` completely and, if the tests still pass, you know it still does its job.
+
+### When a test fails
+
+To see what a failure looks like, here is a test with a mistake in its expected value, as if someone had worked out 2.75 × 3 in their head and got it wrong:
+
+```js
+import { expect, it } from "vitest";
+import { lineTotal } from "./price.js";
+
+it("multiplies the price by the quantity", () => {
+  expect(lineTotal(2.75, 3)).toBe(8.2);
+});
+```
+
+Vitest's report:
+
+```text
+ FAIL  src/price.test.js > multiplies the price by the quantity
+AssertionError: expected 8.25 to be 8.2 // Object.is equality
+
+- Expected
++ Received
+
+- 8.2
++ 8.25
+
+ ❯ src/price.test.js:5:30
+```
+
+Read it in order: which test failed (the file, then the test's name), what was **received** (8.25, the actual value) against what was **expected** (8.2), and the line of the test. Here the *test* is wrong, not the code. That happens, and it is why a failure is a question ("which is right?"), not an automatic verdict on the code.
+
+A useful habit: when you write a new test, make it fail once on purpose (change the expected value) to check that it can fail at all. A test that always passes, whatever the code does, protects nothing.
+
+## Matchers you will use most
+
+```js
+import { describe, expect, it } from "vitest";
+
+describe("common matchers", () => {
+  it("toBe compares simple values exactly", () => {
+    expect(2 + 2).toBe(4);
+    expect("bread".toUpperCase()).toBe("BREAD");
+  });
+
+  it("toEqual compares the contents of objects and arrays", () => {
+    const order = { item: "Rye loaf", quantity: 2 };
+    expect(order).toEqual({ item: "Rye loaf", quantity: 2 });
+    expect([1, 2, 3].map((n) => n * 2)).toEqual([2, 4, 6]);
+  });
+
+  it("toContain checks an array has an item, or a string has some text", () => {
+    expect(["Ama", "Kofi"]).toContain("Kofi");
+    expect("Fresh bread daily").toContain("bread");
+  });
+
+  it("toBeCloseTo allows for rounding in decimal sums", () => {
+    expect(0.1 + 0.2).toBeCloseTo(0.3);
+  });
+
+  it("toThrow checks that a function throws an error", () => {
+    expect(() => JSON.parse("not json")).toThrow();
+  });
+
+  it("not reverses any matcher", () => {
+    expect([1, 2, 3]).not.toContain(4);
+  });
+});
+```
+
+The ones that need explaining:
+
+- **`toBe` versus `toEqual`.** `toBe` asks "is this the very same value?" For numbers and strings that is what you want. But two separately made objects are never the *same* object, even with the same contents, so `expect({ a: 1 }).toBe({ a: 1 })` fails. **`toEqual`** compares the contents. Use `toEqual` for objects and arrays.
+- **`toBeCloseTo`.** Computers store most decimals slightly inexactly, so `0.1 + 0.2` is `0.30000000000000004` (you met this in <Ref to="js-values-variables" />), and `toBe(0.3)` fails. `toBeCloseTo` allows a tiny difference.
+- **`toThrow`.** You pass a *function* that makes the call, `() => JSON.parse("not json")`, not the call itself. If you wrote `expect(JSON.parse("not json"))`, the error would be thrown before `expect` even started, and the test would crash instead of checking.
+
+## What to test
+
+You cannot test everything, and you should not try. Some guidance that works:
+
+- **Test behaviour, not how the code works inside.** Check what a function returns or what a person sees on screen, not which helper functions it called. Tests tied to the inside of the code break every time you tidy it, even when nothing is wrong.
+- **Test the edges.** Bugs gather at the boundaries: zero, empty lists, one item, the largest allowed value, the first value that is *not* allowed, missing data, text where a number was expected. These special inputs are called **edge cases**.
+- **One idea per test**, with a name that says what should be true. When "rounds to the nearest penny" fails, you know what broke without reading the code.
+- **Arrange, act, assert.** Most tests have three steps: set things up, do the thing, check the result. Keeping them in that order makes tests easy to read.
+- **When you fix a bug, first write a test that shows it** (and fails), then fix the code, and watch the test pass. That bug can never quietly come back.
+
+Here are edge-case tests for `applyDiscount`, following that advice:
+
+```js
+import { describe, expect, it } from "vitest";
+import { applyDiscount } from "./price.js";
+
+describe("applyDiscount at the edges", () => {
+  it("leaves the price alone for a 0% discount", () => {
+    expect(applyDiscount(4.5, 0)).toBe(4.5);
+  });
+
+  it("makes the price free for a 100% discount", () => {
+    expect(applyDiscount(4.5, 100)).toBe(0);
+  });
+
+  it("rounds to whole pence", () => {
+    expect(applyDiscount(2.99, 33)).toBe(2);
+  });
+
+  it("refuses a discount over 100%", () => {
+    expect(() => applyDiscount(4.5, 120)).toThrow("between 0 and 100");
+  });
+
+  it("refuses a negative discount", () => {
+    expect(() => applyDiscount(4.5, -10)).toThrow(RangeError);
+  });
+});
+```
+
+The rounding test is worth working through. 2.99 × (100 − 33) = 2.99 × 67 = 200.33; `Math.round` gives 200; ÷ 100 gives **2**, two pounds exactly. `toThrow` can be given part of the error's message or the kind of error to expect.
+
+## Testing code that waits
+
+Test functions can be `async`, and `await` works inside them as usual. The harder part is code that talks to a server: a test must not depend on the internet (it would be slow, and fail whenever the server or your connection did). Instead, the test replaces `fetch` with a stand-in that returns a fixed reply. A stand-in like this is called a **mock**.
+
+Here is a function to test, in `src/people.js`:
+
+```js
+export async function loadNames(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(`The server replied ${response.status}`);
+  }
+  const people = await response.json();
+  return people.map((person) => person.name).sort();
+}
+```
+
+And its tests, in `src/people.test.js`:
+
+```js
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { loadNames } from "./people.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("loadNames", () => {
+  it("returns the names in alphabetical order", async () => {
+    const fakeFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ name: "Kofi" }, { name: "Ama" }],
+    });
+    vi.stubGlobal("fetch", fakeFetch);
+
+    const names = await loadNames("https://example.com/people");
+
+    expect(names).toEqual(["Ama", "Kofi"]);
+    expect(fakeFetch).toHaveBeenCalledWith("https://example.com/people");
+  });
+
+  it("throws when the server replies with an error", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+
+    await expect(loadNames("https://example.com/people")).rejects.toThrow("The server replied 500");
+  });
+});
+```
+
+New pieces:
+
+- **`vi`** is Vitest's toolbox for mocks. **`vi.fn()`** makes a mock function: it does nothing by default, but remembers every call. **`.mockResolvedValue(x)`** makes it return a promise that resolves to `x`, which is how the real `fetch` behaves.
+- The fake reply has only what `loadNames` uses: `ok`, and a `json` method that gives the data.
+- **`vi.stubGlobal("fetch", fakeFetch)`** replaces the global `fetch` with the mock for this test. **`afterEach`** runs after every test; there, `vi.unstubAllGlobals()` puts the real `fetch` back, so one test's stand-in cannot leak into the next.
+- **`toHaveBeenCalledWith`** checks that the mock was called, with these arguments.
+- **`await expect(promise).rejects.toThrow(…)`** checks that a promise fails with that error. Do not forget the `await`: without it, the test finishes before the check happens and passes whatever the result.
+
+## Testing React components
+
+To test a component, you show it on a pretend page and use it the way a person would: find a button by its label, click it, check what appears. Your tests then fail when something a *user* would notice is broken, and keep passing when you merely reorganise the code. The tools:
+
+- **jsdom**: a pretend browser page, written in JavaScript, so components can be shown without opening a browser.
+- **React Testing Library**: shows a component in jsdom (`render`) and finds things on the page the way people do (`screen.getByRole`).
+- **user-event**: clicks and types like a person, firing all the events a real mouse and keyboard would.
+- **jest-dom**: extra matchers for pages, such as `toBeInTheDocument` and `toHaveTextContent`. (Despite the name, it works with Vitest.)
+
+Install them all as development dependencies:
+
+```bash
+npm install --save-dev @testing-library/react @testing-library/dom @testing-library/user-event @testing-library/jest-dom jsdom
+```
+
+Then tell Vitest to use jsdom and to run a setup file before every test file. Create `vitest.config.js` in the project folder (Vitest uses this instead of `vite.config.js` when both exist):
+
+```js
+import { defineConfig } from "vitest/config";
+
+export default defineConfig({
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/setupTests.js"],
+  },
+});
+```
+
+And the setup file, `src/setupTests.js`:
+
+```js
+import "@testing-library/jest-dom/vitest";
+import { cleanup } from "@testing-library/react";
+import { afterEach } from "vitest";
+
+afterEach(() => {
+  cleanup();
+});
+```
+
+The first line adds jest-dom's matchers. The `afterEach` removes whatever each test showed, so that the next test starts with an empty page. (Testing Library does that by itself only if Vitest's `globals` setting is on. Without this line, the second test in a file still sees the first test's component, and finds two of everything.)
+
+### A first component test
+
+The counter from <Ref to="react-state-forms" />, as `src/Counter.jsx`:
+
+```jsx
+import { useState } from "react";
+
+export default function Counter() {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <p>Clicked {count} {count === 1 ? "time" : "times"}</p>
+      <button type="button" onClick={() => setCount(count + 1)}>Add one</button>
+      <button type="button" onClick={() => setCount(0)} disabled={count === 0}>Reset</button>
+    </>
+  );
+}
+```
+
+Its tests, in `src/Counter.test.jsx`:
+
+```jsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it } from "vitest";
+import Counter from "./Counter.jsx";
+
+describe("Counter", () => {
+  it("starts at zero with Reset disabled", () => {
+    render(<Counter />);
+    expect(screen.getByText("Clicked 0 times")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Reset" })).toBeDisabled();
+  });
+
+  it("counts clicks, with the right word for one", async () => {
+    const user = userEvent.setup();
+    render(<Counter />);
+
+    await user.click(screen.getByRole("button", { name: "Add one" }));
+    expect(screen.getByText("Clicked 1 time")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Add one" }));
+    expect(screen.getByText("Clicked 2 times")).toBeInTheDocument();
+  });
+
+  it("goes back to zero on Reset", async () => {
+    const user = userEvent.setup();
+    render(<Counter />);
+    await user.click(screen.getByRole("button", { name: "Add one" }));
+    await user.click(screen.getByRole("button", { name: "Reset" }));
+    expect(screen.getByText("Clicked 0 times")).toBeInTheDocument();
+  });
+});
+```
+
+- **`render(<Counter />)`** shows the component on the pretend page.
+- **`screen`** is the whole page. **`screen.getByRole("button", { name: "Add one" })`** finds the button whose accessible name (here, its text) is "Add one". If there is no such button, or more than one, it throws an error and the test fails.
+- **`userEvent.setup()`** prepares a pretend user. **`await user.click(…)`** clicks; the clicks are asynchronous, so `await` each one.
+- **`toBeInTheDocument()`** and **`toBeDisabled()`** come from jest-dom.
+- Each test renders its own `Counter` and starts from zero: tests must not depend on each other or on running in order.
+
+### Finding things the way people do
+
+Testing Library has many ways to find an element, and recommends an order. Its advice is to prefer the queries that match how people find things on a page:
+
+1. **`getByRole`**, with the element's role and name: `getByRole("button", { name: "Send" })`, `getByRole("heading", { name: "Basket" })`, `getByRole("checkbox", { name: "Gift wrap" })`. This is how screen reader users find things, so a test that finds an element this way also proves it is accessible (<Ref to="web-accessibility" />).
+2. **`getByLabelText`**, for form fields: finds the input whose `<label>` says this.
+3. **`getByText`**, for things that are not interactive, such as a message.
+4. **`getByTestId`**, which finds an element by a `data-testid` attribute added just for tests, only when nothing else works.
+
+A useful side effect: if `getByRole("button", { name: "Send" })` cannot find your button, often the button really *is* hard to use, for example a `<div>` with a click handler instead of a `<button>`. The test is pointing at an accessibility bug.
+
+Each query comes in three forms:
+
+| Form | When nothing matches | Use it for |
+|---|---|---|
+| `getBy…` | throws an error | things that should be there now |
+| `queryBy…` | returns `null` | checking something is *not* there: `expect(screen.queryByText("Error")).not.toBeInTheDocument()` |
+| `findBy…` | waits (up to a second), then throws | things that appear later, such as data from a server; `await` it |
+
+### Testing a form
+
+This sign-up form calls an `onSubmit` prop with what was typed, but only if the email looks right. Save it as `src/SignupForm.jsx`:
+
+```jsx
+import { useState } from "react";
+
+export default function SignupForm({ onSubmit }) {
+  const [email, setEmail] = useState("");
+  const [error, setError] = useState("");
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    if (!email.includes("@")) {
+      setError("Enter an email address with an @.");
+      return;
+    }
+    setError("");
+    onSubmit({ email: email.trim() });
+  }
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <label htmlFor="email">Email</label>
+      <input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
+      <button type="submit">Sign up</button>
+      {error && <p role="alert">{error}</p>}
+    </form>
+  );
+}
+```
+
+The tests, in `src/SignupForm.test.jsx`:
+
+```jsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
+import SignupForm from "./SignupForm.jsx";
+
+describe("SignupForm", () => {
+  it("sends the email when it is valid", async () => {
+    const user = userEvent.setup();
+    const handleSubmit = vi.fn();
+    render(<SignupForm onSubmit={handleSubmit} />);
+
+    await user.type(screen.getByLabelText("Email"), "ama@example.com");
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+
+    expect(handleSubmit).toHaveBeenCalledWith({ email: "ama@example.com" });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("shows an error and sends nothing when the @ is missing", async () => {
+    const user = userEvent.setup();
+    const handleSubmit = vi.fn();
+    render(<SignupForm onSubmit={handleSubmit} />);
+
+    await user.type(screen.getByLabelText("Email"), "ama.example.com");
+    await user.click(screen.getByRole("button", { name: "Sign up" }));
+
+    expect(screen.getByRole("alert")).toHaveTextContent("Enter an email address with an @.");
+    expect(handleSubmit).not.toHaveBeenCalled();
+  });
+});
+```
+
+The form has `noValidate`, as in <Ref to="react-state-forms" />. Without it, the browser's own check for `type="email"` stops the form being submitted when there is no `@`, so the component's message never appears. Writing the second test is how that mistake was found while this chapter was being written: the test could not find the alert.
+
+The component's `onSubmit` prop is a mock (`vi.fn()`), so the test can check exactly what the form would send, without any server. `user.type` types into the field one key at a time, just as a person would, so every `onChange` runs. The error message has `role="alert"`, which both helps screen reader users and gives the test an easy way to find it.
+
+### Testing a component that loads data
+
+For a component that fetches, mock `fetch` as before, and use **`findBy…`** to wait for the data to appear. Save as `src/PeopleList.jsx`:
+
+```jsx
+import { useEffect, useState } from "react";
+
+export default function PeopleList() {
+  const [people, setPeople] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    fetch("https://jsonplaceholder.typicode.com/users")
+      .then((response) => {
+        if (!response.ok) throw new Error(`The server replied ${response.status}`);
+        return response.json();
+      })
+      .then((data) => {
+        if (!ignore) setPeople(data);
+      })
+      .catch(() => {
+        if (!ignore) setFailed(true);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  if (failed) return <p role="alert">The list could not be loaded.</p>;
+  if (!people) return <p>Loading…</p>;
+  return (
+    <ul>
+      {people.map((p) => (
+        <li key={p.id}>{p.name}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+The tests, `src/PeopleList.test.jsx`:
+
+```jsx
+import { render, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import PeopleList from "./PeopleList.jsx";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe("PeopleList", () => {
+  it("shows Loading, then the people", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => [{ id: 1, name: "Ama" }, { id: 2, name: "Kofi" }],
+    }));
+    render(<PeopleList />);
+
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(await screen.findByText("Kofi")).toBeInTheDocument();
+    expect(screen.getAllByRole("listitem")).toHaveLength(2);
+  });
+
+  it("says so when loading fails", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: false, status: 500 }));
+    render(<PeopleList />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("could not be loaded");
+  });
+});
+```
+
+`findByText("Kofi")` keeps looking until Kofi appears (or a second passes), which covers the time the pretend fetch takes. `getAllByRole("listitem")` finds every `<li>`; `getAll…` returns an array instead of one element. The second test checks the error state, which is the state people forget to test, and the one users meet when things go wrong.
+
+## Other kinds of test
+
+The tests in this chapter are **unit tests** (one function or component at a time) and **integration tests** (several pieces together, such as a form and its validation). There is a third kind: **end-to-end tests**, which drive a real browser through the real, running app, clicking and typing like a person. They catch problems the other kinds cannot, but they are slower and break more easily, so teams write many unit tests, fewer integration tests, and a few end-to-end tests for the most important journeys (signing up, paying). **Playwright** is a popular tool for them; this site uses it to check every page in a real browser.
+
+Teams usually run all their tests automatically on every change, before it can be merged. You will set that up in a later part of the course.
+
+## Common mistakes
+
+- **Testing how the code works inside** (which helper was called, what the state variable is named) instead of what it does. Such tests break whenever you tidy the code.
+- **`toBe` on objects or arrays.** Use `toEqual`.
+- **`expect(fn()).toThrow()`** instead of `expect(() => fn()).toThrow()`: the error happens before `expect` runs.
+- **A missing `await`** before `user.click`, `findBy…` or `expect(…).rejects`. The test may finish before anything is checked, and pass when it should fail.
+- **Tests that depend on each other**, such as a second test that expects what the first one did. Each test sets up what it needs.
+- **Leaving the real `fetch` in a test**, so it depends on the internet. Mock it.
+- **Found multiple elements**: usually the page was not cleaned up between tests (see the setup file), or the name is not specific enough.
+- **`getByTestId` everywhere.** Prefer `getByRole` and `getByLabelText`, which also check accessibility.
+- **Never seeing a test fail.** Break the code (or the expected value) once, to prove the test can catch it.
+
+## Practice
+
+Run your answers with `npx vitest run` in a Vite project with Vitest installed. Problems 6 to 10 need the React Testing Library setup.
+
+**1. (warm-up)** Which matcher would you use to check that `getBasket()` returns `[{ id: 1, quantity: 2 }]`, and why not `toBe`?
+
+<Solution>
+
+`toEqual`. `toBe` checks it is the very same array, and a newly made array with the same contents is a different array, so `toBe` would fail even when the contents are right. `toEqual` compares contents.
+
+</Solution>
+
+**2. (warm-up)** What is wrong with `expect(applyDiscount(10, 150)).toThrow();`?
+
+<Solution>
+
+`applyDiscount(10, 150)` runs first, throws, and the test crashes before `expect` can check anything. Pass a function that makes the call: `expect(() => applyDiscount(10, 150)).toThrow();`.
+
+</Solution>
+
+**3. (warm-up)** You need to check that the message "No results" is *not* on the page. Which query do you use, and why not `getByText`?
+
+<Solution>
+
+`queryByText`, as in `expect(screen.queryByText("No results")).not.toBeInTheDocument();`. `getByText` throws an error when nothing matches, so the test would fail exactly when the message is correctly absent. `queryBy…` returns `null` instead.
+
+</Solution>
+
+**4. (standard)** Write tests for this function, including at least two edge cases:
+
+```js
+export function initials(fullName) {
+  return fullName
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part[0].toUpperCase())
+    .join("");
+}
+```
+
+<Solution>
+
+```js
+import { describe, expect, it } from "vitest";
+import { initials } from "./initials.js";
+
+describe("initials", () => {
+  it("takes the first letter of each name", () => {
+    expect(initials("Ama Mensah")).toBe("AM");
+  });
+
+  it("capitalises lower-case names", () => {
+    expect(initials("kofi boateng")).toBe("KB");
+  });
+
+  it("ignores extra spaces", () => {
+    expect(initials("  Priya   Shah ")).toBe("PS");
+  });
+
+  it("works for a single name", () => {
+    expect(initials("Cher")).toBe("C");
+  });
+
+  it("gives an empty string for an empty name", () => {
+    expect(initials("")).toBe("");
+  });
+});
+```
+
+The edge cases are extra spaces, one name, and an empty string. Writing the empty-string test is what shows the `.filter(Boolean)` matters: without it, `"".split(/\s+/)` gives `[""]`, and `part[0]` is `undefined`, which crashes on `.toUpperCase()`.
+
+</Solution>
+
+**5. (standard)** Write a test that checks `loadNames` (from this chapter) calls `fetch` exactly once. Look up the matcher `toHaveBeenCalledTimes`.
+
+<Solution>
+
+```js
+import { afterEach, expect, it, vi } from "vitest";
+import { loadNames } from "./people.js";
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+it("asks the server once", async () => {
+  const fakeFetch = vi.fn().mockResolvedValue({ ok: true, json: async () => [] });
+  vi.stubGlobal("fetch", fakeFetch);
+
+  await loadNames("https://example.com/people");
+
+  expect(fakeFetch).toHaveBeenCalledTimes(1);
+});
+```
+
+The reply is an empty list, which is also a useful edge case: `loadNames` should return `[]` without crashing.
+
+</Solution>
+
+**6. (standard)** Write a test for the "Show more" component from <Ref to="react-state-forms" /> (repeated here as `src/ShowMore.jsx`): the paragraph is hidden at first, appears after one click, and the button's text changes to "Show less".
+
+```jsx
+import { useState } from "react";
+
+export default function ShowMore() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <h2>Our sourdough</h2>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>
+        {open ? "Show less" : "Show more"}
+      </button>
+      {open && <p>We feed our starter twice a day and bake every loaf for 45 minutes.</p>}
+    </>
+  );
+}
+```
+
+<Solution>
+
+```jsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { expect, it } from "vitest";
+import ShowMore from "./ShowMore.jsx";
+
+it("shows and hides the extra text", async () => {
+  const user = userEvent.setup();
+  render(<ShowMore />);
+
+  expect(screen.queryByText(/twice a day/)).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "Show more" }));
+  expect(screen.getByText(/twice a day/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Show less" })).toHaveAttribute("aria-expanded", "true");
+});
+```
+
+`/twice a day/` is a regular expression: it matches any text containing those words, so the test does not need the whole sentence.
+
+</Solution>
+
+**7. (standard)** A test does `render(<Basket />)` and then `screen.getByRole("button", { name: "Pay" })`, but fails with "Unable to find an accessible element with the role "button" and name "Pay"". The page clearly shows the word Pay. What might be wrong with the component?
+
+<Solution>
+
+The "button" is probably not a real button: for example `<div onClick={pay}>Pay</div>` or a `<span>`. Those have no button role, so they cannot be found by role, and they also cannot be reached with the keyboard or recognised by screen readers. Change it to `<button type="button" onClick={pay}>Pay</button>`, and the test and the accessibility problem are both fixed. (Another possibility: the button's accessible name is different, such as an icon with `aria-label="Checkout"`.)
+
+</Solution>
+
+**8. (standard)** Add a test to `SignupForm` for this case: someone types an address with spaces around it, `  ama@example.com  `. What should `onSubmit` receive?
+
+<Solution>
+
+```jsx
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { expect, it, vi } from "vitest";
+import SignupForm from "./SignupForm.jsx";
+
+it("removes spaces around the email", async () => {
+  const user = userEvent.setup();
+  const handleSubmit = vi.fn();
+  render(<SignupForm onSubmit={handleSubmit} />);
+
+  await user.type(screen.getByLabelText("Email"), "  ama@example.com  ");
+  await user.click(screen.getByRole("button", { name: "Sign up" }));
+
+  expect(handleSubmit).toHaveBeenCalledWith({ email: "ama@example.com" });
+});
+```
+
+The component calls `email.trim()`, so the spaces are removed. This is an edge case worth a test: people often paste addresses with a space at the end.
+
+</Solution>
+
+**9. (stretch)** Why does Testing Library recommend `getByRole` over `getByTestId`? Give two reasons.
+
+<Solution>
+
+1. `getByRole` finds elements the way people (including screen reader users) find them, by what they are and what they are called. If the test can find the button, so can a person, so the test also guards accessibility. `getByTestId` finds anything with the right attribute, even an unusable `<div>`.
+2. Tests written with roles and labels keep passing when the code is reorganised but the page looks and works the same, and fail when a person would notice a change. Test ids are extra attributes that exist only for tests and say nothing about what the user experiences.
+
+</Solution>
+
+**10. (stretch)** A test for `PeopleList` passes on your computer but sometimes fails in automated checks with "Unable to find an element with the text: Kofi". The test uses `getByText("Kofi")` right after `render`. Explain, and fix it.
+
+<Solution>
+
+The names appear only after the (pretend) fetch resolves and React renders again, which happens a moment after `render` returns. `getByText` looks once, immediately; on a fast computer the data may already be there by chance, on a slower one it is not. Use `await screen.findByText("Kofi")`, which keeps looking until it appears or a second passes. Tests that pass or fail depending on timing are called **flaky**, and waiting properly for things that happen later is the usual cure.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **test** runs part of your code and checks the result. A **test suite** catches **regressions**: things that used to work and have stopped.
+- **Vitest** runs files ending in `.test.js` (or `.jsx`, `.ts`, `.tsx`). `it` (or `test`) defines a test, `describe` groups them, `expect(value).toBe(expected)` is an **assertion**.
+- Matchers: `toBe` for simple values, `toEqual` for objects and arrays, `toContain`, `toBeCloseTo` for decimals, `toThrow` (pass a function), `not`.
+- Test **behaviour**, test the **edge cases**, one idea per test, and see each test fail once.
+- Replace `fetch` with a **mock** (`vi.fn()`, `vi.stubGlobal`) so tests never depend on the internet; put the real one back in `afterEach`.
+- **React Testing Library** shows components in **jsdom**; **user-event** clicks and types like a person; **jest-dom** adds matchers like `toBeInTheDocument`. Clean up after each test.
+- Find elements with `getByRole` first, then `getByLabelText`, then `getByText`. Use `queryBy` to check something is absent and `await findBy` for things that appear later.
+- Unit and integration tests are fast and many; **end-to-end tests** (for example with Playwright) are few and cover the most important journeys.
+
+## Go deeper
+
+- [Getting Started](https://vitest.dev/guide/), from the Vitest team. Installing and running Vitest, and links to every matcher.
+- [React Testing Library: Introduction](https://testing-library.com/docs/react-testing-library/intro/) and [About Queries](https://testing-library.com/docs/queries/about/), from Testing Library. Setting up, and which query to use when.
+- [user-event](https://testing-library.com/docs/user-event/intro), from Testing Library. Every kind of click, typing and keyboard action it can simulate.
+- [Full Stack Open, Part 5c: Testing React apps](https://fullstackopen.com/en/part5/testing_react_apps/), from the University of Helsinki. The same tools, set up and used step by step in a larger app.

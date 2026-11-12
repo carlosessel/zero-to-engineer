@@ -1,6 +1,7 @@
 // Builds the page shown in an example's preview from its HTML, CSS and JavaScript.
 // Pure functions with no DOM, so they can be unit-tested.
-import { showValue } from './show-value';
+import { formatArgs, showValue } from './show-value';
+import { reactScripts } from './react-preview';
 
 export interface Sources {
   html: string;
@@ -8,13 +9,22 @@ export interface Sources {
   js: string;
 }
 
+/** A React example, already compiled (see react-preview.ts), and where the React libraries are. */
+export interface ReactPart {
+  compiled: string;
+  runtimeUrl: string;
+  /** The libraries' code itself, to put inline instead of loading runtimeUrl (used in development). */
+  runtimeCode?: string;
+}
+
 /** Runs inside the preview. Reports console messages, errors and form submissions to the chapter page. */
 export function bridgeScript(frameId: string): string {
   return `(function () {
   var id = ${JSON.stringify(frameId)};
   var show = ${showValue.toString()};
+  var format = ${formatArgs.toString()};
   function send(level, parts) {
-    parent.postMessage({ zte: 'playground', id: id, level: level, text: Array.prototype.map.call(parts, show).join(' ') }, '*');
+    parent.postMessage({ zte: 'playground', id: id, level: level, text: format(parts, show) }, '*');
   }
   ['log', 'info', 'warn', 'error'].forEach(function (level) {
     var original = console[level];
@@ -24,7 +34,11 @@ export function bridgeScript(frameId: string): string {
   // (Chrome starts it with "Uncaught "), so it is tidied to one form.
   window.addEventListener('error', function (e) {
     var m = String(e.message).replace(/^Uncaught /, '');
-    send('uncaught', ['The code stopped with an error: ' + m + (e.lineno ? ' (line ' + e.lineno + ')' : '')]);
+    // The example's scripts are named with sourceURL (example.js, App.jsx), so the error's
+    // stack says which line of the example it came from. Without that, say no line:
+    // the event's own line number counts from the top of this hidden page.
+    var at = e.error && e.error.stack && /(?:example\\.js|App\\.jsx):(\\d+)/.exec(String(e.error.stack));
+    send('uncaught', ['The code stopped with an error: ' + m + (at ? ' (line ' + at[1] + ')' : '')]);
   });
   window.addEventListener('unhandledrejection', function (e) {
     send('uncaught', ['The code stopped with an error: ' + show(e.reason)]);
@@ -82,12 +96,17 @@ export function dropLocalLinks(html: string, s: Pick<Sources, 'css' | 'js'>): st
 }
 
 /** The complete document for the preview frame. */
-export function buildDocument(s: Sources, frameId: string): string {
+export function buildDocument(s: Sources, frameId: string, react?: ReactPart): string {
   const style = s.css.trim() ? `<style>\n${s.css}\n</style>\n` : '';
   // A </script> inside the learner's own JavaScript would end the script early.
-  const userScript = s.js.trim() ? `<script>\n${s.js.replace(/<\/script/gi, '<\\/script')}\n</script>\n` : '';
+  // sourceURL names the script, so browsers count error line numbers from its first
+  // line (the example's line 1) instead of from the top of this whole page.
+  let userScript = s.js.trim() ? `<script>${s.js.replace(/<\/script/gi, '<\\/script')}\n//# sourceURL=example.js\n</script>\n` : '';
+  if (react) userScript += reactScripts(react.compiled, react.runtimeUrl, frameId, react.runtimeCode) + '\n';
   const bridge = `<script>${bridgeScript(frameId)}</script>\n`;
-  const html = dropLocalLinks(s.html, s);
+  let html = dropLocalLinks(s.html, s);
+  // React examples show themselves in an element with id="root", as in a Vite project.
+  if (react && !/\bid=["']?root\b/.test(html)) html += (html ? '\n' : '') + '<div id="root"></div>';
 
   if (!isFullDocument(html)) {
     return `<!DOCTYPE html>\n<html lang="en">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n${bridge}${style}</head>\n<body>\n${html}\n${userScript}</body>\n</html>\n`;

@@ -76,6 +76,14 @@ It drafts `examples.yaml` and records what each Python block printed. **Read eac
 
 For HTML, CSS and JavaScript, wrap an example's blocks in `<Playground>` so the learner sees a live, editable result (see the README's table of pieces). The draft gives `html` and `css` blocks `check: web`, which runs a validator. Wherever the chapter claims something about how an example looks or behaves (a width, a colour, what a form sends, one column on phones), change it to `check: browser` and write the claim as `expect` expressions, measured in real Chrome; `combine`, `viewport`, `also_at`, `actions` and `color_scheme` are described at the top of `e2e/examples.e2e.ts`. Examples that are wrong on purpose list the problem with `expect_problems`. Writing these checks finds real mistakes: in the CSS part, one example claimed a width the browser did not produce.
 
+JavaScript, TypeScript, React and test files have their own kinds of check, all described at the top of `tests/examples/harness.py`:
+- `js`: run in Node; `output` is compared exactly (`throws`, `stack_contains`, `expect`, `fetch_json` for saved API replies). Plain `js` blocks get a **Run** button on the page.
+- `react`: a `jsx` or `tsx` block that exports a component (or calls `createRoot`), compiled as the site compiles it and clicked through in a simulated page: `steps` such as `click`, `type`, `select`, `text`, `expect`; `warnings_contain` for blocks that show a React warning on purpose; `fetch_json`; `append` (hidden code, with a `note`) for a block that is only one component; `modules` for a block that imports another block. These blocks get **Show the result** on the page.
+- `ts`: type-checked in strict mode; `errors: [TS2322]` for blocks wrong on purpose; `output` to also run it with the types removed. A `tsx` block can also have `steps`.
+- `vitest-run`: test files run with Vitest as a learner would: `files` maps file names to block numbers, `passed` and `failed` give the expected counts, `hidden_files` (with a `note`) supplies anything the chapter does not show.
+
+The draft script records what each JavaScript block prints and what each React block shows (`DRAFT_SHOWN`); read them against the chapter, then delete the draft fields. Writing these checks finds real mistakes: in the front-end part, a sign-up form's own error message could never appear, because the browser's built-in email check blocked the form first.
+
 Rules that keep examples honest:
 - An example must run as written. If it needs a file, create the file in the example. If it continues from an earlier block in the same chapter, that is fine: blocks share a session. If it continues from another chapter, say so in a code comment.
 - Python examples run in the browser too (Pyodide). Plain Python, NumPy, pandas and scikit-learn work there. PyTorch, model APIs and anything needing the learner's own files cannot; the site says so automatically.

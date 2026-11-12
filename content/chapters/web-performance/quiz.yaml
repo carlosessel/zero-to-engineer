@@ -1,0 +1,49 @@
+- question: "Which is the first step when a page feels slow?"
+  options:
+    - "Measure it, with throttling, Lighthouse or PageSpeed Insights, and fix what the measurements point at"
+    - "Rewrite it in a faster framework"
+    - "Minify the CSS by hand"
+  answer: 0
+  explanation: "Guessing wastes time on things that do not matter. The tools list the biggest problems, with the files to blame."
+- question: "Which image should NOT have loading=\"lazy\"?"
+  options:
+    - "A photo near the bottom of a long article"
+    - "The large photo at the top of the home page"
+    - "Thumbnails in a footer"
+  answer: 1
+  explanation: "Lazy loading delays the download, which would make the Largest Contentful Paint later. Use it only for images people scroll to."
+- question: "Why do images need width and height attributes?"
+  options:
+    - "So the browser can save space for them before they arrive, and the page does not jump"
+    - "Images without them are not shown"
+    - "To stop CSS resizing them"
+  answer: 0
+  explanation: "Without them the content below moves when the image loads, which is layout shift (CLS). CSS can still resize the image."
+- question: "What does Cache-Control: no-cache mean?"
+  options:
+    - "Never store this file"
+    - "Store it, but check with the server before each use whether it has changed"
+    - "Keep it for one day"
+  answer: 1
+  explanation: "Despite the name, the file may be kept. Never storing it is no-store."
+- question: "Why is it safe to cache Vite's built files for a year?"
+  options:
+    - "Browsers ignore long cache times"
+    - "Their names contain a fingerprint of their contents, so a changed file gets a new name"
+    - "Vite files never change"
+  answer: 1
+  explanation: "The HTML is checked every time and points at the current names; old files are simply never asked for again."
+- question: "A click handler runs for 400 ms before the screen changes. Which measurement suffers?"
+  options:
+    - "LCP"
+    - "INP"
+    - "CLS"
+  answer: 1
+  explanation: "Interaction to Next Paint measures how long the page takes to respond visibly. Good is 200 ms or less."
+- question: "What does React.lazy with a dynamic import() do?"
+  options:
+    - "Makes the component render faster"
+    - "Puts the component's code in a separate file that is downloaded only when it is first shown"
+    - "Delays rendering until the page is idle"
+  answer: 1
+  explanation: "That is code splitting. Suspense shows its fallback while the file downloads."

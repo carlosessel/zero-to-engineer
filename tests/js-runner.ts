@@ -45,6 +45,7 @@ export async function runExample(code: string, opts: RunOptions = {}): Promise<R
     clearInterval,
     queueMicrotask,
     structuredClone,
+    performance,
     fetch: fakeFetch,
     URL,
     URLSearchParams,

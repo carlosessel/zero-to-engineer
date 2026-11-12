@@ -185,7 +185,7 @@ test('@phone the chapter menu opens and closes, and nothing overflows sideways',
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-const AXE_PAGES = ['/', '/ai/', '/web/', '/web/web-the-map/', '/web/web-setup/', '/web/git-basics/', '/web/html-from-zero/', '/web/html-forms-tables/', '/web/web-accessibility/', '/web/css-from-zero/', '/web/css-box-model/', '/web/css-layout/', '/web/responsive-design/', '/web/design-basics/', '/web/js-values-variables/', '/web/js-logic-functions/', '/web/js-arrays-objects/', '/web/js-dom-events/', '/web/js-debugging/', '/web/js-async-fetch/', '/web/js-modules-tooling/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
+const AXE_PAGES = ['/', '/ai/', '/web/', '/web/web-the-map/', '/web/web-setup/', '/web/git-basics/', '/web/html-from-zero/', '/web/html-forms-tables/', '/web/web-accessibility/', '/web/css-from-zero/', '/web/css-box-model/', '/web/css-layout/', '/web/responsive-design/', '/web/design-basics/', '/web/js-values-variables/', '/web/js-logic-functions/', '/web/js-arrays-objects/', '/web/js-dom-events/', '/web/js-debugging/', '/web/js-async-fetch/', '/web/js-modules-tooling/', '/web/react-basics/', '/web/react-state-forms/', '/web/react-data-routing/', '/web/typescript-basics/', '/web/js-testing/', '/web/web-performance/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
 for (const theme of ['light', 'dark'] as const) {
   test(`accessibility checks pass in ${theme} mode`, async ({ page }) => {
     test.setTimeout(300_000); // many pages, each analysed in full
@@ -307,4 +307,31 @@ test('a JavaScript example can be run, edited and shows errors plainly', async (
   await editor.fill('let x = 1;');
   await box.getByRole('button', { name: 'Run' }).click();
   await expect(out).toContainText('The code ran and printed nothing.');
+});
+
+test('a React example shows its result, responds to clicks, and points errors at the right line', async ({ page }) => {
+  await page.goto('/web/react-state-forms/');
+  const box = page.locator('.playground-result').nth(1);
+  await box.getByRole('button', { name: 'Show the result' }).click();
+  const frame = box.frameLocator('iframe');
+  // React loads from the site's own vendor bundle into the sandboxed frame.
+  await expect(frame.getByText('Clicked 0 times')).toBeVisible();
+  await frame.getByRole('button', { name: 'Add one' }).click();
+  await expect(frame.getByText('Clicked 1 times')).toBeVisible();
+
+  await box.getByRole('button', { name: 'Edit' }).click();
+  const editor = page.locator('.runner-editor').first();
+  await editor.fill('export default function App() {\n  const z = null;\n  return <p>{z.name}</p>;\n}');
+  await expect(box.locator('.playground-console .error').first()).toContainText(
+    "The code stopped with an error: TypeError: Cannot read properties of null (reading 'name') (line 3)",
+  );
+});
+
+test('a TypeScript example runs with its types removed, and says it does not check them', async ({ page }) => {
+  await page.goto('/web/typescript-basics/');
+  const box = page.locator('.playground-result').nth(1);
+  await box.getByRole('button', { name: 'Run' }).click();
+  await expect(box.locator('.playground-console')).toContainText('£4.50');
+  await expect(box.locator('.playground-console .error')).toContainText('price.toFixed is not a function (line 2)');
+  await expect(page.locator('.runner-note').first()).toContainText('It does not check the types');
 });

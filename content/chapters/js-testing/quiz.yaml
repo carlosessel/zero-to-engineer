@@ -1,0 +1,49 @@
+- question: "What is a regression?"
+  options:
+    - "A feature that used to work and has stopped working"
+    - "A test that runs slowly"
+    - "Going back to an older version of a library"
+  answer: 0
+  explanation: "Catching regressions automatically, after every change, is the main job of a test suite."
+- question: "expect({ id: 1 }).toBe({ id: 1 }) fails. Why?"
+  options:
+    - "toBe checks for the very same object, and these are two separate objects with the same contents"
+    - "Objects cannot be tested"
+    - "The ids are different types"
+  answer: 0
+  explanation: "Use toEqual to compare the contents of objects and arrays."
+- question: "Which test name and check is best for a function that adds VAT?"
+  options:
+    - "\"works\": expect(addVat(100)).toBeTruthy()"
+    - "\"adds 20% to the price\": expect(addVat(100)).toBe(120)"
+    - "\"calls multiply\": expect(multiply).toHaveBeenCalled()"
+  answer: 1
+  explanation: "A specific name and an exact expected value say what should be true. The last one tests how the code works inside, not what it does."
+- question: "Data appears in a component after a fetch. How should the test find it?"
+  options:
+    - "screen.getByText right after render"
+    - "await screen.findByText, which waits for it to appear"
+    - "Wait two seconds with setTimeout, then getByText"
+  answer: 1
+  explanation: "findBy… keeps looking until the element appears or the time limit passes, so the test is neither flaky nor slow."
+- question: "Why does Testing Library recommend getByRole first?"
+  options:
+    - "It is the fastest query"
+    - "It finds elements the way people, including screen reader users, do, so the test also checks accessibility"
+    - "It works without a DOM"
+  answer: 1
+  explanation: "If a test cannot find a button by its role and name, a screen reader user may not be able to either."
+- question: "Why mock fetch in a test instead of calling the real server?"
+  options:
+    - "Real requests are not allowed in JavaScript tests"
+    - "So the test is fast and does not fail when the internet or the server does"
+    - "Mocks make the code run faster in production"
+  answer: 1
+  explanation: "A test should fail only when your code is wrong. A mock also lets you test the error states easily."
+- question: "A new test passes the first time you run it. What should you do?"
+  options:
+    - "Nothing: it passed"
+    - "Break the code or the expected value once, to check the test can fail"
+    - "Delete it, because tests should fail first"
+  answer: 1
+  explanation: "A test that cannot fail protects nothing. Seeing it fail once proves it checks what you think."

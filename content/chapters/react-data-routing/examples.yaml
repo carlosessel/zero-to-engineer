@@ -1,0 +1,196 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: jsx
+  check: react
+  steps:
+  - expect: document.title === '0 new messages'
+  - click: 'Messages: 0'
+  - expect: document.title === '1 new messages'
+- block: 2
+  lang: jsx
+  check: react
+  steps:
+  - text: Open for 1 seconds.
+  - click: Hide the timer
+  - no_text: Open for
+  - click: Show the timer
+  - text: Open for 0 seconds.
+- block: 3
+  lang: jsx
+  check: react
+  fetch_json:
+    https://jsonplaceholder.typicode.com/users:
+    - id: 1
+      name: Leanne Graham
+      email: Sincere@april.biz
+      address:
+        city: Gwenborough
+      company:
+        name: Romaguera-Crona
+    - id: 2
+      name: Ervin Howell
+      email: Shanna@melissa.tv
+      address:
+        city: Wisokyburgh
+      company:
+        name: Deckow-Crist
+    - id: 3
+      name: Clementine Bauch
+      email: Nathan@yesenia.net
+      address:
+        city: McKenziehaven
+      company:
+        name: Romaguera-Jacobson
+  note: The replies are the first entries of the real API's replies (checked 12 November 2026), trimmed to the fields the example uses, so the test does not depend on the internet.
+  steps:
+  - text: Loading people…
+  - text: Leanne Graham, Gwenborough
+  - expect: document.querySelectorAll('li').length === 3
+- block: 4
+  lang: jsx
+  check: react
+  fetch_json: &id001
+    https://jsonplaceholder.typicode.com/users/1:
+      id: 1
+      name: Leanne Graham
+      email: Sincere@april.biz
+      address:
+        city: Gwenborough
+      company:
+        name: Romaguera-Crona
+    https://jsonplaceholder.typicode.com/users/2:
+      id: 2
+      name: Ervin Howell
+      email: Shanna@melissa.tv
+      address:
+        city: Wisokyburgh
+      company:
+        name: Deckow-Crist
+    https://jsonplaceholder.typicode.com/users/3:
+      id: 3
+      name: Clementine Bauch
+      email: Nathan@yesenia.net
+      address:
+        city: McKenziehaven
+      company:
+        name: Romaguera-Jacobson
+  note: The replies are the first entries of the real API's replies (checked 12 November 2026), trimmed to the fields the example uses, so the test does not depend on the internet.
+  steps:
+  - text: 'Leanne Graham works at Romaguera-Crona. Email: Sincere@april.biz'
+  - select:
+    - '#who'
+    - '2'
+  - text: Ervin Howell works at Deckow-Crist.
+- block: 5
+  lang: jsx
+  check: react
+  steps:
+  - text: 'Total: £7.25'
+  note: Works, but renders twice; the chapter shows it as what not to do.
+- block: 6
+  lang: jsx
+  check: react
+  steps:
+  - text: 'Total: £7.25'
+- block: 7
+  lang: jsx
+  check: react
+  fetch_json:
+    https://jsonplaceholder.typicode.com/posts:
+      title: Two sourdough loaves
+      body: Please call when ready.
+      userId: 1
+      id: 101
+  note: The reply is the one the real API gave to a POST on 12 November 2026. The fake replies to any method.
+  steps:
+  - expect: document.querySelector('button').disabled
+  - type:
+    - '#order'
+    - Two sourdough loaves
+  - click: Send order
+  - text: Order 101 received. Thank you!
+- block: 8
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    npm init -y >/dev/null
+    bash "$BLOCK"
+    node -e "const p=require('./package.json'); if(!p.dependencies['react-router']) process.exit(1)"
+- block: 9
+  lang: jsx
+  check: react
+  path: /
+  steps:
+  - text: Welcome to Ama's Bakery
+  - click: About
+  - text: About us
+  - expect: window.location.pathname === '/about'
+  - no_text: Welcome
+  - expect: document.querySelector('a[href="/about"]') !== null
+- block: 10
+  lang: css
+  check: web
+- block: 11
+  lang: jsx
+  check: browser
+  combine:
+  - 10
+  - 11
+  actions:
+  - click: text=Products
+  - click: text=Cinnamon bun
+  expect:
+  - document.querySelector('h1').textContent === 'Cinnamon bun'
+  - document.querySelector('main p').textContent === '£2.75. Rolled by hand every morning.'
+  - document.querySelector('nav a.active').textContent === 'Products'
+  - document.querySelector('nav a.active').getAttribute('aria-current') === 'page'
+  - getComputedStyle(document.querySelector('nav a.active')).fontWeight === '700'
+  note: Rendered by the site's own React preview code in real Chrome, then clicked through.
+- block: 12
+  lang: jsx
+  check: react
+  steps:
+  - text: 'Window width: 1024px'
+  - expect: (document.defaultView.innerWidth = 500, document.defaultView.dispatchEvent(new Event('resize')), true)
+  - text: 'Window width: 500px'
+- block: 13
+  lang: jsx
+  check: react
+  steps:
+  - text: '10'
+  - text: '9'
+  - text: Lift off!
+    within_ms: 12000
+- block: 14
+  lang: jsx
+  check: react
+  fetch_json:
+    https://jsonplaceholder.typicode.com/posts?userId=1:
+    - userId: 1
+      id: 1
+      title: sunt aut facere repellat provident occaecati excepturi optio reprehenderit
+    - userId: 1
+      id: 2
+      title: qui est esse
+  note: The replies are the first entries of the real API's replies (checked 12 November 2026), trimmed to the fields the example uses, so the test does not depend on the internet.
+  steps:
+  - text: Loading posts…
+  - text: qui est esse
+  - expect: document.querySelectorAll('li').length === 2
+- block: 15
+  lang: jsx
+  check: react
+  fetch_json: *id001
+  note: 'Wrong on purpose: with no dependency array it fetches after every render, without end.'
+  steps:
+  - text: Leanne Graham
+  - fetches_at_least: 5
+- block: 16
+  lang: jsx
+  check: react
+  steps:
+  - text: Ama's Bakery
+  - click: Contact
+  - text: Visit us at 12 Market Street, Leeds.
+  - expect: document.querySelector('nav a[aria-current="page"]').textContent === 'Contact'

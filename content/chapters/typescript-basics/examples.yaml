@@ -1,0 +1,202 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: js
+  check: js
+  output: |
+    £4.50
+  throws: TypeError
+- block: 2
+  lang: ts
+  check: ts
+  errors:
+  - TS2345
+  error_contains:
+  - Argument of type 'string' is not assignable to parameter of type 'number'.
+  throws: TypeError
+  output: |
+    £4.50
+  note: Wrong on purpose. The type checker reports the error; run anyway, it fails as plain JavaScript does.
+- block: 3
+  lang: text
+  check: illustration
+  note: The type checker's message for block 2, which the check of block 2 confirms word for word.
+- block: 4
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    npm create vite@latest my-ts-app -- --template react-ts --no-interactive
+    cd my-ts-app
+    npm install
+    npm run build
+    # The starter installs TypeScript 7 (checked 12 November 2026).
+    npx tsc -v | grep -q "Version 7"
+    # Its build refuses code with a type error, reporting the code the chapter shows.
+    printf 'function formatPrice(price: number): string {\n  return "£" + price.toFixed(2);\n}\nformatPrice("3.80");\n' > src/check.ts
+    if npx tsc -b > out.txt 2>&1; then echo "expected a type error"; exit 1; fi
+    grep -q "TS2345" out.txt
+  note: Creates the real TypeScript starter, builds it, and checks that its own TypeScript 7 compiler reports the chapter's first error.
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    Ama's Bakery 11 true 3 Ama
+- block: 6
+  lang: ts
+  check: ts
+  errors:
+  - TS2322
+  error_contains:
+  - Type 'string' is not assignable to type 'number'.
+  note: Wrong on purpose.
+- block: 7
+  lang: text
+  check: illustration
+  note: The type checker's message for block 6, which the check of block 6 confirms.
+- block: 8
+  lang: ts
+  check: ts
+  output: |
+    8.25
+    Hello, Kofi!
+    Good morning, Ama!
+    42
+- block: 9
+  lang: ts
+  check: ts
+  output: |
+    Cinnamon bun: £2.75
+- block: 10
+  lang: ts
+  check: ts
+  output: |
+    Our best seller.
+- block: 11
+  lang: ts
+  check: ts
+  output: |
+    A-1042 25
+- block: 12
+  lang: ts
+  check: ts
+  output: |
+    3.50
+    RYE
+- block: 13
+  lang: ts
+  check: ts
+  errors:
+  - TS18048
+  error_contains:
+  - '''found'' is possibly ''undefined''.'
+  throws: TypeError
+  note: 'Wrong on purpose: the type checker reports it, and run anyway it crashes.'
+- block: 14
+  lang: text
+  check: illustration
+  note: The type checker's message for block 13, which the check of block 13 confirms.
+- block: 15
+  lang: ts
+  check: ts
+  output: |
+    No product 3
+    (none)
+- block: 16
+  lang: ts
+  check: ts
+  output: |
+    Loading…
+    Failed: No connection
+    1 people
+- block: 17
+  lang: ts
+  check: ts
+  note: 'Type-checked only: it fetches from the internet. The same request is run against saved replies in the React chapter.'
+- block: 18
+  lang: ts
+  check: ts
+  output: |
+    10 rye
+- block: 19
+  lang: tsx
+  check: ts
+  file: App.tsx
+  steps:
+  - expect: '[...document.querySelectorAll(''h2'')].map(h => h.textContent.trim()).join(''|'') === ''Sourdough loaf|Pistachio croissant New!'''
+  - text: £3.20
+- block: 20
+  lang: tsx
+  check: ts
+  file: App.tsx
+  steps:
+  - expect: document.querySelector('button').disabled
+  - type:
+    - '#name'
+    - Ama
+  - click: Add
+  - text: '1 in the team. Last added: Ama.'
+  - type:
+    - '#name'
+    - Kofi
+  - click: Add
+  - text: '2 in the team. Last added: Kofi.'
+- block: 21
+  lang: ts
+  check: ts
+  output: |
+    12
+- block: 22
+  lang: ts
+  check: ts
+  output: |
+    Ama
+- block: 23
+  lang: ts
+  check: ts
+  errors:
+  - TS2322
+  - TS2345
+  error_contains:
+  - Type 'string' is not assignable to type 'number'.
+  - Argument of type 'Product' is not assignable to parameter of type 'Product[]'.
+  note: 'Wrong on purpose: the two errors the solution names.'
+- block: 24
+  lang: ts
+  check: ts
+  output: |
+    Unknown
+    Sold out
+    5 left
+- block: 25
+  lang: ts
+  check: ts
+  output: |
+    2 baking
+- block: 26
+  lang: tsx
+  check: ts
+  errors:
+  - TS7031
+  - TS7031
+  - TS7031
+  note: 'Wrong on purpose: props with no type are an error in strict mode.'
+- block: 27
+  lang: tsx
+  check: ts
+  file: Counter.tsx
+- block: 28
+  lang: ts
+  check: ts
+  output: |
+    Kofi undefined
+- block: 29
+  lang: ts
+  check: ts
+  output: |
+    1 person
+    Nobody here yet
+- block: 30
+  lang: ts
+  check: ts
+  output: |
+    ["Bread", "Cakes"] 2 Cinnamon bun

@@ -1,0 +1,711 @@
+---
+title: "Data, effects and pages in React"
+summary: "Loading data, loading and error states, and several pages in one app."
+prerequisites: [react-state-forms, js-async-fetch]
+estimated_minutes: 240
+status: deepened
+---
+
+By the end of this chapter your React apps will load real data from a server, show something sensible while it loads and when it fails, and have several pages, each with its own address, without the browser reloading. Those three things turn a page of components into an application.
+
+Some examples here fetch from JSONPlaceholder, a free practice API, so they need an internet connection when you press **Show the result**. Its people and posts are made up for practice.
+
+## Effects: reaching outside React
+
+Everything so far has happened inside React: props in, JSX out, state changed by clicks. But apps also need to deal with things React does not control: fetching data from a server, setting a timer, changing the browser tab's title, listening for the window being resized. Code that keeps a component in step with something outside React is called an **effect**, and you write it with the `useEffect` Hook.
+
+```jsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  useEffect(() => {
+    document.title = `${count} new messages`;
+  }, [count]);
+
+  return (
+    <button type="button" onClick={() => setCount(count + 1)}>
+      Messages: {count}
+    </button>
+  );
+}
+```
+
+`useEffect` takes two things:
+
+1. **A function**, the effect itself. React runs it *after* the component has rendered and the page has been updated.
+2. **An array of dependencies**: the values the effect uses that can change between renders. React runs the effect again after a render only if one of them changed since last time.
+
+Here the effect uses `count`, so its dependencies are `[count]`. Step by step: the first render shows **Messages: 0**, and then the effect sets the tab's title to **0 new messages**. Click, and `count` becomes 1; React renders, sees that `count` changed, and runs the effect again: **1 new messages**.
+
+(The preview on this page is a frame without a tab of its own, so you will not see the title change here. Try it in your Vite project.)
+
+There are three forms of the dependency array, and the difference matters:
+
+| You write | The effect runs |
+|---|---|
+| `useEffect(fn, [a, b])` | after the first render, then after any render where `a` or `b` changed |
+| `useEffect(fn, [])` | once, after the first render |
+| `useEffect(fn)` (no array) | after every render |
+
+The rule for what goes in the array is simple: **every value from the component that the effect uses**: props, state, and anything calculated from them. Leaving one out means the effect keeps using an old value. The Vite starter's linter (`npm run lint`) can point out missing ones.
+
+### Cleaning up
+
+Some effects start something that keeps going: a timer, a connection, a listener. When the component disappears from the page, or before the effect runs again, that thing must be stopped, or it keeps running in the background. To stop it, **return a function** from the effect. React calls this **cleanup function** at the right moments.
+
+```jsx
+import { useEffect, useState } from "react";
+
+function Timer() {
+  const [seconds, setSeconds] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => {
+      setSeconds((s) => s + 1);
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  return <p>Open for {seconds} seconds.</p>;
+}
+
+export default function App() {
+  const [show, setShow] = useState(true);
+  return (
+    <>
+      <button type="button" onClick={() => setShow(!show)}>
+        {show ? "Hide the timer" : "Show the timer"}
+      </button>
+      {show && <Timer />}
+    </>
+  );
+}
+```
+
+- `setInterval` (a cousin of `setTimeout` from <Ref to="js-async-fetch" />) calls the function every 1000 milliseconds, and returns an id.
+- The effect returns `() => clearInterval(id)`. When **Hide the timer** removes `Timer` from the page, React calls it, and the interval stops.
+- `setSeconds((s) => s + 1)` uses an updater function. The effect ran once, during the first render, when `seconds` was 0; writing `setSeconds(seconds + 1)` would set 1 every second for ever.
+
+Without the cleanup, hiding and showing the timer a few times would leave several intervals running, all counting.
+
+**Why effects run twice while you develop.** In your Vite project, `main.jsx` wraps the app in `<StrictMode>`. In development, StrictMode runs every effect's setup, then its cleanup, then its setup again, straight away. It does this to catch missing cleanups: with a correct cleanup you cannot tell, and without one, you see the bug at once (two intervals, two connections). It happens only in development, not on the live site. If you see a request sent twice in the developer tools while developing, this is usually why.
+
+## Loading data
+
+Here is the pattern almost every React app uses to load data when a component appears. It fetches a list of people from the practice API:
+
+```jsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [people, setPeople] = useState([]);
+  const [status, setStatus] = useState("loading");
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function load() {
+      try {
+        const response = await fetch("https://jsonplaceholder.typicode.com/users");
+        if (!response.ok) throw new Error(`The server replied ${response.status}`);
+        const data = await response.json();
+        if (!ignore) {
+          setPeople(data);
+          setStatus("done");
+        }
+      } catch (error) {
+        console.error(error);
+        if (!ignore) setStatus("error");
+      }
+    }
+
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  if (status === "loading") return <p>Loading people…</p>;
+  if (status === "error") return <p role="alert">Sorry, the list could not be loaded. Try again later.</p>;
+
+  return (
+    <ul>
+      {people.map((person) => (
+        <li key={person.id}>
+          {person.name}, {person.address.city}
+        </li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Take it in order:
+
+1. **Three possible states**, held in `status`: `"loading"`, `"error"` or `"done"`. The first render has no data, so it shows **Loading people…**.
+2. **The effect runs once** (`[]`), after that first render. It defines an `async` function and calls it. (The effect function itself cannot be `async`: an `async` function returns a promise, and React expects an effect to return nothing or a cleanup function.)
+3. **The fetch** is the same as in <Ref to="js-async-fetch" />: `await fetch(…)`, check `response.ok` (a 404 or 500 reply does not throw by itself), then `await response.json()`.
+4. **On success**, the data goes into state, the status becomes `"done"`, React renders again, and the list appears: **Leanne Graham, Gwenborough** first.
+5. **On failure** (no connection, a bad status, broken JSON), the `catch` sets `"error"`, and the page says so plainly. `role="alert"` makes screen readers announce the message. The error itself goes to the console, for you.
+6. **The `ignore` flag** is the cleanup. If the component disappears before the reply arrives, cleanup sets `ignore` to true, and the late reply is thrown away instead of being put into state. This matters most when the effect depends on something, as in the next section.
+
+Turn off your internet connection and press **Show the result** again to see the error state. Every component that loads data needs all three: something to show while waiting, something to show when it fails, and the data. An empty list deserves its own message too ("No people yet"), rather than a blank space.
+
+### Loading again when something changes
+
+Often what to load depends on props or state: the details of whichever person was chosen. Put that value in the dependency array, and the effect runs again whenever it changes:
+
+```jsx
+import { useEffect, useState } from "react";
+
+function PersonDetails({ id }) {
+  const [person, setPerson] = useState(null);
+  const [error, setError] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    setPerson(null);
+    setError(false);
+    fetch(`https://jsonplaceholder.typicode.com/users/${id}`)
+      .then((response) => {
+        if (!response.ok) throw new Error(`The server replied ${response.status}`);
+        return response.json();
+      })
+      .then((data) => {
+        if (!ignore) setPerson(data);
+      })
+      .catch(() => {
+        if (!ignore) setError(true);
+      });
+    return () => {
+      ignore = true;
+    };
+  }, [id]);
+
+  if (error) return <p role="alert">Could not load person {id}.</p>;
+  if (!person) return <p>Loading…</p>;
+  return (
+    <p>
+      {person.name} works at {person.company.name}. Email: {person.email}
+    </p>
+  );
+}
+
+export default function App() {
+  const [id, setId] = useState(1);
+  return (
+    <>
+      <label htmlFor="who">Person</label>{" "}
+      <select id="who" value={id} onChange={(e) => setId(Number(e.target.value))}>
+        <option value={1}>Number 1</option>
+        <option value={2}>Number 2</option>
+        <option value={3}>Number 3</option>
+      </select>
+      <PersonDetails id={id} />
+    </>
+  );
+}
+```
+
+Choose **Number 2** and the effect runs again with `id` 2: it clears the old person, shows **Loading…**, and then **Ervin Howell works at Deckow-Crist.** This version uses `.then` instead of `async` and `await`; both work, as you saw in <Ref to="js-async-fetch" />.
+
+Here the `ignore` flag earns its keep. Suppose someone picks 2 and then quickly 3, and the reply for 2 is slow. Without the flag, the reply for 3 might arrive first and then be overwritten by the late reply for 2: the page would show person 2 while the menu says 3. That bug is called a **race condition**: the result depends on which of two things finishes first. With the flag, choosing 3 runs the cleanup for the effect that fetched 2, so its late reply is ignored.
+
+This hand-written pattern is worth understanding, but in larger apps teams usually use a data-fetching library (TanStack Query and SWR are common), or a framework, which handle caching, retries and races for you. Learn the pattern first; then those tools make sense.
+
+## You might not need an effect
+
+Effects are for reaching *outside* React. Beginners often use them for things that need no effect at all, which makes code slower and buggier. Two cases come up all the time.
+
+**1. Values you can calculate.** If something can be worked out from props or state, calculate it during render, as you did with derived data in <Ref to="react-state-forms" />. Do not do this:
+
+```jsx
+import { useEffect, useState } from "react";
+
+const items = [{ name: "Bread", price: 4.5 }, { name: "Buns", price: 2.75 }];
+
+export default function App() {
+  const [total, setTotal] = useState(0);
+  useEffect(() => {
+    setTotal(items.reduce((sum, i) => sum + i.price, 0));
+  }, []);
+  return <p>Total: £{total.toFixed(2)}</p>;
+}
+```
+
+It renders once with a total of £0.00, runs the effect, then renders a second time with **Total: £7.25**. Calculate it instead, and it is right first time, with half the code:
+
+```jsx
+const items = [{ name: "Bread", price: 4.5 }, { name: "Buns", price: 2.75 }];
+
+export default function App() {
+  const total = items.reduce((sum, i) => sum + i.price, 0);
+  return <p>Total: £{total.toFixed(2)}</p>;
+}
+```
+
+**2. Things caused by an event.** If something should happen *because someone did something* (pressed Send, submitted a form), do it in the event handler, not in an effect. Here is a form that sends an order to the server with a POST request, all in the submit handler:
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [title, setTitle] = useState("");
+  const [state, setState] = useState("idle");
+  const [savedId, setSavedId] = useState(null);
+
+  async function handleSubmit(event) {
+    event.preventDefault();
+    setState("sending");
+    try {
+      const response = await fetch("https://jsonplaceholder.typicode.com/posts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, body: "Please call when ready.", userId: 1 }),
+      });
+      if (!response.ok) throw new Error(`The server replied ${response.status}`);
+      const saved = await response.json();
+      setSavedId(saved.id);
+      setState("sent");
+    } catch {
+      setState("failed");
+    }
+  }
+
+  if (state === "sent") return <p>Order {savedId} received. Thank you!</p>;
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <label htmlFor="order">What would you like?</label>{" "}
+      <input id="order" type="text" value={title} onChange={(e) => setTitle(e.target.value)} />{" "}
+      <button type="submit" disabled={state === "sending" || title.trim() === ""}>
+        {state === "sending" ? "Sending…" : "Send order"}
+      </button>
+      {state === "failed" && <p role="alert">That did not work. Check your connection and try again.</p>}
+    </form>
+  );
+}
+```
+
+The button is disabled while sending, so a double-click cannot send the order twice, and its text says what is happening. JSONPlaceholder pretends to save the post and replies with an id of **101**; it does not really keep it.
+
+A test you can apply: *would this code need to run if the component just appeared on screen with nobody touching it?* If yes (load the list for this page), it is an effect. If it only happens because someone did something, it belongs in that event's handler.
+
+## Several pages: routing
+
+A website made of HTML files has one file per page, and every link loads a new page from the server. A React app works differently: the browser loads one HTML page and one bundle of JavaScript, and React then swaps what is on screen when someone follows a link. This is called a **single-page application**, or SPA. It feels fast, because only the part that changed is replaced, and state (such as a basket) survives moving between pages.
+
+But people still expect each page to have its own address, so that the back button works, they can bookmark a page, and they can send someone a link to it. Matching the address in the browser's address bar to what is shown is called **routing**, and the most used tool for it in React is **React Router**. Install it in your Vite project:
+
+```bash
+npm install react-router
+```
+
+React Router can be used in several ways ("modes"); this course uses the simplest, which its documentation calls **declarative mode**. You describe your pages with components, like this:
+
+```jsx
+import { BrowserRouter, Link, Route, Routes } from "react-router";
+
+function Home() {
+  return <h1>Welcome to Ama's Bakery</h1>;
+}
+
+function About() {
+  return <h1>About us</h1>;
+}
+
+function NotFound() {
+  return <h1>Page not found</h1>;
+}
+
+export default function App() {
+  return (
+    <BrowserRouter>
+      <nav>
+        <Link to="/">Home</Link> | <Link to="/about">About</Link>
+      </nav>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/about" element={<About />} />
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </BrowserRouter>
+  );
+}
+```
+
+The pieces:
+
+- **`BrowserRouter`** wraps the app and connects React Router to the browser's address bar and history.
+- **`Routes`** looks at the current address and shows the one **`Route`** that matches best. Each `Route` pairs a `path` with an `element` to show.
+- **`path="*"`** matches any address that nothing else matched, which is how you make a "not found" page.
+- **`Link`** makes a link. It renders a real `<a href="/about">`, so it works with the keyboard and screen readers, but when clicked it changes the address and the screen *without* reloading the page. Use `Link` for links inside your app; a plain `<a href>` would reload everything and lose your state. Use plain `<a>` for links to other sites.
+
+Click **About** and the address becomes `/about` and the heading **About us** appears; the `nav` stays where it is, because it is outside `Routes`. Press the browser's back button and you are on the home page again.
+
+### The examples on this page use MemoryRouter
+
+The sandbox on this page cannot change the address bar (it is deliberately cut off from this site, as other examples are). So the runnable examples below use **`MemoryRouter`**, which works exactly like `BrowserRouter` but keeps the address in memory instead of the address bar. **In your own project, use `BrowserRouter`.** Swapping one for the other is the only change.
+
+### Pages with a parameter
+
+A shop has a page for each product: `/products/1`, `/products/2`, and so on. You do not write a route for each one. Instead, a path can contain a **URL parameter**, a part that starts with a colon and matches anything: `/products/:id`. The page reads the actual value with the **`useParams`** Hook.
+
+## A worked example: a small bakery shop
+
+<Playground>
+
+```css
+nav {
+  display: flex;
+  gap: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #d6c3a5;
+}
+
+nav a.active {
+  font-weight: bold;
+}
+```
+
+```jsx
+import { Link, MemoryRouter, NavLink, Route, Routes, useParams } from "react-router";
+
+const products = [
+  { id: 1, name: "Sourdough loaf", price: 4.5, about: "Made with our ten-year-old starter." },
+  { id: 2, name: "Cinnamon bun", price: 2.75, about: "Rolled by hand every morning." },
+  { id: 3, name: "Rye loaf", price: 3.8, about: "Dark, dense and keeps for a week." },
+];
+
+function Home() {
+  return (
+    <>
+      <h1>Ama's Bakery</h1>
+      <p>Fresh bread in Leeds. <Link to="/products">See what we bake</Link>.</p>
+    </>
+  );
+}
+
+function ProductList() {
+  return (
+    <>
+      <h1>Our bread and cakes</h1>
+      <ul>
+        {products.map((p) => (
+          <li key={p.id}>
+            <Link to={`/products/${p.id}`}>{p.name}</Link>
+          </li>
+        ))}
+      </ul>
+    </>
+  );
+}
+
+function ProductPage() {
+  const { id } = useParams();
+  const product = products.find((p) => p.id === Number(id));
+  if (!product) {
+    return <h1>No product number {id}</h1>;
+  }
+  return (
+    <>
+      <h1>{product.name}</h1>
+      <p>£{product.price.toFixed(2)}. {product.about}</p>
+      <Link to="/products">Back to all products</Link>
+    </>
+  );
+}
+
+function NotFound() {
+  return <h1>Page not found</h1>;
+}
+
+export default function App() {
+  return (
+    <MemoryRouter>
+      <nav aria-label="Main">
+        <NavLink to="/">Home</NavLink>
+        <NavLink to="/products">Products</NavLink>
+      </nav>
+      <main>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/products" element={<ProductList />} />
+          <Route path="/products/:id" element={<ProductPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+    </MemoryRouter>
+  );
+}
+```
+
+</Playground>
+
+How it works:
+
+- **Four routes.** `/` is the home page, `/products` the list, `/products/:id` one product, and `*` everything else.
+- **The list** makes a `Link` per product with a template literal: `/products/1`, `/products/2`, `/products/3`.
+- **The product page** gets `id` from `useParams()`. URL parameters are always text, so `id` is `"2"`, not `2`, and the code converts it with `Number(id)` before comparing with the numeric ids. Forgetting that conversion is a classic bug: `2 === "2"` is false, so no product would ever be found.
+- **A missing product** (someone types `/products/99`) shows a clear message rather than crashing on `product.name`.
+- **`NavLink`** is a `Link` that knows whether it points at the current page. It adds the class `active` to itself (styled bold here) and `aria-current="page"`, which tells screen readers which page you are on.
+- To use this in your own project, change `MemoryRouter` to `BrowserRouter` in both the import and the JSX.
+
+Follow **Products**, then **Cinnamon bun**: the heading reads **Cinnamon bun** and the text **£2.75. Rolled by hand every morning.**
+
+### Loading data for a page
+
+Real product pages load their data from a server, with an effect that depends on the parameter: `useEffect(…, [id])`, exactly like `PersonDetails` earlier. When someone goes from product 1 to product 2, the same `ProductPage` component stays on screen with a new `id`, so the effect runs again.
+
+### One thing to know before you deploy
+
+When someone opens `https://your-site.example/products/2` directly, or presses reload on it, the browser asks the server for `/products/2`. There is no such file: the whole app is `index.html`. Many hosts must be told to send `index.html` for every address so that React Router can take over; otherwise visitors get the host's own "404 Not Found" page. The chapter on deploying, later in the course, shows how. Vite's development server already does this for you, which is why it only shows up after deploying.
+
+## Common mistakes
+
+- **An effect that sets state with no dependency array**: `useEffect(() => { setCount(count + 1); })` runs after every render, sets state, which renders again, for ever. Give it the right dependencies, or ask whether it needs to be an effect at all.
+- **Missing dependencies**: the effect uses `id` but the array is `[]`, so changing `id` loads nothing new. List every value the effect uses.
+- **`useEffect(async () => { … })`**: an async function returns a promise, and React warns that an effect must not return anything besides a function, which is used for clean-up. Define an `async` function inside the effect and call it.
+- **Not checking `response.ok`**: a 404 reply still "succeeds", and the code tries to show an error page's JSON as data.
+- **No loading or error state**, so the page is blank while waiting and stays blank on failure.
+- **No cleanup** for intervals, listeners or fetches whose result may come back late.
+- **Using an effect for derived data or for an event's result.** Calculate during render; act in the event handler.
+- **`<a href="/about">` inside the app** instead of `<Link to="/about">`: the whole page reloads and state is lost.
+- **Comparing a URL parameter with a number** without converting it: `useParams()` gives text.
+- **A blank page or 404 when reloading a deployed app on any address but `/`**: the host is not sending `index.html` for every path.
+
+## Practice
+
+**1. (warm-up)** When does an effect with the dependency array `[userId]` run?
+
+<Solution>
+
+After the first render, and then after any later render in which `userId` has a different value from the previous render. Renders where `userId` stayed the same do not run it.
+
+</Solution>
+
+**2. (warm-up)** What is wrong with `useEffect(() => { const id = setInterval(tick, 1000); }, []);`?
+
+<Solution>
+
+It never stops the interval. When the component disappears, `tick` keeps being called every second. Return a cleanup function: `return () => clearInterval(id);`.
+
+</Solution>
+
+**3. (warm-up)** Which of these needs an effect? (a) Showing the number of items in a basket. (b) Loading the user's orders when their orders page appears. (c) Sending a message when the Send button is pressed.
+
+<Solution>
+
+Only **(b)**. (a) is derived data: calculate `items.length` during render. (c) happens because of an event: do it in the button's or form's handler. (b) has to happen because the page appeared, with nobody touching anything, so it is an effect.
+
+</Solution>
+
+**4. (warm-up)** In the routes `<Route path="/recipes/:slug" element={<Recipe />} />`, what does `useParams()` give inside `Recipe` at the address `/recipes/lemon-cake`?
+
+<Solution>
+
+`{ slug: "lemon-cake" }`. The parameter's name is the word after the colon, and its value is always text.
+
+</Solution>
+
+**5. (standard)** Make a component that shows the window's width, like `Window width: 1200px`, and updates when the window is resized. (The browser fires a `resize` event on `window`, and `window.innerWidth` is the width.) Remember to clean up.
+
+<Solution>
+
+```jsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [width, setWidth] = useState(window.innerWidth);
+
+  useEffect(() => {
+    function handleResize() {
+      setWidth(window.innerWidth);
+    }
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
+
+  return <p>Window width: {width}px</p>;
+}
+```
+
+The listener is added once, after the first render, and removed by the cleanup. `removeEventListener` needs the very same function that was added, which is why it has a name.
+
+</Solution>
+
+**6. (standard)** Make a countdown that starts at 10, goes down by one each second, and shows `Lift off!` at 0, with the interval stopped.
+
+<Solution>
+
+```jsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [left, setLeft] = useState(10);
+
+  useEffect(() => {
+    if (left === 0) return;
+    const id = setTimeout(() => setLeft(left - 1), 1000);
+    return () => clearTimeout(id);
+  }, [left]);
+
+  return <p>{left === 0 ? "Lift off!" : left}</p>;
+}
+```
+
+This version uses one `setTimeout` per second instead of an interval: every time `left` changes, the effect runs again and schedules the next step, and at 0 it schedules nothing. The cleanup cancels a pending timeout if the component disappears.
+
+</Solution>
+
+**7. (standard)** Load the posts from `https://jsonplaceholder.typicode.com/posts?userId=1` and show their titles in a list, with `Loading posts…` while waiting and an error message on failure.
+
+<Solution>
+
+```jsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [posts, setPosts] = useState(null);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+    async function load() {
+      try {
+        const response = await fetch("https://jsonplaceholder.typicode.com/posts?userId=1");
+        if (!response.ok) throw new Error(`The server replied ${response.status}`);
+        const data = await response.json();
+        if (!ignore) setPosts(data);
+      } catch {
+        if (!ignore) setFailed(true);
+      }
+    }
+    load();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  if (failed) return <p role="alert">The posts could not be loaded.</p>;
+  if (posts === null) return <p>Loading posts…</p>;
+  return (
+    <ul>
+      {posts.map((post) => (
+        <li key={post.id}>{post.title}</li>
+      ))}
+    </ul>
+  );
+}
+```
+
+Here `posts === null` means "still loading", which saves a separate status variable. The practice API has ten posts for user 1.
+
+</Solution>
+
+**8. (standard)** This component loads forever and floods the server with requests. Why?
+
+```jsx
+import { useEffect, useState } from "react";
+
+export default function App() {
+  const [user, setUser] = useState(null);
+  useEffect(() => {
+    fetch("https://jsonplaceholder.typicode.com/users/1")
+      .then((r) => r.json())
+      .then((data) => setUser(data));
+  });
+  return <p>{user ? user.name : "Loading…"}</p>;
+}
+```
+
+<Solution>
+
+The effect has no dependency array, so it runs after *every* render. Each time, it fetches and sets `user` to a new object, which causes another render, which runs the effect again, and so on: a request per render, without end. It needs `[]` (load once) as its second argument. It should also check `response.ok` and have an `ignore` cleanup.
+
+</Solution>
+
+**9. (standard)** Add a route `/contact` with a `Contact` page to the worked example, and a `NavLink` to it.
+
+<Solution>
+
+```jsx
+import { MemoryRouter, NavLink, Route, Routes } from "react-router";
+
+function Home() {
+  return <h1>Ama's Bakery</h1>;
+}
+
+function Contact() {
+  return (
+    <>
+      <h1>Contact us</h1>
+      <p>Visit us at 12 Market Street, Leeds.</p>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <MemoryRouter>
+      <nav aria-label="Main">
+        <NavLink to="/">Home</NavLink> <NavLink to="/contact">Contact</NavLink>
+      </nav>
+      <Routes>
+        <Route path="/" element={<Home />} />
+        <Route path="/contact" element={<Contact />} />
+      </Routes>
+    </MemoryRouter>
+  );
+}
+```
+
+One `Route` and one `NavLink`.
+
+</Solution>
+
+**10. (stretch)** On a product page, `const product = products.find((p) => p.id === id);` never finds anything, though `/products/2` exists. Why, and what are two ways to fix it?
+
+<Solution>
+
+`useParams()` returns text, so `id` is `"2"`, while the product ids are numbers, and `2 === "2"` is false. Convert the parameter: `p.id === Number(id)`; or convert the other side: `String(p.id) === id`. Converting once, at the top (`const productId = Number(id);`), keeps the rest of the component simple.
+
+</Solution>
+
+**11. (stretch)** A search box loads results as you type, with `useEffect(…, [query])`. Someone types "bread" quickly, so five requests go out ("b", "br", "bre", "brea", "bread"). The replies come back in a random order. What can go wrong, and how does the `ignore` flag fix it?
+
+<Solution>
+
+Without protection, whichever reply arrives *last* is shown, which might be the one for "bre": the box says "bread" but the results are for "bre". That is a race condition. With an `ignore` flag set in the cleanup, every time `query` changes, React runs the previous effect's cleanup before the new effect, so each older request has `ignore = true` by the time its reply arrives, and only the reply for the current query ("bread") is put into state. (A real search would also wait until typing pauses before sending, to avoid five requests at all.)
+
+</Solution>
+
+**12. (stretch)** A visitor opens `https://ama-bakery.example/products/3` from a bookmark and gets the host's "404 Not Found" page, though clicking through from the home page works. Explain why.
+
+<Solution>
+
+Clicking through never asks the server for `/products/3`: React Router changes the address and the screen inside the page that is already loaded. Opening the address directly makes the browser ask the server for `/products/3`, and the server has no such file, because the whole app is `index.html` and its JavaScript. The host has to be set up to send `index.html` for any address it has no file for, so that React Router can show the right page.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- An **effect** (`useEffect`) keeps a component in step with something outside React: fetching, timers, the document title, event listeners on `window`.
+- Effects run after rendering. The **dependency array** says when to run again: `[a, b]` when those change, `[]` once, no array after every render. List every value the effect uses.
+- Return a **cleanup function** to stop what the effect started. In development, StrictMode runs setup, cleanup, setup to catch missing cleanups.
+- To load data: an effect with an `async` function inside, `response.ok` checked, separate **loading**, **error** and **done** states, and an `ignore` flag in the cleanup to avoid **race conditions**.
+- You might not need an effect: calculate derived values during render, and do things caused by events in the event handler.
+- A **single-page application** swaps the screen without loading new pages. **React Router** matches the address to what is shown: `BrowserRouter`, `Routes`, `Route path element`, `Link`, `NavLink`, `path="*"` for not found.
+- **URL parameters** (`/products/:id`) are read with `useParams()` and are always text.
+- Hosts must send `index.html` for every address of a single-page app.
+
+## Go deeper
+
+- [Synchronizing with Effects](https://react.dev/learn/synchronizing-with-effects), from the React team. Effects, dependencies, cleanup, and why they run twice in development.
+- [You Might Not Need an Effect](https://react.dev/learn/you-might-not-need-an-effect), from the React team. The most common unnecessary effects and what to write instead.
+- [Routing](https://reactrouter.com/start/declarative/routing) and [Navigating](https://reactrouter.com/start/declarative/navigating), from React Router's documentation for declarative mode (version 8 when checked).
+- [Full Stack Open, Part 2c: Getting data from server](https://fullstackopen.com/en/part2/getting_data_from_server), from the University of Helsinki. Fetching in an effect, with a practice server you run yourself.

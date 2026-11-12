@@ -1,0 +1,82 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: html
+  check: web
+- block: 2
+  lang: html
+  check: web
+- block: 3
+  lang: html
+  check: web
+- block: 4
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    npm create vite@latest my-app -- --template react --no-interactive
+    cd my-app
+    npm install
+    bash "$BLOCK" > build.txt 2>&1
+    cat build.txt
+    # Fingerprinted file names, and a gzip column, as the chapter shows.
+    grep -Eq "dist/assets/index-[A-Za-z0-9_-]{8}\.js +[0-9.]+ kB │ gzip: +[0-9.]+ kB" build.txt
+    grep -q "dist/index.html" build.txt
+  note: Builds the real React starter and checks the report has the shape the chapter shows.
+- block: 5
+  lang: text
+  check: illustration
+  note: The last lines of a real build of Vite's React starter on 12 November 2026 (the sizes come from that build; the codes in the file names are examples). Block 4's check builds the starter again and confirms the format, including the fingerprinted names and the gzip column.
+- block: 6
+  lang: jsx
+  check: vitest-run
+  files: &id001
+    src/App.jsx: 6
+    src/Recipes.jsx: 7
+  hidden_files: &id002
+    vitest.config.js: 'export default { test: { environment: "jsdom" } };
+
+      '
+    src/App.test.jsx: "import { render, screen, cleanup } from \"@testing-library/react\";\nimport userEvent from \"@testing-library/user-event\";\nimport { afterEach, expect, it } from \"vitest\";\nimport App from \"./App.jsx\";\n\nafterEach(cleanup);\n\nit(\"loads the recipes only when asked, showing the fallback first\", async () => {\n  const user = userEvent.setup();\n  render(<App />);\n  expect(screen.queryByText(\"Seeded rye\")).toBeNull();\n  await user.click(screen.getByRole(\"button\", { name: \"Show our recipes\" }));\n  expect(screen.getByText(\"Loading recipes…\")).toBeTruthy();\n  expect(await screen.findByText(\"Seeded rye\")).toBeTruthy();\n  expect(screen.queryByText(\"Loading recipes…\")).toBeNull();\n});\n"
+  passed: 1
+  note: The chapter shows the two components; the hidden test file clicks the button and checks the fallback appears first and the recipes after the dynamic import.
+- block: 7
+  lang: jsx
+  check: vitest-run
+  files: *id001
+  hidden_files: *id002
+  passed: 1
+  note: The chapter shows the two components; the hidden test file clicks the button and checks the fallback appears first and the recipes after the dynamic import.
+- block: 8
+  lang: text
+  check: illustration
+  verify: |
+    assert 365 * 24 * 60 * 60 == 31536000
+    assert 'max-age=31536000, immutable' in block and 'no-cache' in block
+  note: Header values as recommended by MDN's Cache-Control reference (checked 12 November 2026).
+- block: 9
+  lang: css
+  check: web
+- block: 10
+  lang: js
+  check: js
+  expect:
+  - total === 1249999975000000
+  - took > 0
+  output_contains:
+  - 'Added up to 1249999975000000 in '
+  note: The time varies from run to run, so only the total and the shape of the message are checked.
+- block: 11
+  lang: js
+  check: js
+  output: |
+    Processed 1000 orders, total £5000
+  wait_ms: 500
+- block: 12
+  lang: html
+  check: web
+- block: 13
+  lang: html
+  check: web
+- block: 14
+  lang: html
+  check: web

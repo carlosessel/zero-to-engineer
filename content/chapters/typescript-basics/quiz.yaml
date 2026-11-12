@@ -1,0 +1,49 @@
+- question: "When does TypeScript find a type error?"
+  options:
+    - "Before the code runs: in your editor and when you build"
+    - "Only when the line with the error runs"
+    - "When the browser loads the page"
+  answer: 0
+  explanation: "The type checker reads the code without running it. Types are removed before running, so they check nothing at run time."
+- question: "You run npm run dev in a TypeScript Vite project that has a type error. What happens?"
+  options:
+    - "The server refuses to start"
+    - "The page runs anyway: the development server removes types without checking them"
+    - "The browser shows the type error"
+  answer: 1
+  explanation: "Your editor shows the error, and npm run build (tsc -b) refuses to build. The development server does not check."
+- question: "products.find(...) has the type Product | undefined. What does that mean for your code?"
+  options:
+    - "Nothing: find always finds something"
+    - "You must handle the case where nothing was found before using its properties"
+    - "You must write as Product after it"
+  answer: 1
+  explanation: "TypeScript reports 'possibly undefined' because the crash is real. Check with if, or use ?. and ??."
+- question: "Which is the best type for a delivery option that can only be \"collect\", \"standard\" or \"express\"?"
+  options:
+    - "string"
+    - "\"collect\" | \"standard\" | \"express\""
+    - "any"
+  answer: 1
+  explanation: "A union of literal types allows only those exact values, so typing mistakes are caught and the editor suggests the options."
+- question: "const user = (await response.json()) as User; What does as User do when the code runs?"
+  options:
+    - "It checks the reply has User's properties and throws if not"
+    - "Nothing: it only tells the type checker to treat the value as a User"
+    - "It converts the reply into a User"
+  answer: 1
+  explanation: "Types and as are removed before running. To be sure of outside data, check its shape when it arrives."
+- question: "Where should you usually write types?"
+  options:
+    - "On every variable"
+    - "On function parameters (and important return values), letting inference do the rest"
+    - "Nowhere: TypeScript infers everything"
+  answer: 1
+  explanation: "TypeScript can infer a variable's type from its value, but it cannot guess what callers will pass to a function."
+- question: "Why does useState<Person[]>([]) need the type in angle brackets?"
+  options:
+    - "From an empty array alone, TypeScript cannot know what the array will hold"
+    - "useState always needs a type"
+    - "It makes the state faster"
+  answer: 0
+  explanation: "useState(\"\") or useState(0) need no type. An empty array or null as the starting value does."

@@ -1,0 +1,49 @@
+- question: "What does a React component return?"
+  options:
+    - "A description of some interface, written in JSX (or null to show nothing)"
+    - "A string of HTML that React inserts with innerHTML"
+    - "Nothing: it changes the DOM itself with createElement"
+  answer: 0
+  explanation: "A component describes what should be on screen. React compares that description with the last one and updates the real page."
+- question: "A component is written as function profile() and used as <profile />. What happens?"
+  options:
+    - "It works the same as a capitalised name"
+    - "React treats <profile /> as an HTML tag called profile, so your function is never called"
+    - "The build fails with a syntax error"
+  answer: 1
+  explanation: "React tells components from HTML elements by the capital letter. Name it Profile."
+- question: "Which of these passes the number 3 as the prop quantity?"
+  options:
+    - 'quantity="3"'
+    - "quantity={3}"
+    - "quantity=3"
+  answer: 1
+  explanation: 'Quotes pass text ("3"). Braces pass a JavaScript value, here the number 3. quantity=3 is not valid JSX.'
+- question: "items is an empty array. What does {items.length && <p>{items.length} items</p>} show?"
+  options:
+    - "Nothing"
+    - "0"
+    - "0 items"
+  answer: 1
+  explanation: "0 && … gives 0, and React shows numbers, including 0. Use items.length > 0 && … instead."
+- question: "Which is the best key for each item in a list of orders that can be cancelled and reordered?"
+  options:
+    - "The order's id from the data"
+    - "The item's position in the array (index)"
+    - "Math.random()"
+  answer: 0
+  explanation: "A key must stay the same for the same item. Positions shift when items are removed or reordered, and a random number changes on every render."
+- question: "Why must a component return a single outer element?"
+  options:
+    - "Browsers cannot show two elements next to each other"
+    - "JSX becomes a function call, and a function returns one value; a fragment <> </> groups several elements without adding one to the page"
+    - "It is only a style rule, and breaking it gives a warning"
+  answer: 1
+  explanation: "Each JSX tag turns into one function call, so two side-by-side tags would be two values. Wrap them in a fragment or an element."
+- question: "Inside ProductCard, someone writes props.price = props.price * 0.9 to show a discount. What is wrong?"
+  options:
+    - "Nothing, as long as the result is rounded"
+    - "Props belong to the parent and are read-only; work out the discounted price in a new variable instead"
+    - "Prices must be strings"
+  answer: 1
+  explanation: "Components must not change their props. const salePrice = price * 0.9 is fine."

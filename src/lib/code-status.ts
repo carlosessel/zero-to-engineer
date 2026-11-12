@@ -3,7 +3,7 @@
 export function codeStatus(checks: { check: string }[]): string | null {
   if (!checks.length) return null;
   const n = (kinds: string[]) => checks.filter((c) => kinds.includes(c.check)).length;
-  const tested = n(['python', 'shell', 'sql', 'vitest', 'pip', 'docker', 'web', 'js']);
+  const tested = n(['python', 'shell', 'sql', 'vitest', 'vitest-run', 'pip', 'docker', 'web', 'js', 'react', 'ts']);
   const rendered = n(['browser']);
   const fake = n(['python-fake-api']);
   const heavy = n(['heavy']);

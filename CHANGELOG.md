@@ -4,6 +4,29 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: Zero to Web Developer, part 4 (Front-end applications)
+
+Added
+- Six chapters: React components and props; state, events and forms; effects, loading data and routing (React Router 8); TypeScript basics; testing JavaScript and React (Vitest, React Testing Library); web performance. About 29,000 words including code, 77 practice problems (15 in each of the React and TypeScript chapters), 42 quiz questions, 30 exercises, 30 resource records, each opened on 12 November 2026.
+- **React and TypeScript examples run on the page.** A React block that is a whole component file gets **Show the result**: Sucrase turns its JSX and types into JavaScript in the browser, and it runs in the sandboxed preview with React, ReactDOM and React Router from a bundle the site builds itself (`npm run vendor`, `public/vendor/react-runtime.js`, not committed). The bundle uses React's development builds on purpose, so warnings such as a missing `key` show under the example. TypeScript blocks get **Run**, with a note that the types are removed, not checked. `<Playground>` groups can mix CSS and JSX.
+- **New kinds of check**: `react` (compiled exactly as the preview compiles it, then clicked and typed through in jsdom with user-event: `tests/react-blocks.test.ts`), `ts` (strict type-checking, with deliberate errors listed by code: `tests/ts-blocks.test.ts`), and `vitest-run` (a chapter's test files run with Vitest as a learner would: `tests/vitest-blocks.test.ts`). 139 code blocks in this part: 58 checked as React, 25 as TypeScript, 23 by running their tests with Vitest, 7 as shell commands with the network (creating and building the real Vite React and React-TypeScript starters, installing React Router, Vitest and Testing Library, and checking that the starter's own TypeScript 7 reports the chapter's first error), 2 rendered in real Chrome, and the rest validated or checked by hand-written assertions. One block is a single line repeated from the example before it, and is not run on its own.
+- Browser tests for the React and TypeScript buttons on the built site, and the six new pages added to the accessibility (axe) checks.
+- 88 glossary terms. Key, Routing and Regression now give both of their meanings (React and Python; web and AI agents; testing and machine learning).
+
+Fixed (found by the checks while writing)
+- The testing chapter's sign-up form could never show its own error message: the browser's built-in check for `type="email"` stopped the form first. It now has `noValidate`, and the chapter explains why.
+- Testing Library only cleans up between tests when Vitest's `globals` setting is on; without it, the second test found two of everything. The chapter's setup file now calls `cleanup` after each test, and says why.
+- The research for the TypeScript chapter assumed the Vite starter's tsconfig sets `"strict": true`. It does not: TypeScript 6 and later are strict by default. The chapter says that instead.
+- A phone number in a practice answer was removed: I could not confirm it was in a range set aside for fiction.
+- Error line numbers in all previews counted from the top of the hidden preview page (an error on line 2 said "line 130"). They now come from the example's own lines.
+- React previews did not load during `npm run dev`: Vite's development server refuses script requests from the sandboxed frame. In development the bundle is now put inline; the built site loads it as a normal script.
+- The CSS validator treated `src` and `font-display` inside `@font-face` as unknown properties; it now checks them against the at-rule's own grammar.
+
+Not verified
+- Sucrase, which compiles the examples on the page, does not report a closing JSX tag that does not match its opening tag (`<p>hi</b>`), and reports some mistakes less clearly than Vite. The common mistakes sections quote Vite's real messages.
+- The type checks use this repository's TypeScript 6 compiler; learners' new projects get TypeScript 7. One network check runs real TypeScript 7 on the chapter's first error.
+- No person has read these chapters yet; time estimates are guesses.
+
 ### 2026-11-12: Zero to Web Developer, part 3 (JavaScript from zero)
 
 Added

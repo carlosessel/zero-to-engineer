@@ -39,10 +39,13 @@ npm run dev
 
 Then open http://localhost:4321. The page reloads as you edit.
 
+`npm run dev` and `npm run build` first run `npm run vendor`, which bundles React, ReactDOM and React Router into `public/vendor/react-runtime.js` for the React examples' previews (development builds, so React's warnings show). That file is built from `package-lock.json` and is not committed; run `npm run vendor` yourself if you serve the site some other way.
+
 Other commands:
 
 | Command | What it does |
 | --- | --- |
+| `npm run vendor` | Builds `public/vendor/react-runtime.js` (done for you by `dev` and `build`) |
 | `npm run build` | Builds the finished site into `dist/`, then builds the search index |
 | `npm run preview` | Serves `dist/` so you can try the built site (search only works here, not in `npm run dev`) |
 | `npm test` | Unit tests: progress, review scheduling, planner, course model, glossary links, tutor prompt, runner helpers |
@@ -86,11 +89,11 @@ Some checks are skipped unless you ask for them, because they are slow or need s
 
 | Set this | To also run |
 | --- | --- |
-| `EXAMPLES_NETWORK=1` | `pip install` lines (resolved, not installed) |
+| `EXAMPLES_NETWORK=1` | `pip install` lines (resolved, not installed), `npm install` lines, and creating and building real Vite starter projects (React, React with TypeScript) |
 | `EXAMPLES_DOCKER=1` | the Dockerfile example (builds and starts a container) |
 | `EXAMPLES_HEAVY=1` | PyTorch and model-download examples (install `tests/examples/requirements-heavy.txt` and PyTorch first) |
 
-The kinds of check, and what each proves, are described at the top of `tests/examples/harness.py`. In short: Python runs through the same runner the website uses; SQL runs in SQLite; shell and Git commands run in an empty temporary folder with a throwaway Git identity; HTML and CSS examples are validated (`tests/web-blocks.test.ts`, using html-validate and css-tree) and, where the chapter makes a claim about how they look or behave, rendered in real Chrome and measured (`e2e/examples.e2e.ts`); the older JavaScript and React examples are tested in `tests/web-examples.test.ts`; model API examples talk to a stand-in server (`tests/examples/fake_anthropic.py`) that returns scripted replies. That last kind proves the code and its handling of replies are right, not what a real model would say.
+The kinds of check, and what each proves, are described at the top of `tests/examples/harness.py`. In short: Python runs through the same runner the website uses; SQL runs in SQLite; shell and Git commands run in an empty temporary folder with a throwaway Git identity; HTML and CSS examples are validated (`tests/web-blocks.test.ts`, using html-validate and css-tree) and, where the chapter makes a claim about how they look or behave, rendered in real Chrome and measured (`e2e/examples.e2e.ts`); JavaScript examples run in Node and their printed output is compared (`tests/js-blocks.test.ts`); React examples are compiled exactly as the site's preview compiles them and shown in a simulated page, with clicks and typing (`tests/react-blocks.test.ts`); TypeScript examples are type-checked in strict mode, with any errors a chapter shows on purpose listed by code (`tests/ts-blocks.test.ts`); test files a chapter shows are run with Vitest as a learner would (`tests/vitest-blocks.test.ts`); the older JavaScript and React examples are tested in `tests/web-examples.test.ts`; model API examples talk to a stand-in server (`tests/examples/fake_anthropic.py`) that returns scripted replies. That last kind proves the code and its handling of replies are right, not what a real model would say.
 
 To add a chapter with code, run `.venv/bin/python scripts/examples_draft.py your-chapter-id`. It writes a draft `examples.yaml` recording what each Python block printed. **Read every recorded output against what the chapter claims** before relying on it; the draft is a starting point, and the tests refuse an entry still marked as a draft.
 
@@ -126,6 +129,7 @@ How the learning features work:
 - **Review.** A quiz question answered wrongly comes back on the review page the next day. Each correct review moves it up a box and it waits longer (1, 3, 7, 14, 30 days); a wrong answer sends it back to the start.
 - **Planner.** Lays unfinished chapters, in course order, onto weeks of the hours you enter, using each chapter's `estimated_minutes`.
 - **Runnable Python.** Every `python` code block gets Run and Edit buttons, unless it needs something a browser cannot provide (PyTorch, an API key, a file of yours); those say so instead. Examples on one page share one Python session, like cells in a notebook. A line that is just a value shows that value, as the `>>>` prompt does. `input()` works by re-running the program with the answers typed so far.
+- **Runnable JavaScript, TypeScript and React.** A JavaScript block gets Run and Edit buttons and shows what it prints, in the same format the tests use. A TypeScript block runs the same way after its types are removed (without checking them; the page says so). A React block that is a whole component file gets **Show the result**: it is compiled in the browser with Sucrase and shown in a sandboxed frame, using the self-hosted React bundle; `<Playground>` groups combine HTML, CSS and JSX. Blocks with `import` or `export` (other than React's own modules) get a note instead, because they need several files. The sandbox cannot read the site's storage or your progress.
 - **Glossary links.** A term is linked to the glossary where a chapter puts it in bold, and capital-letter acronyms are linked where they first appear. To make a new term link, add it to `content/glossary.yaml` (an optional `aliases:` list adds other spellings).
 - **Search.** Pagefind builds an index from the finished site; the browser loads only the pieces it needs.
 

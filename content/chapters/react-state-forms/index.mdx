@@ -1,0 +1,843 @@
+---
+title: "State, events and forms in React"
+summary: "Keeping the screen in step with data, and handling what people type."
+prerequisites: [react-basics]
+estimated_minutes: 240
+status: deepened
+---
+
+By the end of this chapter your React pages will respond to people: buttons that count, lists that grow and shrink, and forms that check what is typed before anything is sent. You will learn **state**, the idea at the centre of every React application, and the handful of rules that keep it working.
+
+## Why an ordinary variable is not enough
+
+Here is a first try at a button that counts clicks. It uses an ordinary variable, as you would in plain JavaScript:
+
+```jsx
+export default function App() {
+  let count = 0;
+
+  function handleClick() {
+    count = count + 1;
+    console.log("count is now", count);
+  }
+
+  return (
+    <>
+      <p>Clicked {count} times</p>
+      <button type="button" onClick={handleClick}>Add one</button>
+    </>
+  );
+}
+```
+
+Press **Show the result** and click the button a few times. The messages under the example say `count is now 1`, `count is now 2`… but the page still says **Clicked 0 times**. Two things are going wrong:
+
+1. **Changing a variable does not tell React anything.** React updates the page only when it renders the component again, and nothing here asks it to.
+2. **Even if it did render again, the count would start from 0.** Rendering means calling `App` again, and every call runs `let count = 0` afresh. Ordinary variables do not survive from one render to the next.
+
+What the component needs is a value that React keeps between renders, and a way to change it that tells React to render again. That is **state**.
+
+## useState: a component's memory
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+
+  function handleClick() {
+    setCount(count + 1);
+  }
+
+  return (
+    <>
+      <p>Clicked {count} times</p>
+      <button type="button" onClick={handleClick}>Add one</button>
+    </>
+  );
+}
+```
+
+Now it works. Line by line:
+
+- `import { useState } from "react";` brings in `useState` from React.
+- `useState(0)` creates a piece of state whose starting value, its **initial value**, is `0`. It returns an array of two things, which the line unpacks with array destructuring (<Ref to="js-arrays-objects" />): `count`, the current value, and `setCount`, a function that changes it. You can name them anything; `thing` and `setThing` is the convention.
+- When the button is clicked, `handleClick` calls `setCount(count + 1)`.
+
+What happens on the first click, step by step:
+
+1. `count` is 0, so `setCount(0 + 1)` asks React to change the state to 1.
+2. React stores 1 and **renders `App` again**: it calls the function a second time.
+3. This time `useState(0)` returns `[1, setCount]`. The `0` is only the starting value, used on the first render; after that React hands back what it has stored.
+4. The JSX now says `Clicked 1 times`, and React updates that text on the page.
+
+(Yes, "1 times". Fixing that is practice problem 2.)
+
+`useState` is a **Hook**: a function whose name starts with `use`, which lets a component use one of React's features. Hooks have two rules, and breaking them causes confusing bugs:
+
+- **Call Hooks only at the top level of a component**, never inside an `if`, a loop, or a nested function. React tells your pieces of state apart by the order they are called in, so that order must be the same on every render.
+- **Call Hooks only from components** (or from your own Hooks), not from ordinary functions.
+
+## Events
+
+`onClick={handleClick}` is how React attaches an event listener, like `addEventListener("click", handleClick)` in <Ref to="js-dom-events" />. Event props are named `on` plus the event in camelCase: `onClick`, `onChange`, `onSubmit`, `onKeyDown`, `onFocus`.
+
+You pass the function itself. The most common mistake in React events is writing `onClick={handleClick()}`, with brackets: that *calls* `handleClick` while rendering, and passes whatever it returns. If it sets state, React renders again, which calls it again, for ever; React stops this with the error `Too many re-renders`.
+
+When the handler needs something passed to it, wrap it in an arrow function, which is not called until the click:
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [message, setMessage] = useState("Choose a size.");
+
+  function choose(size) {
+    setMessage(`You chose ${size}.`);
+  }
+
+  return (
+    <>
+      <button type="button" onClick={() => choose("small")}>Small</button>
+      <button type="button" onClick={() => choose("large")}>Large</button>
+      <p>{message}</p>
+    </>
+  );
+}
+```
+
+Click **Large** and the paragraph says **You chose large.** Each button gets its own little arrow function, and each arrow calls `choose` with a different size.
+
+The handler receives an **event object** just as in plain JavaScript, with `event.target`, `event.preventDefault()` and so on. React passes it as the first argument: `function handleClick(event) { … }`.
+
+## A component can have several pieces of state
+
+Call `useState` once for each separate value:
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [likes, setLikes] = useState(0);
+  const [liked, setLiked] = useState(false);
+
+  function toggle() {
+    if (liked) {
+      setLikes(likes - 1);
+    } else {
+      setLikes(likes + 1);
+    }
+    setLiked(!liked);
+  }
+
+  return (
+    <button type="button" onClick={toggle} aria-pressed={liked}>
+      {liked ? "Unlike" : "Like"} ({likes})
+    </button>
+  );
+}
+```
+
+The first click shows **Unlike (1)**; the second, **Like (0)**. `aria-pressed` tells screen readers that this button is a switch and whether it is on (<Ref to="web-accessibility" />). And because the button's text comes from state, the page can never show a count that disagrees with the label.
+
+Each copy of a component has its own state. If you show `<LikeButton />` three times, each has its own `likes`. State is private to the component instance that created it.
+
+## State is a snapshot
+
+Here is a puzzle. What does this button do?
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [score, setScore] = useState(0);
+
+  function addThree() {
+    setScore(score + 1);
+    setScore(score + 1);
+    setScore(score + 1);
+  }
+
+  return (
+    <>
+      <p>Score: {score}</p>
+      <button type="button" onClick={addThree}>Add three</button>
+    </>
+  );
+}
+```
+
+It adds **one**, not three. During this render, `score` is 0, and it stays 0 for the whole of the handler: setting state does not change the variable you already have, it asks React for a new render with a new value. So the three lines all say `setScore(0 + 1)`. The state in a render is like a photograph, a **snapshot** taken when the render happened.
+
+When the new value depends on the old one, pass `setScore` a function instead. React calls it with the latest value, including any updates already queued:
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [score, setScore] = useState(0);
+
+  function addThree() {
+    setScore((s) => s + 1);
+    setScore((s) => s + 1);
+    setScore((s) => s + 1);
+  }
+
+  return (
+    <>
+      <p>Score: {score}</p>
+      <button type="button" onClick={addThree}>Add three</button>
+    </>
+  );
+}
+```
+
+Now one click shows **Score: 3**. React runs the three **updater functions** in order: 0 + 1 = 1, then 1 + 1 = 2, then 2 + 1 = 3. A good habit: whenever you write `setX(x + …)`, consider `setX((x) => x + …)`.
+
+A related surprise: `console.log(score)` straight after `setScore(5)` prints the *old* value, for the same reason. The new value arrives on the next render.
+
+## Objects and arrays in state: replace, never change
+
+State can hold any value, including objects and arrays. There is one firm rule: **never change an object or array that is in state. Make a new one and set that.**
+
+Why? React decides whether to render again by checking whether you gave it a *different* value. If you change the existing array with `push` and pass the same array back, React sees the same array and may do nothing. Your data changed, but the screen did not.
+
+Making a new array or object is short with the **spread syntax**, `...`, which copies the contents of one array or object into a new one:
+
+```js
+const items = ["Bread", "Milk"];
+const more = [...items, "Eggs"];
+console.log(items, more);
+
+const order = { name: "Ama", quantity: 2 };
+const changed = { ...order, quantity: 3 };
+console.log(order, changed);
+```
+
+`[...items, "Eggs"]` is a new array holding everything in `items`, then `"Eggs"`. `{ ...order, quantity: 3 }` is a new object holding everything in `order`, then `quantity: 3`, which replaces the old quantity. The originals are untouched.
+
+The three things you do to a list in state, each with a method from <Ref to="js-arrays-objects" /> that returns a *new* array:
+
+| To… | Write | Instead of |
+|---|---|---|
+| add an item | `setItems([...items, newItem])` | `items.push(newItem)` |
+| remove an item | `setItems(items.filter((i) => i.id !== id))` | `items.splice(…)` |
+| change an item | `setItems(items.map((i) => (i.id === id ? { ...i, done: true } : i)))` | `item.done = true` |
+
+## A worked example: the to-do list again
+
+In <Ref to="js-dom-events" /> you built a to-do list by creating and removing elements by hand. Here it is in React. Compare how much there is to keep track of.
+
+```jsx
+import { useState } from "react";
+
+let nextId = 4;
+
+export default function App() {
+  const [tasks, setTasks] = useState([
+    { id: 1, text: "Order flour", done: true },
+    { id: 2, text: "Call Kofi", done: false },
+    { id: 3, text: "Clean the ovens", done: false },
+  ]);
+  const [draft, setDraft] = useState("");
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    const text = draft.trim();
+    if (text === "") return;
+    setTasks([...tasks, { id: nextId++, text, done: false }]);
+    setDraft("");
+  }
+
+  function toggle(id) {
+    setTasks(tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)));
+  }
+
+  function remove(id) {
+    setTasks(tasks.filter((t) => t.id !== id));
+  }
+
+  const doneCount = tasks.filter((t) => t.done).length;
+
+  return (
+    <>
+      <form onSubmit={handleSubmit}>
+        <label htmlFor="task">New task</label>{" "}
+        <input id="task" type="text" value={draft} onChange={(e) => setDraft(e.target.value)} />{" "}
+        <button type="submit">Add</button>
+      </form>
+      <ul>
+        {tasks.map((t) => (
+          <li key={t.id}>
+            <label>
+              <input type="checkbox" checked={t.done} onChange={() => toggle(t.id)} />{" "}
+              {t.done ? <s>{t.text}</s> : t.text}
+            </label>{" "}
+            <button type="button" onClick={() => remove(t.id)}>Delete</button>
+          </li>
+        ))}
+      </ul>
+      <p aria-live="polite">{tasks.length === 0 ? "No tasks." : `${doneCount} of ${tasks.length} done.`}</p>
+    </>
+  );
+}
+```
+
+What to notice:
+
+- **All the data is in one place**, the `tasks` array in state. The page is worked out from it on every render. There is no code that edits the page.
+- **Adding** makes a new array with the new task at the end. **Ticking** makes a new array in which the one task with that id is replaced by a copy with `done` flipped. **Deleting** makes a new array without it. Each then calls `setTasks`, and React updates the page.
+- **The summary is not stored.** `doneCount` is calculated from `tasks` on every render, so it can never be out of date. A value you can work out from state is called **derived** data. Storing it in its own state would mean two things to keep in step: exactly the problem React is meant to remove.
+- `nextId` is an ordinary variable *outside* the component. It gives each new task an id; it never needs to be shown, so it does not need to be state. (A real app would get ids from the server.)
+- `{" "}` puts a space between elements on separate lines; JSX drops the line breaks between them.
+- The text box works in a special way, explained next.
+
+## Forms: controlled inputs
+
+Look again at the text box in the to-do list:
+
+```jsx
+<input id="task" type="text" value={draft} onChange={(e) => setDraft(e.target.value)} />
+```
+
+Its `value` comes from state, and every keystroke updates the state. That makes it a **controlled input**: React's state is the single source of truth for what is in the box. The loop on each keystroke:
+
+1. You type "B". The browser fires a change, and `onChange` runs with the event.
+2. `e.target.value` is the box's new contents, `"B"`, and `setDraft("B")` stores it.
+3. React renders again, and the input gets `value="B"`.
+
+Because the value lives in state, the rest of the component can use it at any moment: to clear the box after adding (`setDraft("")`), to check it, or to show a count of characters as you type. In React, `onChange` fires on every keystroke (like the `input` event in plain JavaScript), not only when you leave the field.
+
+If you give an input a `value` but no `onChange`, it becomes stuck: React keeps putting the old value back, and you cannot type. React warns about it in the console: `You provided a 'value' prop to a form field without an 'onChange' handler.`
+
+### A whole form
+
+Most forms have several fields. You can give each its own state, or keep them together in one object, using the input's `name` to know which field changed:
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [form, setForm] = useState({ name: "", email: "", size: "medium", gift: false });
+  const [sent, setSent] = useState(null);
+
+  function handleChange(event) {
+    const { name, value, type, checked } = event.target;
+    setForm({ ...form, [name]: type === "checkbox" ? checked : value });
+  }
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    setSent(form);
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <p>
+        <label htmlFor="name">Name</label>{" "}
+        <input id="name" name="name" type="text" value={form.name} onChange={handleChange} />
+      </p>
+      <p>
+        <label htmlFor="email">Email</label>{" "}
+        <input id="email" name="email" type="email" value={form.email} onChange={handleChange} />
+      </p>
+      <p>
+        <label htmlFor="size">Cake size</label>{" "}
+        <select id="size" name="size" value={form.size} onChange={handleChange}>
+          <option value="small">Small</option>
+          <option value="medium">Medium</option>
+          <option value="large">Large</option>
+        </select>
+      </p>
+      <p>
+        <label>
+          <input name="gift" type="checkbox" checked={form.gift} onChange={handleChange} /> Gift wrap
+        </label>
+      </p>
+      <button type="submit">Order</button>
+      {sent && <p>Thank you, {sent.name}. A {sent.size} cake{sent.gift ? ", gift wrapped," : ""} is on its way.</p>}
+    </form>
+  );
+}
+```
+
+How the one `handleChange` serves every field:
+
+- `event.target` is the field that changed. Destructuring pulls out its `name` (`"email"`, say), its `value`, its `type`, and, for checkboxes, `checked`.
+- `{ ...form, [name]: … }` copies the form object and replaces one property. The square brackets mean "the property whose name is in the variable `name`", so for the email box this is `{ ...form, email: value }`. This is called a **computed property name**.
+- A checkbox's state is `checked` (true or false), not `value`, hence the test on `type`.
+- `select` works like an input in React: give it `value` and `onChange`. (In HTML you would put `selected` on an option instead.)
+
+Type **Ama**, choose **Large**, tick **Gift wrap**, and press **Order**: the page says **Thank you, Ama. A large cake, gift wrapped, is on its way.**
+
+### Checking what people type
+
+Because the form's values are in state, you can check them as the person types and show helpful messages. Work out the errors from the state, as derived data:
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [email, setEmail] = useState("");
+  const [touched, setTouched] = useState(false);
+  const [done, setDone] = useState(false);
+
+  const error = email.trim() === "" ? "Enter your email address." : !email.includes("@") ? "An email address needs an @." : "";
+
+  function handleSubmit(event) {
+    event.preventDefault();
+    setTouched(true);
+    if (error) return;
+    setDone(true);
+  }
+
+  if (done) return <p>Thanks! We will email {email} when the shop opens.</p>;
+
+  return (
+    <form onSubmit={handleSubmit} noValidate>
+      <label htmlFor="email">Email</label>{" "}
+      <input
+        id="email"
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        onBlur={() => setTouched(true)}
+        aria-invalid={touched && error !== ""}
+        aria-describedby="email-error"
+      />{" "}
+      <button type="submit">Tell me</button>
+      <p id="email-error">{touched ? error : ""}</p>
+    </form>
+  );
+}
+```
+
+- `error` is worked out on every render: empty box, no `@`, or fine (`""`).
+- `touched` stops the message shouting at someone who has not started yet. It becomes true when they leave the box (`onBlur`) or press the button.
+- `noValidate` turns off the browser's own pop-up checks, so your messages are the only ones. Your server must still check everything again, because anyone can send a request without your form (<Ref to="security" />).
+- `aria-invalid` and `aria-describedby` tell screen readers that the box has a problem and where the message is (<Ref to="web-accessibility" />).
+- Press **Tell me** with the box empty and the message **Enter your email address.** appears; type `ama` and it changes to **An email address needs an @.**
+
+This `includes("@")` test is deliberately simple. Checking email addresses properly is surprisingly hard; the only real test is sending an email.
+
+## Sharing state between components: lifting state up
+
+So far each piece of state has lived in the component that uses it. But often two components need the same data. On a shop page, the product list adds things to the basket, and the basket summary shows them. Neither component can reach into the other's state.
+
+The answer is to **lift state up**: move the state to the closest component that contains both, and pass it down as props. The parent owns the data; the children get the value to show, and functions to call when something should change.
+
+```jsx
+import { useState } from "react";
+
+const products = [
+  { id: 1, name: "Sourdough loaf", price: 4.5 },
+  { id: 2, name: "Cinnamon bun", price: 2.75 },
+  { id: 3, name: "Rye loaf", price: 3.8 },
+];
+
+function ProductList({ onAdd }) {
+  return (
+    <ul>
+      {products.map((p) => (
+        <li key={p.id}>
+          {p.name}, £{p.price.toFixed(2)}{" "}
+          <button type="button" onClick={() => onAdd(p)}>Add {p.name}</button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Basket({ items, onEmpty }) {
+  const total = items.reduce((sum, item) => sum + item.price, 0);
+  if (items.length === 0) return <p>Your basket is empty.</p>;
+  return (
+    <section>
+      <p>{items.length} {items.length === 1 ? "item" : "items"}, total £{total.toFixed(2)}</p>
+      <button type="button" onClick={onEmpty}>Empty basket</button>
+    </section>
+  );
+}
+
+export default function App() {
+  const [basket, setBasket] = useState([]);
+  return (
+    <>
+      <ProductList onAdd={(p) => setBasket([...basket, p])} />
+      <Basket items={basket} onEmpty={() => setBasket([])} />
+    </>
+  );
+}
+```
+
+- The `basket` state lives in `App`, the parent of both.
+- `ProductList` gets a function prop, `onAdd`. It does not know or care what adding does; it just calls `onAdd(p)` when a button is pressed. Naming such props `onSomething` is the convention.
+- `Basket` gets the `items` to show and an `onEmpty` function.
+- Add a sourdough loaf and a cinnamon bun and the summary reads **2 items, total £7.25**. `reduce` (from <Ref to="js-arrays-objects" />) adds up the prices: 0 + 4.50 + 2.75 = 7.25.
+
+Data flows *down* through props; requests to change it flow *up* through function props. This one-way flow is what makes React apps easier to follow: to find out why something on screen is wrong, you follow the props up to the one place the state lives.
+
+How do you decide where state should live? Find every component that shows or changes the value, then put the state in their closest common parent. No higher than it needs to be, but no lower.
+
+## Common mistakes
+
+- **Changing state directly**: `tasks.push(newTask); setTasks(tasks);` or `form.name = "Ama"`. The screen may not update. Make a new array or object with spread, `map` or `filter`.
+- **`onClick={handleClick()}`**: calls the function while rendering. If it sets state, React stops with `Too many re-renders. React limits the number of renders to prevent an infinite loop.` Pass the function: `onClick={handleClick}`, or `onClick={() => handleClick(id)}`.
+- **Expecting the new value straight after setting it.** After `setCount(5)`, `count` is still the old value until the next render. Use the value you set, or an updater function.
+- **`setX(x + 1)` several times in a row** adds one. Use `setX((x) => x + 1)`.
+- **An input with `value` but no `onChange`**: you cannot type in it, and React warns. Add `onChange`, or use `defaultValue` if you do not need to control it.
+- **Switching an input between controlled and uncontrolled.** `useState()` with no starting value gives `undefined`, and `value={undefined}` means "not controlled". When you later set a string, React warns that `A component is changing an uncontrolled input to be controlled.` Start text fields with `""`.
+- **Storing what you can calculate.** A `total` state next to an `items` state will drift out of step. Calculate it during render.
+- **Calling `useState` inside an `if` or a loop.** It breaks the order React relies on. Call Hooks at the top of the component.
+- **Forgetting `event.preventDefault()`** in a form's `onSubmit`, so the browser reloads the page and everything typed is lost.
+
+## Practice
+
+Use the editor in any example above (press **Edit**), or `src/App.jsx` in your Vite project.
+
+**1. (warm-up)** In `const [name, setName] = useState("Ama");`, what are `name`, `setName` and `"Ama"`?
+
+<Solution>
+
+`name` is the current value of this piece of state; `setName` is the function you call to change it (which makes React render again); `"Ama"` is the initial value, used only on the first render.
+
+</Solution>
+
+**2. (warm-up)** Change the first working counter so it says `Clicked 1 time` for one click and `Clicked 2 times` for more.
+
+<Solution>
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <p>Clicked {count} {count === 1 ? "time" : "times"}</p>
+      <button type="button" onClick={() => setCount(count + 1)}>Add one</button>
+    </>
+  );
+}
+```
+
+The word is worked out from `count` with `? :` during render.
+
+</Solution>
+
+**3. (warm-up)** Why does `<button onClick={setCount(0)}>Reset</button>` crash with "Too many re-renders"?
+
+<Solution>
+
+`setCount(0)` runs while the component is rendering, not when the button is clicked. Setting state asks for another render, which runs `setCount(0)` again, and so on for ever. Pass a function: `onClick={() => setCount(0)}`.
+
+</Solution>
+
+**4. (warm-up)** `const [items, setItems] = useState(["a"]);` Which line correctly adds `"b"`? (a) `items.push("b")` (b) `setItems(items.push("b"))` (c) `setItems([...items, "b"])`
+
+<Solution>
+
+**(c)**. (a) changes the array in state and never tells React. (b) also changes it, and passes `push`'s return value, which is the new *length* (the number 2), so `items` would become a number. (c) makes a new array and sets it.
+
+</Solution>
+
+**5. (warm-up)** What does `{ ...{ size: "small", gift: false }, size: "large" }` give?
+
+<Solution>
+
+`{ size: "large", gift: false }`. The spread copies both properties, then `size: "large"` replaces the copied `size`.
+
+</Solution>
+
+**6. (standard)** Make a counter with three buttons: **−1**, **+1** and **Reset**. The count must never go below 0: disable the −1 button at 0 with the `disabled` prop.
+
+<Solution>
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [count, setCount] = useState(0);
+  return (
+    <>
+      <p>Count: {count}</p>
+      <button type="button" onClick={() => setCount((c) => c - 1)} disabled={count === 0}>−1</button>{" "}
+      <button type="button" onClick={() => setCount((c) => c + 1)}>+1</button>{" "}
+      <button type="button" onClick={() => setCount(0)}>Reset</button>
+    </>
+  );
+}
+```
+
+`disabled={count === 0}` is true at zero, so the button cannot be pressed. A disabled button is also skipped by the keyboard and announced as unavailable.
+
+</Solution>
+
+**7. (standard)** Make a "Show more" button that reveals a paragraph and changes its own text to "Show less", and back again.
+
+<Solution>
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <h2>Our sourdough</h2>
+      <button type="button" onClick={() => setOpen(!open)} aria-expanded={open}>
+        {open ? "Show less" : "Show more"}
+      </button>
+      {open && <p>We feed our starter twice a day and bake every loaf for 45 minutes.</p>}
+    </>
+  );
+}
+```
+
+One true-or-false state controls both the text and whether the paragraph is shown. `aria-expanded` tells screen readers whether the extra text is open.
+
+</Solution>
+
+**8. (standard)** Make a text box with a live character count under it, such as `12 / 140`, that turns into `Too long by 3` when more than 140 characters are typed.
+
+<Solution>
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [text, setText] = useState("");
+  const left = 140 - text.length;
+  return (
+    <>
+      <label htmlFor="review">Your review</label>
+      <br />
+      <textarea id="review" value={text} onChange={(e) => setText(e.target.value)} rows={4} cols={40} />
+      <p>{left >= 0 ? `${text.length} / 140` : `Too long by ${-left}`}</p>
+    </>
+  );
+}
+```
+
+The count is derived from `text`, so there is nothing else to keep in step. In React, `textarea` also takes `value` and `onChange`.
+
+</Solution>
+
+**9. (standard)** A list of names is in state. Write the line that removes `"Kofi"`, and the line that changes `"Ama"` to `"Ama B."`, without changing the array.
+
+<Solution>
+
+```js
+const names = ["Ama", "Kofi", "Priya"];
+const withoutKofi = names.filter((n) => n !== "Kofi");
+const renamed = names.map((n) => (n === "Ama" ? "Ama B." : n));
+console.log(withoutKofi);
+console.log(renamed);
+console.log(names);
+```
+
+In a component, these would be `setNames(names.filter(…))` and `setNames(names.map(…))`. The last line shows the original array is unchanged: `["Ama", "Kofi", "Priya"]`.
+
+</Solution>
+
+**10. (standard)** In the to-do list, someone writes `function toggle(id) { const t = tasks.find((t) => t.id === id); t.done = !t.done; setTasks(tasks); }`. The tick box does not change. Why?
+
+<Solution>
+
+It changes a task object that is inside the state, then passes the *same* array back to `setTasks`. React compares the new value with the old one, finds the same array, and skips the render, so the screen does not change. Make a new array with a new object for the changed task: `setTasks(tasks.map((t) => (t.id === id ? { ...t, done: !t.done } : t)))`.
+
+</Solution>
+
+**11. (standard)** Make a temperature converter: one input for degrees Celsius, and a line underneath showing the same temperature in Fahrenheit (F = C × 9 ÷ 5 + 32), to one decimal place. Show nothing under it while the box is empty. What does it show for 21?
+
+<Solution>
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [celsius, setCelsius] = useState("");
+  const c = Number(celsius);
+  return (
+    <>
+      <label htmlFor="c">Degrees Celsius</label>{" "}
+      <input id="c" type="number" value={celsius} onChange={(e) => setCelsius(e.target.value)} />
+      {celsius !== "" && <p>{celsius} °C is {(c * 9 / 5 + 32).toFixed(1)} °F</p>}
+    </>
+  );
+}
+```
+
+For 21: 21 × 9 ÷ 5 + 32 = 37.8 + 32 = 69.8, so it shows **21 °C is 69.8 °F**. The state holds the text from the box (input values are always text), and `Number` turns it into a number for the sum.
+
+</Solution>
+
+**12. (standard)** A sign-up form has a password box and a "confirm password" box. Show `The passwords do not match.` under them while both have something typed and they differ, and disable the submit button until they match.
+
+<Solution>
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const mismatch = password !== "" && confirm !== "" && password !== confirm;
+  const ready = password !== "" && password === confirm;
+  return (
+    <form onSubmit={(e) => e.preventDefault()}>
+      <label htmlFor="pw">Password</label>{" "}
+      <input id="pw" type="password" value={password} onChange={(e) => setPassword(e.target.value)} />
+      <br />
+      <label htmlFor="pw2">Confirm password</label>{" "}
+      <input id="pw2" type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
+      {mismatch && <p>The passwords do not match.</p>}
+      <button type="submit" disabled={!ready}>Sign up</button>
+    </form>
+  );
+}
+```
+
+Both `mismatch` and `ready` are derived from the two pieces of state. Disabling the button is a convenience; a message saying why it is disabled, as here, is kinder than a button that silently does nothing.
+
+</Solution>
+
+**13. (stretch)** Lift state up: make two components, `Thermostat` (with **Warmer** and **Cooler** buttons that change the temperature by 1) and `Display` (which shows `Set to 20 °C`, and adds ` (eco)` when the temperature is 19 or below). The temperature starts at 20 and lives in `App`.
+
+<Solution>
+
+```jsx
+import { useState } from "react";
+
+function Thermostat({ onChange }) {
+  return (
+    <>
+      <button type="button" onClick={() => onChange(1)}>Warmer</button>{" "}
+      <button type="button" onClick={() => onChange(-1)}>Cooler</button>
+    </>
+  );
+}
+
+function Display({ temperature }) {
+  return <p>Set to {temperature} °C{temperature <= 19 ? " (eco)" : ""}</p>;
+}
+
+export default function App() {
+  const [temperature, setTemperature] = useState(20);
+  return (
+    <>
+      <Display temperature={temperature} />
+      <Thermostat onChange={(by) => setTemperature((t) => t + by)} />
+    </>
+  );
+}
+```
+
+`Thermostat` only reports "change by this much"; `App` owns the number; `Display` only shows it. Press **Cooler** once and it reads **Set to 19 °C (eco)**.
+
+</Solution>
+
+**14. (stretch)** Add a quantity to the basket example: instead of adding the same product twice, the basket should hold `{ id, name, price, quantity }` and the add button should increase the quantity of a product already in it. Show each line as `2 × Cinnamon bun` and the total. What is the total for two cinnamon buns and one rye loaf?
+
+<Solution>
+
+```jsx
+import { useState } from "react";
+
+const products = [
+  { id: 1, name: "Sourdough loaf", price: 4.5 },
+  { id: 2, name: "Cinnamon bun", price: 2.75 },
+  { id: 3, name: "Rye loaf", price: 3.8 },
+];
+
+export default function App() {
+  const [basket, setBasket] = useState([]);
+
+  function add(product) {
+    const existing = basket.find((line) => line.id === product.id);
+    if (existing) {
+      setBasket(basket.map((line) => (line.id === product.id ? { ...line, quantity: line.quantity + 1 } : line)));
+    } else {
+      setBasket([...basket, { ...product, quantity: 1 }]);
+    }
+  }
+
+  const total = basket.reduce((sum, line) => sum + line.price * line.quantity, 0);
+
+  return (
+    <>
+      {products.map((p) => (
+        <button key={p.id} type="button" onClick={() => add(p)}>Add {p.name}</button>
+      ))}
+      <ul>
+        {basket.map((line) => (
+          <li key={line.id}>{line.quantity} × {line.name}</li>
+        ))}
+      </ul>
+      <p>Total £{total.toFixed(2)}</p>
+    </>
+  );
+}
+```
+
+Two cinnamon buns and one rye loaf: 2 × 2.75 + 1 × 3.80 = 5.50 + 3.80 = **£9.30**. The two branches of `add` are the "change an item" and "add an item" patterns from the table.
+
+</Solution>
+
+**15. (stretch)** Explain why this counter shows 1 after one click, not 2, and fix it so it adds two:
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [n, setN] = useState(0);
+  function addTwo() {
+    setN(n + 1);
+    setN(n + 1);
+  }
+  return <button type="button" onClick={addTwo}>{n}</button>;
+}
+```
+
+<Solution>
+
+During this render `n` is 0, and stays 0 inside `addTwo`: both lines ask for `0 + 1`. Use updater functions, which each get the latest value:
+
+```jsx
+import { useState } from "react";
+
+export default function App() {
+  const [n, setN] = useState(0);
+  function addTwo() {
+    setN((x) => x + 1);
+    setN((x) => x + 1);
+  }
+  return <button type="button" onClick={addTwo}>{n}</button>;
+}
+```
+
+(Or simply `setN(n + 2)`.)
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **State** is data a component remembers between renders. `const [value, setValue] = useState(initial)` creates it; calling `setValue` stores a new value and makes React render the component again.
+- Ordinary variables reset on every render and changing them does not update the page.
+- **Hooks** such as `useState` are called at the top level of a component, never inside conditions or loops.
+- Events are props like `onClick={handleClick}`: pass the function, do not call it. Use an arrow function to pass arguments.
+- State is a **snapshot**: setting it does not change the current variable. When the new value depends on the old, use an **updater function**: `setCount((c) => c + 1)`.
+- Never change objects or arrays in state. Make new ones with spread `...`, `map` and `filter`.
+- **Controlled inputs** take `value` from state and update it in `onChange`; forms use `onSubmit` with `event.preventDefault()`.
+- Calculate **derived** values (totals, counts, error messages) during render instead of storing them.
+- When several components need the same state, **lift it up** to their closest common parent and pass it down as props, with `onSomething` function props for changes.
+
+## Go deeper
+
+- [Adding Interactivity](https://react.dev/learn/adding-interactivity), from the React team. Events, state, snapshots, and updating objects and arrays, one page each.
+- [State: A Component's Memory](https://react.dev/learn/state-a-components-memory), from the React team. A longer explanation of `useState`, with challenges.
+- [Sharing State Between Components](https://react.dev/learn/sharing-state-between-components), from the React team. Lifting state up, step by step.
+- [The `<input>` reference](https://react.dev/reference/react-dom/components/input), from the React team. Controlled inputs, and fixes for the usual problems with them.
+- [Full Stack Open, Part 2b: Forms](https://fullstackopen.com/en/part2/forms), from the University of Helsinki. Another worked form, with exercises.

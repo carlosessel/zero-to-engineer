@@ -1,0 +1,732 @@
+---
+title: "TypeScript basics"
+summary: "Adding types to JavaScript so many mistakes are caught before the code runs."
+prerequisites: [react-data-routing]
+estimated_minutes: 180
+status: deepened
+---
+
+By the end of this chapter you will be able to read and write TypeScript, the version of JavaScript that most professional teams now use, and use it to catch a whole class of mistakes while you type instead of when a user finds them. You will also know how to type React components, which is how you will meet TypeScript in most jobs.
+
+## The problem TypeScript solves
+
+Here is a small JavaScript function and a call to it that looks reasonable:
+
+```js
+function formatPrice(price) {
+  return "£" + price.toFixed(2);
+}
+
+console.log(formatPrice(4.5));
+console.log(formatPrice("3.80"));
+```
+
+The first call prints **£4.50**. The second stops with `TypeError: price.toFixed is not a function`, because `"3.80"` is text, and text has no `toFixed`. Where would text come from? Easily: everything typed into a form arrives as text, and so do URL parameters (<Ref to="react-data-routing" />).
+
+The worst part is *when* you find out. JavaScript only notices when that line actually runs, perhaps on a customer's phone, on a page you did not test. In a large app, many bugs are like this one: a value of the wrong kind arriving somewhere it does not belong.
+
+**TypeScript** is JavaScript with **types** added: labels that say what kind of value each variable, parameter and property holds. A program called the **type checker** reads your code, without running it, and reports every place where the labels do not fit together. Here is the same function in TypeScript:
+
+```ts
+function formatPrice(price: number): string {
+  return "£" + price.toFixed(2);
+}
+
+console.log(formatPrice(4.5));
+console.log(formatPrice("3.80"));
+```
+
+`price: number` says "`price` must be a number", and `: string` after the brackets says "this function returns a string". Now the second call is reported as an error before the code ever runs, underlined in red in your editor:
+
+```text
+error TS2345: Argument of type 'string' is not assignable to parameter of type 'number'.
+```
+
+Every TypeScript error has a code (here `TS2345`) and a message. The messages take some getting used to; this one means "you passed a string where a number is needed".
+
+TypeScript was created by Microsoft and is free and open source. When this chapter was checked (November 2026), the current version was TypeScript 7.
+
+### How TypeScript runs
+
+Browsers and Node do not understand most of TypeScript's syntax. Before the code runs, the types are removed, leaving ordinary JavaScript: `function formatPrice(price) { … }`. So types cost nothing when the code runs, and they also **check nothing** when it runs: all the checking happens beforehand, in your editor and when you build.
+
+That has a consequence worth remembering. Vite's development server removes the types *without checking them*, so it happily runs code with type errors. You see the errors in your editor, and `npm run build` checks them all before building. On this page, too, the **Run** button removes the types and runs the JavaScript that is left, without checking: the error above would only appear when the code ran, as in JavaScript. The type errors shown in this chapter come from the real type checker, which was run on every example.
+
+## Setting up
+
+Vite has a React starter with TypeScript:
+
+```bash
+npm create vite@latest my-ts-app -- --template react-ts
+cd my-ts-app
+npm install
+npm run build
+```
+
+It is the React starter you know, with three differences:
+
+- Files end in **`.ts`** (TypeScript) and **`.tsx`** (TypeScript with JSX) instead of `.js` and `.jsx`.
+- **`tsconfig.json`** and the files it points to (`tsconfig.app.json`, `tsconfig.node.json`) hold the type checker's settings. You rarely need to change them.
+- The `build` script is `tsc -b && vite build`. **`tsc`** is the TypeScript compiler; `tsc -b` type-checks the project, and only if that passes does Vite build it. A type error stops the build, which is exactly what you want: broken code cannot be published by accident.
+
+Editors such as VS Code understand TypeScript without any extra setup and show errors as you type.
+
+The checker has a **strict** mode, which turns on its most useful checks, such as the checks for missing values later in this chapter. Since TypeScript 6 it is on by default, so new projects are strict. Keep it on.
+
+## Basic types
+
+You add a type with a colon after a name. The basic types are the kinds of value from <Ref to="js-values-variables" />:
+
+```ts
+let shopName: string = "Ama's Bakery";
+let loaves: number = 12;
+let isOpen: boolean = true;
+let prices: number[] = [4.5, 2.75, 3.8];
+let names: string[] = ["Ama", "Kofi"];
+
+loaves = 11;
+console.log(shopName, loaves, isOpen, prices.length, names[0]);
+```
+
+`number[]` means "an array of numbers". Changing `loaves` to 11 is fine; it is still a number. Writing `loaves = "eleven"` would be an error.
+
+### Let TypeScript work types out
+
+You rarely need to write types on variables, because TypeScript works them out from the value. This is called **type inference**:
+
+```ts
+let shopName = "Ama's Bakery";
+let loaves = 12;
+const prices = [4.5, 2.75, 3.8];
+
+loaves = "eleven";
+```
+
+TypeScript infers that `loaves` is a `number` from its first value, so the last line is still an error:
+
+```text
+error TS2322: Type 'string' is not assignable to type 'number'.
+```
+
+A good rule: **write types on function parameters** (TypeScript cannot guess what callers will pass) **and let TypeScript infer the rest**. Return types are optional too; writing them is useful for important functions, because it checks that the function returns what you meant.
+
+### Functions
+
+```ts
+function lineTotal(price: number, quantity: number): number {
+  return price * quantity;
+}
+
+function greet(name: string, greeting = "Hello"): string {
+  return `${greeting}, ${name}!`;
+}
+
+const double = (n: number) => n * 2;
+
+console.log(lineTotal(2.75, 3));
+console.log(greet("Kofi"));
+console.log(greet("Ama", "Good morning"));
+console.log(double(21));
+```
+
+- Each parameter gets its type: `price: number, quantity: number`.
+- `greeting = "Hello"` has a default value, so TypeScript infers it is a string, and callers may leave it out.
+- Arrow functions are typed the same way: `(n: number) => n * 2`. TypeScript infers that `double` returns a number.
+- A function that returns nothing has the return type **`void`**: `function log(message: string): void { console.log(message); }`.
+
+Calling `lineTotal(2.75)` would be an error too: TypeScript checks the *number* of arguments as well as their types.
+
+## Objects: describing their shape
+
+Most data is objects. You describe an object's shape, which properties it has and their types, with a **type alias**: a name for a type, made with the keyword `type`.
+
+```ts
+type Product = {
+  id: number;
+  name: string;
+  price: number;
+  description?: string;
+};
+
+const bun: Product = { id: 2, name: "Cinnamon bun", price: 2.75 };
+
+function label(product: Product): string {
+  return `${product.name}: £${product.price.toFixed(2)}`;
+}
+
+console.log(label(bun));
+```
+
+- `type Product = { … }` names the shape. By convention, type names start with a capital letter.
+- `description?: string`: the **`?`** makes a property **optional**. `bun` has no description, and that is allowed.
+- `const bun: Product` says this object must match the shape. If you left out `price`, misspelt `name` as `nmae`, or gave `price` as `"2.75"`, each would be an error.
+- `label` accepts any `Product`, and inside it the editor knows exactly which properties exist: type `product.` and it lists them.
+
+You will also see the same thing written with the keyword **`interface`**:
+
+```ts
+interface Product {
+  id: number;
+  name: string;
+  price: number;
+  description?: string;
+}
+
+const loaf: Product = { id: 1, name: "Sourdough loaf", price: 4.5, description: "Our best seller." };
+console.log(loaf.description);
+```
+
+For describing objects, the two are nearly interchangeable. Teams pick one style; this course uses `type`, because it also works for the other kinds of type below. Arrays of objects work as you would expect: `Product[]` is an array of products.
+
+## Union types: one of several
+
+Sometimes a value can be one of several types. A **union type**, written with `|`, says "this or that":
+
+```ts
+let orderNumber: string | number = 1042;
+orderNumber = "A-1042";
+
+type Size = "small" | "medium" | "large";
+
+function cakePrice(size: Size): number {
+  if (size === "small") return 18;
+  if (size === "medium") return 25;
+  return 32;
+}
+
+console.log(orderNumber, cakePrice("medium"));
+```
+
+The second union is made of exact strings. `Size` allows only those three words, so `cakePrice("huge")` or a typing mistake such as `cakePrice("meduim")` is an error, and your editor suggests the three allowed values as you type. A union of exact values like this is called a **literal type**, and it is the usual way in TypeScript to say "one of these options".
+
+### Narrowing: checking which one you have
+
+If a value could be a string *or* a number, you cannot call `toFixed` on it straight away, because it might be a string. You check first, and TypeScript follows your check. Inside the `if`, it knows which type you have. This is called **narrowing**:
+
+```ts
+function show(value: string | number): string {
+  if (typeof value === "number") {
+    return value.toFixed(2);
+  }
+  return value.toUpperCase();
+}
+
+console.log(show(3.5));
+console.log(show("rye"));
+```
+
+Inside the `if`, `value` is a `number`, so `toFixed` is fine. After it, the only possibility left is `string`, so `toUpperCase` is fine. This prints **3.50** and **RYE**. TypeScript understands `typeof`, `===` comparisons, truth tests (`if (value)`), and more.
+
+### null and undefined: the mistakes TypeScript catches most
+
+The most common crash in JavaScript is reading a property of something that is not there: `Cannot read properties of undefined`. In strict mode, TypeScript tracks which values might be `undefined` or `null`, and makes you deal with them.
+
+The array method `find` is the classic case. It returns the first match, or `undefined` if there is none:
+
+```ts
+type Product = { id: number; name: string; price: number };
+
+const products: Product[] = [
+  { id: 1, name: "Sourdough loaf", price: 4.5 },
+  { id: 2, name: "Cinnamon bun", price: 2.75 },
+];
+
+const found = products.find((p) => p.id === 3);
+console.log(found.name);
+```
+
+TypeScript knows `found` is `Product | undefined`, so the last line is an error:
+
+```text
+error TS18048: 'found' is possibly 'undefined'.
+```
+
+And it is right: there is no product 3, so in JavaScript this line would crash. Narrow first, and the error goes away, because inside the `if` TypeScript knows `found` cannot be `undefined`:
+
+```ts
+type Product = { id: number; name: string; price: number };
+
+const products: Product[] = [
+  { id: 1, name: "Sourdough loaf", price: 4.5 },
+  { id: 2, name: "Cinnamon bun", price: 2.75 },
+];
+
+const found = products.find((p) => p.id === 3);
+if (found) {
+  console.log(found.name);
+} else {
+  console.log("No product 3");
+}
+console.log(found?.name ?? "(none)");
+```
+
+The last line shows two short forms. **`?.`**, **optional chaining**, gives `undefined` instead of crashing when the thing before it is `undefined` or `null`; and `??`, from <Ref to="js-dom-events" />, supplies a value for that case. This prints **No product 3**, then **(none)**.
+
+### Describing states that cannot be mixed up
+
+Unions of object types are a powerful way to describe something that can be in one of several states. Remember the loading pattern from <Ref to="react-data-routing" />: loading, failed, or done with data. With separate variables, nothing stops you having an error *and* data at once, by mistake. A union makes each state its own shape:
+
+```ts
+type Person = { id: number; name: string };
+
+type Loadable =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "done"; people: Person[] };
+
+function describe(state: Loadable): string {
+  switch (state.status) {
+    case "loading":
+      return "Loading…";
+    case "error":
+      return `Failed: ${state.message}`;
+    case "done":
+      return `${state.people.length} people`;
+  }
+}
+
+console.log(describe({ status: "loading" }));
+console.log(describe({ status: "error", message: "No connection" }));
+console.log(describe({ status: "done", people: [{ id: 1, name: "Ama" }] }));
+```
+
+Each shape has a `status` with a different exact value. Checking `state.status` narrows `state` to one shape, so `state.message` can only be used in the `"error"` case and `state.people` only in the `"done"` case. It is impossible to read data while loading. This is called a **discriminated union**, and `status` is the **discriminant**: the property that tells the shapes apart. It prints **Loading…**, **Failed: No connection** and **1 people**. (That last one should say "1 person"; practice 13 fixes it.)
+
+## any, unknown, and data from outside
+
+The type **`any`** switches checking off: an `any` value can be used in any way at all, and TypeScript says nothing. It exists so that old JavaScript can be moved to TypeScript gradually. In new code, every `any` is a hole in your safety net; avoid writing it.
+
+Data that comes from outside your program is the tricky part. `response.json()` returns `Promise<any>`: TypeScript cannot know what a server will send. The usual approach is to say what you expect:
+
+```ts
+type Person = { id: number; name: string; email: string };
+
+async function loadPeople(): Promise<Person[]> {
+  const response = await fetch("https://jsonplaceholder.typicode.com/users");
+  if (!response.ok) throw new Error(`The server replied ${response.status}`);
+  const people: Person[] = await response.json();
+  return people;
+}
+
+loadPeople().then((people) => console.log(people[0].name, people.length));
+```
+
+`Promise<Person[]>` is the type of an async function's result: "a promise that gives an array of people". Read the angle brackets as "of". The line `const people: Person[] = …` is a *promise you make to TypeScript*, not a check. Remember that types disappear before the code runs: if the server sends something different, nothing stops it. For data you do not control, teams often check its shape when it arrives, with a validation library such as Zod, which turns "I promise" into "I checked".
+
+Two related tools you will see in other people's code:
+
+- **`unknown`** is the safe opposite of `any`: a value whose type you do not know, which TypeScript will not let you use until you narrow it with checks.
+- **`as`** (`value as Product`) tells TypeScript "treat this as a `Product`, trust me". It also checks nothing. Use it rarely; an `as` that silences an error usually hides a bug.
+
+## Generics: types with a slot
+
+You have already used types with angle brackets: `Promise<Person[]>`. You can also write the array type `number[]` as `Array<number>`. These are **generic types**: types with a slot for another type, filled in when you use them. A promise *of what*? An array *of what*?
+
+You can write generic functions too. This function returns the first item of any array, and TypeScript keeps track of what kind of item it is:
+
+```ts
+function first<T>(items: T[]): T | undefined {
+  return items[0];
+}
+
+const n = first([10, 20, 30]);
+const word = first(["rye", "spelt"]);
+console.log(n, word);
+```
+
+`<T>` declares a **type parameter**, a placeholder named `T`. Called with an array of numbers, `T` is `number`, so `n` is `number | undefined`; called with strings, `word` is `string | undefined`. One function, correct types for every use. You will mostly *use* generic types, from React and other libraries, rather than write them; recognising `<T>` is enough for now.
+
+## TypeScript with React
+
+In a `.tsx` file, the main new thing is giving each component's props a type:
+
+```tsx
+type ProductCardProps = {
+  name: string;
+  price: number;
+  isNew?: boolean;
+};
+
+function ProductCard({ name, price, isNew = false }: ProductCardProps) {
+  return (
+    <article>
+      <h2>
+        {name} {isNew && <span>New!</span>}
+      </h2>
+      <p>£{price.toFixed(2)}</p>
+    </article>
+  );
+}
+
+export default function App() {
+  return (
+    <>
+      <ProductCard name="Sourdough loaf" price={4.5} />
+      <ProductCard name="Pistachio croissant" price={3.2} isNew />
+    </>
+  );
+}
+```
+
+The props type goes after the destructured props: `({ name, price, isNew = false }: ProductCardProps)`. Now every use of `<ProductCard>` is checked. Forget `price`, pass `price="4.5"`, or misspell a prop, and the editor underlines it, with the list of props it expected. (`isNew` on its own, with no value, means `isNew={true}`.)
+
+State, events and children:
+
+```tsx
+import { useState, type ReactNode } from "react";
+
+type Person = { id: number; name: string };
+
+function Panel({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <section>
+      <h2>{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+export default function App() {
+  const [name, setName] = useState("");
+  const [people, setPeople] = useState<Person[]>([]);
+  const [chosen, setChosen] = useState<Person | null>(null);
+
+  function handleChange(event: React.ChangeEvent<HTMLInputElement>) {
+    setName(event.target.value);
+  }
+
+  function add() {
+    const person = { id: people.length + 1, name: name.trim() };
+    setPeople([...people, person]);
+    setChosen(person);
+    setName("");
+  }
+
+  return (
+    <Panel title="Team">
+      <label htmlFor="name">Name</label>{" "}
+      <input id="name" type="text" value={name} onChange={handleChange} />{" "}
+      <button type="button" onClick={add} disabled={name.trim() === ""}>Add</button>
+      <p>{people.length} in the team. Last added: {chosen ? chosen.name : "nobody yet"}.</p>
+    </Panel>
+  );
+}
+```
+
+- **`useState("")`** needs no type: TypeScript infers `string` from the starting value.
+- **`useState<Person[]>([])`** does: from an empty array alone, TypeScript cannot know what will go in it. The angle brackets fill in `useState`'s type slot, as with `first<T>` above.
+- **`useState<Person | null>(null)`**: "a person, or nobody yet". Because the type includes `null`, TypeScript makes you check before using `chosen.name`, as the JSX does with `chosen ? … : …`.
+- **`children: ReactNode`**: `ReactNode` is React's type for "anything that can be shown": JSX, text, numbers, `null`, or arrays of them. `type ReactNode` in the import says it is a type, which is removed with the other types.
+- **Event types**: an input's change event is `React.ChangeEvent<HTMLInputElement>`. You do not need to memorise these. Write the handler inline first, `onChange={(e) => setName(e.target.value)}`, and TypeScript infers the type of `e`; hover over `e` in your editor to see it.
+
+## Common mistakes
+
+- **Writing types everywhere.** `const n: number = 5` adds nothing. Type parameters and important return values; let inference do the rest.
+- **Using `any` to make an error go away.** The error was usually right. Fix the cause, or use a union and narrow.
+- **Using `as` to silence an error** (`product as Product`), especially on `find` results. Check for `undefined` instead.
+- **Ignoring "possibly 'undefined'"** (`TS18048`). It is pointing at a real crash. Narrow with `if`, or use `?.` and `??`.
+- **Believing types check data at run time.** A type on `response.json()` is a promise, not a check.
+- **`useState([])` or `useState(null)` without a type.** TypeScript infers a type that only allows empty arrays or `null`, and later lines fail with confusing errors. Give the type: `useState<Person[]>([])`.
+- **Thinking the development server checks types.** It does not. Read the errors in your editor, and run `npm run build` (or `npx tsc -b`) before you push.
+- **Using `enum`.** Older code uses `enum Size { Small, Medium }`. Vite's TypeScript starter turns on a setting (`erasableSyntaxOnly`) that rejects it, because enums are one of the few TypeScript features that are not just removed before running. Use a union of literal types: `type Size = "small" | "medium"`.
+
+## Practice
+
+For problems that ask about errors, the best way to answer is to type the code into a `.ts` file in your TypeScript project and read the editor's message. The **Run** button on this page does not check types.
+
+**1. (warm-up)** Add types to the parameters: `function area(width, height) { return width * height; }`.
+
+<Solution>
+
+```ts
+function area(width: number, height: number): number {
+  return width * height;
+}
+
+console.log(area(3, 4));
+```
+
+The `: number` return type is optional; TypeScript would infer it. This prints **12**.
+
+</Solution>
+
+**2. (warm-up)** What type does TypeScript infer for each? `let a = 3;` `let b = "3";` `let c = [1, 2];` `let d = true;`
+
+<Solution>
+
+`a` is `number`, `b` is `string`, `c` is `number[]`, `d` is `boolean`.
+
+</Solution>
+
+**3. (warm-up)** Write a type alias `Customer` with a `name` (text), an `email` (text) and an optional `phone` (text).
+
+<Solution>
+
+```ts
+type Customer = {
+  name: string;
+  email: string;
+  phone?: string;
+};
+
+const ama: Customer = { name: "Ama", email: "ama@example.com" };
+console.log(ama.name);
+```
+
+</Solution>
+
+**4. (warm-up)** Which of these is an error, given `type Size = "small" | "medium" | "large";`? (a) `const s: Size = "large";` (b) `const s: Size = "Large";` (c) `const s: Size = "medium";`
+
+<Solution>
+
+**(b)**. Literal types are exact, including capital letters, so `"Large"` is not one of the allowed values.
+
+</Solution>
+
+**5. (warm-up)** What does `?.` do in `order?.customer?.name`?
+
+<Solution>
+
+Each `?.` stops and gives `undefined` if the thing before it is `undefined` or `null`, instead of crashing. So the whole expression is `undefined` if there is no order, or no customer; otherwise it is the name.
+
+</Solution>
+
+**6. (standard)** This code has two type errors. Find them without running it, then check with the type checker.
+
+```ts
+type Product = { id: number; name: string; price: number };
+
+const rye: Product = { id: 3, name: "Rye loaf", price: "3.80" };
+
+function total(items: Product[]): number {
+  return items.reduce((sum, item) => sum + item.price, 0);
+}
+
+console.log(total(rye));
+```
+
+<Solution>
+
+1. `price: "3.80"` is a string, but `Product` says `price` is a number: `TS2322: Type 'string' is not assignable to type 'number'.`
+2. `total(rye)` passes one product, but `total` wants an *array* of products: `TS2345: Argument of type 'Product' is not assignable to parameter of type 'Product[]'.`
+
+Fixed: `price: 3.8`, and `total([rye])`.
+
+</Solution>
+
+**7. (standard)** Write `function describeStock(stock: number | null): string` that returns `"Unknown"` for `null`, `"Sold out"` for 0, and `"5 left"` (with the number) otherwise.
+
+<Solution>
+
+```ts
+function describeStock(stock: number | null): string {
+  if (stock === null) return "Unknown";
+  if (stock === 0) return "Sold out";
+  return `${stock} left`;
+}
+
+console.log(describeStock(null));
+console.log(describeStock(0));
+console.log(describeStock(5));
+```
+
+After the first `if`, TypeScript knows `stock` is a number. It prints **Unknown**, **Sold out**, **5 left**.
+
+</Solution>
+
+**8. (standard)** Why is `const user = users.find((u) => u.id === 7); console.log(user.email);` an error, and what are two fixes?
+
+<Solution>
+
+`find` returns `User | undefined`, because there might be no user 7, so `user.email` could crash: `TS18048: 'user' is possibly 'undefined'.` Fixes: check first, `if (user) { console.log(user.email); }`; or use optional chaining, `console.log(user?.email)`, which prints `undefined` when there is no user. (Writing `user!.email` or `users.find(…) as User` also silences it, but only by promising there is a user, which might be false.)
+
+</Solution>
+
+**9. (standard)** Write a type `Order` for a bakery order: an `id` (number), a `customer` (text), `items` (an array of objects, each with a `name` and a `quantity`), and a `status` that is exactly one of `"new"`, `"baking"`, `"ready"` or `"collected"`. Create one order.
+
+<Solution>
+
+```ts
+type OrderItem = { name: string; quantity: number };
+
+type Order = {
+  id: number;
+  customer: string;
+  items: OrderItem[];
+  status: "new" | "baking" | "ready" | "collected";
+};
+
+const order: Order = {
+  id: 1042,
+  customer: "Kofi",
+  items: [
+    { name: "Sourdough loaf", quantity: 2 },
+    { name: "Cinnamon bun", quantity: 6 },
+  ],
+  status: "baking",
+};
+
+console.log(order.items.length, order.status);
+```
+
+Giving the item shape its own name (`OrderItem`) keeps `Order` readable and lets other code use it.
+
+</Solution>
+
+**10. (standard)** Type this React component's props: it takes a `title` (text), a `count` (number) and an optional `onReset` function that takes nothing and returns nothing.
+
+```tsx
+export function Counter({ title, count, onReset }) {
+  return (
+    <div>
+      <h2>{title}</h2>
+      <p>{count}</p>
+      {onReset && <button type="button" onClick={onReset}>Reset</button>}
+    </div>
+  );
+}
+```
+
+<Solution>
+
+```tsx
+type CounterProps = {
+  title: string;
+  count: number;
+  onReset?: () => void;
+};
+
+export function Counter({ title, count, onReset }: CounterProps) {
+  return (
+    <div>
+      <h2>{title}</h2>
+      <p>{count}</p>
+      {onReset && <button type="button" onClick={onReset}>Reset</button>}
+    </div>
+  );
+}
+```
+
+`() => void` is the type of "a function that takes nothing and returns nothing". The `?` makes it optional, which is why the component checks `onReset &&` before showing the button.
+
+</Solution>
+
+**11. (standard)** What is the type of `last` in each case, and why does the second need care?
+
+```ts
+function lastItem<T>(items: T[]): T | undefined {
+  return items[items.length - 1];
+}
+
+const a = lastItem(["Ama", "Kofi"]);
+const b = lastItem([]);
+console.log(a, b);
+```
+
+<Solution>
+
+`a` is `string | undefined` (here `"Kofi"`). For `b`, called with an empty array, TypeScript cannot tell what `T` is meant to be, and the result is `undefined` when the code runs. The `| undefined` in the return type is what forces callers to handle the empty case. The code prints **Kofi undefined**.
+
+</Solution>
+
+**12. (standard)** In a TypeScript React component, `const [items, setItems] = useState([]);` and later `setItems([...items, "Bread"])` gives an error. Why, and how do you fix it?
+
+<Solution>
+
+From an empty array alone, TypeScript infers that `items` is an array that can never hold anything (its type is `never[]`), so adding `"Bread"` is an error. Say what it will hold: `useState<string[]>([])`.
+
+</Solution>
+
+**13. (stretch)** Change `describe` from the discriminated union example so that the `"done"` case says `1 person` for one and `3 people` for three. Then add a fourth state, `{ status: "empty" }`, and see what the type checker says about `describe` before you handle it.
+
+<Solution>
+
+```ts
+type Person = { id: number; name: string };
+
+type Loadable =
+  | { status: "loading" }
+  | { status: "error"; message: string }
+  | { status: "done"; people: Person[] }
+  | { status: "empty" };
+
+function describe(state: Loadable): string {
+  switch (state.status) {
+    case "loading":
+      return "Loading…";
+    case "error":
+      return `Failed: ${state.message}`;
+    case "done":
+      return state.people.length === 1 ? "1 person" : `${state.people.length} people`;
+    case "empty":
+      return "Nobody here yet";
+  }
+}
+
+console.log(describe({ status: "done", people: [{ id: 1, name: "Ama" }] }));
+console.log(describe({ status: "empty" }));
+```
+
+Before the `"empty"` case was added, the type checker reported `TS2366: Function lacks ending return statement and return type does not include 'undefined'.`: with a new state, the `switch` no longer covers every case, so the function could end without returning. That is the type checker pointing you to every place that needs updating when a new state is added.
+
+</Solution>
+
+**14. (stretch)** A teammate writes `const product = data as Product;` where `data` came from `response.json()`. Explain what this does and does not do, and what could still go wrong.
+
+<Solution>
+
+It tells TypeScript to treat `data` as a `Product` from now on, so the editor offers `product.name` and `product.price` and the checker stops complaining. It does **not** check anything when the code runs: the types are removed first. If the server sends `{ "title": "Rye" }` or `{ "price": "3.80" }`, the code carries on with wrong data and fails later, somewhere else, perhaps with `toFixed is not a function`, which is harder to trace. To be sure, check the data's shape when it arrives (by hand with `typeof` checks, or with a validation library).
+
+</Solution>
+
+**15. (stretch)** Write a typed function `groupByCategory(products: Product[]): Record<string, Product[]>` that returns an object with one array per category. (`Record<string, Product[]>` means "an object whose keys are strings and whose values are arrays of products".) Test it on three products in two categories.
+
+<Solution>
+
+```ts
+type Product = { id: number; name: string; category: string };
+
+function groupByCategory(products: Product[]): Record<string, Product[]> {
+  const groups: Record<string, Product[]> = {};
+  for (const product of products) {
+    if (!groups[product.category]) {
+      groups[product.category] = [];
+    }
+    groups[product.category].push(product);
+  }
+  return groups;
+}
+
+const groups = groupByCategory([
+  { id: 1, name: "Sourdough loaf", category: "Bread" },
+  { id: 2, name: "Cinnamon bun", category: "Cakes" },
+  { id: 3, name: "Rye loaf", category: "Bread" },
+]);
+console.log(Object.keys(groups), groups.Bread.length, groups.Cakes[0].name);
+```
+
+It prints **["Bread", "Cakes"] 2 Cinnamon bun**. (Here pushing into `groups` is fine: it is an ordinary local object being built, not React state.)
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **TypeScript** is JavaScript with **types**. The **type checker** reads the code without running it and reports where types do not fit. Types are removed before the code runs, so they cost nothing and check nothing at run time.
+- Create projects with `npm create vite@latest … -- --template react-ts`. `npm run build` type-checks with `tsc` before building; the development server does not check.
+- Basic types: `string`, `number`, `boolean`, `number[]`. Type function parameters; let **type inference** do the rest.
+- Describe objects with a **type alias** (`type Product = { … }`) or an `interface`; `?` marks optional properties.
+- **Union types** (`string | number`) and **literal types** (`"small" | "large"`) say "one of these". **Narrowing** with `typeof`, `===` or `if` tells TypeScript which one you have.
+- Strict mode tracks `undefined` and `null`: handle "possibly 'undefined'" with a check, `?.` or `??`.
+- **Discriminated unions** describe states that cannot be mixed up.
+- Avoid `any` and `as`. Data from servers is only as safe as the checks you make on it.
+- **Generics** are types with a slot: `Promise<T>`, `Array<T>`, `useState<Person[]>([])`.
+- In React: type each component's props, give `useState` a type when its starting value is empty, and use `ReactNode` for `children`.
+
+## Go deeper
+
+- [TypeScript for JavaScript Programmers](https://www.typescriptlang.org/docs/handbook/typescript-in-5-minutes.html), from the TypeScript team. The official short introduction.
+- [Everyday Types](https://www.typescriptlang.org/docs/handbook/2/everyday-types.html) and [Narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html), from the TypeScript Handbook. The two chapters that cover most of this one in more depth.
+- [Generics](https://www.typescriptlang.org/docs/handbook/2/generics.html), from the TypeScript Handbook. For when you need to write your own.
+- [Using TypeScript](https://react.dev/learn/typescript), from the React team. Typing props, Hooks and events.

@@ -1,0 +1,189 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    npm init -y >/dev/null
+    bash "$BLOCK"
+    npx vitest --version | grep -q "vitest/5"
+  note: Installs the current Vitest from npm (version 5 when checked).
+- block: 2
+  lang: json
+  check: illustration
+  verify: |
+    import json
+    scripts = json.loads(block)['scripts']
+    assert scripts['test'] == 'vitest'
+    assert scripts['dev'] == 'vite' and scripts['build'] == 'vite build'
+- block: 3
+  lang: js
+  check: vitest-run
+  files: &id001
+    src/price.js: 3
+    src/price.test.js: 4
+  passed: 5
+- block: 4
+  lang: js
+  check: vitest-run
+  files: *id001
+  passed: 5
+  output_contains:
+  - src/price.test.js (5 tests)
+  - Tests  5 passed (5)
+- block: 5
+  lang: text
+  check: illustration
+  note: Vitest's report for block 4, shortened (the timing differs each run). The check of block 4 confirms the lines shown.
+- block: 6
+  lang: js
+  check: vitest-run
+  files:
+    src/price.js: 3
+    src/price.test.js: 6
+  passed: 0
+  failed: 1
+  output_contains:
+  - 'AssertionError: expected 8.25 to be 8.2 // Object.is equality'
+  - '- 8.2'
+  - + 8.25
+  - src/price.test.js:5:30
+  note: 'Wrong on purpose: the test''s expected value is wrong.'
+- block: 7
+  lang: text
+  check: illustration
+  note: Vitest's report for block 6, shortened. The check of block 6 confirms each line shown.
+- block: 8
+  lang: js
+  check: vitest-run
+  files:
+    src/matchers.test.js: 8
+  passed: 6
+- block: 9
+  lang: js
+  check: vitest-run
+  files:
+    src/price.js: 3
+    src/discount.test.js: 9
+  passed: 5
+- block: 10
+  lang: js
+  check: vitest-run
+  files: &id002
+    src/people.js: 10
+    src/people.test.js: 11
+  passed: 2
+- block: 11
+  lang: js
+  check: vitest-run
+  files: *id002
+  passed: 2
+- block: 12
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    npm init -y >/dev/null
+    bash "$BLOCK"
+    node -e "const d=require('./package.json').devDependencies; for (const p of ['@testing-library/react','@testing-library/dom','@testing-library/user-event','@testing-library/jest-dom','jsdom']) if(!d[p]) process.exit(1)"
+- block: 13
+  lang: js
+  check: vitest-run
+  files: &id003
+    vitest.config.js: 13
+    src/setupTests.js: 14
+    src/Counter.jsx: 15
+    src/Counter.test.jsx: 16
+  passed: 3
+- block: 14
+  lang: js
+  check: vitest-run
+  files: *id003
+  passed: 3
+- block: 15
+  lang: jsx
+  check: vitest-run
+  files: *id003
+  passed: 3
+- block: 16
+  lang: jsx
+  check: vitest-run
+  files: *id003
+  passed: 3
+  note: 'Also run without the cleanup in the setup file while writing the chapter: the second test then fails with ''Found multiple elements'', as the text says.'
+- block: 17
+  lang: jsx
+  check: vitest-run
+  files: &id004
+    vitest.config.js: 13
+    src/setupTests.js: 14
+    src/SignupForm.jsx: 17
+    src/SignupForm.test.jsx: 18
+  passed: 2
+- block: 18
+  lang: jsx
+  check: vitest-run
+  files: *id004
+  passed: 2
+- block: 19
+  lang: jsx
+  check: vitest-run
+  files: &id005
+    vitest.config.js: 13
+    src/setupTests.js: 14
+    src/PeopleList.jsx: 19
+    src/PeopleList.test.jsx: 20
+  passed: 2
+- block: 20
+  lang: jsx
+  check: vitest-run
+  files: *id005
+  passed: 2
+- block: 21
+  lang: js
+  check: vitest-run
+  files:
+    src/initials.js: 21
+    src/initials.test.js: 22
+  passed: 5
+- block: 22
+  lang: js
+  check: vitest-run
+  files:
+    src/initials.js: 21
+    src/initials.test.js: 22
+  passed: 5
+- block: 23
+  lang: js
+  check: vitest-run
+  files:
+    src/people.js: 10
+    src/once.test.js: 23
+  passed: 1
+- block: 24
+  lang: jsx
+  check: vitest-run
+  files:
+    vitest.config.js: 13
+    src/setupTests.js: 14
+    src/ShowMore.jsx: 24
+    src/ShowMore.test.jsx: 25
+  passed: 1
+- block: 25
+  lang: jsx
+  check: vitest-run
+  files:
+    vitest.config.js: 13
+    src/setupTests.js: 14
+    src/ShowMore.jsx: 24
+    src/ShowMore.test.jsx: 25
+  passed: 1
+- block: 26
+  lang: jsx
+  check: vitest-run
+  files:
+    vitest.config.js: 13
+    src/setupTests.js: 14
+    src/SignupForm.jsx: 17
+    src/Trim.test.jsx: 26
+  passed: 1

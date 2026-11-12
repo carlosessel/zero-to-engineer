@@ -1,0 +1,48 @@
+- question: "A component sets count = count + 1 on an ordinary let variable when a button is clicked. What happens on screen?"
+  options:
+    - "The number goes up by one"
+    - "Nothing changes: React was not asked to render again, and the variable would reset if it were"
+    - "React shows an error"
+  answer: 1
+  explanation: "Only setting state makes React render again, and only state survives between renders."
+- question: "count is 4. A handler runs setCount(count + 1) twice. What is count on the next render?"
+  options:
+    - "5"
+    - "6"
+    - "4"
+  answer: 0
+  explanation: "count is 4 for the whole handler, so both calls ask for 5. setCount((c) => c + 1) twice would give 6."
+- question: "Which line correctly marks the task with id 3 as done?"
+  options:
+    - "tasks[2].done = true; setTasks(tasks);"
+    - "setTasks(tasks.map((t) => (t.id === 3 ? { ...t, done: true } : t)));"
+    - "setTasks(tasks.push({ id: 3, done: true }));"
+  answer: 1
+  explanation: "A new array with a new object for the changed task. The first changes state in place, so React may not update; the third sets state to a number."
+- question: "You cannot type in <input value={name} />. Why?"
+  options:
+    - "It has a value from state but no onChange, so React keeps putting the old value back"
+    - "Inputs in React need a key"
+    - "The type attribute is missing"
+  answer: 0
+  explanation: "A controlled input needs onChange to update its state. React also prints a warning about it."
+- question: "A basket summary and a product list both need the basket. Where should the basket state live?"
+  options:
+    - "In both components, kept in step with each other"
+    - "In their closest common parent, passed down as props"
+    - "In a global variable outside React"
+  answer: 1
+  explanation: "Lifting state up gives one source of truth. Children get the value as props and ask for changes through function props."
+- question: "Where should a shopping basket's total be kept?"
+  options:
+    - "In its own useState, updated whenever items change"
+    - "Calculated from the items during render"
+  answer: 1
+  explanation: "A value you can calculate from state is derived data. Storing it separately means two things to keep in step."
+- question: "Why must useState not be called inside an if?"
+  options:
+    - "It is slower there"
+    - "React matches each piece of state to its call by order, which must be the same on every render"
+    - "It works, but only in development"
+  answer: 1
+  explanation: "That is the first rule of Hooks: call them at the top level of the component."

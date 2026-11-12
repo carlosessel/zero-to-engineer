@@ -1,0 +1,421 @@
+---
+title: "Fast pages: web performance"
+summary: "Measuring load time, images, caching, and what makes a site feel fast."
+prerequisites: [js-testing, internet]
+estimated_minutes: 120
+status: deepened
+---
+
+By the end of this chapter you will be able to measure how fast a page really is, find out what is slowing it down, and fix the usual causes: images that are too big, too much JavaScript, files that are downloaded again on every visit, and code that freezes the page. A fast site keeps visitors, works for people on cheap phones and slow connections, and ranks better in search results.
+
+## Why speed matters
+
+Your own computer is probably fast, on a fast connection, close to the server you are testing. Many of your visitors are not: they are on a phone that cost a fraction of yours, on a train, with one bar of signal. A page that appears instantly for you can take ten seconds for them, and many people give up long before that.
+
+Pages have grown heavy. The **HTTP Archive** measures millions of websites every year, and its 2025 Web Almanac put the typical (median) home page, as loaded on a phone, at about 2.5 megabytes. That is a lot of data to download on a slow connection, just to see a home page. Most of it is images and JavaScript, which is where this chapter spends most of its time.
+
+Performance work follows one rule: **measure first, then fix what the measurements point at.** Guessing wastes time on things that do not matter.
+
+## Measuring
+
+### The Network panel
+
+Open your browser's developer tools (<Ref to="js-debugging" />) and choose the **Network** panel, then reload the page. Each row is one file the page downloaded: the HTML, the CSS, each script, each image and font, and each request made with `fetch`. For each one you can see its size, how long it took, and when it started. At the bottom: how many requests, how many bytes, and when the page finished loading.
+
+Two settings make it far more useful:
+
+- **Disable cache**: download everything fresh, as a first-time visitor would.
+- **Throttling**: pretend to have a slower connection. Choose a preset such as "Slow 4G" and reload; now you see roughly what a visitor on a poor connection sees. Things that were invisible at full speed (a huge image, a script that everything waits for) become obvious.
+
+### Lighthouse and PageSpeed Insights
+
+**Lighthouse** is a tool built into Chrome's developer tools (its own panel). It loads your page under controlled conditions, with a simulated slow phone, and gives it a score out of 100 for performance, plus a list of specific problems: "Properly size images", "Reduce unused JavaScript", and so on, each with the files to blame. It also checks accessibility and other good practice.
+
+**PageSpeed Insights** (pagespeed.web.dev) runs Lighthouse for you on any public address, with nothing to install. It also shows something Lighthouse cannot: how the page performed for **real visitors** using Chrome over the past 28 days, from a public dataset called the Chrome UX Report, or **CrUX**. (Only sites with enough visitors have this.)
+
+That is the difference between two kinds of measurement:
+
+- **Lab data**: one test run in controlled conditions. Repeatable and great for finding problems, but it is one imagined visitor.
+- **Field data**: measurements from real visitors, on their real phones and connections. It is the truth about your users, but you only get it once the site is live and busy.
+
+Use lab tools while you build; check field data once the site is live.
+
+## Core Web Vitals
+
+Google defines three measurements, the **Core Web Vitals**, for the three things people notice most about a page: how fast the main content appears, how quickly it responds, and whether things jump about. Each has a threshold for "good":
+
+| Measurement | What it measures | Good |
+|---|---|---|
+| **LCP**, Largest Contentful Paint | how long until the largest image or block of text in view appears | 2.5 seconds or less |
+| **INP**, Interaction to Next Paint | how long the page takes to respond visibly when someone clicks, taps or types | 200 milliseconds or less |
+| **CLS**, Cumulative Layout Shift | how much things move unexpectedly while the page is used | 0.1 or less |
+
+A site meets a threshold when at least 75% of visits are that good or better (this is called the **75th percentile**): fast for most visitors, not just the lucky ones. INP replaced an older measurement, First Input Delay, on 12 March 2024, so older articles may mention FID instead.
+
+LCP is mostly about downloading less and sooner; INP is mostly about JavaScript not hogging the browser; CLS is mostly about saving space for things before they arrive. The rest of the chapter takes each in turn.
+
+## Images
+
+Images are usually the heaviest part of a page, and the easiest to fix.
+
+### Send the right size
+
+A photo straight from a phone camera can be 4000 pixels wide and several megabytes. Shown in a column 600 pixels wide, three-quarters of those pixels are thrown away by the browser after being downloaded. So make smaller copies of each image, and let the browser choose:
+
+```html
+<img
+  src="loaf-800.jpg"
+  srcset="loaf-400.jpg 400w, loaf-800.jpg 800w, loaf-1600.jpg 1600w"
+  sizes="(max-width: 700px) 100vw, 600px"
+  width="800"
+  height="600"
+  alt="A sourdough loaf, sliced, on a wooden board">
+```
+
+- **`srcset`** lists the copies and how wide each is in pixels (`400w` means 400 pixels wide).
+- **`sizes`** tells the browser how wide the image will be shown: the full width of the screen (`100vw`) on screens up to 700 pixels wide, and 600 pixels otherwise.
+- From those, the browser picks the smallest copy that will look sharp. A phone 375 pixels wide with a high-density screen (two device pixels per CSS pixel) needs about 750 pixels, so it takes `loaf-800.jpg`; a narrow, low-density screen takes `loaf-400.jpg`.
+- `src` is the fallback for very old browsers.
+
+Making the copies is a job for a tool: an image editor's "export", a command-line tool, or your host or framework, many of which resize images for you.
+
+### Use modern formats
+
+Newer image formats, **WebP** and **AVIF**, are usually much smaller than JPEG and PNG for the same quality. The `<picture>` element offers several formats and lets the browser take the first one it supports:
+
+```html
+<picture>
+  <source srcset="loaf.avif" type="image/avif">
+  <source srcset="loaf.webp" type="image/webp">
+  <img src="loaf.jpg" width="800" height="600" alt="A sourdough loaf, sliced, on a wooden board">
+</picture>
+```
+
+The `<img>` inside is required: it is the fallback, and it carries the `alt`, `width` and `height` for whichever file is chosen. For icons and logos, use **SVG**, which stays sharp at any size and is often tiny.
+
+### Always give width and height
+
+Look again at both examples: `width="800" height="600"`. Without them, the browser does not know how tall the image will be until it has downloaded it, so it lays out the text with no space for it, and when the image arrives everything below jumps down. That jump is exactly what CLS measures, and it is how people end up tapping the wrong button. With width and height, the browser works out the image's shape (here 4 by 3) and saves the space straight away. Your CSS can still make the image any size: with `max-width: 100%; height: auto;` it shrinks to fit and keeps its shape (<Ref to="responsive-design" />).
+
+### Load images further down later
+
+Images far down a long page do not need to download before the visitor scrolls there. Add **`loading="lazy"`** and the browser waits until the image is close to coming into view:
+
+```html
+<h2>From our customers</h2>
+<img
+  src="customers.jpg"
+  loading="lazy"
+  width="800"
+  height="533"
+  alt="Customers at the bakery counter on a Saturday morning">
+```
+
+All the major browsers support it. But **never lazy-load the images visible when the page opens**, above the fold, especially the large main image: they would start downloading later, which makes LCP worse. Lazy loading is for what people have to scroll to.
+
+## Less JavaScript
+
+JavaScript is the most expensive thing a page downloads, byte for byte. An image only has to be decoded and drawn; a script also has to be read, compiled and run, and while it runs, the page cannot respond. Cheap phones are much slower at this than laptops.
+
+### What Vite's build does for you
+
+When you run `npm run build` in a Vite project, Vite prepares your code for the live site:
+
+```bash
+npm run build
+```
+
+It prints what it made. For Vite's React starter, built on 12 November 2026, the report ended like this (the codes in the file names, and the sizes, will differ for your project):
+
+```text
+dist/index.html                   0.45 kB │ gzip:  0.29 kB
+dist/assets/index-D8b4DHJx.css    4.10 kB │ gzip:  1.47 kB
+dist/assets/index-Cd3Kp2fJ.js   222.44 kB │ gzip: 69.28 kB
+```
+
+- **Bundling**: your many modules become a few files, so the browser makes fewer requests.
+- **Minifying**: spaces, comments and long variable names are removed. The code works the same and is much smaller.
+- **Fingerprinting**: each file's name includes a code made from its contents (`index-Cd3Kp2fJ.js`). Change the file and the code changes. You will see why this matters in the caching section.
+- The **gzip** column is the size after compression, roughly what actually travels over the network, because servers compress text files before sending them.
+
+Most of those 222 kilobytes of JavaScript are React itself; in a bigger app, most is React plus your libraries. Every package you add (<Ref to="js-modules-tooling" />) can add to it, so it is worth asking whether you need a package before installing it. Search for "bundle size" with the package's name to see its cost.
+
+### Code splitting: load parts of the app when needed
+
+An app with ten pages does not need the code for all ten before showing the first. **Code splitting** puts parts of the app into separate files that are downloaded only when needed. In React you do it with `lazy` and `Suspense`:
+
+```jsx
+import { lazy, Suspense, useState } from "react";
+
+const Recipes = lazy(() => import("./Recipes.jsx"));
+
+export default function App() {
+  const [showRecipes, setShowRecipes] = useState(false);
+  return (
+    <main>
+      <h1>Ama's Bakery</h1>
+      <button type="button" onClick={() => setShowRecipes(true)}>Show our recipes</button>
+      {showRecipes && (
+        <Suspense fallback={<p>Loading recipes…</p>}>
+          <Recipes />
+        </Suspense>
+      )}
+    </main>
+  );
+}
+```
+
+And `Recipes.jsx`, the part that is loaded later:
+
+```jsx
+export default function Recipes() {
+  return (
+    <section>
+      <h2>Recipes</h2>
+      <ul>
+        <li>Seeded rye</li>
+        <li>Cinnamon buns</li>
+      </ul>
+    </section>
+  );
+}
+```
+
+- **`import("./Recipes.jsx")`**, with brackets, is a **dynamic import**: it loads a module when that line runs, and returns a promise for it. Vite sees it and puts `Recipes` and anything only it uses into a separate file.
+- **`lazy(…)`** turns that into a component React can show. The first time `<Recipes />` is shown, React starts the download.
+- **`Suspense`** shows its `fallback` (here "Loading recipes…") until the download finishes, then shows the component.
+
+Split at the places where people often do not go: separate pages (each `Route` element in <Ref to="react-data-routing" /> is a natural point), a rarely opened settings panel, a heavy chart. Do not split tiny components; each split is one more request.
+
+(This example has two files, so it cannot run in this page's one-file sandbox, which reports that it cannot import `./Recipes.jsx`. It works in a Vite project.)
+
+## Caching: do not download the same file twice
+
+When the browser downloads a file, the server can tell it how long it may keep and reuse its copy, with an HTTP header (<Ref to="internet" />) called **`Cache-Control`**. A copy kept for reuse is called a **cache**. Getting caching right means repeat visitors download almost nothing.
+
+The usual setup for a site built with Vite:
+
+```text
+# The fingerprinted files: dist/assets/index-Cd3Kp2fJ.js and the like
+Cache-Control: max-age=31536000, immutable
+
+# The HTML pages: dist/index.html
+Cache-Control: no-cache
+```
+
+- **`max-age=31536000`** says "keep this for 31,536,000 seconds", which is one year (365 × 24 × 60 × 60), and **`immutable`** says "it will never change, so do not even ask". That is safe *only because of fingerprinting*: when you change the code, the new file gets a new name, so it is a different file as far as the browser is concerned.
+- **`no-cache`** is confusingly named. It does not mean "do not keep it": it means "keep it, but check with the server before each use whether it has changed". The server answers "not modified" in a tiny reply if it has not. (Not keeping it at all is `no-store`.)
+- So the HTML is always checked, and always points at the current file names; the files it points at are downloaded once and reused for a year.
+
+Most static hosts set sensible caching for you; it is worth checking with the Network panel (reload, and look for files served "from memory cache" or "from disk cache").
+
+## Fonts
+
+Custom fonts are files too, and text in a custom font cannot be drawn until its font file arrives. Three habits help:
+
+```css
+@font-face {
+  font-family: "Bakery Sans";
+  src: url("/fonts/bakery-sans.woff2") format("woff2");
+  font-weight: 400;
+  font-display: swap;
+}
+
+body {
+  font-family: "Bakery Sans", system-ui, sans-serif;
+}
+```
+
+- **WOFF2** is the most compressed font format, and every current browser supports it. You need no other format.
+- **`font-display: swap`** tells the browser to show the text straight away in a fallback font, and swap in the custom font when it arrives, instead of showing invisible text while it waits.
+- **Fewer fonts and weights.** Each weight (regular, bold, italic…) is usually a separate file. Two weights of one family is often plenty. Or use the fonts already on the visitor's device (`system-ui`), which cost nothing to download.
+
+## Responding quickly: long tasks
+
+The browser does almost everything on one **main thread**: running your JavaScript, working out layout, drawing the page, and handling clicks and typing. While your code runs, nothing else can happen. A piece of work that occupies the main thread for more than 50 milliseconds is called a **long task**, and long tasks are the main reason for a poor INP: the visitor clicks, and nothing happens until the task ends.
+
+You can measure how long some code takes with **`performance.now()`**, which gives the time in milliseconds, with fractions:
+
+```js
+function totalUpTo(n) {
+  let total = 0;
+  for (let i = 0; i < n; i++) {
+    total += i;
+  }
+  return total;
+}
+
+const start = performance.now();
+const total = totalUpTo(50_000_000);
+const took = performance.now() - start;
+
+console.log(`Added up to ${total} in ${Math.round(took)} ms`);
+```
+
+Press **Run** a few times: the time varies from run to run and from computer to computer, and on a slow phone it can be several times longer. (`50_000_000` is just 50000000 written with underscores so it is easier to read.) If that loop ran in a click handler, the page would be frozen for that long after every click.
+
+The fixes, in order of preference:
+
+1. **Do less.** Is all that work needed now? Often a calculation can be done once and remembered, done on the server, or done only for what is on screen.
+2. **Break it up.** Split the work into chunks and let the browser handle clicks and draw between them:
+
+```js
+async function processInChunks(items, handle, chunkSize = 100) {
+  for (let i = 0; i < items.length; i += chunkSize) {
+    for (const item of items.slice(i, i + chunkSize)) {
+      handle(item);
+    }
+    // Give the browser a chance to respond before the next chunk.
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  }
+}
+
+const orders = Array.from({ length: 1000 }, (_, i) => ({ id: i + 1, total: 5 }));
+let sum = 0;
+processInChunks(orders, (order) => {
+  sum += order.total;
+}).then(() => console.log(`Processed ${orders.length} orders, total £${sum}`));
+```
+
+   Each `await` of a zero-length `setTimeout` ends the current task, so between chunks the browser can draw and react to the visitor. This prints **Processed 1000 orders, total £5000** once all ten chunks are done.
+3. **Move it off the main thread** with a **web worker**, a separate thread for heavy JavaScript that cannot touch the page directly. This site runs the Python examples in a worker, so the page stays responsive while your code runs.
+
+Chrome's developer tools have a **Performance** panel that records everything the main thread did and marks long tasks in red, so you can see exactly which function is to blame.
+
+## Feeling fast
+
+Speed is also about what people perceive. Show something useful quickly (the page's layout and text, then the images); show a placeholder the same shape as the content that is loading rather than a blank space or a spinner in the corner; respond to a click immediately (disable the button, say "Saving…") even if the work takes longer. Layout shifts and frozen buttons make a fast site feel slow; good feedback makes a slow operation feel acceptable.
+
+## Common mistakes
+
+- **Testing only on your own fast computer and connection.** Throttle the network, and try a real cheap phone if you can.
+- **Optimising without measuring.** Run Lighthouse first and fix the biggest items it lists.
+- **Huge images**: a 4000-pixel photo shown 600 pixels wide. Resize, use `srcset`, and use WebP or AVIF.
+- **Images without `width` and `height`**, so the page jumps when they arrive (a poor CLS).
+- **`loading="lazy"` on the main image at the top of the page**, which delays the largest thing people see (a poor LCP).
+- **Installing a large package for a small job.** Check what a package adds to your bundle.
+- **Long-running code in event handlers**, which freezes the page (a poor INP).
+- **Long caching on files without fingerprints**, so visitors keep an old version for a year. Only fingerprinted files get `max-age=31536000, immutable`.
+- **Many fonts and weights**, or text that stays invisible while fonts load (use `font-display: swap`).
+
+## Practice
+
+**1. (warm-up)** Which Core Web Vital would each of these hurt most? (a) A banner that appears at the top after a second and pushes the article down. (b) A 3 MB photo at the top of the home page. (c) A click handler that sorts 200,000 items before updating the screen.
+
+<Solution>
+
+(a) **CLS**: content moves unexpectedly. (b) **LCP**: the largest thing in view takes long to arrive. (c) **INP**: the page cannot respond until the sorting finishes.
+
+</Solution>
+
+**2. (warm-up)** What is the difference between lab data and field data, and which one does PageSpeed Insights's "real visitors" section show?
+
+<Solution>
+
+Lab data comes from a test run in controlled conditions (Lighthouse's simulated phone); field data comes from real visitors' devices and connections. PageSpeed Insights's real-visitor section is field data, from the Chrome UX Report (CrUX), covering the past 28 days, for sites with enough visitors.
+
+</Solution>
+
+**3. (warm-up)** Your site's LCP is 2.1 seconds for 70% of visits and worse for the other 30%. Does it meet the "good" threshold?
+
+<Solution>
+
+No. The threshold is judged at the 75th percentile: at least 75% of visits must have an LCP of 2.5 seconds or less. Here only 70% are known to be that fast (the other 30% are worse than 2.1 seconds, and some may be worse than 2.5), so 75% is not reached.
+
+</Solution>
+
+**4. (standard)** Write the HTML for a logo image, `logo.svg`, shown 160 by 40 pixels at the top of every page, and for a photo, `team.jpg` (1200 by 800), at the bottom of the About page. Which attributes does each need?
+
+<Solution>
+
+```html
+<img src="logo.svg" width="160" height="40" alt="Ama's Bakery">
+```
+
+```html
+<img src="team.jpg" loading="lazy" width="1200" height="800" alt="The bakery team outside the shop">
+```
+
+Both need `width`, `height` and `alt`. Only the team photo, far down the page, gets `loading="lazy"`; the logo is at the top and should load straight away. (An SVG logo needs no `srcset`: it is sharp at any size.)
+
+</Solution>
+
+**5. (standard)** A page shows a 1000-pixel-wide image in a column that is at most 500 CSS pixels wide on every screen. You have copies 500, 1000 and 2000 pixels wide. Write the `srcset` and `sizes`, and say which copy a phone with a screen density of 2 should get.
+
+<Solution>
+
+```html
+<img
+  src="cake-1000.jpg"
+  srcset="cake-500.jpg 500w, cake-1000.jpg 1000w, cake-2000.jpg 2000w"
+  sizes="(max-width: 500px) 100vw, 500px"
+  width="1000"
+  height="750"
+  alt="A three-layer lemon cake">
+```
+
+On a phone narrower than 500 pixels, the image is the full screen width, say 390 CSS pixels; at density 2 that is 780 device pixels, so the browser picks `cake-1000.jpg`, the smallest copy at least that wide. (The height here assumes a 4 by 3 photo.)
+
+</Solution>
+
+**6. (standard)** Why is `Cache-Control: max-age=31536000, immutable` safe for `assets/index-Cd3Kp2fJ.js` but dangerous for `index.html`?
+
+<Solution>
+
+The script's name contains a fingerprint made from its contents: when the code changes, the build makes a file with a different name, so the long-cached old file is simply never asked for again. `index.html` keeps the same name for ever; if browsers kept it for a year without checking, visitors would keep seeing the old page, which points at the old scripts, until the year ran out. HTML gets `no-cache`, so it is checked with the server every time.
+
+</Solution>
+
+**7. (standard)** How many seconds are in 30 days? Write the `Cache-Control` header that keeps a file for 30 days.
+
+<Solution>
+
+30 × 24 × 60 × 60 = 30 × 86,400 = **2,592,000** seconds, so `Cache-Control: max-age=2592000`.
+
+</Solution>
+
+**8. (standard)** A React app has a home page, a menu page and an admin dashboard with a large charting library. Which parts would you load with `lazy`, and why not everything?
+
+<Solution>
+
+The admin dashboard, certainly: most visitors never see it, and the charting library is large, so splitting it out spares every customer from downloading it. The menu page is a reasonable split too, as a separate page. The home page should be in the main file, since everyone sees it first and splitting it would only add a request before anything appears. Splitting every small component would add many requests and loading states for very little saving.
+
+</Solution>
+
+**9. (stretch)** The Lighthouse report for a page lists: "Image elements do not have explicit width and height" (CLS 0.32), "Largest Contentful Paint element: the hero image, 1.9 MB" (LCP 6.8 s), and "Reduce unused JavaScript: 410 KB". In what order would you work, and what would you do for each?
+
+<Solution>
+
+Start with the biggest effect for the least work. (1) The hero image: resize it to the largest size actually shown, offer `srcset`, convert to AVIF or WebP, and make sure it is not lazy-loaded; this alone can cut seconds from LCP. (2) Add `width` and `height` to every image: a few minutes' work that fixes most of the CLS. (3) The unused JavaScript: find which packages and pages it belongs to, remove packages you do not need, and split rarely used pages with `lazy`. Then measure again; the scores show whether each change worked.
+
+</Solution>
+
+**10. (stretch)** A search page filters 50,000 products on every keystroke, and typing feels sticky. Suggest three ways to improve it, from cheapest to most work.
+
+<Solution>
+
+1. **Do less per keystroke**: wait until typing pauses for about 300 milliseconds before filtering (a technique called debouncing), and show only the first 50 results instead of drawing all the matches.
+2. **Break the work up**: filter in chunks, letting the browser respond between them, as in `processInChunks`.
+3. **Move the work elsewhere**: filter in a web worker so the main thread stays free, or send the search to the server, which can use a database index (<Ref to="sql" />) and return only the matches.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Measure first.** The Network panel (with throttling and the cache disabled), Lighthouse, and PageSpeed Insights, which adds **field data** from real visitors (CrUX) to Lighthouse's **lab data**.
+- The **Core Web Vitals**: **LCP** 2.5 s or less, **INP** 200 ms or less, **CLS** 0.1 or less, for at least 75% of visits.
+- **Images**: send the right size with `srcset` and `sizes`; use AVIF or WebP with `<picture>`; always give `width` and `height`; `loading="lazy"` only for images further down the page.
+- **JavaScript**: Vite bundles, minifies and fingerprints. Add packages with care; split rarely used parts with `lazy`, `Suspense` and dynamic `import()`.
+- **Caching**: fingerprinted files get `max-age=31536000, immutable`; HTML gets `no-cache` (check before reuse).
+- **Fonts**: WOFF2, `font-display: swap`, few weights.
+- **Long tasks** (over 50 ms) on the **main thread** make pages slow to respond. Do less, break work up, or use a **web worker**.
+
+## Go deeper
+
+- [Web Vitals](https://web.dev/articles/vitals), from Google's web.dev. What LCP, INP and CLS measure, and their thresholds.
+- [Learn Performance](https://web.dev/learn/performance), from web.dev. A free course covering everything in this chapter in more depth.
+- [PageSpeed Insights](https://pagespeed.web.dev/), from Google. Test any public page.
+- [Using responsive images in HTML](https://developer.mozilla.org/en-US/docs/Web/HTML/Guides/Responsive_images), from MDN. `srcset`, `sizes` and `<picture>` in detail.
+- [Cache-Control](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Cache-Control), from MDN. Every caching setting, with recommended patterns.

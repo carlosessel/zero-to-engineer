@@ -30,6 +30,14 @@ Kinds of check (the `check:` field):
   vitest           Checked by a named test in tests/web-examples.test.ts.
   js               JavaScript, run in Node by tests/js-blocks.test.ts with console output
                    compared (`output`, `output_contains`, `throws`, `expect`).
+  react            A React component (jsx or tsx), compiled as the site's preview compiles it
+                   and shown in a simulated page by tests/react-blocks.test.ts, with clicks
+                   and typing: `steps`, `output`, `warnings_contain`, `throws`, `fetch_json`.
+  ts               TypeScript, type-checked in strict mode by tests/ts-blocks.test.ts
+                   (`errors` for blocks that are wrong on purpose) and, if `output` or
+                   `throws` is given, run with the types removed.
+  vitest-run       Test files, run with Vitest by tests/vitest-blocks.test.ts:
+                   `files` (file name -> block number), `passed`, `failed`.
   web              HTML or CSS, validated by tests/web-blocks.test.ts (html-validate,
                    css-tree). `expect_problems` for examples that are wrong on purpose.
   browser          As web, and rendered in real Chrome by e2e/examples.e2e.ts, which
@@ -62,7 +70,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CHAPTERS = ROOT / "content" / "chapters"
 FENCE = re.compile(r"^(`{3,})(\w+)\n(.*?)\n\1[ \t]*$", re.S | re.M)
-KINDS = {"python", "python-fake-api", "heavy", "shell", "sql", "pip", "docker", "vitest", "web", "browser", "js", "illustration", "not-run"}
+KINDS = {"python", "python-fake-api", "heavy", "shell", "sql", "pip", "docker", "vitest", "web", "browser", "js", "react", "ts", "vitest-run", "illustration", "not-run"}
 AUTOMATED = {"python", "shell", "sql", "pip", "docker", "vitest"}
 
 
@@ -109,6 +117,14 @@ def problems_with_spec(chapter: str) -> list[str]:
             out.append(f"{where}: browser needs at least one expectation")
         if kind == "vitest" and not entry.get("test"):
             out.append(f"{where}: vitest needs the test name")
+        if kind == "vitest-run" and not (entry.get("files") and "passed" in entry):
+            out.append(f"{where}: vitest-run needs files and passed")
+        if kind == "react" and entry.get("append") and not entry.get("note"):
+            out.append(f"{where}: react with append needs a note saying what the hidden code adds")
+        if kind == "react" and lang not in ("jsx", "tsx"):
+            out.append(f"{where}: react is for jsx or tsx blocks")
+        if kind == "ts" and lang not in ("ts", "tsx"):
+            out.append(f"{where}: ts is for ts or tsx blocks")
     return out
 
 
@@ -158,6 +174,12 @@ class Chapter:
             raise Skip("validated in tests/web-blocks.test.ts")
         if kind == "js":
             raise Skip("run in tests/js-blocks.test.ts")
+        if kind == "react":
+            raise Skip("run in tests/react-blocks.test.ts")
+        if kind == "ts":
+            raise Skip("type-checked in tests/ts-blocks.test.ts")
+        if kind == "vitest-run":
+            raise Skip("run with Vitest by tests/vitest-blocks.test.ts")
         if kind == "browser":
             raise Skip("validated in tests/web-blocks.test.ts and rendered in a real browser by e2e/examples.e2e.ts")
         if kind == "illustration":

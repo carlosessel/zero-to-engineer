@@ -1,0 +1,213 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    npm create vite@latest my-react-app -- --template react --no-interactive
+    cd my-react-app
+    npm install
+    # `npm run dev` runs until stopped, so the check builds the project instead, which compiles the same files.
+    npm run build
+    test -f dist/index.html
+  note: Creates the real starter project from the internet, installs it and builds it.
+- block: 2
+  lang: jsx
+  check: shell
+  needs: network
+  script: |
+    npm create vite@latest my-react-app -- --template react --no-interactive
+    diff my-react-app/src/main.jsx "$BLOCK"
+  note: The block must match the main.jsx that Vite's React starter creates, line for line.
+- block: 3
+  lang: jsx
+  check: react
+  steps:
+  - text: Hello, React
+- block: 4
+  lang: text
+  check: illustration
+  note: A simplified picture of what JSX becomes; the compiled code is checked in tests/react-preview.test.ts, which confirms JSX turns into calls to the jsx runtime.
+- block: 5
+  lang: jsx
+  check: react
+  steps:
+  - text: Ama's Bakery
+  - text: Today we baked 12 loaves.
+  - text: All of them would cost £30.00.
+  - text: 'Opening time: 08:00'
+- block: 6
+  lang: jsx
+  check: react
+  steps:
+  - text: Ama's Bakery
+  - text: Fresh bread every morning.
+  - expect: document.querySelector('hr') !== null
+  - expect: document.querySelectorAll('#root > *').length === 4
+- block: 7
+  lang: jsx
+  check: react
+  steps:
+  - text: Opening hours
+  - text: © 2026 Ama's Bakery
+  - expect: document.querySelector('header h1').textContent === "Ama's Bakery"
+  - expect: document.querySelector('main section h2').textContent === 'Opening hours'
+  - expect: document.querySelector('footer') !== null
+- block: 8
+  lang: jsx
+  check: react
+  steps:
+  - text: Ama's Bakery
+- block: 9
+  lang: jsx
+  check: react
+  modules:
+    ./Header.jsx: 8
+  steps:
+  - expect: document.querySelector('header h1').textContent === "Ama's Bakery"
+- block: 10
+  lang: jsx
+  check: react
+  steps:
+  - text: Sourdough loaf
+  - text: £4.50
+  - text: £2.75
+  - text: £3.80
+  - expect: document.querySelectorAll('article').length === 3
+- block: 11
+  lang: jsx
+  check: react
+  append: |
+    export default function App() {
+      return <ProductCard name="Rye loaf" price={3.8} />;
+    }
+  note: Only the component is shown in the chapter; the hidden App uses it once, to check it shows the name and price.
+  steps:
+  - expect: 'document.querySelector(''h2'').textContent === ''Rye loaf: £3.80'''
+- block: 12
+  lang: jsx
+  check: react
+  append: |
+    export default function App() {
+      return <ProductCard name="Rye loaf" price={3.8} />;
+    }
+  note: Only the component is shown in the chapter; the hidden App uses it once, to check it shows the name and price.
+  steps:
+  - expect: 'document.querySelector(''h2'').textContent === ''Rye loaf: £3.80'''
+- block: 13
+  lang: jsx
+  check: react
+  steps:
+  - text: Today's special
+  - text: Pistachio croissant, £3.20.
+  - text: Next to the library.
+  - expect: document.querySelectorAll('section').length === 2
+  - expect: document.querySelectorAll('section')[1].querySelectorAll('p').length === 2
+- block: 14
+  lang: jsx
+  check: react
+  steps:
+  - expect: '[...document.querySelectorAll(''p'')].map(p => p.textContent).join(''|'') === ''3 left|Sold out'''
+- block: 15
+  lang: jsx
+  check: react
+  steps:
+  - expect: '[...document.querySelectorAll(''li'')].map(li => li.textContent).join(''|'') === ''Sourdough loaf, £4.50 (available)|Pistachio croissant, £3.20 New! (available)|Rye loaf, £3.80 (sold out)'''
+- block: 16
+  lang: jsx
+  check: react
+  steps:
+  - expect: '[...document.querySelectorAll(''li'')].map(li => li.textContent).join(''|'') === ''Sourdough loaf: £4.50|Cinnamon bun: £2.75|Rye loaf: £3.80'''
+- block: 17
+  lang: jsx
+  check: react
+  warnings_contain:
+  - Each child in a list should have a unique "key" prop.
+  steps:
+  - expect: document.querySelectorAll('li').length === 2
+- block: 18
+  lang: css
+  check: web
+- block: 19
+  lang: jsx
+  check: browser
+  combine:
+  - 18
+  - 19
+  expect:
+  - document.querySelectorAll('.card').length === 4
+  - document.querySelector('.sold-out h3').textContent.trim() === 'Rye loaf'
+  - getComputedStyle(document.querySelector('.sold-out')).color === 'rgb(89, 89, 89)'
+  - document.querySelector('.sold-out').textContent.includes('Sold out today')
+  - document.querySelectorAll('.badge').length === 1 && document.querySelector('.badge').closest('.card').textContent.includes('Pistachio croissant')
+  - '[...document.querySelectorAll(''section'')][2].textContent === ''DrinksNothing in this section today.'''
+  - getComputedStyle(document.querySelector('.menu')).display === 'grid'
+  note: Rendered by the site's own React preview code in real Chrome.
+- block: 20
+  lang: jsx
+  check: react
+  steps:
+  - text: Hello, Kofi
+- block: 21
+  lang: jsx
+  check: react
+  steps:
+  - expect: document.querySelector('label').htmlFor === 'email'
+  - expect: document.querySelector('label').className === 'field'
+  - expect: document.querySelector('input').type === 'email'
+- block: 22
+  lang: jsx
+  check: react
+  steps:
+  - text: Welcome back, Ama!
+  - text: Welcome back, Kofi!
+  - text: Welcome back, Priya!
+- block: 23
+  lang: jsx
+  check: react
+  steps:
+  - text: This is visit number 1.
+  - text: This is visit number 7.
+- block: 24
+  lang: jsx
+  check: react
+  steps:
+  - expect: document.querySelectorAll('li').length === 0
+  - expect: document.querySelector('ul') !== null
+  note: 'Wrong on purpose: the list is empty.'
+- block: 25
+  lang: jsx
+  check: react
+  steps:
+  - expect: '[...document.querySelectorAll(''li'')].map(li => li.textContent).join(''|'') === ''Leeds|York|Hull'''
+- block: 26
+  lang: jsx
+  check: react
+  steps:
+  - expect: '[...document.querySelectorAll(''li'')].map(li => li.textContent).join(''|'') === ''Rye loaf Sold out|Sourdough Only 2 left|Cinnamon bun '''
+  - expect: document.querySelectorAll('strong').length === 2
+- block: 27
+  lang: jsx
+  check: react
+  steps:
+  - expect: '[...document.querySelectorAll(''li'')].map(li => li.textContent).join(''|'') === ''Ama (Baker)|Kofi (Barista)'''
+- block: 28
+  lang: jsx
+  check: react
+  steps:
+  - text: Opening hours
+  - text: 8am to 4pm, Monday to Saturday.
+  - expect: document.querySelector('#root > div').style.borderRadius === '6px'
+- block: 29
+  lang: jsx
+  check: react
+  steps:
+  - expect: document.querySelector('h1').textContent === 'Our team'
+  - expect: '[...document.querySelectorAll(''article h2'')].map(h => h.textContent).join(''|'') === ''Ama|Kofi|Priya'''
+  - expect: '[...document.querySelectorAll(''article p'')].map(p => p.textContent).join(''|'') === ''Baker|Barista|Manager'''
+- block: 30
+  lang: jsx
+  check: react
+  steps:
+  - expect: '[...document.querySelectorAll(''li'')].map(li => li.textContent).join(''|'') === ''Cinnamon bun: £2.75|Pistachio croissant: £3.20'''
+  - text: 2 items under £3.50
