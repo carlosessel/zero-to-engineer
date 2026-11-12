@@ -1,0 +1,52 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python-fake-api
+  note: 'Run against the stand-in server: proves the SDK call is valid and the reply is handled; it is not the live API.'
+  replies:
+  - text: COMPLAINT
+  - text: I'm sorry about the stale bun. Bring your receipt and we'll replace it.
+  verify: |
+    assert requests[0]['model'] == 'claude-haiku-5-5' and requests[0]['max_tokens'] == 10
+    assert requests[1]['system'].startswith('You respond to complaints')
+    assert "('COMPLAINT'" in out
+- block: 2
+  lang: python
+  check: python-fake-api
+  note: 'Run against the stand-in server: proves the SDK call is valid and the reply is handled; it is not the live API. The scripted replies ask for check_stock, then place_order, then answer; the example''s own code runs the tools.'
+  replies:
+  - tool_use:
+      name: check_stock
+      input:
+        product: sourdough loaf
+  - tool_use:
+      name: place_order
+      input:
+        product: sourdough loaf
+        quantity: 2
+  - text: 'Done: two sourdough loaves are reserved for you.'
+  verify: |
+    assert ns['ORDERS'] == [('sourdough loaf', 2)] and ns['STOCK']['sourdough loaf'] == 4
+    assert 'step 1: check_stock' in out and '6 sourdough loaf left' in out
+    assert 'Reserved 2 sourdough loaf' in out
+    last = requests[-1]['messages'][-1]['content'][0]
+    assert last['type'] == 'tool_result'
+- block: 3
+  lang: python
+  check: shell
+  note: 'Runs the example with a stand-in for the SDK''s query function (claude-agent-sdk 0.2.180 installed), so no real Claude Code session starts: it checks the options are valid and are passed with the prompt.'
+  script: |
+    python - <<'PY'
+    import asyncio, runpy, sys
+    import claude_agent_sdk
+    seen = {}
+    async def fake_query(prompt, options):
+        seen["prompt"], seen["options"] = prompt, options
+        yield "result message"
+    claude_agent_sdk.query = fake_query
+    code = open(sys.argv[0] if False else __import__('os').environ['BLOCK']).read()
+    exec(compile(code, "example.py", "exec"), {"__name__": "example"})
+    assert "Python 3.9" in seen["prompt"]
+    o = seen["options"]
+    assert o.allowed_tools == ["Read", "Grep", "Glob", "Edit"] and o.permission_mode == "acceptEdits" and o.max_turns == 20
+    PY

@@ -4,6 +4,22 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: Mastering Claude and Claude Code, parts 4 to 6 (the course is complete)
+
+Added
+- Part 4, Building on the Claude API: the Messages API in depth, building agents, context engineering for long-running agents, and Managed Agents and Agent Skills, with the AI course's first-call, tool use, structured output and evals chapters reused. Part 5, Mastery: judgement, and five projects with checklists. Part 6: a library of Anthropic's courses, documentation and engineering articles, and the glossary. About 12,800 new words, 29 practice problems, 25 quiz questions. The whole course is 24 new chapters (about 48,000 words) plus 4 reused.
+- The stand-in API server used by the example checks now imitates token counting, Message Batches and prompt-caching usage, so those examples run end to end. The API examples (streaming, caching, batches, routing, a hand-written agent loop, compaction, the memory tool, skills) are all run against it and their requests asserted.
+- The Agent SDK example runs with a stand-in for its query function, checking its options with the real claude-agent-sdk 0.2.180. Managed Agents and Files API calls are checked against the installed SDK's method signatures.
+- Five Claude pages added to the accessibility checks (passing in light and dark mode). The course's glossary, library and projects pages have short addresses (/claude/glossary/ and so on).
+- 20 glossary terms; Routing now also used by the Claude course.
+
+Fixed
+- "Event" was briefly linked to its web meaning (a click or key press) from the Managed Agents chapter; that word is no longer a glossary link there.
+
+Not verified
+- Nothing ran against the live API; no API key is used anywhere. Managed Agents, compaction and context editing were beta features when checked, and the chapters say so.
+- The cost arithmetic uses the prices on Anthropic's pages on 12 November 2026.
+
 ### 2026-11-12: Mastering Claude and Claude Code, part 3 (Claude Code)
 
 Added

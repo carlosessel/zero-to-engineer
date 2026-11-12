@@ -1,0 +1,94 @@
+---
+title: "The mastery projects"
+slug: projects
+summary: "Build a skill, an MCP server, a GitHub automation and an agent, each with a checklist."
+prerequisites: [cl-judgement]
+estimated_minutes: 60
+status: resources-verified
+---
+
+Reading about Claude Code and the API is not the same as being good with them. These projects make you use each part of the course on something real, and each produces something you will keep using. Do them in order; each builds on the ones before. The time on this page is for reading the briefs: each project takes from an afternoon to a few days.
+
+Each project has a **brief** (what to build), the **chapters** it draws on, and a **checklist** you can tick off honestly. A project is done when every box is ticked, not when it "works on my machine".
+
+## Project 1: Your working set-up
+
+**Brief.** Set up Claude Code properly on a real project of yours (from another course on this site, or your own): instructions, permissions, a check, and a habit of review.
+
+**Draws on:** <Ref to="cc-context" />, <Ref to="cc-settings" />, <Ref to="cc-workflows" />.
+
+**Checklist:**
+- [ ] A `CLAUDE.md` under 30 lines, containing only what Claude cannot find in the code, including the exact test, lint and type-check commands.
+- [ ] `.claude/settings.json` that allows the check commands, asks before `git push`, and denies reading secret files; checked with `/permissions`.
+- [ ] Three real tasks done with plan mode where appropriate, each with a check, each diff read before committing.
+- [ ] One `/code-review` run, with a note of which findings you accepted and why.
+- [ ] A short write-up: what went wrong, and what you changed in your set-up because of it.
+
+## Project 2: A skill and a hook for your team
+
+**Brief.** Turn one workflow you repeat into a skill, and one rule that must never be broken into a hook. Package both as a plugin.
+
+**Draws on:** <Ref to="cc-extending" />.
+
+**Checklist:**
+- [ ] A task skill with a description that triggers reliably (test three requests that should trigger it and two that should not), and `disable-model-invocation: true` if it changes anything.
+- [ ] A hook that enforces a real rule (a check before finishing, or protection for a folder), which prints a reason that tells Claude what to do instead.
+- [ ] You have watched the hook block something, on purpose.
+- [ ] Both packaged in a plugin with a `plugin.json`, loaded with `--plugin-dir`, and installed from a marketplace repository (your own is fine).
+- [ ] A README explaining what each part does and why it is a skill or a hook.
+
+## Project 3: An MCP server for something you use
+
+**Brief.** Write an MCP server that gives Claude access to a system you actually use: a notes folder, a to-do app's API, a small database, your course progress export.
+
+**Draws on:** <Ref to="cc-mcp" />.
+
+**Checklist:**
+- [ ] Two to four tools, each with a name and docstring a newcomer would understand, and inputs that are hard to get wrong.
+- [ ] Errors that say how to fix the call.
+- [ ] The least access possible (read-only unless writing is the point).
+- [ ] Tests that call each tool directly, without Claude.
+- [ ] Added to Claude Code, and used in a real task; a note of one way Claude misused a tool, and how you changed the description to fix it.
+- [ ] No secrets in the code or in `.mcp.json`; credentials come from environment variables.
+
+## Project 4: An automation with a person in the loop
+
+**Brief.** Automate one recurring job with Claude Code in GitHub Actions or as a scheduled task, ending in something a person approves.
+
+**Draws on:** <Ref to="cc-automation" />, <Ref to="cc-teams-safety" />.
+
+Ideas: a weekly dependency update pull request; an automatic first review on every pull request; a nightly flaky-test report.
+
+**Checklist:**
+- [ ] Written answers to the five questions: what done looks like, the check, what it may touch, what stops it, who signs off.
+- [ ] Permissions as narrow as the job allows (`dontAsk` with an allowlist, or the action's minimal permissions); keys in secrets.
+- [ ] A spending or turn limit.
+- [ ] The main branch protected so the automation cannot merge.
+- [ ] Watched for its first three runs, with notes on what you changed.
+
+## Project 5: An agent of your own
+
+**Brief.** Build a small agent with the Claude API or the Agent SDK that does a useful multi-step job, and evaluate it.
+
+**Draws on:** <Ref to="first-call" />, <Ref to="cl-api-deep" />, <Ref to="tools" />, <Ref to="cl-agents" />, <Ref to="cl-context-engineering" />, <Ref to="evals" />.
+
+Ideas: a research assistant that searches your notes and answers with citations; a code-health agent that reports on a repository; a study helper that quizzes you from your course progress.
+
+**Checklist:**
+- [ ] A written reason why this needs an agent rather than a single prompt or a fixed workflow.
+- [ ] Tools designed for the model, as in Project 3.
+- [ ] A cap on steps and cost, and sensible behaviour when a tool fails.
+- [ ] An evaluation: at least 20 test cases with expected outcomes, run automatically, with the pass rate recorded before and after one improvement.
+- [ ] Prompt caching used where the same long context repeats, with the cost before and after.
+- [ ] No API key in the repository; a `.env.example` showing what is needed.
+- [ ] A one-page write-up of what it does well, where it fails, and what you would do next.
+
+## When you have finished
+
+You will have a set-up you use every day, extensions your team can install, a server, an automation and an agent, plus evidence (checklists, notes, evaluation results) that they work. That evidence is also what to show in a job interview: not "I use AI tools", but what you built, how you checked it, and what you learnt when it went wrong.
+
+## Summary
+
+- Five projects, each building on the last: a working set-up, a skill and a hook in a plugin, an MCP server, a supervised automation, and an evaluated agent.
+- A project is done when every checklist item is honestly ticked.
+- Keep your notes on what went wrong; they are the most valuable part.

@@ -1,0 +1,30 @@
+- question: What is context rot?
+  options:
+  - Old files on disk
+  - Declining recall of the context as it grows
+  answer: 1
+  explanation: Aim for the smallest set of high-signal tokens.
+- question: Which is just-in-time retrieval?
+  options:
+  - Loading every document at the start
+  - Keeping references and loading details with tools when needed
+  answer: 1
+  explanation: Claude Code works this way.
+- question: Which tool design is better for an agent?
+  options:
+  - list_contacts returning every contact
+  - search_contacts returning a few matches with names
+  answer: 1
+  explanation: Few, purposeful tools with high-signal results.
+- question: Why clear context in larger steps rather than every turn?
+  options:
+  - Clearing changes the prompt's beginning and invalidates the cache
+  - It is a rule of the API
+  answer: 0
+  explanation: Frequent clearing means the cache is almost never read.
+- question: Why must a memory tool handler confine paths to its folder?
+  options:
+  - Performance
+  - Otherwise a model mistake or prompt injection could read or overwrite other files
+  answer: 1
+  explanation: Your code carries out the commands.

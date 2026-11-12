@@ -1,0 +1,404 @@
+---
+title: "The Messages API in depth"
+summary: "Conversations, streaming, prompt caching, thinking and effort, batches, files, citations and vision."
+prerequisites: [first-call]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will know the Messages API well enough to build production features on it: what every important field of a request and a reply means, how to stream replies, how to make repeated context cheap with prompt caching, how to control thinking, how to process thousands of requests at half price, and how to work with files, citations and images. <Ref to="first-call" /> made your first call; this chapter is everything after it.
+
+Details are from Anthropic's [API documentation](https://platform.claude.com/docs/en/build-with-claude/overview), checked in **November 2026**, using the Python SDK (`pip install anthropic`). The examples were run against a stand-in server that imitates the API's replies, not the live API; you need your own API key to run them for real, kept in an environment variable and never in your code.
+
+## A request, field by field
+
+Every call to the **Messages API** sends one request and gets one reply. The fields you will use most:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()  # reads the ANTHROPIC_API_KEY environment variable
+
+def reply_text(msg):
+    """A reply is a list of blocks. Join the ones that are text."""
+    return "".join(block.text for block in msg.content if block.type == "text")
+
+msg = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=2000,
+    system="You are a support assistant for Ama's Bakery. Answer in at most three sentences.",
+    messages=[{"role": "user", "content": "Do you have anything without gluten?"}],
+    output_config={"effort": "low"},
+    stop_sequences=["END"],
+    metadata={"user_id": "customer-7f3a"},
+)
+print(reply_text(msg))
+print(msg.stop_reason, msg.usage.input_tokens, msg.usage.output_tokens)
+```
+
+| Field | Meaning |
+|---|---|
+| `model` | which model (<Ref to="cl-models" />) |
+| `max_tokens` | the most output tokens allowed, **including thinking**: a hard limit, so leave room |
+| `system` | the system prompt: instructions for the whole conversation |
+| `messages` | the conversation: alternating `user` and `assistant` turns, ending with `user` |
+| `output_config` | `effort` (`low` to `max`) and, for structured output, a `format` (<Ref to="structured-output" />) |
+| `stop_sequences` | text that makes the model stop when it writes it |
+| `metadata` | an opaque id for your end user (not their name or email), to help Anthropic handle abuse |
+| `tools`, `tool_choice` | tools the model may call (<Ref to="tools" />) |
+
+Some fields you may see in older tutorials are **gone**. Under the current API version, the documentation says `temperature`, `top_p` and `top_k` are rejected on every model; and writing the start of the reply for the model (prefilling) is rejected on current models. The SDK sends the API version header for you.
+
+## A reply, field by field
+
+The reply's important fields:
+
+- **`content`**: a list of **blocks**, not one string. On current models it usually starts with a `thinking` block (by default its text is omitted and only a signature is returned), then one or more `text` blocks, and `tool_use` blocks when the model wants a tool. That is why the code joins the text blocks rather than reading `content[0].text`, which fails whenever the first block is not text.
+- **`stop_reason`**: why the model stopped. The ones to handle:
+
+| `stop_reason` | Means | Do |
+|---|---|---|
+| `end_turn` | finished normally | use the reply |
+| `max_tokens` | hit your limit mid-reply | raise `max_tokens`, or ask for less; the reply is cut off |
+| `tool_use` | wants a tool run | run it and send back the result (<Ref to="tools" />) |
+| `stop_sequence` | wrote one of your stop sequences | use the text before it |
+| `refusal` | declined for safety reasons | show a suitable message; do not retry blindly |
+| `pause_turn` | paused a long server-side tool turn | send the conversation back to let it continue |
+
+- **`usage`**: tokens in and out (your bill), including `cache_creation_input_tokens` and `cache_read_input_tokens` for prompt caching, and how many output tokens were thinking.
+- **`id`**, and the request id in `msg._request_id`, worth logging: support will ask for it.
+
+Always check `stop_reason`. Code that assumes every reply finished normally will one day show half a sentence to a customer.
+
+## Conversations: the API is stateless
+
+The documentation is direct: the Messages API is stateless, so you always send the full conversation history. Your program keeps the list of turns, adds each new message and reply, and sends the whole list each time:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+def reply_text(msg):
+    return "".join(block.text for block in msg.content if block.type == "text")
+
+history = []
+
+def ask(question):
+    history.append({"role": "user", "content": question})
+    msg = client.messages.create(model="claude-opus-5-5", max_tokens=1000, messages=history)
+    history.append({"role": "assistant", "content": msg.content})
+    return reply_text(msg)
+
+print(ask("My name is Kofi. Suggest a bread for sandwiches."))
+print(ask("And what was my name?"))
+print(len(history), "messages in the history")
+```
+
+Appending `msg.content` (the full list of blocks, including thinking) rather than only the text keeps the conversation exactly as the model produced it, which matters when tools are involved. Because each request resends everything, long conversations cost more each turn: prompt caching, below, is the fix.
+
+## Streaming
+
+A long reply can take many seconds. **Streaming** sends the reply as it is written, so people see words appear immediately instead of waiting. The SDK makes it simple:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+with client.messages.stream(
+    model="claude-opus-5-5",
+    max_tokens=2000,
+    messages=[{"role": "user", "content": "Explain sourdough starter in three short paragraphs."}],
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="", flush=True)
+    final = stream.get_final_message()
+
+print()
+print("stopped because:", final.stop_reason)
+```
+
+`text_stream` yields pieces of text as they arrive; `get_final_message()` gives the complete reply, with `usage` and `stop_reason`, once the stream ends. Under the hood the API sends a sequence of events (`message_start`, then for each block `content_block_start`, `content_block_delta` and `content_block_stop`, then `message_delta` and `message_stop`), which you only need if you build your own handling. The documentation also recommends streaming for requests with a large `max_tokens`, to avoid HTTP timeouts on long replies.
+
+## Prompt caching: paying once for repeated context
+
+Many applications send the same long beginning with every request: a long system prompt, a product manual, a codebase, a long conversation so far. **Prompt caching** lets the API keep that processed beginning for a while and reuse it. From the documentation, when checked:
+
+- **Reading from the cache** costs a tenth of the normal input price on most models, and less on some (a twentieth on Opus 5.5 and Sonnet 5.5).
+- **Writing to the cache** costs 1.25 times the normal price for the default 5-minute cache, or twice for a 1-hour cache.
+- The cache lasts **5 minutes** by default, and each use refreshes it free of charge. `"ttl": "1h"` keeps it for an hour.
+- Only prompts above a minimum length are cached: 512 tokens on the current Claude 5 models. Shorter ones are simply not cached, with no error.
+
+You mark where the cacheable part ends with `cache_control`. The simplest way is **automatic caching**, a single `cache_control` on the whole request, which caches everything up to the last cacheable block and moves forward as a conversation grows. For more control, put `cache_control` on a specific block:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+manual = "Ama's Bakery staff handbook. " + "Section text that rarely changes. " * 300
+
+system = [
+    {"type": "text", "text": "You answer staff questions using only the handbook."},
+    {"type": "text", "text": manual, "cache_control": {"type": "ephemeral"}},
+]
+
+for question in ["What time do bakers start?", "How do I log a waste item?"]:
+    msg = client.messages.create(
+        model="claude-opus-5-5",
+        max_tokens=500,
+        system=system,
+        messages=[{"role": "user", "content": question}],
+    )
+    u = msg.usage
+    print(f"written to cache: {u.cache_creation_input_tokens}, read from cache: {u.cache_read_input_tokens}, uncached: {u.input_tokens}")
+```
+
+The first request writes the handbook to the cache (`cache_creation_input_tokens`); the second, within five minutes, reads it back (`cache_read_input_tokens`) at a fraction of the price. The rule for where to put the marker, from the documentation: **on the last block whose beginning is identical across requests.** The prefix is matched in order (tools, then system, then messages), so put stable material first and anything that changes (the user's question, today's date) after the marker. A timestamp at the top of the system prompt would make every request different and nothing would ever be read from the cache.
+
+A worked cost example on Opus 5.5 ($4 per million input tokens): a 20,000-token handbook sent with 1,000 questions in one busy hour. Without caching: 1,000 × 20,000 = 20 million tokens = **$80** for the handbook part. With a 1-hour cache: one write at 2 × $4 = $8 per million, so 20,000 × $8 ÷ 1,000,000 = $0.16, plus 999 reads at 0.05 × $4 = $0.20 per million, so 999 × 20,000 × $0.20 ÷ 1,000,000 ≈ $4.00. About **$4.16** instead of $80.
+
+## Thinking and effort
+
+Current models think before answering (<Ref to="cl-how-it-works" />), and on the Claude 5 models this **adaptive thinking** is on by default: the model decides how much to think. The main control is **effort**, `output_config={"effort": "…"}` (<Ref to="cl-models" />). Points from the documentation worth knowing:
+
+- Thinking tokens are billed as output and count towards `max_tokens`, so at high effort set `max_tokens` generously.
+- By default the reply's thinking block has its text **omitted**. To see a summary of the thinking (it is never the raw reasoning), ask for it: `thinking={"type": "adaptive", "display": "summarized"}`.
+- The older way of setting a fixed thinking budget (`budget_tokens`) is rejected by the Claude 5 models. Some current models also refuse to turn thinking off entirely; check the model's page before sending `{"type": "disabled"}`.
+- In conversations with tools, send thinking blocks back unchanged, as the conversation example above does by appending `msg.content`.
+
+## Batches: half price for work that can wait
+
+For jobs that do not need answers straight away (classifying a backlog, summarising a week of tickets, generating test data), the **Message Batches API** processes many requests together at **50% of the normal price**. From the documentation: up to 100,000 requests (or 256 MB) per batch; most finish within an hour; a batch expires after 24 hours; results are kept for 29 days.
+
+```python
+import time
+
+import anthropic
+from anthropic.types.message_create_params import MessageCreateParamsNonStreaming
+from anthropic.types.messages.batch_create_params import Request
+
+client = anthropic.Anthropic()
+
+reviews = {
+    "review-1": "The rye was dense and dry.",
+    "review-2": "Best cinnamon buns in Leeds!",
+}
+
+batch = client.messages.batches.create(
+    requests=[
+        Request(
+            custom_id=review_id,
+            params=MessageCreateParamsNonStreaming(
+                model="claude-haiku-5-5",
+                max_tokens=50,
+                messages=[{"role": "user", "content": f"Reply POSITIVE or NEGATIVE only.\n\n{text}"}],
+            ),
+        )
+        for review_id, text in reviews.items()
+    ]
+)
+
+while client.messages.batches.retrieve(batch.id).processing_status != "ended":
+    time.sleep(60)
+
+for result in client.messages.batches.results(batch.id):
+    if result.result.type == "succeeded":
+        text = "".join(b.text for b in result.result.message.content if b.type == "text")
+        print(result.custom_id, text)
+    else:
+        print(result.custom_id, "failed:", result.result.type)
+```
+
+Each request has your own `custom_id`, because results come back in any order: match them by id, never by position. Handle the failure types (`errored`, `canceled`, `expired`) as well as `succeeded`. Batching combines with prompt caching for even lower cost.
+
+## Counting tokens before you send
+
+To know the size of a request before sending it (to check it fits, or to estimate cost), the API counts tokens for you, free (with a rate limit):
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+count = client.messages.count_tokens(
+    model="claude-opus-5-5",
+    system="You answer staff questions using only the handbook.",
+    messages=[{"role": "user", "content": "What time do bakers start?"}],
+)
+print(count.input_tokens, "input tokens")
+```
+
+The documentation calls the count an estimate, close to what the real request will use.
+
+## Files, citations and images
+
+**Documents.** You can send a PDF or text document in a message. For a file used many times, upload it once with the **Files API** and refer to it by id (stable when checked; up to 500 MB per file):
+
+```python
+uploaded = client.files.upload(file=("handbook.pdf", open("handbook.pdf", "rb"), "application/pdf"))
+
+msg = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=1000,
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "document", "source": {"type": "file", "file_id": uploaded.id}, "citations": {"enabled": True}},
+            {"type": "text", "text": "What is the policy on staff discounts? Cite the page."},
+        ],
+    }],
+)
+```
+
+**Citations.** With `"citations": {"enabled": True}` on the documents, the reply's text blocks carry citations pointing to the exact passages used (page locations for PDFs, character ranges for plain text). Your program can show them as footnotes, and people can check every claim. Citations must be enabled on all the documents in a request or none.
+
+**Images.** An image is a content block too, from base64 data, a URL or an uploaded file:
+
+```python
+{"type": "image", "source": {"type": "url", "url": "https://example.com/receipt.jpg"}}
+```
+
+JPEG, PNG, GIF and WebP are accepted; the documentation lists size and count limits.
+
+## Errors and retries
+
+Network calls fail. The errors you will see most:
+
+| Status | Type | Do |
+|---|---|---|
+| 400 | `invalid_request_error` | fix the request (a wrong field, a rejected parameter); retrying will not help |
+| 401 / 403 | authentication / permission | check the key and its permissions |
+| 429 | `rate_limit_error` | slow down; wait as long as the `retry-after` header says |
+| 500 | `api_error` | retry with a delay |
+| 529 | `overloaded_error` | retry with a delay |
+
+The Python SDK already **retries** connection errors, 408, 409, 429 and server errors twice with exponential backoff (waiting longer each time), honouring `retry-after`. You can change that with `anthropic.Anthropic(max_retries=5)`. Handle what remains:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic(max_retries=3)
+
+def safe_answer(question):
+    try:
+        msg = client.messages.create(
+            model="claude-opus-5-5",
+            max_tokens=500,
+            messages=[{"role": "user", "content": question}],
+        )
+    except anthropic.RateLimitError:
+        return "We're busy right now. Please try again in a minute."
+    except anthropic.APIStatusError as e:
+        print("API error", e.status_code, e.request_id)
+        return "Sorry, something went wrong. Please try again."
+    except anthropic.APIConnectionError:
+        return "We couldn't reach the assistant. Check your connection."
+    if msg.stop_reason == "max_tokens":
+        return "".join(b.text for b in msg.content if b.type == "text") + " …"
+    return "".join(b.text for b in msg.content if b.type == "text")
+
+print(safe_answer("When do you open on Sundays?"))
+```
+
+Log the request id with every error; it is what Anthropic's support needs to investigate.
+
+## Common mistakes
+
+- **Reading `content[0].text`.** The first block is often thinking. Join the text blocks.
+- **Ignoring `stop_reason`**, and showing a reply that was cut off at `max_tokens`.
+- **`max_tokens` too low at high effort**: thinking uses it up and the answer is cut short.
+- **Sending `temperature`** or a prefilled reply copied from an old tutorial: both are rejected now.
+- **A changing value (a timestamp, a user id) before the cache marker**, so the cache is never read.
+- **Matching batch results by position** instead of `custom_id`.
+- **Retrying 400 errors**, which will fail the same way every time.
+- **An API key in the code or the repository.** Use an environment variable or a secret store.
+- **Personal data in `metadata.user_id`.** Use an opaque id.
+
+## Practice
+
+**1. (warm-up)** A reply has `stop_reason` `"max_tokens"`. What happened, and what are two fixes?
+
+<Solution>
+
+The model hit the `max_tokens` limit before finishing, so the reply is cut off (and thinking may have used much of the limit). Fixes: raise `max_tokens`; or ask for a shorter answer, or lower the effort if the task does not need deep thinking.
+
+</Solution>
+
+**2. (warm-up)** Why does a chatbot built on the Messages API cost more per message as a conversation gets longer?
+
+<Solution>
+
+The API is stateless, so every request resends the whole conversation, and all of it is billed as input. Prompt caching reduces the cost of the repeated part.
+
+</Solution>
+
+**3. (standard)** This request is never read from the cache. Why?
+
+```python
+system = [
+    {"type": "text", "text": f"Today is {datetime.now().isoformat()}."},
+    {"type": "text", "text": HANDBOOK, "cache_control": {"type": "ephemeral"}},
+]
+```
+
+<Solution>
+
+The cached prefix includes everything before the marker, and the first block contains the current time, which is different on every request, so the prefix never matches. Put the handbook (stable) first with the marker, and the date after it (or in the user message).
+
+</Solution>
+
+**4. (standard)** Using the prices in this chapter, what would the handbook part of the cost be for 1,000 questions in an hour with a 5-minute cache, assuming questions arrive often enough that the cache never expires?
+
+<Solution>
+
+One write at 1.25 × $4 = $5 per million: 20,000 × 5 ÷ 1,000,000 = $0.10. Then 999 reads at 0.05 × $4 = $0.20 per million: 999 × 20,000 × 0.20 ÷ 1,000,000 = $3.996. Total about **$4.10**, slightly cheaper than the 1-hour cache, as long as no gap of more than five minutes lets it expire (each use refreshes it).
+
+</Solution>
+
+**5. (standard)** You need to tag 40,000 old support tickets by topic by tomorrow morning. Which API features would you use, and why?
+
+<Solution>
+
+The Message Batches API (half price, no need for instant answers), a cheap fast model such as Haiku 5.5 for a simple classification, a `custom_id` per ticket to match results, prompt caching for the shared instructions and examples, and structured output for the label so a program can read it. Check a sample of results before trusting the rest.
+
+</Solution>
+
+**6. (standard)** Which errors should your code retry, and which not? 400, 401, 429, 500, 529.
+
+<Solution>
+
+Retry 429 (after waiting as `retry-after` says), 500 and 529, with backoff; the SDK already retries these twice by default. Do not retry 400 (the request is wrong) or 401 (the key is wrong): they will fail the same way every time.
+
+</Solution>
+
+**7. (stretch)** Design how a customer-facing chat feature should handle a reply whose `stop_reason` is `refusal`.
+
+<Solution>
+
+Do not show raw internals or retry automatically. Show a short, polite message that the assistant cannot help with that request, with a route to a person (a contact link or human support). Log it with the request id (and no unnecessary personal data) so the team can review whether refusals are expected for the product's use, and adjust the system prompt if legitimate requests are being refused.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A request has `model`, `max_tokens` (including thinking), `system`, `messages`, `output_config` (effort, format), and optionally `tools`, `stop_sequences` and `metadata`. `temperature` and prefilling are rejected on current models.
+- A reply's `content` is a list of blocks: join the text blocks. Always check `stop_reason`; log `usage` and the request id.
+- The API is **stateless**: resend the whole history each turn.
+- **Streaming** (`client.messages.stream`, `text_stream`, `get_final_message`) shows text as it is written.
+- **Prompt caching** (`cache_control`) makes a repeated prefix about 10 to 40 times cheaper to read; put stable content first and the marker after it.
+- **Adaptive thinking** is on by default; control it with **effort**; thinking counts towards `max_tokens`.
+- **Batches** are half price for work that can wait; match results by `custom_id`.
+- Count tokens before sending; upload files once; enable **citations** for checkable answers; send images as blocks.
+- The SDK retries rate limits and server errors; handle the rest, and never retry a 400.
+
+## Go deeper
+
+- [Working with the Messages API](https://platform.claude.com/docs/en/build-with-claude/working-with-messages), from Anthropic. Requests, replies and conversations.
+- [Streaming](https://platform.claude.com/docs/en/build-with-claude/streaming) and [Prompt caching](https://platform.claude.com/docs/en/build-with-claude/prompt-caching), from Anthropic.
+- [Batch processing](https://platform.claude.com/docs/en/build-with-claude/batch-processing), from Anthropic.
+- [Citations](https://platform.claude.com/docs/en/build-with-claude/citations) and [Files](https://platform.claude.com/docs/en/build-with-claude/files), from Anthropic.
+- [Errors](https://platform.claude.com/docs/en/api/errors), from Anthropic. Every status code and what it means.

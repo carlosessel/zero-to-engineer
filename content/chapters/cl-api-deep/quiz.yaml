@@ -1,0 +1,39 @@
+- question: Why join text blocks instead of reading content[0].text?
+  options:
+  - content[0] is often a thinking block, not text
+  - It is faster
+  - content is always one block
+  answer: 0
+  explanation: Current models usually return a thinking block first.
+- question: A reply's stop_reason is max_tokens. What happened?
+  options:
+  - It finished normally
+  - It was cut off at your token limit, which includes thinking
+  answer: 1
+  explanation: Raise max_tokens or ask for less.
+- question: Where should cache_control go?
+  options:
+  - On the first block
+  - On the last block whose beginning is identical across requests
+  - On the user's question
+  answer: 1
+  explanation: Stable content first, the marker after it, varying content after that.
+- question: A request includes temperature copied from an old tutorial. What happens?
+  options:
+  - It is used
+  - It is rejected with a 400 on current models
+  answer: 1
+  explanation: temperature, top_p and top_k are removed under the current API version.
+- question: How do you match batch results to requests?
+  options:
+  - By their position
+  - By custom_id
+  answer: 1
+  explanation: Results come back in any order.
+- question: Which error should you not retry?
+  options:
+  - '429'
+  - '529'
+  - '400'
+  answer: 2
+  explanation: A 400 means the request is wrong; it will fail the same way.

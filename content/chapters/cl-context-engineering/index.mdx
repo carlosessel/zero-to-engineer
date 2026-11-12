@@ -1,0 +1,207 @@
+---
+title: "Context engineering for long-running agents"
+summary: "Compaction, context editing, memory, writing good tools, and harnesses that keep agents on track."
+prerequisites: [cl-agents]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will be able to keep an agent effective over long tasks, the ones with hundreds of tool calls and hours of work, by controlling what is in its context: giving it the right information at the right moment, clearing what it no longer needs, letting it keep notes, and designing tools whose results help rather than flood. Anthropic calls this **context engineering**, and treats it as the next step after prompt engineering.
+
+The chapter follows Anthropic's articles [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents) and [Writing effective tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents), and the API documentation on [compaction](https://platform.claude.com/docs/en/build-with-claude/compaction), [context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing) and the [memory tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool), checked in **November 2026**. Several of these API features were in beta when checked; the chapter says which.
+
+## Why context needs engineering
+
+Prompt engineering is about writing good instructions. **Context engineering** is about the whole of what the model sees at each step: instructions, tool descriptions, the history, tool results, retrieved documents, notes. In an agent, that set changes with every step, and grows.
+
+Anthropic's article makes two points that shape everything else:
+
+- **Models have an attention budget.** As the number of tokens in the context grows, the model's ability to recall and use any particular piece of it degrades. The article calls this **context rot**. A million-token window does not mean a million tokens are all used equally well.
+- So the goal is **the smallest set of high-signal tokens** that makes the right outcome likely. Every irrelevant tool result, outdated plan and duplicated file in the context costs money and attention.
+
+## The system prompt at the right altitude
+
+The article describes a "right altitude" for system prompts, between two failure modes: so specific that it hard-codes brittle if-then logic for every case, or so vague that it assumes context the model does not have. Aim for clear principles and the information the agent cannot find for itself, organised into sections (background, instructions, tool guidance, output format), as short as it can be while still complete. It is the same advice as for `CLAUDE.md` in <Ref to="cc-context" />.
+
+## Just-in-time retrieval
+
+A tempting design is to load everything the agent might need into the context at the start: every document, every file. The article recommends the opposite for most agents: **keep lightweight references** (file paths, document titles, record ids, search queries) and let the agent **load details when it needs them**, through tools. Claude Code works this way: it does not read your whole repository up front; it searches and opens files as the task requires.
+
+This **progressive disclosure** keeps the context focused and lets the agent explore spaces far bigger than any window. The cost is that each lookup takes a step, so a hybrid is common: a small amount of essential information up front (Claude Code loads `CLAUDE.md`), and everything else on demand.
+
+## Tools that are good for context
+
+Tool results are often the largest part of an agent's context, so tool design is context design. The tools article's advice, in brief:
+
+- **A few thoughtful tools rather than one per API endpoint.** Its example: rather than `list_users`, `list_events` and `create_event`, offer `schedule_event`, which finds availability and books in one call. Rather than `list_contacts` returning everyone, offer `search_contacts`.
+- **Return high-signal information**: names and meaningful identifiers rather than long opaque ids, and only the fields needed. A `response_format` option (`concise` or `detailed`) lets the agent choose.
+- **Paginate, filter and truncate** large results, with defaults that are sensible. (Claude Code caps a tool response at 25,000 tokens by default.)
+- **Make errors actionable**: say what was wrong and how to call the tool correctly.
+- **Write descriptions as you would for a new colleague**, with unambiguous parameter names (`user_id`, not `user`).
+- **Name tools in groups** with a shared prefix (`asana_search`, `asana_create_task`) when there are many.
+
+The article's method for getting there: build a prototype, run an evaluation of realistic tasks, read the transcripts to see where the agent struggled, and improve the tools, often with Claude's help analysing the transcripts.
+
+## Techniques for long tasks
+
+When a task runs longer than one context can comfortably hold, the article describes three techniques.
+
+### 1. Compaction
+
+**Compaction** summarises the conversation so far and continues from the summary, keeping decisions, open problems and important details and dropping redundant tool output. Claude Code does this automatically (and with `/compact`, <Ref to="cc-context" />). The API offers it server-side, in beta when checked. The documentation recommends the on-demand form, where you ask for a summary when you decide it is time:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+history = [
+    {"role": "user", "content": "Audit the checkout code for bugs. Here is the first file..."},
+    {"role": "assistant", "content": "Reading it now. Found an off-by-one error in the discount loop..."},
+    {"role": "user", "content": "Continue with the payment module."},
+]
+
+summary = client.beta.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=4096,
+    betas=["compact-2026-09-04"],
+    messages=history,
+    compaction={"type": "summarize"},
+)
+print(summary.stop_reason)
+```
+
+The reply contains a `compaction` block; you start the next request's `messages` with that block instead of the long history. There is also an automatic form that compacts when the input passes a threshold you set. Because these are beta features, check the current documentation for their exact names before using them.
+
+The lightest form of compaction is simply **clearing old tool results**: once a file's contents or a search's results have been used, the raw output rarely needs to stay.
+
+### 2. Context editing
+
+**Context editing** (beta when checked) lets the API clear old content automatically as the conversation grows: for example, removing all but the last few tool results once the input passes a threshold, or old thinking blocks. You set it once in the request's `context_management` field, with rules such as how many recent tool uses to keep and which tools never to clear. The documentation warns that clearing content changes the prompt's beginning, so it invalidates the prompt cache from that point: clear in larger steps rather than a little every turn.
+
+### 3. Structured notes and memory
+
+An agent can keep **notes outside its context**, such as a progress file, a to-do list or a record of decisions, and reread them when needed. Claude Code's auto memory and a `NOTES.md` an agent maintains are examples. For long tasks that span several context windows or sessions, notes are what carry the state across.
+
+The API's **memory tool** (stable when checked, `{"type": "memory_20250818", "name": "memory"}`) gives Claude a set of file commands (view, create, edit, delete, rename) under a `/memories` folder that **your application stores**, so the agent can save what it learns and read it in later sessions. Because your code carries out the commands, your code must keep them inside that folder: the documentation warns that the handler must block paths that try to escape it, such as `../`.
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+msg = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=2000,
+    tools=[{"type": "memory_20250818", "name": "memory"}],
+    messages=[{"role": "user", "content": "Before starting, check your memory for notes on this customer's preferences."}],
+)
+for block in msg.content:
+    if block.type == "tool_use":
+        print(block.name, block.input)
+```
+
+When Claude uses the tool, your code performs the command on your storage and returns the result, as with any tool (<Ref to="cl-agents" />). The Python SDK includes a helper class to base an implementation on.
+
+### Sub-agents with clean contexts
+
+The fourth technique is the one from <Ref to="cl-agents" /> and <Ref to="cc-parallel" />: hand a focused job to a sub-agent with a clean context, and get back a condensed summary (the article suggests a summary of roughly one to two thousand tokens) rather than all its working. The lead agent's context stays clear for decisions.
+
+## Harnesses for long-running work
+
+The code around a model that runs its loop, manages its context and provides its tools is called a **harness**. Claude Code is a harness; so is your agent loop, and Anthropic's Managed Agents (<Ref to="cl-managed-agents" />). For work that runs for hours, the harness matters as much as the prompt. Good long-running harnesses, as Anthropic's articles describe them, have:
+
+- **A written definition of done** the agent can check against (a specification, a list of features, tests).
+- **A progress record** the agent updates (what is done, what is next, what failed), so a fresh context can pick up where the last left off.
+- **Regular checks** (tests, builds) so errors are caught early rather than compounding.
+- **Clean starts**: a new context with the progress record, rather than an ever-growing one.
+
+This is the same discipline as a good engineer leaving clear notes and a passing build at the end of each day.
+
+## Choosing techniques
+
+| Problem | Technique |
+|---|---|
+| The agent loads more than it needs | just-in-time retrieval; better-scoped tools |
+| Tool results flood the context | concise, paginated results; clearing old tool results |
+| The conversation outgrows a context window | compaction; notes and a fresh start |
+| Knowledge must persist across sessions | the memory tool, or your own notes store |
+| A side-job produces lots of detail | a sub-agent that returns a summary |
+| Long runs drift or stall | a harness with a definition of done, progress notes and checks |
+
+## Common mistakes
+
+- **Loading everything up front** "in case", then wondering why the agent misses things.
+- **Tools that return entire databases**, or long raw JSON with opaque ids.
+- **Clearing context a little every turn**, invalidating the prompt cache each time.
+- **A memory tool handler that does not confine paths** to its folder.
+- **No progress record** on long tasks, so each new context starts from scratch.
+- **Relying on beta features without checking** their current names and status.
+
+## Practice
+
+**1. (warm-up)** What is context rot, and what does it imply for agent design?
+
+<Solution>
+
+As the context grows, a model's ability to recall and use any particular part of it degrades: it has a limited attention budget. So agents should keep the context to the smallest set of high-signal tokens: load details when needed, keep tool results concise, and remove what is no longer useful.
+
+</Solution>
+
+**2. (warm-up)** Give an example of just-in-time retrieval.
+
+<Solution>
+
+Instead of putting every file of a codebase into the context, the agent keeps the file paths and uses search and read tools to open only the files relevant to the current step, as Claude Code does.
+
+</Solution>
+
+**3. (standard)** Redesign these tools for an agent that books meetings: `list_users()`, `list_calendar_events(user_id)`, `create_event(user_ids, start, end)`.
+
+<Solution>
+
+Offer fewer, higher-level tools, for example `find_free_slots(people: list of names or emails, duration_minutes, within_days)`, which returns a few candidate times, and `schedule_meeting(people, start, duration_minutes, title)`, which books it and returns a confirmation with names, not ids. Results stay small, the agent needs two steps instead of many, and errors can say exactly what was wrong ("Kofi is unavailable then; next free slot is 14:00").
+
+</Solution>
+
+**4. (standard)** Your agent's prompt cache is almost never read during long sessions, and you use context editing with a small threshold. What is happening?
+
+<Solution>
+
+Each time context editing clears content, the beginning of the prompt changes, which invalidates the cache from that point. Clearing a little at a time means the cache is invalidated almost every turn. Clear less often, in larger chunks (a higher threshold and clearing more at once), so the prefix stays stable for longer.
+
+</Solution>
+
+**5. (standard)** Why must a memory tool handler block paths such as `/memories/../config/secrets.json`?
+
+<Solution>
+
+Your code carries out the memory commands on your real storage. If it does not confine paths to the memories folder, a path with `../` could read or overwrite other files, whether because of a model mistake or a prompt injection telling the agent to do it.
+
+</Solution>
+
+**6. (stretch)** Design a harness for an agent that migrates 300 API endpoints to a new error format over a day.
+
+<Solution>
+
+A specification of the new format with examples; a checklist file listing all 300 endpoints, which the agent updates as each is migrated and tested; a rule to run that endpoint's tests (and the full suite every 20 endpoints) after each change; work in batches, each in a fresh context that starts by reading the specification and the checklist; a sub-agent or `/code-review` pass on each batch; spending and step limits; and a pull request per batch for human review. If tests fail twice on an endpoint, the agent records it in the checklist as blocked and moves on.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Context engineering** is choosing everything the model sees at each step, aiming for the smallest set of high-signal tokens, because of **context rot**: attention degrades as context grows.
+- Write system prompts at the **right altitude**: clear principles, not brittle rules or vague hopes.
+- Prefer **just-in-time retrieval** (references plus tools) over loading everything.
+- Design tools for context: few and purposeful, concise high-signal results, pagination, actionable errors, clear names.
+- For long tasks: **compaction** (beta in the API), **context editing** (beta; mind the cache), **notes and the memory tool** (confine its paths), and **sub-agents** that return summaries.
+- A good **harness** gives long runs a definition of done, a progress record, regular checks and clean starts.
+
+## Go deeper
+
+- [Effective context engineering for AI agents](https://www.anthropic.com/engineering/effective-context-engineering-for-ai-agents), from Anthropic's engineering blog.
+- [Writing effective tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents), from Anthropic's engineering blog.
+- [Compaction](https://platform.claude.com/docs/en/build-with-claude/compaction) and [Context editing](https://platform.claude.com/docs/en/build-with-claude/context-editing), from Anthropic.
+- [Memory tool](https://platform.claude.com/docs/en/agents-and-tools/tool-use/memory-tool), from Anthropic.

@@ -1,0 +1,163 @@
+---
+title: "Managed Agents and Agent Skills"
+summary: "Running agents on Anthropic's hosted harness, and giving them skills through the API."
+prerequisites: [cl-context-engineering]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will know when to run an agent on Anthropic's hosted infrastructure instead of building the loop yourself, how its main pieces fit together, and how to give any API agent **skills**, the same packaged workflows you met in the apps and Claude Code. These are the quickest routes from "I have an agent idea" to "it is running reliably for real users".
+
+Details are from Anthropic's documentation on [Managed Agents](https://platform.claude.com/docs/en/managed-agents/overview) and [Agent Skills](https://platform.claude.com/docs/en/build-with-claude/skills-guide), checked in **November 2026**. **Managed Agents was a beta feature when checked**: its names and shapes may change, so treat the code here as a sketch to compare with the current documentation, not something to paste into production.
+
+## Three ways to run an agent
+
+| Option | You build | Best for |
+|---|---|---|
+| **Messages API** (<Ref to="cl-agents" />) | the loop, the tools, the runtime, the context management | full control; agents whose tools are your own functions |
+| **Agent SDK** | your application around Claude Code's loop and tools, running on your machines | agents that work on files and systems like a developer |
+| **Managed Agents** | the agent's configuration; Anthropic runs the loop, the sandbox and the session | long-running and asynchronous work, without operating the infrastructure |
+
+The documentation describes **Managed Agents** as a pre-built, configurable agent harness that runs in managed infrastructure: Claude can read files, run commands, browse the web and run code in a secure sandbox, with prompt caching and compaction built in (<Ref to="cl-context-engineering" />).
+
+## The four pieces
+
+- An **agent**: the configuration (model, system prompt, tools, MCP servers, skills). Create it once, use it for many sessions.
+- An **environment**: where the agent's work runs, such as a cloud sandbox with limited network access, or a sandbox you host yourself.
+- A **session**: one run of an agent in an environment, with its own history and files. Sessions are stateful: they persist until you delete them.
+- Events: the messages in and out of a session. You send a user message as an event, and stream back the agent's messages, tool uses and status changes.
+
+The documentation's quickstart, in outline (Python, with the beta interface the SDK exposes under `client.beta`):
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+agent = client.beta.agents.create(
+    name="Docs assistant",
+    model="claude-opus-5-5",
+    system="You keep this team's documentation accurate. Ask before deleting anything.",
+    tools=[{"type": "agent_toolset_20260401", "configs": [{"name": "web_search", "enabled": False}]}],
+)
+
+environment = client.beta.environments.create(
+    name="docs-env",
+    config={"type": "cloud", "networking": {"type": "limited", "allow_package_managers": True}},
+)
+
+session = client.beta.sessions.create(agent=agent.id, environment_id=environment.id, title="Weekly docs check")
+
+with client.beta.sessions.events.stream(session.id) as stream:
+    client.beta.sessions.events.send(
+        session.id,
+        events=[{"type": "user.message", "content": [{"type": "text", "text": "Find broken links in the docs folder and fix them."}]}],
+    )
+    for event in stream:
+        print(event.type)
+        if event.type == "session.status_idle":
+            break
+```
+
+Read it as: define the agent (with its built-in tool set, web search switched off); define an environment with limited networking; start a session; send the task as an event; watch events stream back until the session goes idle. You wrote no loop, no tool code and no sandbox.
+
+Further features the documentation describes, all beta when checked: **memory stores** that persist what agents learn across sessions; **vaults** that hold each end user's credentials so the agent can act on their behalf without your code handling secrets; multi-agent set-ups; scheduled deployments; and webhooks. The documentation also notes that Managed Agents was not eligible for zero data retention (except self-hosted), because sessions keep their transcripts until you delete them: check this against your data requirements.
+
+### When to choose it
+
+Choose Managed Agents when the job is long or asynchronous (a research task that takes an hour, a nightly maintenance job, an assistant that works in the background for many users) and you would otherwise build and operate sandboxes, job queues and context management yourself. Choose the Messages API when you need full control over every step, or your "agent" is really a workflow (<Ref to="cl-agents" />). The decision is the usual build-or-buy one: what you gain in speed, you give up in control and in depending on a beta service.
+
+## Agent Skills in the API
+
+The skills you wrote for the apps and Claude Code (<Ref to="cl-apps" />, <Ref to="cc-extending" />) work through the API too. A request attaches skills through its `container` field, and needs the **code execution tool**, because skills often run scripts:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+msg = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=4096,
+    container={"skills": [{"type": "anthropic", "skill_id": "xlsx", "version": "latest"}]},
+    tools=[{"type": "code_execution_20250825", "name": "code_execution"}],
+    messages=[{"role": "user", "content": "Make a spreadsheet of this week's bread orders with a total per day: Mon 42, Tue 38, Wed 51."}],
+)
+print(msg.stop_reason)
+```
+
+- **Anthropic's pre-built skills** have ids `pptx`, `xlsx`, `docx` and `pdf`, for making and editing those file types.
+- **Your own skills** are uploaded once with the Skills API (no longer beta when checked), for example `client.skills.create(files=files_from_dir("weekly_report"))` with `from anthropic.lib import files_from_dir`, which gives an id beginning `skill_` to use in place of `"xlsx"`.
+- Up to 20 skills can be attached to a request. As in Claude Code, Claude sees each skill's short description and loads the full instructions only when needed.
+- The skill's `SKILL.md` needs a `name` (lower-case letters, numbers and hyphens, up to 64 characters, not containing "anthropic" or "claude") and a `description` (up to 1,024 characters).
+
+Files the skill creates (the spreadsheet above) are returned as file references, which you download with the Files API (<Ref to="cl-api-deep" />).
+
+Skills are the most portable thing in this course: one well-written skill works in the Claude apps, Claude Code, the API and Managed Agents.
+
+## Common mistakes
+
+- **Putting a beta feature into production without a plan** for it changing. Pin the versions you use, watch the release notes, and isolate the code that calls it.
+- **Choosing a hosted agent for what is really a workflow**, adding cost and complexity.
+- **Forgetting sessions persist.** Delete what you no longer need, and know what your data policy allows.
+- **Handling end users' credentials in your own code** when a vault could hold them.
+- **Attaching skills without the code execution tool**, which skills need.
+- **Skill names with forbidden words or capitals**, which uploading rejects.
+
+## Practice
+
+**1. (warm-up)** Name the four core pieces of Managed Agents and say what each is.
+
+<Solution>
+
+The **agent** (configuration: model, system prompt, tools, MCP servers, skills); the **environment** (where the work runs, such as a cloud sandbox); the **session** (one stateful run of an agent in an environment); and events (messages in and out of a session, such as a user message, the agent's messages and tool uses, and status changes).
+
+</Solution>
+
+**2. (warm-up)** What two things does an API request need in order to use the pre-built `pdf` skill?
+
+<Solution>
+
+The skill attached in `container={"skills": [{"type": "anthropic", "skill_id": "pdf", "version": "latest"}]}`, and the code execution tool in `tools`.
+
+</Solution>
+
+**3. (standard)** For each, choose the Messages API, the Agent SDK or Managed Agents, with a reason: (a) a support bot that answers from your FAQ and can look up order status; (b) a nightly job that researches competitors' prices on the web and writes a report; (c) an internal tool that refactors code in your repositories on request.
+
+<Solution>
+
+(a) **Messages API**: short interactions, your own tools (order look-up), and full control over every reply. (b) **Managed Agents**: long-running, asynchronous, needs web browsing and a sandbox, with no need to run that infrastructure yourself. (c) **Agent SDK**: work on files and repositories like a developer, using Claude Code's tools and permissions, on your own machines with access to your code.
+
+</Solution>
+
+**4. (standard)** Your skill upload fails. Its `SKILL.md` header has `name: Claude Weekly Report`. Why?
+
+<Solution>
+
+Skill names must be lower-case letters, numbers and hyphens, and may not contain "claude" or "anthropic". Rename it, for example `weekly-report`.
+
+</Solution>
+
+**5. (stretch)** Your team built its product on a beta feature, and the provider announces a change to its request format. What practices would have made this easy to handle?
+
+<Solution>
+
+Keeping all calls to the beta feature in one small module behind your own interface, so only that module changes; pinning SDK versions and the beta header, so nothing changes until you choose; tests that exercise that module; watching release notes; and an evaluation suite to rerun after the change, to confirm behaviour did not change.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Three ways to run agents: the **Messages API** (you build everything), the **Agent SDK** (Claude Code's loop as a library), and **Managed Agents** (Anthropic runs the loop and sandbox; beta when checked).
+- Managed Agents has **agents**, **environments**, **sessions** and events, plus memory stores and vaults. Sessions persist; check data requirements.
+- Choose a hosted agent for long, asynchronous work; build your own when you need control, or when it is really a workflow.
+- **Agent Skills** attach to API requests through `container`, with the **code execution tool**; pre-built skills cover pptx, xlsx, docx and pdf; your own are uploaded with the Skills API.
+- One skill works across the apps, Claude Code, the API and Managed Agents.
+
+## Go deeper
+
+- [Managed Agents overview](https://platform.claude.com/docs/en/managed-agents/overview) and [quickstart](https://platform.claude.com/docs/en/managed-agents/quickstart), from Anthropic.
+- [Agent Skills guide](https://platform.claude.com/docs/en/build-with-claude/skills-guide), from Anthropic. Using pre-built and custom skills through the API.
+- [Agent Skills overview](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/overview), from Anthropic.
