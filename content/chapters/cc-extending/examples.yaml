@@ -1,0 +1,76 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: markdown
+  check: illustration
+  note: The skill from the Claude Code documentation's 'Create your first skill' section.
+  verify: |
+    import yaml
+    head = block.split('---')[1]
+    meta = yaml.safe_load(head)
+    assert 'Use when' in meta['description']
+    assert '!`git diff HEAD`' in block
+- block: 2
+  lang: markdown
+  check: illustration
+  verify: |
+    import yaml
+    head = block.split('---')[1]
+    meta = yaml.safe_load(head)
+    assert meta['name'] == 'release' and meta['disable-model-invocation'] is True
+    assert 'Do not merge' in block
+- block: 3
+  lang: json
+  check: illustration
+  note: Commands and settings as given in the Claude Code documentation, checked 12 November 2026.
+  verify: |
+    import json
+    h = json.loads(block)['hooks']['PostToolUse'][0]
+    assert h['matcher'] == 'Edit|Write' and h['hooks'][0]['type'] == 'command'
+- block: 4
+  lang: json
+  check: illustration
+  note: Commands and settings as given in the Claude Code documentation, checked 12 November 2026.
+  verify: |
+    import json
+    cmd = json.loads(block)['hooks']['Stop'][0]['hooks'][0]['command']
+    assert cmd.endswith('|| exit 2') and '1>&2' in cmd
+- block: 5
+  lang: bash
+  check: shell
+  script: |
+    set +e
+    echo '{"tool_input":{"file_path":"/repo/src/generated/client.ts"}}' | bash "$BLOCK" 2>err.txt; code=$?
+    test "$code" = 2 || { echo "expected exit 2, got $code"; exit 1; }
+    grep -q "npm run codegen" err.txt
+    echo '{"tool_input":{"file_path":"/repo/src/app.ts"}}' | bash "$BLOCK"; test $? = 0
+    echo '{"tool_input":{}}' | bash "$BLOCK"; test $? = 0
+  note: 'Runs the hook with the JSON Claude Code sends: an edit under src/generated/ is blocked with exit code 2 and the message, others pass.'
+- block: 6
+  lang: text
+  check: illustration
+  note: A folder layout from the Claude Code documentation's plugin pages, not a program.
+- block: 7
+  lang: json
+  check: illustration
+  verify: |
+    import json
+    assert json.loads(block)['name'] == 'bakery-team-tools'
+- block: 8
+  lang: text
+  check: illustration
+  note: Commands typed in a Claude Code session; their form follows the Claude Code plugin documentation, checked 12 November 2026.
+- block: 9
+  lang: markdown
+  check: illustration
+  verify: |
+    import yaml
+    head = block.split('---')[1]
+    meta = yaml.safe_load(head)
+    assert meta['name'] == 'new-migration' and meta['disable-model-invocation'] is True
+- block: 10
+  lang: json
+  check: illustration
+  verify: |
+    import json
+    cmd = json.loads(block)['hooks']['Stop'][0]['hooks'][0]['command']
+    assert cmd == 'npm run lint 1>&2 || exit 2'

@@ -23,7 +23,8 @@ Kinds of check (the `check:` field):
   shell            Bash, in an empty temporary folder. `script:` is what runs;
                    `$BLOCK` is a file holding the block. Default: the block itself.
   sql              Run in SQLite (in memory, or the file named by `database`); `verify` gets `db`.
-  Any kind may say `needs: network` to run only when EXAMPLES_NETWORK=1.
+  Any kind may say `needs: network` to run only when EXAMPLES_NETWORK=1, or
+                   `needs: claude-cli` to run only where Claude Code is installed.
   pip              `pip install` lines: checks the packages can be resolved.
                    Needs the network: runs only when EXAMPLES_NETWORK=1.
   docker           A shell script that needs Docker. Runs only when EXAMPLES_DOCKER=1.
@@ -59,6 +60,7 @@ import io
 import json
 import os
 import re
+import shutil
 import sqlite3
 import subprocess
 import sys
@@ -190,6 +192,8 @@ class Chapter:
             raise Skip("needs PyTorch or a model download; set EXAMPLES_HEAVY=1")
         if kind == "docker" and os.environ.get("EXAMPLES_DOCKER") != "1":
             raise Skip("needs Docker; set EXAMPLES_DOCKER=1")
+        if e.get("needs") == "claude-cli" and not shutil.which("claude"):
+            raise Skip("needs Claude Code installed (the claude command); it checks the chapter's commands against claude --help")
         if (kind == "pip" or e.get("needs") == "network") and os.environ.get("EXAMPLES_NETWORK") != "1":
             raise Skip("needs the network; set EXAMPLES_NETWORK=1")
         if kind in ("python", "python-fake-api", "heavy"):

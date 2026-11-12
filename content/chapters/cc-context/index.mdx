@@ -1,0 +1,201 @@
+---
+title: "Context: CLAUDE.md, memory and long sessions"
+summary: "Giving Claude Code the right context, project memory files, and managing a long conversation."
+prerequisites: [cc-surfaces]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will be able to give Claude Code what it needs to know about a project once, in files it reads every session, and keep each conversation focused. This is the single biggest lever on the quality of its work: as <Ref to="cl-how-it-works" /> showed, what is not in the context does not exist for Claude.
+
+Details come from the Claude Code documentation pages on [memory](https://code.claude.com/docs/en/memory) and [best practices](https://code.claude.com/docs/en/best-practices), checked in **November 2026**.
+
+## What Claude Code can and cannot see
+
+Claude Code starts every task by reading your code, and current models are very good at it: they find your file layout, conventions, test framework and existing patterns, often faster than you could explain them. So you do **not** need to describe your architecture.
+
+What it cannot find is what was never written down in the repository:
+
+- a decision the team made in a meeting ("we use the error helpers in `src/lib/errors.ts`; never throw plain strings");
+- how to check work here: the exact test, type-check and lint commands, and how to run a single test;
+- traps: an old pattern used everywhere that new code must not copy, a folder that looks unused but is not, an environment variable the integration tests need;
+- your preferences between two reasonable approaches.
+
+Anthropic's best-practices page offers a two-question test before writing anything down: **Could Claude find this by reading the code? Would it actually go and look?** If both answers are yes, leave it out.
+
+## CLAUDE.md: the project's standing instructions
+
+**`CLAUDE.md`** is a Markdown file that Claude Code loads into every session, a little like a project's instructions in the apps (<Ref to="cl-apps" />). Because it is read on every task, every line costs some attention on every task, so it should be short and hold only what Claude cannot work out. A good one, adapted from the best-practices page's example:
+
+```markdown
+# Commands
+- Install: npm install
+- Run all tests: npm test
+- Run one test file: npx vitest run path/to/file.test.ts
+- Type-check: npx tsc --noEmit
+
+# Conventions
+- Use the error helpers in src/lib/errors.ts; never throw plain strings
+- src/legacy/ is still in use, but do not copy its patterns into new code
+
+# Gotchas
+- Integration tests need DATABASE_URL set; see .env.example
+```
+
+The most valuable line is usually the **command that checks work**: with it, Claude can test its own changes (<Ref to="cc-workflows" />).
+
+You do not have to start from nothing. **`/init`** generates a first `CLAUDE.md` from your codebase; the job afterwards is mostly deleting lines. The documentation recommends keeping each file under 200 lines.
+
+### Where CLAUDE.md files live
+
+| Scope | File | For |
+|---|---|---|
+| Project | `./CLAUDE.md` (or `./.claude/CLAUDE.md`) | the team: commit it, so everyone's sessions share it |
+| Local | `./CLAUDE.local.md` | your own notes for this project; add it to `.gitignore` |
+| User | `~/.claude/CLAUDE.md` | your preferences across every project |
+| Managed | a system-wide file set by your organisation | company-wide rules |
+
+Files in the folder you start in and every folder above it are loaded and **combined**, not replaced: the root file first, the closest last. A `CLAUDE.md` inside a subfolder is loaded only when Claude works on files there, which keeps rules about one part of the codebase out of the way elsewhere. A file can pull in another with an `@` import, such as `@docs/testing.md`.
+
+If a project already has an `AGENTS.md` (a similar file used by other coding tools) and no `CLAUDE.md`, recent versions of Claude Code read it.
+
+### When a line in CLAUDE.md is ignored
+
+If Claude keeps missing a line, the documentation's advice is clear: **adding IMPORTANT or capital letters probably won't fix it.** Either the file has grown so long that the line gets lost (shorten it), or the line is a rule that must never be broken, in which case it should not be an instruction at all, but something Claude Code *enforces*: a hook or a permission rule (<Ref to="cc-settings" />, <Ref to="cc-extending" />). Instructions are followed nearly always; enforcement is followed always.
+
+Workflows that are only needed sometimes (how to cut a release, how to add a database migration) belong in **skills** rather than `CLAUDE.md`, because a skill's full text is loaded only when the task needs it (<Ref to="cc-extending" />).
+
+## Auto memory
+
+As well as the files you write, Claude Code keeps an **auto memory** for each project on your machine: notes it saves for itself when it learns something worth remembering, such as a correction you made twice or a preference you stated. It lives in your home folder (under `~/.claude/projects/`), not in the repository, and an index of it is loaded at the start of each session.
+
+**`/memory`** lets you open and edit your `CLAUDE.md` files, see what auto memory has saved, and turn auto memory on or off. Look at it occasionally: like memory in the apps, a wrong saved note quietly affects later work.
+
+## Keeping a conversation focused
+
+Current models have a 1-million-token context window, and Claude Code compacts long conversations automatically, so running out of space is now rare. The reason to manage context is **quality and cost**, not space: a focused context gives better answers and costs less, because every reply rereads it.
+
+The controls:
+
+| Command | Does | Use it |
+|---|---|---|
+| `/clear` | starts a fresh conversation (the old one stays available through `/resume`) | between unrelated tasks; it costs nothing |
+| `/compact` | replaces the history so far with a summary; you can add a focus, such as `/compact keep the decisions about the API` | when a long task has built up clutter you no longer need |
+| `/context` | shows what is taking up the context | when you suspect something large or irrelevant is loaded |
+| `/rewind` | goes back to an earlier prompt, optionally summarising | when a branch of the conversation went nowhere |
+
+The best-practices page adds a rule of thumb worth adopting: **if you have corrected the same thing twice and it is still wrong, run `/clear` and write one better prompt** that includes what you learnt, instead of a third correction. The conversation by then contains two failed attempts that Claude keeps rereading.
+
+## Handing Claude what you already have
+
+Rather than describing something, give it directly:
+
+- **A file**: type `@` and its path to include it: `@src/auth/session.ts`.
+- **An image**: paste a screenshot of the design, or of the error.
+- **Command output**: pipe it in from your shell, for example `cat error.log | claude -p "What is going wrong here?"`.
+
+## A worked example
+
+You join a team and start using Claude Code on their service. The first week:
+
+1. Run `/init`. It writes a `CLAUDE.md` describing the stack, the folders and the commands.
+2. Delete everything Claude could see for itself (the folder descriptions, the stack summary). Keep the commands to install, test one file, type-check and lint.
+3. Over the week, each time you correct Claude on something it could not have known ("we never call the payments API directly; go through `PaymentGateway`"), add one line under Conventions.
+4. Put your own preferences ("explain changes briefly; I am new to this codebase") in `CLAUDE.local.md`, ignored by Git.
+5. When a teammate asks how to add a migration, and you notice Claude needs the same explanation, turn it into a skill rather than adding twenty lines to `CLAUDE.md`.
+
+After a week the file is perhaps fifteen lines, every one of them earning its place.
+
+## Common mistakes
+
+- **A long CLAUDE.md that describes the architecture.** Claude reads the code; write only what it cannot find.
+- **Leaving out the check commands**, the most useful lines of all.
+- **Shouting** (IMPORTANT, capitals) at a line that is ignored. Shorten the file, or enforce the rule with a hook or permission rule.
+- **Personal preferences in the shared file.** Use `CLAUDE.local.md` or your user `CLAUDE.md`.
+- **One endless conversation for a day's unrelated tasks.** `/clear` between tasks.
+- **A third correction** after two failed ones, instead of `/clear` and a better prompt.
+- **Never reviewing auto memory.**
+
+## Practice
+
+**1. (warm-up)** Which of these belong in a project's `CLAUDE.md`? (a) "This is a Node.js project using Express." (b) "Run a single test with `npx vitest run <file>`." (c) "Never import from `src/legacy/` in new code." (d) "The routes are in `src/routes/`."
+
+<Solution>
+
+**(b)** and **(c)**. Claude can see (a) and (d) by reading the code. (b) is how to check work, and (c) is a decision it cannot infer, especially if the legacy code is everywhere.
+
+</Solution>
+
+**2. (warm-up)** Where do you put "I prefer short explanations; I'm new to this codebase", so it does not affect your teammates?
+
+<Solution>
+
+In `CLAUDE.local.md` in the project (added to `.gitignore`), or in your user file `~/.claude/CLAUDE.md` if it applies to every project.
+
+</Solution>
+
+**3. (standard)** Your `CLAUDE.md` says "Never edit files in src/generated/", but Claude edited one twice this month. What should you do?
+
+<Solution>
+
+Make it a rule Claude Code enforces rather than an instruction: a permission deny rule for edits to that folder, or a hook that blocks such edits (<Ref to="cc-settings" />, <Ref to="cc-extending" />). Instructions are followed nearly always; a deny rule always. Also check whether the file is so long the line gets lost.
+
+</Solution>
+
+**4. (standard)** You have spent an hour on a bug. Claude has tried three wrong fixes, and you have corrected it each time. What is the best next step?
+
+<Solution>
+
+Run `/clear` and write one new prompt that includes what you learnt: the symptoms, what has been ruled out, the likely area, and the check to run. The current conversation is full of failed attempts that Claude keeps rereading, which steers it back towards them.
+
+</Solution>
+
+**5. (standard)** A workflow for adding a database migration takes 25 lines to explain. Should it go in `CLAUDE.md`? Why or why not?
+
+<Solution>
+
+No. It is needed only occasionally, and lines in `CLAUDE.md` take attention on every task. Put it in a skill, whose full text loads only when a migration task comes up. `CLAUDE.md` can keep a one-line pointer if useful.
+
+</Solution>
+
+**6. (stretch)** Write a `CLAUDE.md` of at most twelve lines for a project you know (or for the bakery site from the web course), following this chapter's rules.
+
+<Solution>
+
+For example:
+
+```markdown
+# Commands
+- Install: npm install
+- Dev server: npm run dev
+- All tests: npm test; one file: npx vitest run <path>
+- Type-check: npx tsc --noEmit
+
+# Conventions
+- Prices are stored in pence as integers; format only when displaying
+- Use the shared Button component, not raw <button> elements
+
+# Gotchas
+- The menu data in public/menu.json is generated by a script; edit data/menu.yaml instead
+```
+
+Every line is something Claude could not reliably find by reading the code, or would waste time rediscovering.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Claude Code reads your code well; write down only what it **cannot see**: decisions, check commands, traps and preferences.
+- **`CLAUDE.md`** is loaded every session. Keep it short (under 200 lines; much shorter is better). `/init` drafts one; delete what Claude can find itself.
+- Project, local (`CLAUDE.local.md`), user (`~/.claude/CLAUDE.md`) and managed files are **combined**; subfolder files load when Claude works there; `@` imports another file.
+- An ignored line needs a shorter file or **enforcement** (hooks, permission rules), not capital letters. Occasional workflows belong in **skills**.
+- **Auto memory** saves Claude's own notes per project; review it with `/memory`.
+- Manage context for quality and cost: `/clear` between tasks, `/compact` with a focus, `/context` to inspect, and after two failed corrections, `/clear` and a better prompt.
+
+## Go deeper
+
+- [Memory](https://code.claude.com/docs/en/memory), from the Claude Code documentation. Every CLAUDE.md location, imports, auto memory and writing effective instructions.
+- [Best practices](https://code.claude.com/docs/en/best-practices), from the Claude Code documentation. "Tell Claude what it can't see" and "Keep CLAUDE.md short".
+- [Context window](https://code.claude.com/docs/en/context-window), from the Claude Code documentation. What fills it and how compaction works.

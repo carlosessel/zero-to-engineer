@@ -1,0 +1,228 @@
+---
+title: "Settings, permissions and commands"
+summary: "Settings files, permission rules and modes (including auto mode), sandboxing, slash commands, model and effort choice, and output styles."
+prerequisites: [cc-workflows]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will be able to set up Claude Code so it asks only when it matters: safe commands run freely, dangerous ones are blocked outright, and the rest are decided by a mode you chose on purpose. You will also know the commands you will use every day.
+
+Everything here is from the Claude Code documentation pages on [settings](https://code.claude.com/docs/en/settings), [permissions](https://code.claude.com/docs/en/permissions), [permission modes](https://code.claude.com/docs/en/permission-modes) and [commands](https://code.claude.com/docs/en/commands), checked in **November 2026**.
+
+## Instructions versus enforcement
+
+Before the details, one idea from Anthropic's best-practices page that organises everything in this chapter and the next. Every rule you give Claude Code is one of two kinds:
+
+- **Instructions** (your prompt, `CLAUDE.md`, skills): the model reads them and *usually* follows them. It is a judgement each time.
+- **Enforcement** (permission rules, hooks, the sandbox, managed settings): Claude Code itself applies them, *every* time, whatever the model decided.
+
+Most of the time you want instructions, because the model with the actual code in front of it judges better than a rule written in advance. Use enforcement for the few things that must always, or never, happen. As the page puts it: if you keep adding emphasis to a line and Claude still misses it, the line belongs in a hook or a rule.
+
+## Settings files
+
+Settings are JSON files, at several levels:
+
+| File | Shared? | For |
+|---|---|---|
+| `~/.claude/settings.json` | no, just you | your preferences in every project |
+| `.claude/settings.json` in the project | yes, commit it | the team's shared rules for this project |
+| `.claude/settings.local.json` in the project | no (Claude Code keeps it out of Git) | your own rules for this project; "don't ask again" answers are saved here |
+| managed settings | set by your organisation | company-wide rules nobody can override |
+
+When the same setting appears in several, the order of precedence (highest first) is: **managed, then command-line flags, then local, then project, then user.** Lists such as permission rules are **merged** across files. `/config` opens an interactive settings screen; `/permissions` shows the rules in effect and where each came from.
+
+## Permission rules
+
+A **permission rule** says what may run without asking, what must always ask, and what is forbidden. Rules go in a settings file under `permissions`:
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(npm run *)", "Bash(npm test *)", "Bash(git status)", "Bash(git diff *)"],
+    "ask": ["Bash(git push *)"],
+    "deny": ["Read(./.env)", "Read(./secrets/**)", "Bash(git push --force *)"]
+  }
+}
+```
+
+How to read them:
+
+- A rule is a tool name, optionally with a pattern in brackets: `Bash(npm run *)` matches any command starting `npm run `; `Read(./.env)` matches reading that file; `WebFetch(domain:example.com)` matches fetching from that site.
+- `*` matches anything. `Bash(npm run build)` with no star matches exactly that command.
+- **Deny is checked first, then ask, then allow; the first match wins.** A deny rule cannot be overridden by an allow rule, and deny rules apply in every mode, even the most permissive.
+- A bare tool name in `deny`, such as `"WebFetch"`, removes that tool entirely.
+
+Good starting rules for most projects: allow your test, build and lint commands and read-only Git commands; ask for pushes; deny reading secret files.
+
+Remember what this protects and what it does not. Rules stop Claude Code's *tools* from doing things. A command it is allowed to run can still do anything that command can do: allowing `Bash(npm run *)` allows whatever your `package.json` scripts do.
+
+## Permission modes
+
+A **permission mode** sets the baseline for what runs without asking. The documentation lists six:
+
+| Mode | What runs without asking | Best for |
+|---|---|---|
+| `default` (shown as **Manual**) | reading only | reviewing every action yourself; sensitive or unfamiliar code |
+| `acceptEdits` | reading, editing files, and simple file commands such as `mkdir` and `mv` | iterating on code you are reviewing as you go |
+| `plan` | reading and investigating; no edits until you approve a plan | exploring before changing (<Ref to="cc-workflows" />) |
+| `auto` | everything, with background safety checks | long tasks, fewer interruptions |
+| `dontAsk` | only what your rules allow in advance; anything else is refused | scripts and CI with an exact allowlist |
+| `bypassPermissions` | everything | only inside an isolated container or virtual machine |
+
+Switch during a session with **Shift+Tab**, start with `claude --permission-mode plan`, or set a default in settings (`permissions.defaultMode`).
+
+### Auto mode
+
+In **auto mode**, a separate checker (a classifier: a model that judges each action) reviews what Claude is about to do and blocks risky actions, so you are not asked about routine ones. Recent versions start interactive sessions in auto mode. By default it blocks things like:
+
+- downloading and running code from the internet (`curl … | bash`);
+- sending sensitive data to outside services;
+- production deployments and migrations;
+- force-pushing, and Git commands that would throw away uncommitted work (`git reset --hard`, `git clean -fd`);
+- deleting files that existed before the session;
+- merging a pull request no human has approved, or disabling CI checks;
+- printing a live password or token.
+
+It also treats limits you state in the conversation as blocks: if you say "don't push until I've reviewed it", pushing is blocked until you lift that.
+
+Auto mode is convenient and much safer than approving everything without reading. But the documentation states plainly that it **does not guarantee safety**: a classifier can be wrong. For work that matters, combine it with deny rules, the sandbox, Git, and review.
+
+### Never auto-approved
+
+Some actions prompt in every mode, including `bypassPermissions`: anything matching an `ask` rule, questions Claude asks you, and recognised deletions of critical paths (such as removing your home folder).
+
+## The sandbox
+
+Permission rules decide whether Claude *may* run a command. The **sandbox** limits what a command *can reach* once it runs, enforced by the operating system. When it is on (`/sandbox`, or `"sandbox": { "enabled": true }` in settings), commands Claude runs can write only inside the project (and temporary folders and any you add), and can reach the network only through a list of allowed sites that starts empty. It works on macOS, Linux and WSL2; it was not available for native Windows when checked. File tools, MCP servers and hooks run outside it.
+
+A sandbox turns "Claude ran a bad command" from a disaster into an error message. Combined with auto mode, it lets long tasks run with few prompts and a hard boundary.
+
+## The commands you will use daily
+
+Type `/` to see them all. The ones worth knowing by heart:
+
+| Command | Does |
+|---|---|
+| `/init` | drafts a `CLAUDE.md` for the project |
+| `/memory` | edits instruction files and auto memory |
+| `/clear`, `/compact`, `/context` | manage the conversation (<Ref to="cc-context" />) |
+| `/rewind` | goes back to an earlier checkpoint |
+| `/resume` | reopens an earlier session |
+| `/plan` | plans before changing |
+| `/model`, `/effort` | choose model and effort (<Ref to="cl-models" />) |
+| `/permissions`, `/config` | see and change rules and settings |
+| `/code-review`, `/security-review` | review the current changes |
+| `/mcp`, `/plugin`, `/skills`, `/hooks` | manage extensions (next chapters) |
+| `/usage` | cost and plan usage |
+| `/doctor` | checks the installation and settings for problems |
+| `/help` | everything else |
+
+### Your own commands are skills
+
+You can add commands of your own. The documentation says custom commands have been **merged into skills**: a file at `.claude/skills/deploy/SKILL.md` (or the older `.claude/commands/deploy.md`) creates a `/deploy` command. <Ref to="cc-extending" /> shows how to write them.
+
+## Output styles and the status line
+
+An **output style** changes how Claude talks to you. The built-in ones when checked were Default, Proactive, Concise, Explanatory and Learning. **Explanatory** adds explanations of why it made choices, and **Learning** asks *you* to write some of the code, with guidance: a good fit for someone learning a codebase or a language. Switch with `/output-style`.
+
+The **status line** at the bottom of the terminal can show anything a small script prints, such as the model, the Git branch, or how full the context is. `/statusline` sets one up for you.
+
+## A sensible setup
+
+For a typical project, as a starting point:
+
+- **Project settings** (committed): allow test, build, lint and read-only Git commands; ask for `git push`; deny reading `.env` and secrets folders.
+- **Mode**: auto for everyday work on your own machine; Manual for unfamiliar code or sensitive systems; plan before any big change.
+- **Sandbox**: on, if your system supports it.
+- **Your own settings**: model and effort defaults, an output style if you want one.
+
+## Common mistakes
+
+- **Approving everything without reading**, in Manual mode. If prompts are too frequent, add allow rules for safe commands, or use auto mode with deny rules, rather than clicking yes blindly.
+- **`bypassPermissions` on your own computer.** The documentation says isolated containers and virtual machines only.
+- **Relying on a `CLAUDE.md` line** ("never read .env") for something that must never happen. Use a deny rule.
+- **Broad allow rules** such as `Bash(*)`, which allow everything.
+- **Forgetting that allowed commands do whatever they do**: allowing `npm run *` allows every script in `package.json`.
+- **Assuming auto mode is a guarantee.** It is a strong safety net, not a wall.
+- **Putting personal preferences in the shared project settings.** Use `.claude/settings.local.json` or your user settings.
+
+## Practice
+
+**1. (warm-up)** In what order are deny, allow and ask rules checked, and what wins?
+
+<Solution>
+
+Deny first, then ask, then allow; the first match wins. So a deny rule always beats an allow rule for the same action.
+
+</Solution>
+
+**2. (warm-up)** Which mode would you use for (a) exploring a big unfamiliar codebase before changing anything, (b) a CI job that should only ever run the tests, (c) everyday work on your own project?
+
+<Solution>
+
+(a) `plan`. (b) `dontAsk`, with an allow rule for the test command, so anything else is refused. (c) `auto` (with sensible deny rules and the sandbox), or `acceptEdits` if you prefer to approve commands but not edits.
+
+</Solution>
+
+**3. (standard)** Write a `permissions` block that lets Claude run `npm test` and `npm run lint` without asking, asks before any `git push`, and forbids reading anything in `config/secrets/`.
+
+<Solution>
+
+```json
+{
+  "permissions": {
+    "allow": ["Bash(npm test *)", "Bash(npm test)", "Bash(npm run lint)"],
+    "ask": ["Bash(git push *)"],
+    "deny": ["Read(./config/secrets/**)"]
+  }
+}
+```
+
+`npm test *` covers the test command with extra arguments; the plain `npm test` covers it without.
+
+</Solution>
+
+**4. (standard)** Your project's `.claude/settings.json` allows `Bash(npm run *)`. A teammate adds a script `"clean": "rm -rf ~/projects"` to `package.json`. What is the risk, and what would limit it?
+
+<Solution>
+
+Claude could run `npm run clean` without asking, because the allow rule matches, and the script deletes far more than the project. Narrower allow rules (only the scripts you need, such as `Bash(npm run test)` and `Bash(npm run lint)`) and the sandbox (which would block writes outside the project) both limit it, and reviewing changes to `package.json` matters too. Auto mode's classifier may also block destroying files that existed before the session, but should not be the only protection.
+
+</Solution>
+
+**5. (standard)** Explain the difference between a deny rule and the sandbox.
+
+<Solution>
+
+A deny rule stops Claude Code's tools from taking a matching action at all: the command is never run. The sandbox lets permitted commands run, but the operating system confines what they can reach: writes only inside the project, network only to allowed sites. They protect against different things and combine well.
+
+</Solution>
+
+**6. (stretch)** A colleague wants to run Claude Code overnight with no prompts, on their laptop, using `--dangerously-skip-permissions`. Explain why that is a bad idea and propose a safer set-up.
+
+<Solution>
+
+That mode lets everything run without asking, and the documentation limits it to isolated containers and virtual machines: on a laptop, a mistaken or manipulated command can reach every file, credential and network the user can. Safer: run the job in a container or virtual machine (or a cloud session), or locally in auto mode with the sandbox on, deny rules for secrets and pushes, its own worktree and branch, a spending cap (`--max-budget-usd` with `-p`), a clear definition of done with a check, and a person reviewing the resulting pull request in the morning (<Ref to="cc-automation" />).
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Instructions** (prompts, `CLAUDE.md`, skills) are usually followed; **enforcement** (rules, hooks, sandbox, managed settings) always applies. Use enforcement for must-always and must-never.
+- Settings live in user, project (shared), local (yours) and managed files; precedence is managed, flags, local, project, user; lists merge.
+- **Permission rules**: `allow`, `ask`, `deny`, with patterns like `Bash(npm run *)` and `Read(./.env)`. Deny is checked first and always wins.
+- **Modes**: Manual (`default`), `acceptEdits`, `plan`, `auto`, `dontAsk`, `bypassPermissions` (containers only). Shift+Tab switches.
+- **Auto mode** blocks risky actions with a classifier, but does not guarantee safety.
+- The **sandbox** confines what commands can write and reach, enforced by the operating system.
+- Know the daily commands; custom commands are now **skills**; **output styles** such as Explanatory and Learning change how Claude works with you.
+
+## Go deeper
+
+- [Permissions](https://code.claude.com/docs/en/permissions), from the Claude Code documentation. Rule syntax and how rules combine.
+- [Permission modes](https://code.claude.com/docs/en/permission-modes), from the Claude Code documentation. Every mode, and what auto mode blocks.
+- [Settings](https://code.claude.com/docs/en/settings), from the Claude Code documentation. Files, precedence and every key.
+- [Sandboxing](https://code.claude.com/docs/en/sandboxing), from the Claude Code documentation. What the sandbox confines and how to configure it.
+- [Commands](https://code.claude.com/docs/en/commands), from the Claude Code documentation. Every slash command.

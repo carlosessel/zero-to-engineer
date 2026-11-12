@@ -1,0 +1,243 @@
+---
+title: "Connecting tools with MCP"
+summary: "What the Model Context Protocol is, adding MCP servers, and writing your own."
+prerequisites: [cc-extending]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will be able to connect Claude Code to the other systems you work with (your issue tracker, your database, your monitoring) and write a small tool server of your own. Without connections, Claude Code sees only your files and terminal. With them, it can read the ticket, check the error logs, query the data and open the pull request in one task.
+
+Details are from the Claude Code [MCP documentation](https://code.claude.com/docs/en/mcp), checked in **November 2026**, and the official [Model Context Protocol](https://modelcontextprotocol.io/) site.
+
+## What MCP is
+
+The **Model Context Protocol (MCP)** is an open standard for connecting AI applications to tools and data. A program that offers tools this way is an **MCP server**; an application that uses them, such as Claude Code, the Claude apps or your own agent, is an **MCP client**. Because it is a standard, one server works with every client: a server written for your database works in Claude Code, in the Claude apps as a custom connector (<Ref to="cl-apps" />), and in agents you build with the API.
+
+An MCP server offers mainly:
+
+- **tools**: actions the model can call, such as "create an issue", "run this SQL query" or "search the logs";
+- **resources**: data the client can read, such as a document or a database schema;
+- **prompts**: ready-made prompt templates.
+
+With servers connected, the documentation's examples of what you can ask include "Add the feature described in JIRA issue ENG-4521 and create a PR on GitHub" and "Check Sentry and Statsig to check the usage of the feature described in ENG-4521."
+
+## Adding a server
+
+There are two common kinds of server:
+
+- Remote servers run on someone else's machine and are reached over HTTP. Most services (issue trackers, design tools, monitoring) offer one. This is the recommended kind for anything hosted.
+- Local servers are programs on your machine that Claude Code starts and talks to through standard input and output (called **stdio**). Good for databases on your machine, local tools, and servers you write yourself.
+
+Add a remote server:
+
+```bash
+claude mcp add --transport http notion https://mcp.notion.com/mcp
+```
+
+Add a local server (everything after `--` is the command that starts it):
+
+```bash
+claude mcp add --transport stdio db -- npx -y @bytebase/dbhub --dsn "postgresql://readonly:pass@localhost:5432/shop"
+```
+
+That second example is from the documentation: DBHub is an MCP server for relational databases. Note the **read-only database user** in the connection string. The documentation recommends it so that queries Claude runs cannot change data. Give every server the least access it needs.
+
+Then check and manage your servers:
+
+```bash
+claude mcp list
+```
+
+In a session, `/mcp` shows each server's status (a tick when connected, a cross with the error when not), lets you sign in to servers that use OAuth (the "log in with…" flow many services offer), and switches servers on or off.
+
+## Who gets the server: scopes
+
+`claude mcp add` takes a `--scope`:
+
+| Scope | Stored in | Available to |
+|---|---|---|
+| `local` (the default) | your user configuration, for this project only | you, in this project |
+| `project` | `.mcp.json` at the root of the repository | everyone who works on the project (commit it) |
+| `user` | your user configuration | you, in every project |
+
+A project's `.mcp.json` looks like this:
+
+```json
+{
+  "mcpServers": {
+    "issues": {
+      "type": "http",
+      "url": "https://mcp.example-tracker.com/mcp"
+    },
+    "api-server": {
+      "type": "http",
+      "url": "${API_BASE_URL:-https://api.example.com}/mcp",
+      "headers": { "Authorization": "Bearer ${API_KEY}" }
+    }
+  }
+}
+```
+
+`${API_KEY}` is filled in from an **environment variable** on each person's machine, so the shared file never contains a secret. Never put a token directly into a committed file.
+
+Because a project's `.mcp.json` could add servers you did not choose, Claude Code asks you to approve a project's servers before using them.
+
+## Context cost
+
+Each connected server's tools must be described to the model. To keep this cheap, Claude Code loads MCP tools on demand by default: only their names enter the context until one is needed. Even so, connect what you need and switch off what you are not using; Anthropic's cost guidance suggests preferring command-line tools Claude can already run (such as `git` or a cloud provider's CLI) over an MCP server that does the same job.
+
+## Security
+
+The documentation's warning is short and worth memorising: "Verify you trust each server before connecting it. Servers that fetch external content can expose you to prompt injection risk."
+
+What that means in practice:
+
+- **A server can do whatever its access allows.** A database server with a read-write user can delete data; a tracker server with your token can close tickets. Use read-only and narrowly scoped access wherever you can.
+- **Content from servers enters Claude's context.** A ticket, an email, a web page or a log line written by someone else can contain text designed to manipulate Claude into misusing its other tools: a **prompt injection**. The risk is highest when one session combines untrusted content with powerful actions.
+- **Local servers are programs that run on your machine** with your permissions. Install them only from sources you trust, as with any software.
+- Organisations can control which servers may be used with managed settings (<Ref to="cc-teams-safety" />).
+
+## Writing your own server
+
+When there is no ready-made server for a system you use (often an internal one), writing one is straightforward. Official SDKs exist for several languages; here is a complete local server in Python, using the official `mcp` package (version 2, which was 2.3.0 when checked). It gives Claude two tools for a bakery's stock:
+
+```python
+from mcp.server.mcpserver import MCPServer
+
+mcp = MCPServer("bakery-stock")
+
+STOCK = {"sourdough loaf": 6, "rye loaf": 0, "cinnamon bun": 12}
+
+
+@mcp.tool()
+def check_stock(product: str) -> str:
+    """How many of a product are left today. Use the product's full name, for example 'rye loaf'."""
+    name = product.strip().lower()
+    if name not in STOCK:
+        return f"Unknown product '{product}'. Known products: {', '.join(sorted(STOCK))}."
+    return f"{STOCK[name]} {name} left."
+
+
+@mcp.tool()
+def sold_out() -> list[str]:
+    """List the products that are sold out today."""
+    return sorted(name for name, count in STOCK.items() if count == 0)
+
+
+if __name__ == "__main__":
+    mcp.run(transport="stdio")
+```
+
+How it works:
+
+- `MCPServer("bakery-stock")` creates a server with a name. (Many tutorials use `FastMCP` from `mcp.server.fastmcp`: that is the same thing under its version 1 name, and importing it from version 2 fails with a message pointing to the new name.)
+- `@mcp.tool()` turns an ordinary function into a tool. The SDK reads the function's **name**, its **parameters and type hints**, and its **docstring**, and describes them to the model. So the docstring is the tool's instructions: say what it does, when to use it, and what to pass, as you would in a skill's description.
+- Errors are returned as helpful messages ("Unknown product… Known products: …"), so the model can correct itself rather than give up.
+- `mcp.run(transport="stdio")` serves it over stdio.
+
+Install the package (`pip install mcp`), save the file as `bakery_stock.py`, and add it:
+
+```bash
+claude mcp add --transport stdio bakery -- python bakery_stock.py
+```
+
+Now "Which products are sold out?" makes Claude call `sold_out` and answer **rye loaf**. A real version would read from your database or internal API instead of a dictionary.
+
+Designing good tools for a model is a skill of its own. Anthropic's engineering guidance on writing tools for agents boils down to: a few clear, well-named tools rather than many overlapping ones; descriptions written for a newcomer; inputs that are hard to get wrong; and results that are concise and say what to do next. <Ref to="tools" /> in the AI course covers tool use from the API side.
+
+## Common mistakes
+
+- **Connecting servers "in case".** Each one costs context and widens what can go wrong.
+- **Write access where read would do**, especially for databases.
+- **Tokens in a committed `.mcp.json`.** Use `${ENV_VARS}`.
+- **Trusting a server's content as instructions.** It is data; untrusted content plus powerful tools is the prompt-injection recipe.
+- **Vague tool docstrings** in your own servers, so the model calls the wrong tool or passes the wrong thing.
+- **Errors that just say "failed"**, leaving the model nothing to correct.
+
+## Practice
+
+**1. (warm-up)** What is the difference between an MCP server and an MCP client?
+
+<Solution>
+
+A server offers tools (and resources and prompts) to AI applications; a client, such as Claude Code or the Claude apps, connects to servers and lets the model use their tools.
+
+</Solution>
+
+**2. (warm-up)** You want every developer on the project to have the team's issue-tracker server. Which scope, and where is it stored?
+
+<Solution>
+
+`project` scope, stored in `.mcp.json` at the root of the repository, which you commit. Any credentials come from each person's environment variables or their own sign-in, not from the file.
+
+</Solution>
+
+**3. (standard)** Write the command to add a local server started by `node ./tools/inventory-server.js`, available only to you in this project.
+
+<Solution>
+
+`claude mcp add --transport stdio inventory -- node ./tools/inventory-server.js` (local scope is the default; `--scope local` makes it explicit).
+
+</Solution>
+
+**4. (standard)** A session has a server that reads customer support emails and another that can issue refunds. Describe the risk and two ways to reduce it.
+
+<Solution>
+
+An email from anyone could contain instructions crafted to make Claude issue refunds: a prompt injection, with untrusted content and a powerful action in the same session. Reduce it by keeping the two apart (do not connect the refund server in sessions that read emails), requiring human approval for refunds (an `ask` rule on that tool, or no refund tool at all, only a "request a refund" tool that queues one for a person), and limiting the refund server's own permissions (amount limits, audit log).
+
+</Solution>
+
+**5. (standard)** Add a tool `restock(product, count)` to the bakery server that adds stock and returns the new amount, refusing negative counts with a helpful message.
+
+<Solution>
+
+```python
+from mcp.server.mcpserver import MCPServer
+
+mcp = MCPServer("bakery-stock")
+
+STOCK = {"sourdough loaf": 6, "rye loaf": 0, "cinnamon bun": 12}
+
+
+@mcp.tool()
+def restock(product: str, count: int) -> str:
+    """Add newly baked items to today's stock. count is how many were baked (a positive whole number)."""
+    name = product.strip().lower()
+    if name not in STOCK:
+        return f"Unknown product '{product}'. Known products: {', '.join(sorted(STOCK))}."
+    if count <= 0:
+        return "count must be a positive whole number: the number of items just baked."
+    STOCK[name] += count
+    return f"{STOCK[name]} {name} now in stock."
+```
+
+Restocking 4 rye loaves returns **4 rye loaf now in stock.** Note the docstring explains what `count` means, and errors say how to fix the call.
+
+</Solution>
+
+**6. (stretch)** Why does a tool's docstring matter so much more in an MCP server than a comment in ordinary code?
+
+<Solution>
+
+The model never sees your code; it decides whether and how to call the tool only from its name, parameters and description, which the SDK builds from the docstring. A vague docstring means wrong tools chosen, wrong arguments passed, and tools ignored when they would help. It is effectively a prompt, so it deserves the same care as one.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **MCP** is an open standard connecting AI applications (**clients**) to **servers** that offer **tools**, **resources** and **prompts**. One server works in every client.
+- Add servers with `claude mcp add`: `--transport http` for remote servers, `--transport stdio -- <command>` for local ones. Manage them with `claude mcp list` and `/mcp`.
+- Scopes: `local` (default; you, this project), `project` (`.mcp.json`, shared; approved before use), `user` (you, everywhere). Keep secrets in environment variables.
+- Trust each server before connecting; give it the least access it needs; remember content from servers can carry **prompt injections**.
+- Writing a server is short with an official SDK; the tool's **name, parameters and docstring** are what the model sees, so write them like a prompt.
+
+## Go deeper
+
+- [Connect Claude Code to tools via MCP](https://code.claude.com/docs/en/mcp), from the Claude Code documentation. Adding servers, scopes, authentication and examples.
+- [Model Context Protocol](https://modelcontextprotocol.io/), the official site. The specification, SDKs and guides to building servers.
+- [Introduction to MCP](https://academy.claude.com/), on Claude Academy. Anthropic's free course on building servers and clients.
+- [Writing effective tools for agents](https://www.anthropic.com/engineering/writing-tools-for-agents), from Anthropic's engineering blog. How to design tools models use well.

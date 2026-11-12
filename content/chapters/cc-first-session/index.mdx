@@ -1,0 +1,209 @@
+---
+title: "Claude Code from zero"
+summary: "Installing it, your first session, how the agent loop and its tools work, and permissions."
+prerequisites: [cl-prompting]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will have Claude Code installed, will have run a first real session in a project, and will understand what it is doing at each step: which tools it uses, why it asks permission, how to stop it, and how to undo what it did. Everything later in this part builds on this picture.
+
+**Claude Code** is Anthropic's coding agent. You give it a task in plain words ("the sign-up form accepts empty emails; fix it and add a test"), and it works through it the way a developer would: reading files, searching the code, running commands, editing files, running the tests, and reporting back. It runs in your terminal, in your editor, in a desktop app and on the web (<Ref to="cc-surfaces" />), all with the same core.
+
+Commands and details here come from the [Claude Code documentation](https://code.claude.com/docs/en/overview), checked in **November 2026**. Claude Code updates often, so if a menu or message looks different, the docs win.
+
+## Installing
+
+Claude Code installs as a single program called `claude`. The recommended way, which also updates itself in the background:
+
+```bash
+# macOS, Linux or Windows Subsystem for Linux
+curl -fsSL https://claude.ai/install.sh | bash
+```
+
+On Windows, in PowerShell:
+
+```powershell
+irm https://claude.ai/install.ps1 | iex
+```
+
+(Package managers work too, for example `brew install --cask claude-code` on macOS or `winget install Anthropic.ClaudeCode` on Windows, but those copies do not update themselves.) Check it worked:
+
+```bash
+claude --version
+```
+
+You need an account: a Claude subscription (Pro or above), a Claude Console account that pays per token through the API, or access through a cloud provider. The first time you start `claude`, it opens your browser to log in. On native Windows, the docs recommend installing Git for Windows first.
+
+## Your first session
+
+Claude Code works on the folder you start it in. Go to a project (any folder of code; a small one from an earlier course is ideal) and start it:
+
+```bash
+cd ~/projects/bakery-site
+claude
+```
+
+You see a prompt where you type, as in a chat. Start by asking questions rather than asking for changes. It is the fastest way to see how it works, and a good habit on any unfamiliar codebase:
+
+```text
+What does this project do? Which files would I change to add a new page?
+```
+
+Watch what happens. Claude Code does not answer from nowhere: you will see it **using tools**, such as listing files, reading the README and the main source files, and searching for where pages are defined, and only then answering. Each tool use appears in the transcript, so you can see exactly what it looked at.
+
+Now a small change:
+
+```text
+The footer still says 2025. Make it show the current year automatically, then run the tests.
+```
+
+It finds the footer, proposes an edit and asks permission to make it, asks again before running the test command, reads the result, and tells you what it did.
+
+## The agent loop, concretely
+
+What you just watched is the agent loop from <Ref to="cl-how-it-works" />:
+
+1. **Read the context**: your request, plus everything gathered so far.
+2. **Choose an action**: answer, or use a tool.
+3. **Run the tool**, after asking you if the action needs permission, and add its result to the context.
+4. **Repeat** until the task is done, then summarise.
+
+The built-in **tools** are what make Claude Code an agent rather than a chat. The ones you will see most (names as the documentation gives them):
+
+| Tool | What it does | Asks permission? |
+|---|---|---|
+| `Read` | read a file | no |
+| `Glob`, `Grep` | find files by name, search their contents (on some systems searching is done through `Bash` instead) | no |
+| `Edit`, `Write` | change a file, create a file | yes |
+| `Bash` | run a terminal command: tests, builds, git | yes, except a small set of read-only commands |
+| `WebFetch`, `WebSearch` | read a web page, search the web | yes |
+| `Agent` | hand a sub-task to a separate helper agent (<Ref to="cc-parallel" />) | depends |
+| `Skill` | load a skill's instructions (<Ref to="cc-extending" />) | yes |
+
+Two things follow. First, **the quality of the work depends on what the tools let Claude see and check.** If it can run your tests, it can find out whether its change worked; if it cannot, it is guessing. Second, **the transcript is a record you can audit**: what was read, what was run, what changed.
+
+## Permissions: you decide what it may do
+
+By default, Claude Code may read your files freely, but asks before anything that changes something or reaches outside: editing files, running most commands, fetching web pages. A permission prompt looks roughly like this (the exact wording changes between versions):
+
+```text
+Bash command: npm test
+  1. Yes
+  2. Yes, and don't ask again for: npm test *
+  3. Yes, and switch to auto mode
+  4. No
+```
+
+- **Yes** allows this one action.
+- **Yes, and don't ask again** saves a rule for this project, so similar commands run without asking. Rules are saved in `.claude/settings.local.json` in the project. Use this for safe, repetitive commands like running tests.
+- **Auto mode** lets Claude Code work without asking each time, with a separate safety check in the background that blocks risky actions. Recent versions start interactive sessions in auto mode by default. The documentation is explicit that it does not guarantee safety; <Ref to="cc-settings" /> covers all the modes and how to choose.
+- **No** refuses; you can then tell Claude what to do instead.
+
+Read each request before approving it, especially commands. If you do not understand a command, ask: "What does that command do, and why do you need it?" That habit alone prevents most accidents.
+
+## Stopping, steering and undoing
+
+- **Esc** stops Claude mid-step and keeps the work done so far. Use it the moment you see it heading the wrong way: it is cheaper than letting it finish and then undoing.
+- **Type while it works** to steer: "Use the existing date helper rather than writing a new one."
+- **Rewind** with `/rewind` (or pressing Esc twice on an empty prompt) to go back to an earlier point: restore the code, the conversation, or both. Claude Code makes a checkpoint at each of your prompts.
+
+Checkpoints have limits worth knowing: they track edits made with Claude's file-editing tools, but **not** files changed by commands it ran (a `Bash` command that deletes or generates files) or by you outside Claude Code. The documentation is clear that checkpoints are not a replacement for version control. Use Git (<Ref to="git-basics" />): commit before a big task, and you can always get back.
+
+## Sessions: leaving and coming back
+
+- `/exit` (or Ctrl+D twice) ends the session.
+- `claude --continue` (or `-c`) reopens the most recent session in this folder, with its history.
+- `claude --resume` (or `-r`) lets you choose an earlier session.
+- `/clear` starts a fresh conversation within the same session; do this between unrelated tasks (<Ref to="cc-context" /> explains why).
+
+## Watching what it costs
+
+`/usage` shows what this session has cost or how much of your plan's limit you have used. On a subscription you pay a flat fee within limits; on the API you pay per token (<Ref to="cl-models" />). Long sessions, large files read into context, and high effort all use more. Anthropic's cost page gave an average of around $13 per developer per active day for API users when checked; your use will differ.
+
+## A sensible first week
+
+1. **Ask before you change.** Use it to understand an unfamiliar codebase: "How does login work here? Walk me through the files."
+2. **Small, checkable tasks.** A bug with a failing test, a small feature with a clear definition of done.
+3. **Always give it a check.** "…then run the tests" or "…then run the build".
+4. **Read every diff** before you commit it. You are responsible for the code, whoever typed it.
+5. **Commit often**, so undoing is easy.
+
+## Common mistakes
+
+- **Starting with a huge, vague task** ("build the app"). Start small and specific, with a way to check.
+- **Approving commands you have not read.** Ask what a command does if you are not sure.
+- **No way to check the work.** Without tests or a build to run, Claude cannot tell whether it succeeded, and neither can you without reading everything.
+- **Letting it run on in the wrong direction.** Press Esc early and redirect.
+- **Relying on checkpoints instead of Git.** Commit before big changes.
+- **Committing code you have not read.**
+
+## Practice
+
+**1. (warm-up)** Put the agent loop in order: run the tool; choose an action; repeat until done; read the context.
+
+<Solution>
+
+Read the context; choose an action (answer or use a tool); run the tool and add its result to the context; repeat until done.
+
+</Solution>
+
+**2. (warm-up)** Which of these actions will Claude Code ask permission for by default: reading `src/app.js`, editing `src/app.js`, running `npm install`, searching the code for `login`?
+
+<Solution>
+
+Editing `src/app.js` and running `npm install`. Reading files and searching do not need permission.
+
+</Solution>
+
+**3. (standard)** Claude Code proposes the command `rm -rf build && npm run build`. What should you do before approving it?
+
+<Solution>
+
+Read it and understand it: it deletes the `build` folder and everything in it, then rebuilds. That is normal if `build` is generated output, but check that the folder is really generated and not something you need. If unsure, choose No and ask why it needs to delete it, or ask it to show the folder's contents first. Note that a checkpoint will not restore files deleted by a command.
+
+</Solution>
+
+**4. (standard)** Rewrite this first task so it is small and checkable: "Improve the sign-up page."
+
+<Solution>
+
+For example: "On the sign-up page, an empty email is accepted. Make the form refuse it with the message 'Enter your email address', add a test for the empty case, and run the tests." It names one problem, the expected behaviour, and a check.
+
+</Solution>
+
+**5. (standard)** Halfway through a task you see Claude editing a file you did not expect, and heading towards a large refactor you did not ask for. What do you do?
+
+<Solution>
+
+Press Esc to stop it, then steer: "Stop. Don't refactor. Only change the validation in signup.js." If the unwanted edits are already made, use `/rewind` to restore the code to the checkpoint before them, or discard them with Git.
+
+</Solution>
+
+**6. (stretch)** Explain why "then run the tests" at the end of a request changes the quality of the result so much.
+
+<Solution>
+
+Without a check, Claude can only produce what looks right; it has no information about whether the change works. Running the tests adds real evidence to its context: a failure shows exactly what is wrong, and it can loop (fix, run again) until they pass. It turns guessing into checking, the same reason verification reduces hallucination in <Ref to="cl-how-it-works" />.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Claude Code** is an agent for software work: it reads, searches, runs commands, edits and checks, in a loop, in the folder you start it in.
+- Install with the native installer; start with `claude` in a project and log in.
+- Its **tools** (`Read`, `Edit`, `Bash` and others) are what let it act; the transcript shows every use.
+- By default it reads freely and **asks permission** to edit, run commands or go online. Read what you approve; save rules for safe repeated commands.
+- **Esc** stops it; typing steers it; `/rewind` goes back to a checkpoint, but commands' effects are not tracked, so **use Git**.
+- `claude --continue` and `--resume` return to sessions; `/clear` starts fresh; `/usage` shows cost.
+- Start small, always give it a check, read every diff, commit often.
+
+## Go deeper
+
+- [Quickstart](https://code.claude.com/docs/en/quickstart), from the Claude Code documentation. Installing, logging in and a first session.
+- [How Claude Code works](https://code.claude.com/docs/en/how-claude-code-works), from the Claude Code documentation. The loop, the tools and the context.
+- [Tools reference](https://code.claude.com/docs/en/tools-reference), from the Claude Code documentation. Every built-in tool and whether it needs permission.
+- [Checkpointing](https://code.claude.com/docs/en/checkpointing), from the Claude Code documentation. What rewind can and cannot restore.
+- [Claude Code 101](https://academy.claude.com/), on Claude Academy. Anthropic's free introductory course.

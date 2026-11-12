@@ -1,0 +1,178 @@
+---
+title: "Claude Code on a team: security and cost"
+summary: "Shared and managed settings, AI code review and security scans, secrets, prompt injection, and watching cost and usage."
+prerequisites: [cc-automation]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will be able to set Claude Code up for a team so that everyone gets the same good workflows, risky actions are prevented rather than merely discouraged, AI-written code is reviewed as carefully as anyone's, and the cost stays visible and reasonable. These are the questions a tech lead, a security team or a manager will ask you about, so it pays to know the answers.
+
+Details are from the Claude Code documentation on [security](https://code.claude.com/docs/en/security), [managed settings](https://code.claude.com/docs/en/settings), [data usage](https://code.claude.com/docs/en/data-usage), [costs](https://code.claude.com/docs/en/costs) and [monitoring](https://code.claude.com/docs/en/monitoring-usage), checked in **November 2026**.
+
+## Shared set-up: what goes in the repository
+
+Most of a team's Claude Code set-up belongs in version control, next to the code, so everyone gets it and changes are reviewed like code:
+
+| File | Holds |
+|---|---|
+| `CLAUDE.md` | the short list of commands, conventions and traps (<Ref to="cc-context" />) |
+| `.claude/settings.json` | permission rules: allowed checks, asks for pushes, denied secrets (<Ref to="cc-settings" />) |
+| `.claude/skills/` | the team's workflows: release, migration, review checklist (<Ref to="cc-extending" />) |
+| `.claude/agents/` | shared helper agents, such as a read-only reviewer (<Ref to="cc-parallel" />) |
+| `.mcp.json` | the shared tool servers, with secrets as environment variables (<Ref to="cc-mcp" />) |
+
+Personal preferences stay out of it (`CLAUDE.local.md`, `.claude/settings.local.json`, user files). A team plugin can package all the shared parts for several repositories.
+
+## Managed settings: rules nobody can override
+
+An organisation can deploy **managed settings** through system files or device management, or from the admin console for some plans. They sit at the top of the precedence order, so no project or person can override them. The documentation's example denies reading secrets, forbids the bypass mode, and allows only the organisation's own permission rules:
+
+```json
+{
+  "permissions": {
+    "deny": ["Read(./.env)", "Read(./secrets/**)"],
+    "disableBypassPermissionsMode": "disable"
+  },
+  "allowManagedPermissionRulesOnly": true
+}
+```
+
+Managed settings can also restrict which MCP servers may be used, which hooks may run, and whether auto mode is available. Use them for the handful of rules that must hold everywhere; leave the rest to teams.
+
+## Reviewing AI-written code
+
+Code written by Claude is still your team's code, and the same rules apply: **every change is reviewed by a person who understands it before it merges.** Some specifics:
+
+- **Review the diff, not the summary.** A summary says what Claude intended; the diff says what it did.
+- **Watch for the typical AI failure modes**: changes outside the task; tests edited or deleted to make them pass; hard-coded values that satisfy a test but not the real rule; plausible-looking calls to functions or library options that do not exist; needless new abstractions; error handling that hides failures.
+- **Use automated review as a first pass, not the last.** `/code-review` locally, an automatic review on every pull request through the GitHub Action, and `/security-review` for security-sensitive changes. They catch a lot, and they free human reviewers to think about design and intent.
+- **The author answers for it.** Whoever opens the pull request should be able to explain every line. "Claude wrote it" is not an answer in a review.
+
+## Security
+
+### Prompt injection
+
+**Prompt injection** is an attacker hiding instructions in content Claude reads (a web page, an issue, a dependency's README, an email, a log line) to make it do something you did not intend: leak a secret, run a command, change code. The documentation lists the protections Claude Code has: the permission system, network commands such as `curl` not being approved automatically, web pages being summarised by a separate model call, and a trust prompt before using a new project's settings and MCP servers.
+
+Your part:
+
+- **Be most careful where untrusted content meets powerful actions.** A session that reads public issues and can push code, or reads emails and can send them, deserves the tightest rules.
+- **Keep secrets out of reach**: deny rules for secret files, environment variables rather than files in the repository, no live credentials pasted into conversations.
+- **Use the sandbox** so that even a manipulated command cannot write outside the project or reach arbitrary sites.
+- **Review before anything irreversible**: merges, deployments, data changes.
+
+### Other risks to manage
+
+- **Hooks, plugins and MCP servers run code** on your machines. Install only from trusted sources; review changes to them like code.
+- **Dependencies Claude adds** are dependencies you ship. Check that each one exists, is the right package, is maintained and is needed. A model can suggest a package name that does not exist, and attackers sometimes publish packages under such names.
+- **Isolation for risky work**: for untrusted code or unattended runs, use a container, a virtual machine or a cloud session, not your own laptop with all your credentials.
+
+### What happens to your data
+
+The data-usage page, when checked, said: on commercial plans (Team, Enterprise, the API, and cloud providers), your code and conversations are **not used for training** by default; on personal plans, they are used for training only if you turn that setting on. Retention periods differ by plan and setting, and organisations on some plans can arrange zero data retention. Local session transcripts are kept on your machine for 30 days by default. Check your organisation's policy, and the current page, before using Claude Code on confidential code.
+
+## Cost
+
+When checked, Anthropic's cost page gave averages for API-billed use of around **$13 per developer per active day** and **$150 to $250 per developer per month**, with 90% of users under $30 per active day. Subscriptions are a flat fee within usage limits instead. Either way, the same habits keep usage down, and most also improve results:
+
+- **`/clear` between tasks**, and `/compact` with a focus in long ones.
+- **Choose the model and effort** for the task (<Ref to="cl-models" />): routine work does not need the strongest model at high effort.
+- **Keep `CLAUDE.md` short**, and move occasional workflows into skills.
+- **Switch off MCP servers you are not using**, and prefer command-line tools Claude can already run.
+- **Specific prompts and plan mode**, so less work is thrown away.
+- **Press Esc early** when a task heads the wrong way.
+- **Subagents and parallel sessions only where they pay** (<Ref to="cc-parallel" />).
+- **Spending caps on automation** (`--max-budget-usd`).
+
+`/usage` shows a person's cost or plan usage. For a team, Claude Code can send usage metrics (sessions, tokens, cost, lines changed, commits, pull requests) to your monitoring system through **OpenTelemetry**, the standard you will meet in <Ref to="observability" />, by setting `CLAUDE_CODE_ENABLE_TELEMETRY=1` and the usual OpenTelemetry exporter variables.
+
+## Measuring whether it helps
+
+Usage is not value. A team adopting Claude Code should look at outcomes it already tracks: how long changes take from start to merge, how often changes cause incidents, review turnaround, and how developers feel about their work. Watch especially for a rising rate of bugs or reverted changes, which would mean review is not keeping up with generation.
+
+## Common mistakes
+
+- **Each person with their own set-up**, so results vary and good practice does not spread. Share settings, skills and agents in the repository.
+- **Security rules as `CLAUDE.md` lines** instead of deny rules and managed settings.
+- **"Claude wrote it" in a review**, or approving code nobody fully read.
+- **Sessions that combine untrusted input with powerful actions** and loose permissions.
+- **Secrets in conversations, `CLAUDE.md` or `.mcp.json`.**
+- **No visibility of cost** until the bill arrives.
+- **Measuring lines of code generated** rather than outcomes.
+
+## Practice
+
+**1. (warm-up)** Which of these belong in the repository, and which in personal files: the test command, your preferred explanation style, a deny rule for `.env`, the team's release skill?
+
+<Solution>
+
+Repository: the test command (`CLAUDE.md`), the deny rule (`.claude/settings.json`) and the release skill (`.claude/skills/`). Personal: your explanation style (`CLAUDE.local.md` or your user `CLAUDE.md`).
+
+</Solution>
+
+**2. (warm-up)** What is the difference between a deny rule in a project's settings and the same rule in managed settings?
+
+<Solution>
+
+Both block the action, but a project's settings can be changed by anyone who edits the repository, while managed settings are set by the organisation, sit at the top of the precedence order, and cannot be overridden by projects or individuals.
+
+</Solution>
+
+**3. (standard)** List four things to look for when reviewing a pull request written mostly by Claude.
+
+<Solution>
+
+Any four of: changes outside the task; tests edited, weakened or deleted; hard-coded values that only satisfy the tests; calls to functions, options or packages that do not exist; new dependencies that are not needed or are not the real package; needless abstractions; error handling that swallows failures; whether the author can explain every line.
+
+</Solution>
+
+**4. (standard)** A developer sets up a session that triages public GitHub issues and can push to branches and run any command. What could go wrong, and how would you lock it down?
+
+<Solution>
+
+An issue written by anyone could contain a prompt injection telling Claude to run a command, leak a secret or push malicious code. Lock it down: let the triage session only read issues and post comments or labels (no push, no arbitrary commands), using `dontAsk` with an exact allowlist; run any code-changing follow-up in a separate session started by a person; keep secrets out of reach with deny rules and the sandbox; protect branches so nothing merges without human review.
+
+</Solution>
+
+**5. (standard)** Your team's Claude Code costs doubled this month. Name four things to check.
+
+<Solution>
+
+Any four of: whether people use the strongest model at high effort for routine work; very long sessions without `/clear`; a growing `CLAUDE.md`; many MCP servers connected; heavy use of subagents, agent teams or workflows; automation without spending caps or running too often; large files or logs being read into context. OpenTelemetry metrics or `/usage` per person show where the tokens go.
+
+</Solution>
+
+**6. (stretch)** Write a one-page policy (as bullet points) for a ten-person team starting to use Claude Code.
+
+<Solution>
+
+For example:
+- Shared set-up lives in the repository: `CLAUDE.md`, `.claude/settings.json`, skills and agents; changes go through review.
+- Managed settings deny reading secrets and disable bypass mode.
+- Default mode: auto with the sandbox on, on our own machines; plan mode for changes touching more than a few files.
+- Every change is reviewed by a person who can explain it; automated review runs on every pull request; security-sensitive changes also get `/security-review`.
+- No secrets in prompts or files; credentials come from the environment.
+- New dependencies need a named reason and a check that the package is genuine.
+- Automation runs with `dontAsk` or in containers, with spending caps, and cannot merge.
+- Usage is monitored through OpenTelemetry; we review cost and outcomes (lead time, incidents) monthly.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Put the team's set-up in the repository (`CLAUDE.md`, settings, skills, agents, `.mcp.json`); keep personal preferences in personal files; share across repositories with a plugin.
+- **Managed settings** enforce organisation-wide rules that nobody can override.
+- AI-written code gets the same human review as any code; watch for edited tests, out-of-scope changes, invented APIs and unneeded dependencies; automated review is a first pass.
+- Guard against **prompt injection** by separating untrusted input from powerful actions, keeping secrets out of reach, using the sandbox, and reviewing irreversible steps.
+- Commercial plans are not used for training by default; check retention and your organisation's policy.
+- Keep cost visible with `/usage` and OpenTelemetry, and down with focused context, the right model and effort, few MCP servers and spending caps. Measure outcomes, not lines generated.
+
+## Go deeper
+
+- [Security](https://code.claude.com/docs/en/security), from the Claude Code documentation. Protections, prompt injection and best practices.
+- [Settings](https://code.claude.com/docs/en/settings), from the Claude Code documentation. Managed settings and precedence.
+- [Data usage](https://code.claude.com/docs/en/data-usage), from the Claude Code documentation. Training, retention and telemetry.
+- [Manage costs](https://code.claude.com/docs/en/costs) and [monitoring usage](https://code.claude.com/docs/en/monitoring-usage), from the Claude Code documentation.

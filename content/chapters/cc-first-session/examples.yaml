@@ -1,0 +1,31 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: not-run
+  reason: Installs software system-wide; the command was copied from the Claude Code quickstart on 12 November 2026.
+- block: 2
+  lang: powershell
+  check: not-run
+  reason: Windows installer; copied from the Claude Code quickstart on 12 November 2026.
+- block: 3
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    claude --version | grep -q "Claude Code"
+- block: 4
+  lang: bash
+  check: not-run
+  reason: Starts an interactive session in your own project folder.
+- block: 5
+  lang: text
+  check: illustration
+  note: A sample request to type into Claude Code, not a program.
+- block: 6
+  lang: text
+  check: illustration
+  note: A sample request to type into Claude Code, not a program.
+- block: 7
+  lang: text
+  check: illustration
+  note: The rough shape of a permission prompt, from the Claude Code documentation's permissions page; the chapter says the exact wording changes between versions.

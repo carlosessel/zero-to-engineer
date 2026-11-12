@@ -1,0 +1,44 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    claude --help | grep -q -- "--print"
+  note: Checks the flag; running it needs a login and costs tokens.
+- block: 2
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    claude --help | grep -q -- "--print"
+  note: Checks the flag; running it needs a login.
+- block: 3
+  lang: bash
+  check: not-run
+  reason: The best-practices page's example, copied as given; it needs a login, files.txt and a repository. Its --max-turns flag is documented on that page though not listed by claude --help in version 2.1.272.
+- block: 4
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    h=$(claude --help); for f in -- --output-format; do :; done; echo "$h" | grep -q -- "--output-format"
+  note: Checks the flags exist; running it needs a login.
+- block: 5
+  lang: yaml
+  check: illustration
+  note: From the Claude Code GitHub Actions documentation.
+  verify: |
+    import yaml
+    w = yaml.safe_load(block)
+    steps = w['jobs']['claude']['steps']
+    assert steps[1]['uses'] == 'anthropics/claude-code-action@v1'
+    assert '${{ secrets.ANTHROPIC_API_KEY }}' == steps[1]['with']['anthropic_api_key']
+    assert w['jobs']['claude']['permissions']['contents'] == 'write'
+- block: 6
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    h=$(claude --help); for f in --allowedTools --permission-mode --max-budget-usd --output-format; do echo "$h" | grep -q -- "$f" || { echo "missing $f"; exit 1; }; done
+  note: Checks every flag used exists in the installed claude; running it needs a login and costs tokens.

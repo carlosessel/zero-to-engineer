@@ -1,0 +1,214 @@
+---
+title: "Claude Code without you watching"
+summary: "Headless mode, GitHub Actions and GitLab CI, scheduled tasks and routines, and the Agent SDK."
+prerequisites: [cc-parallel]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will be able to run Claude Code from scripts, from your CI pipeline and on a schedule, safely: with a clear definition of done, a check, limited permissions, a spending cap, and a person approving the result. This is where Claude Code stops being an assistant you talk to and becomes part of your team's machinery.
+
+Details are from the Claude Code documentation on [headless mode](https://code.claude.com/docs/en/headless), [GitHub Actions](https://code.claude.com/docs/en/github-actions), [scheduled tasks](https://code.claude.com/docs/en/scheduled-tasks) and the [Agent SDK](https://code.claude.com/docs/en/agent-sdk/overview), checked in **November 2026**.
+
+## Five questions before anything runs unattended
+
+Anthropic's best-practices page gives five questions to answer for each task before you leave it running. They are the whole chapter in miniature:
+
+1. **Does it know what done looks like?** A specification file, a failing test to turn green, a goal condition.
+2. **Can it check its own work?** Tests, a type-check, a hook, a review step.
+3. **What is it allowed to touch?** Permission rules, a locked-down mode, the sandbox, a worktree, the one branch it may push to.
+4. **What stops it?** A limit on turns or spending.
+5. **Where does the result go, and who signs off?** A pull request, a comment or a summary, and then a person approving anything that cannot be undone.
+
+While you are watching, a missing piece of context costs a message. Overnight, nobody corrects it, and you find a night's work built on a wrong assumption.
+
+## Headless mode: `claude -p`
+
+`claude -p "prompt"` (short for `--print`) runs one task and exits, printing the result. This is how Claude Code goes into scripts, Git hooks and CI.
+
+```bash
+claude -p "Summarise the changes on this branch compared with main, in five bullet points"
+```
+
+You can pipe text in:
+
+```bash
+cat error.log | claude -p "What is the most likely cause of these errors? Name the file to look at."
+```
+
+For scripts, a few flags matter:
+
+| Flag | Does |
+|---|---|
+| `--output-format json` | prints one JSON object (the text is in its `result` field) for a program to read; `stream-json` streams events |
+| `--allowedTools "Read,Edit,Bash(npm test)"` | pre-approves exactly these tools |
+| `--permission-mode dontAsk` | refuses anything not pre-approved, instead of waiting for a person who is not there |
+| `--max-budget-usd 2` | stops when the run has cost this much |
+| `--bare` | ignores hooks, skills, plugins, MCP servers and `CLAUDE.md` files, so the run behaves the same wherever it runs |
+| `--append-system-prompt "…"` | adds instructions for this run |
+
+The best-practices page's example of a careful batch job, migrating files one by one:
+
+```bash
+for file in $(cat files.txt); do
+  claude --bare -p "Migrate $file to the new logger API and commit. Reply OK or FAIL." \
+    --allowedTools "Read,Edit,Bash(git add *),Bash(git commit *)" \
+    --permission-mode dontAsk \
+    --max-turns 20
+done
+```
+
+Each run can only read, edit and commit, refuses anything else, and stops after 20 turns. The page's advice: **try it on three files first**, see what goes wrong, fix the prompt, then run the rest.
+
+A script can also read the JSON result:
+
+```bash
+summary=$(claude -p "List the TODO comments in src/ as a numbered list" --output-format json | jq -r '.result')
+echo "$summary"
+```
+
+## In GitHub: Claude Code in pull requests and issues
+
+With the Claude Code GitHub Action, anyone on the team can mention `@claude` in a pull request or issue comment ("@claude fix the failing test", "@claude review this for security problems"), and Claude Code runs in GitHub's CI, then replies, pushes commits or opens a pull request.
+
+The quickest setup is `/install-github-app` in a Claude Code session: it installs the GitHub app on the repository and adds the needed secret. The workflow it uses looks like this (from the documentation):
+
+```yaml
+name: Claude Code
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+jobs:
+  claude:
+    if: contains(github.event.comment.body, '@claude')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+      - uses: anthropics/claude-code-action@v1
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+```
+
+- It runs when a comment containing `@claude` is created.
+- `permissions` says what the job's GitHub token may do: here, write code, pull requests and issues.
+- The key comes from a repository **secret**, never from the file. (A subscription token from `claude setup-token` can be used instead of an API key.)
+- The action can also run on every pull request with a fixed `prompt`, such as an automatic review.
+
+GitLab CI/CD has a similar integration (labelled beta, and maintained by GitLab, when checked).
+
+**Protect your main branch** with branch rules the automation cannot bypass, and keep a person approving merges. An automated agent opening pull requests is valuable; one merging its own is a risk.
+
+## On a schedule
+
+Two ways to make Claude Code run repeatedly:
+
+- **`/loop`** repeats a prompt on an interval *inside an open session*, for example `/loop 15m check CI on this branch, and if it's red pull the failing job's log, fix it and push`. It stops when the session ends.
+- **Cloud scheduled tasks** (`/schedule`) run on Anthropic's cloud on a timer, on a fresh copy of your repository, even with your laptop closed; they can also be triggered by GitHub events or an API call. The documentation labelled them a research preview when checked, and warns: protect `main` with a rule the task cannot bypass, and watch the first few runs before trusting it unattended.
+
+Good scheduled jobs: a nightly check of dependency updates that opens a pull request with the tests run; a morning summary of new error reports; a weekly look for flaky tests.
+
+## The Agent SDK: Claude Code as a library
+
+The **Claude Agent SDK** gives your own programs the same agent loop, tools, permissions, skills, hooks and MCP support that Claude Code uses. It exists for Python (`pip install claude-agent-sdk`) and TypeScript (`npm install @anthropic-ai/claude-agent-sdk`). Use it when you want to build an agent into a product or an internal tool, rather than run the `claude` command. <Ref to="first-call" /> and the API part of this course build on the same ideas from the ground up.
+
+## A worked example: a nightly dependency update
+
+The goal: each night, update minor versions of dependencies, run the tests, and open a pull request for a person to review.
+
+1. **Done looks like**: `package.json` and the lockfile updated to the latest minor versions; all tests and the build pass; a pull request open with a table of what changed.
+2. **The check**: `npm test` and `npm run build`, run by Claude and required by a `Stop` hook (<Ref to="cc-extending" />).
+3. **Allowed to touch**: only those files; it may run `npm`, the tests and Git on a branch named `deps/<date>`; it may not push to `main` (branch protection) or read `.env` (deny rule).
+4. **What stops it**: a spending cap; and if the tests fail after two attempts, it opens the pull request as a draft, explaining the failure, instead of carrying on.
+5. **Sign-off**: a person reviews and merges the pull request in the morning.
+
+Set up as a cloud scheduled task, or a CI job with `claude -p` on a nightly trigger, with the instructions above in the prompt.
+
+## Common mistakes
+
+- **No definition of done or check**, so a night's work rests on "looks finished".
+- **`bypassPermissions` outside an isolated container.** Use `dontAsk` with an exact allowlist, or auto mode with the sandbox.
+- **No spending or turn limit.**
+- **Secrets in workflow files.** Use the CI system's secrets.
+- **Letting automation merge to main.** Protect the branch; a person approves.
+- **Running a batch job on all files at once** before trying three.
+- **Trusting a new scheduled task** without watching its first runs.
+
+## Practice
+
+**1. (warm-up)** What does `claude -p` do differently from `claude`?
+
+<Solution>
+
+It runs a single task non-interactively and exits, printing the result, instead of opening an interactive session. That makes it usable from scripts, Git hooks and CI.
+
+</Solution>
+
+**2. (warm-up)** Why use `--permission-mode dontAsk` in a CI job rather than the default mode?
+
+<Solution>
+
+Nobody is there to answer a permission prompt. `dontAsk` refuses anything that is not pre-approved (for example with `--allowedTools`), so the job either does exactly what was allowed or fails safely, instead of waiting or being run with everything allowed.
+
+</Solution>
+
+**3. (standard)** Write a `claude -p` command that reviews the current branch's diff for security problems, may only read files and run `git diff`, costs at most $1, and prints the result as JSON.
+
+<Solution>
+
+```bash
+claude -p "Review the changes on this branch compared with main for security problems. List each with file, line and risk, or say none found." \
+  --allowedTools "Read,Bash(git diff *)" \
+  --permission-mode dontAsk \
+  --max-budget-usd 1 \
+  --output-format json
+```
+
+</Solution>
+
+**4. (standard)** Answer the five questions for this job: "Every Monday, find flaky tests and open an issue listing them."
+
+<Solution>
+
+1. Done: an issue exists listing each test that both passed and failed across repeated runs, with failure messages, or a comment saying none were found.
+2. Check: run the suite several times (say five) and compare results; the issue cites the run results.
+3. Allowed: read code, run the test command, create one issue; no code changes, no pushes.
+4. Stops: a spending cap and a fixed number of test runs.
+5. Result: an issue in the tracker; a person triages it.
+
+</Solution>
+
+**5. (stretch)** A teammate proposes letting `@claude` merge its own pull requests when the tests pass, to save time. Make the case against, and propose a compromise.
+
+<Solution>
+
+Tests passing does not prove the change is right, safe or wanted: tests cover only what someone thought to test, and an agent can be wrong or be manipulated by content it read (an issue's text could contain a prompt injection). Merging is also hard to undo once deployed. Auto mode itself blocks merging pull requests no human has approved, for this reason. A compromise: let Claude open pull requests and run an automatic review, require one human approval for anything, and allow fast-track approval for narrow, low-risk categories (dependency patch updates with all checks green) while keeping a human click.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Before anything runs unattended, answer five questions: what done looks like, how it checks itself, what it may touch, what stops it, and who signs off.
+- **`claude -p`** runs one task from scripts and CI. Key flags: `--output-format json`, `--allowedTools`, `--permission-mode dontAsk`, `--max-budget-usd`, `--bare`. Try batches on a few items first.
+- The **GitHub Action** (`anthropics/claude-code-action`, set up with `/install-github-app`) answers `@claude` in pull requests and issues; keys go in secrets; protect `main`.
+- **`/loop`** repeats within a session; **cloud scheduled tasks** (`/schedule`) run on a timer or event while you are away.
+- The **Agent SDK** (Python and TypeScript) puts Claude Code's agent loop inside your own programs.
+
+## Go deeper
+
+- [Headless mode](https://code.claude.com/docs/en/headless), from the Claude Code documentation. `claude -p`, its flags, and examples.
+- [GitHub Actions](https://code.claude.com/docs/en/github-actions), from the Claude Code documentation. Setup, configuration and examples.
+- [Scheduled tasks](https://code.claude.com/docs/en/scheduled-tasks) and [routines](https://code.claude.com/docs/en/routines), from the Claude Code documentation.
+- [Agent SDK overview](https://code.claude.com/docs/en/agent-sdk/overview), from the Claude Code documentation.
+- [Claude Code in Action](https://academy.claude.com/), on Claude Academy. Anthropic's free course on long, hands-off sessions and automation.

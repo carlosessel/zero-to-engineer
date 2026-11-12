@@ -4,6 +4,24 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: Mastering Claude and Claude Code, part 3 (Claude Code)
+
+Added
+- Ten chapters on Claude Code: from zero, where it runs, context and CLAUDE.md, workflows, settings and permissions, skills, hooks and plugins, MCP, many agents at once, automation, and teams, security and cost. About 20,800 words, 57 practice problems, 46 quiz questions.
+- Facts come from the Claude Code documentation, read on 12 November 2026; every linked page was opened.
+- Checks: settings files, skills, subagent definitions and the GitHub workflow are parsed and their claims asserted. The hook script is run with the JSON Claude Code sends, to confirm it blocks with exit code 2. The MCP server is loaded with the real `mcp` package and each tool called. Command lines are checked against the installed `claude --help` (a new `needs: claude-cli` option skips these where Claude Code is not installed, such as CI).
+- All 16 Claude course chapters are marked resources-verified.
+- 22 glossary terms. "Hook" now gives both meanings (a React Hook, and a Claude Code hook).
+
+Fixed (found by the checks)
+- The MCP server example was first written for the old `FastMCP` API. Version 2 of the Python SDK (2.3.0) renamed it `MCPServer`, and the old import now fails. The chapter uses the new API and tells readers about the old name they will see in tutorials.
+- The site's Python Run button now knows the `mcp` package cannot run in the browser, and says so.
+- "Remote" and "Scope" were briefly linked to their Git and variable-scope meanings from the MCP chapter; those words are no longer glossary links there.
+
+Not verified
+- Commands that need a Claude Code login, cost tokens or change your machine (installing, `claude -p` runs, adding MCP servers) are not executed; their flags are checked against `claude --help` instead. The installed version (2.1.272) is slightly older than the documentation, and the documentation's `--max-turns` example is not listed by its `--help`.
+- Sample prompts are not measured against a live model.
+
 ### 2026-11-12: Three new courses planned; Mastering Claude and Claude Code, parts 1 and 2
 
 Added

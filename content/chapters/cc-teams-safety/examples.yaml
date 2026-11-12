@@ -1,0 +1,9 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: json
+  check: illustration
+  note: The managed-settings example from the Claude Code security documentation.
+  verify: |
+    import json
+    s = json.loads(block)
+    assert s['allowManagedPermissionRulesOnly'] is True and s['permissions']['disableBypassPermissionsMode'] == 'disable'

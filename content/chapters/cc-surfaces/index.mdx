@@ -1,0 +1,136 @@
+---
+title: "Claude Code everywhere"
+summary: "The terminal, VS Code and JetBrains, the desktop app, the web, your phone and Slack, and when to use each."
+prerequisites: [cc-first-session]
+estimated_minutes: 90
+status: resources-verified
+---
+
+By the end of this chapter you will know every place Claude Code runs, what each is best at, and how to move work between them: start a task at your desk, check on it from your phone, and pick it up in your editor. The engine is the same everywhere; what changes is how you watch, review and steer it.
+
+Details come from the [Claude Code documentation](https://code.claude.com/docs/en/platforms), checked in **November 2026**. Some surfaces are marked beta or research preview there; this chapter says so where it matters.
+
+## The surfaces
+
+| Where | What it is good at |
+|---|---|
+| **Terminal** (the `claude` command) | Everything. The full feature set, scripting and automation, and the fastest way to work if you live in a terminal |
+| **VS Code** (extension) | Seeing changes as inline diffs in your editor, mentioning files with `@`, reviewing plans beside your code |
+| **JetBrains IDEs** (plugin, labelled beta) | The same idea in IntelliJ, PyCharm, WebStorm and others: a diff viewer and sharing your selection |
+| **Desktop app** | Several sessions side by side, each in its own Git worktree; visual diff review; previewing your app; watching pull requests |
+| **Web** (claude.ai/code) | Sessions that run on Anthropic's cloud machines and keep going after you close the laptop |
+| **Phone** (the Claude app) | Starting and checking cloud sessions, and steering a session on your computer remotely |
+| **Slack** | Mentioning Claude in a channel to turn a bug report into a pull request |
+| **Chrome** (with `--chrome`) | Letting Claude drive your browser to test a web app, using your logged-in sessions |
+
+## Terminal
+
+The terminal is the reference version: every feature appears here first, and everything else in this course works here. It also enables automation, which needs no screen at all (<Ref to="cc-automation" />). If you are comfortable in a terminal (<Ref to="terminal-files" />), it is the best place to learn Claude Code, because nothing is hidden.
+
+## In your editor
+
+The **VS Code extension** puts Claude Code in a panel beside your code. Its main advantage is review: proposed edits appear as diffs in the editor, where you can read them in context and accept or reject them. You can point at files with `@` (for example `@src/signup.js`) and see plans laid out before Claude acts on them. The extension includes its own copy of Claude Code; to also type `claude` in VS Code's terminal, install the standalone version as in <Ref to="cc-first-session" />.
+
+The **JetBrains plugin** gives the same pattern in IntelliJ-family IDEs. Use whichever editor you already use; do not switch editors for Claude Code.
+
+## Desktop app
+
+The desktop app is built for running **several sessions at once**. Each session gets its own **Git worktree** (a separate working copy of the repository on its own branch; <Ref to="cc-parallel" /> explains them), so parallel tasks cannot trample each other's files. You review each session's changes visually, preview the app it is building, and see the state of its pull request. It suits a way of working where you hand out several tasks and review the results, rather than watching one.
+
+## Web and cloud sessions
+
+At **claude.ai/code**, sessions run on machines in Anthropic's cloud, connected to your GitHub repository. They carry on after you disconnect, so you can start a long task, close the laptop, and come back to a branch or pull request. From the terminal, `claude --cloud "task"` starts one, and `--teleport` brings a cloud session down into your terminal to continue locally.
+
+Cloud sessions are useful when a task is long, when you want to run several without loading your own machine, or when you are away from your computer.
+
+## Phone
+
+The Claude app on iOS and Android can start and monitor cloud sessions, and, with **Remote Control** (`/remote-control` in a session on your computer), steer a session that is running on your own machine. Approving a permission request or redirecting a task from your phone means a long task does not stall while you are away.
+
+## Slack and Chrome
+
+In **Slack**, mentioning Claude in a channel can start a cloud session on a bug report from that conversation and come back with a pull request. The documentation describes the details per plan; teams on Team and Enterprise plans use a newer, shared version called Claude Tag.
+
+With **Chrome** (start with `claude --chrome`, needing the Claude in Chrome extension), Claude Code can open pages, click, type and read the result in your browser: useful for checking that a web change actually works. It uses the sessions you are logged in to, so treat it with the care you would give anyone using your browser.
+
+## Moving between surfaces
+
+The surfaces share sessions and settings, so you can choose per moment rather than per project:
+
+- Start a task in the terminal, continue it in the desktop app or VS Code with the same history.
+- Start a cloud session from your phone on the train; pull it into your terminal at your desk with `--teleport`.
+- Run several tasks in parallel in the desktop app; deal with the one that needs a decision from your phone.
+
+Project settings and instructions (`CLAUDE.md`, skills, permissions; next chapters) live in the repository, so they apply wherever the session runs.
+
+## Choosing
+
+- **Learning, one task at a time, scripting:** terminal.
+- **Writing code yourself with Claude alongside:** your editor's extension.
+- **Several independent tasks in parallel:** desktop app, or several cloud sessions.
+- **Long tasks while you are away:** cloud sessions, monitored from your phone.
+- **Testing a web app end to end:** Chrome.
+
+## Common mistakes
+
+- **Switching surfaces to fix a problem that is really about context or instructions.** The model and tools are the same everywhere; a vague task is vague in every app.
+- **Running parallel tasks in one folder** without worktrees, so they edit the same files. Use the desktop app's worktrees or `claude --worktree`.
+- **Forgetting cloud sessions have only what is in the repository.** Secrets, local files and services on your machine are not there unless you set them up.
+- **Using Chrome mode on a browser logged in to accounts you do not want an agent near.** Use a separate browser profile.
+
+## Practice
+
+**1. (warm-up)** Which surface would you use to run three independent bug fixes at the same time and review each result?
+
+<Solution>
+
+The desktop app, which runs each session in its own Git worktree with visual diff review. (Several cloud sessions, or several terminal sessions with `claude --worktree`, also work.)
+
+</Solution>
+
+**2. (warm-up)** What happens to a cloud session on claude.ai/code when you close your laptop?
+
+<Solution>
+
+It keeps running on Anthropic's cloud machines. You can check it later from any device, or bring it into your terminal with `--teleport`.
+
+</Solution>
+
+**3. (standard)** A cloud session fails because it cannot connect to the database. On your laptop the same task works. Why?
+
+<Solution>
+
+The cloud session runs on a fresh machine with a copy of your repository, not on your laptop. Your local database, environment variables and secrets are not there unless the cloud environment is set up to provide them. Configure the environment, or run that task locally.
+
+</Solution>
+
+**4. (standard)** Why might you prefer reviewing Claude's edits in VS Code rather than in the terminal?
+
+<Solution>
+
+The extension shows each proposed edit as a diff in the editor, in the context of the whole file, with your usual navigation and highlighting, which makes careful review easier than reading changes in a terminal transcript.
+
+</Solution>
+
+**5. (stretch)** Design a working day that uses three surfaces, for a developer with two features and a flaky test to deal with.
+
+<Solution>
+
+For example: in the morning, start the flaky-test investigation as a cloud session (it may take long, and needs no attention). Work on feature A in VS Code with Claude alongside, reviewing diffs as you go. Hand feature B to a desktop-app session in its own worktree, with a clear specification, and review its result after lunch. Check the cloud session from your phone during a break, approve its proposed fix, and review the pull request in the afternoon.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Claude Code runs in the **terminal**, **VS Code**, **JetBrains** (beta), the **desktop app**, the **web** (cloud sessions), the **phone app**, **Slack** and **Chrome**. The engine is the same.
+- The terminal has every feature; editors make review easier; the desktop app runs parallel sessions in **worktrees**; cloud sessions keep going without you; the phone lets you monitor and steer.
+- Sessions and project settings travel between surfaces: `--cloud` starts a cloud session, `--teleport` brings one back.
+- Cloud sessions have only what is in the repository and environment, not your laptop's files or services.
+
+## Go deeper
+
+- [Platforms](https://code.claude.com/docs/en/platforms), from the Claude Code documentation. Every surface compared.
+- [VS Code](https://code.claude.com/docs/en/vs-code) and [Desktop](https://code.claude.com/docs/en/desktop), from the Claude Code documentation.
+- [Claude Code on the web](https://code.claude.com/docs/en/claude-code-on-the-web), from the Claude Code documentation. Cloud sessions, environments and teleporting.

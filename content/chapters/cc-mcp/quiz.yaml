@@ -1,0 +1,31 @@
+- question: You want one server to work in Claude Code, the Claude apps and your own agent. Why is that possible?
+  options:
+  - They share a database
+  - MCP is an open standard, so any client can use any server
+  answer: 1
+  explanation: Servers and clients speak the same protocol.
+- question: Which scope shares a server with everyone on the project?
+  options:
+  - local
+  - project, stored in .mcp.json
+  - user
+  answer: 1
+  explanation: Commit .mcp.json; keep secrets in environment variables.
+- question: What is the safest way to connect a production database through MCP?
+  options:
+  - An admin user so nothing fails
+  - A read-only database user
+  answer: 1
+  explanation: Give servers the least access they need.
+- question: What does the model see of a tool in your own MCP server?
+  options:
+  - Your whole source code
+  - Its name, parameters and description (from the docstring)
+  answer: 1
+  explanation: So write the docstring like a prompt.
+- question: Why is a session with an email-reading server and a payments server risky?
+  options:
+  - Too many tokens
+  - An email could contain a prompt injection that leads to a payment
+  answer: 1
+  explanation: Untrusted content plus powerful actions is the risky combination.

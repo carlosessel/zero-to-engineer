@@ -1,0 +1,184 @@
+---
+title: "Many agents at once"
+summary: "Subagents, agent teams, worktrees and parallel sessions, and dynamic workflows."
+prerequisites: [cc-mcp]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know when one Claude Code session is the right tool and when several are, and how to run several without them getting in each other's way: helper agents for focused side-jobs and independent review, separate working copies for parallel tasks, and larger coordinated runs. Used well, this multiplies what you get done. Used carelessly, it multiplies cost and confusion.
+
+Details are from the Claude Code documentation on [subagents](https://code.claude.com/docs/en/sub-agents), [worktrees](https://code.claude.com/docs/en/worktrees), [agent teams](https://code.claude.com/docs/en/agent-teams) and [workflows](https://code.claude.com/docs/en/workflows), checked in **November 2026**. Some of these features are labelled experimental or research preview there; this chapter says which.
+
+## First: when *not* to use more agents
+
+Anthropic's best-practices page lists two old pieces of advice that no longer hold with current models: using subagents to "protect the context window", and handing a task to a subagent "for a better answer". Context rarely runs out now, and the same task given to a helper does not come back better. What extra agents *are* good for:
+
+- **Parallel work**: independent tasks done at the same time.
+- **Keeping noisy output out of your way**: a long search or log analysis whose details you do not need.
+- **Independent review**: a fresh agent that has not seen your reasoning, so it judges the code on its own.
+
+Each extra agent costs extra tokens. Use them for those three reasons, not by habit.
+
+## Subagents
+
+A **subagent** is a helper agent that Claude Code starts for a specific job. It gets its own fresh context and its own instructions, does the job, and returns only a summary to your conversation. Claude Code has built-in ones, including **Explore** (searches and reads a codebase without changing anything) and **Plan** (does the research behind plan mode); Claude uses them on its own when a task suits them.
+
+You can define your own as Markdown files in `.claude/agents/` (for the project) or `~/.claude/agents/` (for you). The documentation's example:
+
+```markdown
+---
+name: code-reviewer
+description: Reviews code for quality and best practices
+tools: Read, Glob, Grep
+model: sonnet
+---
+
+You are a code reviewer. When invoked, analyze the code and provide
+specific, actionable feedback on quality, security, and best practices.
+```
+
+- The header gives a **name** and a **description** (as with skills, the description is how Claude decides when to use it), and optionally which **tools** it may use, which **model**, and more.
+- The body becomes the subagent's own system prompt. It does *not* get your conversation or the main Claude Code instructions: only this, plus basic details such as the working folder.
+- `tools: Read, Glob, Grep` makes this reviewer read-only: it cannot change anything, which is exactly right for a reviewer.
+- `model: sonnet` runs it on a cheaper, faster model, which is often enough for focused jobs. The best-practices page suggests Haiku for subagents doing simple jobs.
+
+Use one by asking: "Use the code-reviewer agent to review the changes in src/checkout/." Claude can also choose it on its own when your request matches its description.
+
+Some good subagents to define:
+
+| Subagent | Tools | Why separate |
+|---|---|---|
+| Reviewer | read-only | judges the code without your reasoning |
+| Test runner | `Bash` for the test command, read | long test output stays out of your conversation; you get the failures |
+| Researcher | read and web | explores the docs or codebase and reports back briefly |
+| Spec checker | read-only | compares the diff with `SPEC.md` and lists gaps |
+
+## Parallel sessions and worktrees
+
+Subagents help *within* one task. For several **independent tasks at once** (a bug fix, a small feature and a refactor), you want several separate sessions. The problem is files: two sessions editing the same folder will overwrite each other's work.
+
+The answer is a **Git worktree**: a second (or third…) working copy of the same repository, in its own folder, on its own branch, sharing the repository's history. Each session works in its own worktree, and the tasks cannot collide. When each is done, it is merged like any branch.
+
+```bash
+claude --worktree fix-login
+```
+
+This creates a worktree at `.claude/worktrees/fix-login/` on a new branch called `worktree-fix-login` and starts a session in it. Start another in a second terminal with a different name. (Add `.claude/worktrees/` to `.gitignore`.)
+
+A worktree is a fresh checkout, so files Git ignores, such as `.env`, are not there and dependencies are not installed. List small ignored files each worktree needs in a `.worktreeinclude` file at the root of the repository (same format as `.gitignore`), and Claude Code copies them in; keep the install command in `CLAUDE.md` so Claude runs it in a new checkout. The desktop app does the same for every session automatically (<Ref to="cc-surfaces" />), and a subagent can be given its own worktree with `isolation: worktree` in its header.
+
+### Background sessions
+
+You can also start a session in the background and carry on: `claude --bg "fix the flaky checkout test"` starts one, and `claude agents` (labelled research preview when checked) shows all your background sessions on one screen, where you can open, check or stop each.
+
+### Making parallel work pay off
+
+Parallel sessions save time only if you can review what they produce. Practical rules:
+
+- **Only truly independent tasks.** Two tasks that change the same files will conflict when merged.
+- **Write each task down properly**: what done looks like, and the check to run (<Ref to="cc-workflows" />). Nobody is watching to correct a vague start.
+- **Review each result as carefully as one.** Three unreviewed pull requests are three risks, not three wins.
+- **Start with two**, not ten. Add more when reviewing keeps up.
+
+## Agent teams (experimental)
+
+**Agent teams** go a step further: a lead session coordinates several teammate sessions, with a shared task list and messages between them. When checked, the documentation marked them **experimental and off by default** (turned on with the environment variable `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), with known limits around resuming sessions and coordination, and its cost page noted they use several times more tokens. Try them on a well-understood task once the basics are second nature.
+
+## Dynamic workflows
+
+For very large jobs (reviewing every file in a big codebase, migrating hundreds of call sites), Claude Code can write a small **workflow** script that coordinates dozens to hundreds of subagents in the background, each doing one piece, with the results collected at the end. You watch progress with `/workflows`. These consume a great many tokens, so use them for work that genuinely needs that scale, and set a budget.
+
+## Choosing
+
+| Situation | Use |
+|---|---|
+| One task, start to finish | one session |
+| A noisy side-job inside a task (long search, test output) | a subagent |
+| An independent second opinion | a read-only reviewer subagent, or `/code-review` |
+| Two or three independent tasks today | parallel sessions, each in its own worktree |
+| Long tasks you will not watch | background or cloud sessions (<Ref to="cc-automation" />) |
+| A huge, divisible job | a dynamic workflow, with a budget |
+
+## Common mistakes
+
+- **Subagents by habit**, expecting better answers. They cost more and do not improve a task given to them unchanged.
+- **Parallel sessions in one folder**, overwriting each other. Use worktrees.
+- **Parallel tasks that touch the same files**, then painful merges.
+- **Reviewers with write access.** Make reviewers read-only.
+- **More sessions than you can review.**
+- **Vague subagent descriptions**, so Claude never uses them, or uses them wrongly.
+
+## Practice
+
+**1. (warm-up)** Give the three good reasons to use a subagent from this chapter.
+
+<Solution>
+
+Parallel work; keeping noisy output (long searches, logs, test output) out of your conversation; and independent review by an agent that has not seen your reasoning.
+
+</Solution>
+
+**2. (warm-up)** What does a subagent receive as its instructions, and what does it *not* receive?
+
+<Solution>
+
+It receives the body of its definition file as its system prompt, plus basic environment details such as the working folder, and the task it is given. It does not receive your conversation history or the main Claude Code system prompt.
+
+</Solution>
+
+**3. (standard)** Write a subagent definition for a test runner that runs the project's tests and reports only the failures, briefly, on a fast model.
+
+<Solution>
+
+```markdown
+---
+name: test-runner
+description: Runs the test suite and reports failures. Use after code changes, or when asked to run the tests.
+tools: Bash, Read
+model: haiku
+---
+
+Run the project's tests with `npm test`. If everything passes, reply with one line
+saying how many tests passed. If anything fails, list each failing test's name,
+the assertion that failed, and the file and line, and nothing else. Do not try to
+fix anything.
+```
+
+Ideally a permission rule limits its `Bash` use to the test command.
+
+</Solution>
+
+**4. (standard)** You want Claude Code to fix two unrelated bugs at the same time. Describe the setup.
+
+<Solution>
+
+Two sessions, each in its own worktree and branch: `claude --worktree fix-bug-a` in one terminal and `claude --worktree fix-bug-b` in another (or two sessions in the desktop app). Give each a specific task with a check. Review each diff separately and merge each through its own pull request.
+
+</Solution>
+
+**5. (stretch)** A colleague runs eight parallel sessions every morning and merges whatever passes the tests. What are the risks, and what would you change?
+
+<Solution>
+
+Tests passing is not the same as correct, secure and maintainable code: unreviewed changes can contain wrong behaviour the tests do not cover, security problems, or needless complexity, and eight at once makes careful review unlikely. Tasks may also overlap and conflict. Change: fewer sessions, only independent tasks, each with a clear specification; a reviewer subagent or `/code-review` on each, then a human review of every diff before merging; and merge one at a time, rerunning tests after each.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Use extra agents for **parallel work**, **keeping noisy output away**, and **independent review**, not by habit: each costs tokens, and delegation alone does not improve an answer.
+- A **subagent** is a helper with its own context and instructions (`.claude/agents/*.md`: name, description, tools, model; body as system prompt) that returns a summary. Built-in ones include Explore and Plan.
+- **Parallel sessions** need separate **worktrees** (`claude --worktree name`), so tasks cannot overwrite each other. The desktop app does this automatically.
+- **Background sessions** (`claude --bg`) and `claude agents` let you hand off and check on work.
+- **Agent teams** (experimental) and **dynamic workflows** coordinate many agents for big jobs, at high token cost.
+- Parallel work pays off only if you can review every result.
+
+## Go deeper
+
+- [Subagents](https://code.claude.com/docs/en/sub-agents), from the Claude Code documentation. Built-in agents, every header field, and patterns.
+- [Worktrees](https://code.claude.com/docs/en/worktrees), from the Claude Code documentation. Parallel sessions on separate working copies.
+- [Agent teams](https://code.claude.com/docs/en/agent-teams), from the Claude Code documentation. The experimental lead-and-teammates set-up.
+- [Dynamic workflows](https://code.claude.com/docs/en/workflows), from the Claude Code documentation. Large coordinated runs.

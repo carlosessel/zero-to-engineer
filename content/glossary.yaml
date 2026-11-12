@@ -67,6 +67,12 @@
 - term: "Authorisation"
   definition: "Deciding what a known user is allowed to do."
   courses: [se]
+- term: "Auto memory"
+  definition: "Notes Claude Code saves for itself about a project, such as corrections and preferences, kept on your machine and loaded each session."
+  courses: [claude]
+- term: "Auto mode"
+  definition: "A Claude Code permission mode in which a separate classifier reviews actions and blocks risky ones, so routine actions run without prompts. It does not guarantee safety."
+  courses: [claude]
 - term: "AVIF"
   definition: "A newer image format, often smaller still than WebP."
   courses: [web]
@@ -146,12 +152,24 @@
 - term: "Claude"
   definition: "Anthropic's family of AI models, used through the Claude apps, Claude Code and the Claude API."
   courses: [claude]
+- term: "Claude Agent SDK (Agent SDK)"
+  definition: "A library for Python and TypeScript that gives your own programs Claude Code's agent loop, tools, permissions, skills and hooks."
+  courses: [claude]
+- term: "Claude Code"
+  definition: "Anthropic's coding agent: it reads, searches, runs commands, edits files and checks its work in your projects, in the terminal, editors, a desktop app and the web."
+  courses: [claude]
+- term: "CLAUDE.md"
+  definition: "A Markdown file of standing instructions that Claude Code loads into every session: check commands, conventions and traps it cannot see in the code."
+  courses: [claude]
 - term: "Cleanup function"
   definition: "A function returned from a React effect that stops what the effect started, such as a timer."
   courses: [web]
 - term: "Client"
   definition: "The program that makes a request, such as a browser or app."
-  courses: [se, web]
+  courses: [se, web, claude]
+- term: "Cloud scheduled tasks"
+  definition: "Claude Code tasks that run on Anthropic's cloud on a timer or an event, on a fresh copy of your repository."
+  courses: [claude]
 - term: "CLS"
   definition: "Cumulative Layout Shift: how much content moves unexpectedly. Good is 0.1 or less."
   courses: [web]
@@ -290,6 +308,9 @@
 - term: "Dynamic import"
   definition: "import(\"./file.js\") with brackets, which loads a module when that line runs and returns a promise for it."
   courses: [web]
+- term: "Dynamic workflows"
+  definition: "Claude Code runs in which a script coordinates many subagents in the background for a very large job."
+  courses: [claude]
 - term: "Edge case"
   aliases: ["edge cases"]
   definition: "An unusual input at the boundary of what code handles, such as zero, an empty list or the largest allowed value."
@@ -312,7 +333,7 @@
   courses: [web, se]
 - term: "Environment variable"
   definition: "A setting supplied to a program from outside its code."
-  courses: [se]
+  courses: [se, claude]
 - term: "Epoch"
   definition: "One full pass through the training data."
   courses: [ai]
@@ -331,6 +352,9 @@
 - term: "Event object"
   definition: "The object passed to an event handler, describing what happened, such as which element was clicked."
   courses: [web]
+- term: "Exit code"
+  definition: "The number a program returns when it ends: 0 means success, anything else a kind of failure."
+  courses: [claude]
 - term: "Expression"
   aliases: ["expressions"]
   definition: "A piece of code that produces a value, such as 2 + 3, a variable or a function call."
@@ -423,8 +447,10 @@
   courses: [web, se]
 - term: "Hook"
   aliases: ["hooks"]
-  definition: "A React function whose name starts with use, such as useState, called at the top level of a component."
-  courses: [web]
+  definitions:
+    web: "A React function whose name starts with use, such as useState, called at the top level of a component."
+    claude: "A command Claude Code itself runs on an event, such as before a tool is used or when Claude tries to finish; exit code 2 blocks."
+  courses: [web, claude]
 - term: "HTML"
   definition: "The language that says what is on a web page: headings, paragraphs, links, images and so on."
   courses: [web]
@@ -543,9 +569,15 @@
 - term: "Main thread"
   definition: "The one place where a browser runs a page's JavaScript, layout, drawing and event handling."
   courses: [web]
+- term: "Managed settings"
+  definition: "Claude Code settings deployed by an organisation, which projects and individuals cannot override."
+  courses: [claude]
 - term: "Margin"
   definition: "Space outside an element's border that pushes other boxes away."
   courses: [web]
+- term: "Marketplaces"
+  definition: "Lists of Claude Code plugins, usually kept in a Git repository, from which plugins are installed."
+  courses: [claude]
 - term: "Matcher"
   aliases: ["matchers"]
   definition: "The method in an assertion that says what kind of check to make, such as toBe or toEqual."
@@ -553,6 +585,12 @@
 - term: "MCP"
   definition: "Model Context Protocol: an open standard for connecting models to tools and data."
   courses: [ai, claude]
+- term: "MCP client"
+  definition: "An application, such as Claude Code or the Claude apps, that connects to MCP servers so a model can use their tools."
+  courses: [claude]
+- term: "MCP server"
+  definition: "A program that offers tools, resources and prompts to AI applications through the Model Context Protocol."
+  courses: [claude]
 - term: "Media query"
   definition: "A CSS block that applies only when a condition is true, such as the window being at least 700 pixels wide."
   courses: [web]
@@ -613,6 +651,9 @@
 - term: "Optional chaining"
   definition: "The ?. operator, which gives undefined instead of crashing when the thing before it is undefined or null."
   courses: [web]
+- term: "Output style"
+  definition: "A Claude Code setting that changes how Claude works with you, such as Explanatory or Learning."
+  courses: [claude]
 - term: "Output tokens"
   definition: "The tokens a model writes, including its thinking. They cost several times more than input tokens."
   courses: [claude]
@@ -637,9 +678,18 @@
 - term: "PATH"
   definition: "The list of folders your computer searches when you type a program's name in the terminal."
   courses: [web, ai, se]
+- term: "Permission mode"
+  definition: "The Claude Code setting that decides what runs without asking: Manual, acceptEdits, plan, auto, dontAsk or bypassPermissions."
+  courses: [claude]
+- term: "Permission rule"
+  definition: "A Claude Code setting that allows, asks for or denies a matching action, such as Bash(npm test *) or Read(./.env). Deny rules always win."
+  courses: [claude]
 - term: "Placeholder"
   definition: "Grey hint text inside an empty form field; it disappears when you type, so it never replaces a label."
   courses: [web]
+- term: "Plan mode"
+  definition: "A Claude Code permission mode in which Claude investigates and proposes a plan but edits nothing until you approve."
+  courses: [claude]
 - term: "Playwright"
   definition: "A tool for end-to-end tests that drives real browsers."
   courses: [web]
@@ -720,6 +770,9 @@
 - term: "Remote"
   definition: "A copy of a Git repository kept somewhere else, usually on GitHub; the main one is usually called origin."
   courses: [web]
+- term: "Remote Control"
+  definition: "A Claude Code feature for steering a session running on your computer from your phone or another device."
+  courses: [claude]
 - term: "Render"
   aliases: ["rendering"]
   definition: "In React, calling a component to get a fresh description of what should be on screen; React then updates the page to match."
@@ -748,6 +801,9 @@
 - term: "Sampling"
   definition: "Choosing each next token with a little randomness among the likely ones, which is why the same question can get different answers."
   courses: [claude]
+- term: "Sandbox"
+  definition: "Operating-system limits on what commands Claude Code runs can write and reach on the network."
+  courses: [claude]
 - term: "Scope"
   definition: "Where in the code a variable exists; a variable made inside a block exists only in that block."
   courses: [web]
@@ -765,7 +821,7 @@
   courses: [web]
 - term: "Server"
   definition: "A computer or program that answers requests."
-  courses: [se, web]
+  courses: [se, web, claude]
 - term: "Single-page application"
   definition: "A web app that loads one page and then swaps what is shown with JavaScript, instead of loading a new page for each link."
   courses: [web]
@@ -798,6 +854,12 @@
   aliases: ["statements"]
   definition: "One instruction in a program, such as a line that stores a value or calls a function."
   courses: [web]
+- term: "Status line"
+  definition: "The line at the bottom of Claude Code's terminal display, which can show the model, branch or context use from a small script."
+  courses: [claude]
+- term: "Stdio"
+  definition: "Standard input and output: the way a local MCP server and Claude Code talk, by the program reading and writing text."
+  courses: [claude]
 - term: "Strict mode"
   aliases: ["strict"]
   definition: "TypeScript's setting that turns on its most useful checks, such as for missing values; on by default since TypeScript 6."
@@ -807,6 +869,9 @@
   courses: [web]
 - term: "Structured outputs"
   definition: "An API feature that makes a model's reply follow a schema you define, so programs can read it reliably."
+  courses: [claude]
+- term: "Subagent"
+  definition: "A helper agent Claude Code starts for a specific job, with its own context and instructions, which returns a summary."
   courses: [claude]
 - term: "SVG"
   definition: "An image format made of shapes rather than pixels, which stays sharp at any size."
@@ -955,6 +1020,9 @@
 - term: "Working folder"
   definition: "In Git, your project's files as they are on disk right now, including changes not yet committed."
   courses: [web]
+- term: "Worktrees"
+  definition: "Extra working copies of one Git repository, each in its own folder on its own branch, so parallel sessions cannot overwrite each other."
+  courses: [claude]
 - term: "XML tags"
   definition: "Labels in angle brackets, such as <document> and </document>, used in prompts to mark where each kind of content starts and ends."
   courses: [claude]

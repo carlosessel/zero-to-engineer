@@ -9,6 +9,7 @@ describe('whyNotRunnable', () => {
   it('names the library that cannot run in the browser', () => {
     expect(whyNotRunnable('import torch\nfrom torch import nn')).toContain('torch');
     expect(whyNotRunnable('x = 1\nfrom sentence_transformers import SentenceTransformer')).toContain('sentence_transformers');
+    expect(whyNotRunnable('from mcp.server.mcpserver import MCPServer')).toContain('mcp');
   });
   it('does not mistake a longer name for a blocked library', () => {
     expect(whyNotRunnable('import torchless')).toBeNull();

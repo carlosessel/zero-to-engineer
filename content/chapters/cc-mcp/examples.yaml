@@ -1,0 +1,70 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    claude mcp add --help | grep -q -- "--transport"
+  note: Checks the command's options against the installed claude; it does not add a server.
+- block: 2
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    claude mcp add --help | grep -q -- "--transport"
+  note: Checks the command's options; it does not add the server or connect to a database.
+- block: 3
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    claude mcp --help | grep -q "list"
+  note: Checks the command exists; it does not list your own servers.
+- block: 4
+  lang: json
+  check: illustration
+  verify: |
+    import json
+    s = json.loads(block)['mcpServers']
+    assert all(v['type'] == 'http' and 'url' in v for v in s.values())
+    assert '${API_KEY}' in s['api-server']['headers']['Authorization']
+- block: 5
+  lang: python
+  check: shell
+  script: |
+    cp "$BLOCK" bakery_stock.py
+    python - <<'PY'
+    import asyncio, runpy
+    ns = runpy.run_path("bakery_stock.py", run_name="bakery_stock")
+    mcp = ns["mcp"]
+    tools = asyncio.run(mcp.list_tools())
+    assert sorted(t.name for t in tools) == ["check_stock", "sold_out"], tools
+    assert "full name" in next(t for t in tools if t.name == "check_stock").description
+    r = asyncio.run(mcp.call_tool("sold_out", {}))
+    assert r.structured_content == {"result": ["rye loaf"]}, r
+    r = asyncio.run(mcp.call_tool("check_stock", {"product": " Rye Loaf "}))
+    assert r.content[0].text == "0 rye loaf left.", r
+    r = asyncio.run(mcp.call_tool("check_stock", {"product": "bagel"}))
+    assert "Known products" in r.content[0].text, r
+    PY
+  note: Loads the server with the mcp package (2.3.0) without starting stdio, lists its tools and calls each one.
+- block: 6
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    claude mcp add --help | grep -q -- "--transport"
+  note: Checks the command's options; it does not add the server.
+- block: 7
+  lang: python
+  check: shell
+  script: |
+    cp "$BLOCK" restock.py
+    python - <<'PY'
+    import asyncio, runpy
+    mcp = runpy.run_path("restock.py", run_name="restock")["mcp"]
+    r = asyncio.run(mcp.call_tool("restock", {"product": "rye loaf", "count": 4}))
+    assert r.content[0].text == "4 rye loaf now in stock.", r
+    r = asyncio.run(mcp.call_tool("restock", {"product": "rye loaf", "count": -1}))
+    assert "positive whole number" in r.content[0].text, r
+    PY

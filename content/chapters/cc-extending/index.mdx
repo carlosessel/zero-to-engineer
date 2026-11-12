@@ -1,0 +1,324 @@
+---
+title: "Extending Claude Code: skills, hooks and plugins"
+summary: "Writing skills, running hooks on events, and packaging and sharing them as plugins through marketplaces."
+prerequisites: [cc-settings]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will be able to teach Claude Code your team's workflows with **skills**, make certain steps happen automatically and reliably with **hooks**, and package both as a **plugin** others can install. This is how individual good practice becomes a team's standard way of working, and how people who use Claude Code heavily get consistently good results.
+
+Details are from the Claude Code documentation on [skills](https://code.claude.com/docs/en/skills), [hooks](https://code.claude.com/docs/en/hooks) and [plugins](https://code.claude.com/docs/en/plugins/overview), checked in **November 2026**. The skill format is an open standard also used by the Claude apps and the API (<Ref to="cl-apps" />).
+
+## Skills
+
+A **skill** is a folder containing a `SKILL.md` file: some instructions, with a short header saying what the skill is for. Claude reads only the header of each skill at first; when your request matches, it loads the whole skill and follows it. You can also run a skill yourself by typing its name as a command. (This site's own repository has a skill for adding new courses, which is how the courses you are reading were created.)
+
+### Your first skill
+
+From the documentation's own first example: a skill that summarises your uncommitted changes and flags anything risky. Create `~/.claude/skills/summarize-changes/SKILL.md`:
+
+```markdown
+---
+description: Summarizes uncommitted changes and flags anything risky. Use when the user asks what changed, wants a commit message, or asks to review their diff.
+---
+
+## Current changes
+
+!`git diff HEAD`
+
+## Instructions
+
+Summarize the changes above in two or three bullet points, then list any risks you notice such as missing error handling, hardcoded values, or tests that need updating. If the diff is empty, say there are no uncommitted changes.
+```
+
+Three parts to notice:
+
+1. **The header** (between the `---` lines, in a format called YAML front matter) holds the `description`. It is the most important line in the skill: Claude decides whether to use the skill from it, so say what it does *and when to use it*.
+2. **The `!` line** runs a command (`git diff HEAD`) and puts its output into the skill before Claude reads it. The instructions arrive with the real diff, so the answer is grounded in your actual changes rather than guesses.
+3. **The instructions** say what to do, concisely. Once loaded, a skill stays in the context, so every line has a cost.
+
+Test it: in a project with some changes, ask "What did I change?" (Claude should load the skill by itself), or type `/summarize-changes` (the folder name becomes the command).
+
+### Where skills live
+
+| Location | Available |
+|---|---|
+| `~/.claude/skills/<name>/SKILL.md` | to you, in every project |
+| `.claude/skills/<name>/SKILL.md` in a project | to everyone working on the project (commit it) |
+| inside a plugin | to everyone who installs the plugin |
+
+### Two kinds of skill
+
+The documentation describes two kinds of content:
+
+- **Reference** skills hold knowledge Claude applies while working: your API conventions, a style guide, domain rules. Let Claude load them when relevant.
+- **Task** skills are step-by-step procedures: deploying, cutting a release, creating a migration. These are usually things *you* want to start deliberately, so add `disable-model-invocation: true` to the header, and Claude will not start them on its own:
+
+```markdown
+---
+name: release
+description: Prepare a release - bump the version, update the changelog, open a pull request
+disable-model-invocation: true
+---
+
+Prepare a release:
+1. Run the full test suite with `npm test` and stop if anything fails.
+2. Read the commits since the last tag with `git log $(git describe --tags --abbrev=0)..HEAD --oneline`.
+3. Choose the version bump (patch, minor or major) by semantic versioning, and say why.
+4. Update the version in package.json and add a CHANGELOG.md entry grouped as Added, Changed, Fixed.
+5. Create a branch release/vX.Y.Z, commit, push, and open a pull request. Do not merge it.
+```
+
+Other header fields worth knowing: `allowed-tools` (tools the skill may use without asking), `model` and `effort` (run the skill with a particular model or effort), and `context: fork` (run it in a separate helper agent, so its work does not fill your conversation). The documentation lists them all.
+
+### Writing good skills
+
+- **Write the description for the moment of choice.** "Use when the user asks to deploy, release or ship" triggers reliably; "Deployment helper" does not.
+- **Keep the body short and direct.** Say what to do, not why at length. Put long reference material in separate files in the skill folder, and tell Claude when to read them.
+- **Prefer a script for anything mechanical.** If a step must happen exactly the same way every time, put it in a script in the skill folder and have the skill run it.
+- **Test it** on a few real requests, including ones that should *not* trigger it.
+
+## Hooks
+
+A **hook** is a command that Claude Code itself runs when a particular event happens: before a tool is used, after a file is edited, when Claude tries to finish its turn, when a session starts. Unlike an instruction in `CLAUDE.md` or a skill, a hook does not depend on the model choosing to follow it. It always runs. That makes hooks the tool for rules that must have no exceptions (<Ref to="cc-settings" /> explains instructions versus enforcement).
+
+Hooks are configured in a settings file. This one, from the documentation's examples, formats every file Claude edits with Prettier:
+
+```json
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          { "type": "command", "command": "jq -r '.tool_input.file_path' | xargs npx prettier --write" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Reading it from the outside in:
+
+- **`PostToolUse`** is the event: after a tool has been used.
+- **`matcher`** chooses which tools: `Edit|Write` means the edit or write tools.
+- **The command** receives details of the event as JSON on its input. Here `jq` (a JSON tool) pulls out the file path and passes it to Prettier.
+
+The events you will use most:
+
+| Event | Runs | Typical use |
+|---|---|---|
+| `SessionStart` | when a session starts | load context, such as today's open tickets |
+| `PreToolUse` | before a tool runs; can block it | forbid editing generated files, or a dangerous command |
+| `PostToolUse` | after a tool runs | format, lint, or run tests on the changed file |
+| `Stop` | when Claude tries to finish its turn; can send it back | refuse to finish until the checks pass |
+| `Notification` | when Claude needs your attention | send a desktop or phone notification |
+
+### Blocking with exit codes
+
+A hook command reports back through its **exit code** (the number a program returns when it ends; 0 means success):
+
+- **0**: carry on.
+- **2**: block. For `PreToolUse`, the tool call is stopped; for `Stop`, Claude is sent back to work. Whatever the command printed to its error output is given to Claude as the reason.
+- anything else: an error is shown, but nothing is blocked.
+
+The best-practices page's example: refuse to let Claude finish until the TypeScript type-check passes.
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          { "type": "command", "command": "npx tsc --noEmit 1>&2 || exit 2" }
+        ]
+      }
+    ]
+  }
+}
+```
+
+If `tsc` fails, the hook exits with 2, its errors go to Claude, and Claude keeps working until the type-check passes. (Claude Code stops blocking after several blocks in a row with no progress, so a broken check cannot trap it for ever.)
+
+And a `PreToolUse` hook that forbids edits in a generated folder:
+
+```bash
+#!/bin/bash
+# .claude/hooks/protect-generated.sh
+# Reads the tool call as JSON on standard input; blocks edits under src/generated/.
+file=$(jq -r '.tool_input.file_path // empty')
+case "$file" in
+  */src/generated/*)
+    echo "src/generated/ is created by 'npm run codegen'. Change the schema and run that instead." >&2
+    exit 2
+    ;;
+esac
+exit 0
+```
+
+Registered with `"PreToolUse": [{ "matcher": "Edit|Write", "hooks": [{ "type": "command", "command": ".claude/hooks/protect-generated.sh" }] }]`. The message tells Claude what to do instead, so it can carry on correctly.
+
+### Hooks run with your permissions
+
+A hook runs a command on your machine, as you, automatically. Read any hook before you add it, especially from someone else's project or plugin, as you would read any script before running it. `/hooks` shows the hooks in effect and where each came from.
+
+## Plugins
+
+A **plugin** packages skills, hooks, helper-agent definitions and MCP server settings together, so a team (or anyone) can install them in one step. Its layout:
+
+```text
+my-plugin/
+├── .claude-plugin/
+│   └── plugin.json        the manifest: name, description, version
+├── skills/
+│   └── release/SKILL.md
+├── agents/                helper-agent definitions (see "Many agents at once")
+├── hooks/hooks.json
+└── .mcp.json              MCP servers (see "Connecting tools with MCP")
+```
+
+The manifest needs only a name:
+
+```json
+{
+  "name": "bakery-team-tools",
+  "description": "Release, migration and review workflows for the bakery site",
+  "version": "1.0.0"
+}
+```
+
+Plugins are shared through **marketplaces**, which are lists of plugins, usually kept in a Git repository. Anthropic's official marketplace is available by default. In a session:
+
+```text
+/plugin marketplace add your-org/claude-plugins
+/plugin install bakery-team-tools@your-org
+```
+
+While building a plugin, load it from a folder with `claude --plugin-dir ./my-plugin`, and reload it after changes with `/reload-plugins`. Skills in a plugin are run as `/plugin-name:skill-name`.
+
+As with hooks: installing a plugin installs code that will run on your machine. Install from sources you trust, and read what a plugin contains.
+
+## Which tool for which job
+
+| You want… | Use |
+|---|---|
+| Claude to know something on every task, briefly | `CLAUDE.md` (<Ref to="cc-context" />) |
+| Claude to know how to do something occasionally | a reference skill |
+| A procedure you start deliberately | a task skill with `disable-model-invocation: true` |
+| Something to happen every time, with no exceptions | a hook |
+| Something to be impossible | a deny rule (<Ref to="cc-settings" />) or a `PreToolUse` hook |
+| To share all of the above | a plugin |
+
+## Common mistakes
+
+- **A vague skill description**, so the skill never triggers, or triggers when it should not.
+- **Long, chatty skill bodies.** Once loaded they stay in context; be concise.
+- **Task skills Claude can start by itself** (deploys, releases). Add `disable-model-invocation: true`.
+- **Writing a must-never rule as an instruction.** Use a hook or deny rule.
+- **Hooks that block without explaining.** Print a reason that tells Claude what to do instead.
+- **Hooks for mere preferences.** The best-practices page says to delete those and let Claude decide.
+- **Installing hooks and plugins you have not read.** They run code as you.
+
+## Practice
+
+**1. (warm-up)** What decides whether Claude loads a skill on its own?
+
+<Solution>
+
+The skill's `description` in its header. Claude reads every skill's description and loads the full skill when a request matches it, so the description should say what the skill does and when to use it.
+
+</Solution>
+
+**2. (warm-up)** Which exit code from a `PreToolUse` hook blocks the tool call, and where does the reason go?
+
+<Solution>
+
+Exit code 2. Whatever the hook printed to its error output (stderr) is given to Claude as the reason.
+
+</Solution>
+
+**3. (standard)** Write a `SKILL.md` for a task skill `new-migration` that creates a database migration in your project, which Claude must never start on its own.
+
+<Solution>
+
+```markdown
+---
+name: new-migration
+description: Create a new database migration with an up and a down step
+disable-model-invocation: true
+---
+
+Create a migration:
+1. Ask what the migration should change if the request does not say.
+2. Run `npm run migrate:create -- <short-name>` to create the file.
+3. Write the up step, and a down step that exactly undoes it.
+4. Run `npm run migrate:up` then `npm run migrate:down` then `npm run migrate:up` against the local database, and show the output.
+5. Do not edit migrations that have already been committed.
+```
+
+The commands are examples; use your project's real ones.
+
+</Solution>
+
+**4. (standard)** Your team keeps forgetting to run the linter, and so does Claude. Should the fix be a `CLAUDE.md` line, a skill, or a hook? Write it.
+
+<Solution>
+
+A hook, because it must happen every time. For example, run the linter whenever Claude tries to finish, and send it back if it fails:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "npm run lint 1>&2 || exit 2" }] }
+    ]
+  }
+}
+```
+
+Keep the lint command in `CLAUDE.md` too, so Claude can run it while working rather than only at the end.
+
+</Solution>
+
+**5. (standard)** A plugin from an unknown author offers "50 productivity hooks". What should you check before installing it?
+
+<Solution>
+
+That you trust the source; then read what it contains: every hook command (they run as you, automatically), any MCP servers it adds (what they connect to), and the skills' instructions. Install only what you need, ideally per project rather than for everything, and check `/hooks` afterwards.
+
+</Solution>
+
+**6. (stretch)** Design a small team plugin for a web project: list two skills, one hook and one deny rule you would include, and what each is for.
+
+<Solution>
+
+For example:
+- Skill `release` (task, user-invoked): bump the version, update the changelog, open a pull request.
+- Skill `api-conventions` (reference): how endpoints, errors and validation are written in this codebase, loaded when Claude works on the API.
+- Hook `Stop`: run the type-check and tests, sending Claude back if they fail.
+- Deny rule (in the plugin's or project's settings): `Read(./.env)` and `Bash(git push --force *)`.
+
+Bundled as a plugin in the team's marketplace, every developer gets the same workflows and guarantees with one install.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **skill** is a folder with a `SKILL.md`: a header with a `description` (when to use it) and concise instructions. Claude loads it when relevant, or you run it as `/name`.
+- Skills live in `~/.claude/skills/` (yours), `.claude/skills/` (project), or plugins. **Reference** skills hold knowledge; **task** skills are procedures, usually with `disable-model-invocation: true`.
+- `!` lines inject a command's output into a skill, grounding it in real data.
+- A **hook** is a command Claude Code runs on an event (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`…). Exit code **2** blocks, with stderr as the reason. Hooks are for rules with no exceptions.
+- A **plugin** bundles skills, hooks, agents and MCP settings, shared through **marketplaces** and installed with `/plugin install`.
+- Hooks and plugins run code as you: read them before installing.
+
+## Go deeper
+
+- [Skills](https://code.claude.com/docs/en/skills), from the Claude Code documentation. Every field, where skills load, and examples.
+- [Skill authoring best practices](https://platform.claude.com/docs/en/agents-and-tools/agent-skills/best-practices), from Anthropic. Writing descriptions and bodies that work.
+- [Hooks guide](https://code.claude.com/docs/en/hooks-guide) and [hooks reference](https://code.claude.com/docs/en/hooks), from the Claude Code documentation. Every event, input and exit code.
+- [Create plugins](https://code.claude.com/docs/en/plugins/create), from the Claude Code documentation. Building, testing and publishing a plugin.
+- [Introduction to Agent Skills](https://academy.claude.com/), on Claude Academy. Anthropic's free course on skills.

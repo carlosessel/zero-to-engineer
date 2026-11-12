@@ -1,0 +1,33 @@
+- question: What makes Claude load a skill on its own?
+  options:
+  - The folder name
+  - A request that matches the skill's description
+  - Skills always load
+  answer: 1
+  explanation: 'Write the description for the moment of choice: what it does and when to use it.'
+- question: A deploy skill should never be started by Claude itself. What do you add?
+  options:
+  - 'disable-model-invocation: true'
+  - 'allowed-tools: none'
+  - A warning in the body
+  answer: 0
+  explanation: Then only you can start it, with its command.
+- question: Which is right for 'always run the type-check before finishing, no exceptions'?
+  options:
+  - A CLAUDE.md line
+  - A Stop hook that blocks until it passes
+  answer: 1
+  explanation: Hooks are enforced by Claude Code; instructions are a judgement each time.
+- question: A PreToolUse hook exits with code 2. What happens?
+  options:
+  - The tool call is blocked and the hook's stderr is given to Claude as the reason
+  - Nothing
+  - Claude Code crashes
+  answer: 0
+  explanation: Exit 0 continues; 2 blocks; others are non-blocking errors.
+- question: Why read a plugin before installing it?
+  options:
+  - Plugins are slow
+  - Its hooks and servers run code on your machine as you
+  answer: 1
+  explanation: Install from trusted sources and read what it contains.

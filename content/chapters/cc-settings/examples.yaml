@@ -1,0 +1,16 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: json
+  check: illustration
+  verify: |
+    import json
+    p = json.loads(block)['permissions']
+    assert set(p) == {'allow', 'ask', 'deny'}
+    assert 'Read(./.env)' in p['deny'] and 'Bash(git push *)' in p['ask']
+- block: 2
+  lang: json
+  check: illustration
+  verify: |
+    import json
+    p = json.loads(block)['permissions']
+    assert 'Bash(npm run lint)' in p['allow'] and 'Read(./config/secrets/**)' in p['deny'] and 'Bash(git push *)' in p['ask']

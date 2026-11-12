@@ -1,0 +1,34 @@
+- question: Claude Code wants to edit a file. In the default (Manual) mode, what happens?
+  options:
+  - It edits straight away
+  - It asks your permission first
+  - It refuses
+  answer: 1
+  explanation: Reading is free; editing, most commands and web access need approval in Manual mode.
+- question: Claude Code is heading the wrong way mid-task. What is the quickest fix?
+  options:
+  - Wait for it to finish, then undo
+  - Press Esc and redirect it
+  - Close the terminal
+  answer: 1
+  explanation: Esc stops it and keeps the work so far; then steer it.
+- question: A command Claude ran deleted some files. Can /rewind bring them back?
+  options:
+  - Yes, always
+  - 'No: checkpoints track Claude''s file edits, not effects of commands it ran'
+  answer: 1
+  explanation: Checkpoints do not cover changes made by Bash commands. Commit with Git before big tasks.
+- question: Why add 'then run the tests' to a request?
+  options:
+  - It makes Claude faster
+  - It gives Claude a check, so it can find out whether its change worked and fix it if not
+  - Tests are required to save files
+  answer: 1
+  explanation: Without a check, Claude can only produce what looks right.
+- question: How do you reopen the most recent session in a folder?
+  options:
+  - claude --continue
+  - claude --new
+  - /clear
+  answer: 0
+  explanation: claude --continue (or -c) reopens the latest session; --resume lets you choose.

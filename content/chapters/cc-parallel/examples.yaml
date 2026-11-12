@@ -1,0 +1,25 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: markdown
+  check: illustration
+  note: The subagent example from the Claude Code subagents documentation.
+  verify: |
+    import yaml
+    head = block.split('---')[1]
+    meta = yaml.safe_load(head)
+    assert meta['tools'] == 'Read, Glob, Grep' and meta['model'] == 'sonnet'
+- block: 2
+  lang: bash
+  check: shell
+  needs: claude-cli
+  script: |
+    claude --help | grep -q -- "--worktree"
+  note: Checks the flag exists in the installed claude; it does not start a session.
+- block: 3
+  lang: markdown
+  check: illustration
+  verify: |
+    import yaml
+    head = block.split('---')[1]
+    meta = yaml.safe_load(head)
+    assert meta['name'] == 'test-runner' and meta['model'] == 'haiku' and 'Bash' in meta['tools']

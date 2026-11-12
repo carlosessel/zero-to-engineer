@@ -1,0 +1,33 @@
+- question: A deny rule and an allow rule both match an action. What happens?
+  options:
+  - The allow rule wins
+  - 'The deny rule wins: deny is checked first'
+  - Claude decides
+  answer: 1
+  explanation: Deny, then ask, then allow; first match wins.
+- question: Which mode suits a CI job that should only run the tests?
+  options:
+  - bypassPermissions
+  - dontAsk with an allow rule for the test command
+  - acceptEdits
+  answer: 1
+  explanation: dontAsk refuses anything not pre-approved.
+- question: Does auto mode guarantee safety?
+  options:
+  - 'Yes'
+  - 'No: a classifier blocks risky actions, but the documentation says it does not guarantee safety'
+  answer: 1
+  explanation: Combine it with deny rules, the sandbox, Git and review.
+- question: What does the sandbox add beyond permission rules?
+  options:
+  - Nothing
+  - Operating-system limits on what permitted commands can write and reach on the network
+  answer: 1
+  explanation: Rules decide whether a command runs; the sandbox limits what it can touch.
+- question: Where are your 'don't ask again' answers saved?
+  options:
+  - .claude/settings.json (shared)
+  - .claude/settings.local.json (yours)
+  - CLAUDE.md
+  answer: 1
+  explanation: Local settings are kept out of Git.

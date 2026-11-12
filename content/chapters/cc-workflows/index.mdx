@@ -1,0 +1,230 @@
+---
+title: "Workflows that work"
+summary: "Explore, plan, code, commit; plan mode; test-driven work; reviewing diffs; Git, branches and pull requests."
+prerequisites: [cc-context]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will have a small set of dependable ways to work with Claude Code on real tasks: understanding unfamiliar code, planning before changing, giving Claude a check to pass, reviewing what it did, and getting it through Git and code review. These habits matter more than any setting.
+
+The workflows follow Claude Code's [best practices](https://code.claude.com/docs/en/best-practices) and [common workflows](https://code.claude.com/docs/en/common-workflows) pages, checked in **November 2026**.
+
+## The shape of a good task
+
+Almost every successful task has four parts, in this order:
+
+1. **Understand**: Claude reads the relevant code (and you read its summary).
+2. **Plan**: for anything bigger than a small fix, agree the approach before any edits.
+3. **Change, with a check**: Claude edits and runs a check that comes back pass or fail.
+4. **Review and commit**: you read the diff, it is reviewed, and it goes through Git like any other change.
+
+You can skip the plan for a one-line fix. You should never skip the check or the review.
+
+## Understanding code first
+
+On an unfamiliar codebase, ask before you change:
+
+```text
+How does a user's session get refreshed after it times out? Show me the files
+involved and the order things happen in. Don't change anything.
+```
+
+Claude reads and searches, then explains with file names you can open. Questions like this are cheap, and the answer gives both you and Claude the context for the change. Some good starters from the common-workflows page: "Give me an overview of this codebase", "Where is X handled?", "Trace what happens when Y".
+
+## Write a specific prompt
+
+The best-practices page shows the difference specificity makes:
+
+| Instead of | Try |
+|---|---|
+| "fix the login bug" | "users report login fails after the session times out. look at token refresh in src/auth/, write a failing test that reproduces it, then fix it" |
+| "add a calendar widget" | "follow the pattern in HotDogWidget.php and build a calendar widget that lets you pick a month and page between years. no new libraries" |
+
+Each better version names the place, the symptom, the pattern to follow, the limits, and what "fixed" means. The page also notes that Claude tends to build the smallest thing that satisfies a request, because it cannot see how much you hoped for. When you want the fuller version, say so ("be ambitious: empty and error states, keyboard navigation, not just the layout").
+
+## Plan mode: agree the approach first
+
+**Plan mode** lets Claude read and investigate but not edit your files. It produces a plan, and nothing changes until you approve it. Enter it with **Shift+Tab** (which cycles through the permission modes), by typing `/plan` with a description, or by starting with `claude --permission-mode plan`.
+
+```text
+/plan Add rate limiting to the public API: 100 requests per minute per API key,
+returning 429 with a Retry-After header. Reuse the Redis client we already have.
+```
+
+Claude explores the code and comes back with a plan: which files change, the approach, the risks, the tests. You can then approve it (and choose how much to supervise the edits), edit the plan yourself (**Ctrl+G** opens it in your editor), or keep planning ("Don't add a new middleware layer; put it in the existing auth middleware").
+
+Plan when the task touches several files, when there are real design choices, or when you are not sure what you want. A wrong plan costs one message to fix; wrong code costs a rewind.
+
+### When you don't know what you want yet
+
+For a fuzzy feature, the best-practices page suggests letting Claude interview you:
+
+```text
+I want to add rate limiting to the public API but haven't thought it through
+yet. Interview me until you could write the spec, then write it to SPEC.md.
+```
+
+It asks about the parts you have not decided (per user or per key? what happens over the limit? what is out of scope?) until the answers make a specification. Then **start a fresh session** to build from `SPEC.md`: the build begins with a clean context and a written definition of done.
+
+## Give Claude a check to run
+
+This is the most important habit in the chapter. In the best-practices page's words, Claude stops when the work *looks* done; without something to run, "looks done" is all it has, and you become the test suite. Give it a check that comes back pass or fail, and it can close the loop itself: change, run, read the failure, fix, run again.
+
+Checks can be anything with a result Claude can read:
+
+- a test file or the whole test suite;
+- a build's exit code;
+- a type-checker or linter;
+- a script comparing output with an expected file;
+- a screenshot of the page next to the design (with Chrome; <Ref to="cc-surfaces" />).
+
+How strict to be:
+
+- **In the prompt**: "run the auth tests after, and keep going until they pass". Works today, for any task.
+- **As a goal**: `/goal all tests in tests/auth pass and lint is clean` sets a condition that a separate check reviews after each turn, sending Claude back if it is not met. Useful for long runs you are not watching.
+- **Enforced by a hook**: a `Stop` hook runs your check whenever Claude tries to finish, and blocks it until the check passes (<Ref to="cc-extending" />).
+- **By a reviewer who did not write the code**: `/code-review` (below).
+
+And ask for **evidence**: the command it ran and its output. "All tests pass" on its own tells you little; reading the output is quicker than running it yourself.
+
+### Test-driven work with Claude
+
+Test-driven development (<Ref to="testing" />) suits Claude Code especially well, because the test is the check:
+
+```text
+Write a failing test in tests/discount.test.ts for this rule: orders over £50
+get 10% off, but never on gift cards. Run it and show me it fails. Don't write
+the implementation yet.
+```
+
+Read the test: is it what you meant? Then: "Now implement it so the test passes, without changing the test." Asking it not to change the test matters: the best-practices guidance warns that a model can focus on making tests pass rather than solving the problem, so say plainly that the tests define correctness and must not be edited to pass.
+
+## Reviewing the work
+
+You are responsible for every line you commit. Review in three layers:
+
+1. **Read the diff yourself.** In the terminal, ask "show me the full diff"; in VS Code or the desktop app, use the diff view. Look for changes outside the task, deleted tests, hard-coded values, and anything you do not understand. If you do not understand it, ask.
+2. **Get an independent review.** `/code-review` (also `/review`) reviews the current changes in a fresh helper agent that never saw your conversation, so it is not swayed by the reasoning that produced the code. You can give it an effort level, ask it to fix what it finds (`--fix`), or point it at a pull request or branch.
+3. **Review against the specification**, if there is one: "Use a subagent to review this diff against SPEC.md. Check every requirement is implemented and the edge cases have tests. Report gaps that affect correctness; skip style." The page says not to drop "skip style": a reviewer asked to find problems will always find *something*, and fixing every nitpick adds needless complexity.
+
+For security-sensitive changes, `/security-review` checks your branch's changes for vulnerabilities. Anthropic also offers a heavier cloud review that runs many reviewer agents and reproduces each finding; the documentation marked it a research preview with a cost after a few free runs, when checked.
+
+## Git, branches and pull requests
+
+Claude Code is fluent in Git, and you can ask in plain words:
+
+```text
+Create a branch called fix/session-refresh, commit these changes with a clear
+message, push it, and open a pull request describing the bug, the fix and how
+it was tested.
+```
+
+Habits that keep this safe:
+
+- **Commit before a big task**, so you can always get back (checkpoints do not track everything; <Ref to="cc-first-session" />).
+- **One branch per task**, and for tasks run in parallel, one worktree per task (<Ref to="cc-parallel" />).
+- **Let Claude write the pull request description**, then edit it: it knows what changed, but you know why it matters.
+- **Never let it push to the main branch or force-push** without your explicit say-so. Settings can forbid it (<Ref to="cc-settings" />), and auto mode blocks force-pushing over others' work by default.
+- `claude --from-pr 123` starts a session on an existing pull request, to address review comments.
+
+## Steering, briefly
+
+The controls from <Ref to="cc-first-session" />, as the best-practices page puts them: watch the first minute, press **Esc** the moment Claude drifts, and after two failed corrections, `/clear` and write a better prompt. `/rewind` makes it cheap to try a bold approach and go back if it does not work out. For a quick question that should not clutter the history, `/btw` answers without adding to it.
+
+## A worked example, start to finish
+
+A real bug: customers report that discount codes sometimes apply twice.
+
+1. **Understand.** "How are discount codes applied at checkout? Trace it from the API route to the database. Don't change anything." Claude finds the route, a service, and a retry wrapper around the payment call.
+2. **Hypothesis and failing test.** "I suspect the retry re-applies the discount. Write a failing test that calls checkout with a payment that times out once, and show it fails." The test fails: the discount is applied twice. The bug is reproduced.
+3. **Plan.** In plan mode: "Propose a fix." Claude proposes applying the discount once before the retry loop, and making the operation safe to repeat. You approve.
+4. **Change with a check.** Claude edits, runs the test (passes), then the whole suite (passes). You ask for the output as evidence.
+5. **Review.** You read the diff: two files, plus the new test. `/code-review` finds one more place where a retry could double-charge a delivery fee; Claude adds a test and fixes it.
+6. **Ship.** "Branch, commit, push, open a PR with the bug, root cause, fix and tests." You edit the description to link the customer reports, and request a human review.
+
+Nothing here is exotic. The quality comes from the order: understand, reproduce, plan, check, review.
+
+## Common mistakes
+
+- **Going straight to code on a task that needed a plan**, then rewriting it twice.
+- **No check**, so "done" means "looks done".
+- **Accepting "all tests pass" without the output.**
+- **Letting Claude change the tests** to make them pass. Say the tests define correctness.
+- **Reviewing only the summary**, not the diff.
+- **Asking a reviewer for "any problems"** and then fixing every style nitpick.
+- **Big multi-day tasks in one ever-growing conversation.** Use a spec file and fresh sessions.
+- **Letting it push to main.**
+
+## Practice
+
+**1. (warm-up)** Put in order: review the diff; plan; understand the code; change with a check; commit.
+
+<Solution>
+
+Understand the code; plan; change with a check; review the diff; commit.
+
+</Solution>
+
+**2. (warm-up)** What does plan mode stop Claude from doing, and what can it still do?
+
+<Solution>
+
+It stops Claude editing your files until you approve a plan. It can still read files, search, and run exploratory commands to investigate.
+
+</Solution>
+
+**3. (standard)** Rewrite this as a specific, checkable prompt: "the export is slow, make it faster".
+
+<Solution>
+
+For example: "Exporting 10,000 orders to CSV from /admin/export takes about 40 seconds. Find where the time goes (profile it or add timing), tell me the cause before changing anything, then make it under 5 seconds for 10,000 orders without changing the CSV's columns. Add a test with 10,000 rows that checks the output matches the current format, and show me the timing before and after."
+
+</Solution>
+
+**4. (standard)** Claude says "Fixed, all tests pass." What two things should you do before committing?
+
+<Solution>
+
+Ask for the evidence (the test command and its output) and read it; then read the diff yourself, checking for changes outside the task, edited or deleted tests, and anything you do not understand. For important changes, also run `/code-review`.
+
+</Solution>
+
+**5. (standard)** Why does `/code-review` run in a fresh helper agent rather than in your conversation?
+
+<Solution>
+
+So the reviewer judges the code on its own, without having seen the reasoning that produced it. A reviewer that has read the conversation tends to accept the same assumptions; a fresh one is more likely to spot what they missed.
+
+</Solution>
+
+**6. (stretch)** Plan a test-driven workflow for adding "orders over £50 get free delivery, except to the Scottish Highlands" with Claude Code, with the prompts you would use at each step.
+
+<Solution>
+
+1. Understand: "Where is the delivery fee calculated? Show me the function and its tests. Don't change anything."
+2. Specify edge cases yourself: exactly £50, £50.01, a Highlands postcode over £50, a Highlands postcode under £50, and how Highlands postcodes are recognised (a question for the business, not Claude).
+3. Failing tests: "Add failing tests in the delivery fee test file for these cases: … Run them and show they fail. Don't change the implementation."
+4. Implement: "Make the tests pass without changing them. Run the whole suite and show me the output."
+5. Review: read the diff; `/code-review`.
+6. Ship: branch, commit, pull request describing the rule and the test cases.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Good tasks go **understand → plan → change with a check → review → commit**.
+- Ask questions before changing unfamiliar code. Write **specific prompts**: place, symptom, pattern, limits, definition of done; say "be ambitious" when you want the fuller version.
+- **Plan mode** (Shift+Tab or `/plan`) investigates without editing until you approve. For fuzzy features, let Claude interview you into a `SPEC.md`, then build in a fresh session.
+- **Give Claude a check** that comes back pass or fail, and ask for the evidence. Test-driven work fits naturally; tell it not to change the tests.
+- Review the **diff**, get an independent **`/code-review`**, and review against the spec, skipping style.
+- Use Git deliberately: commit before big tasks, a branch per task, edit the PR description, never push to main without saying so.
+
+## Go deeper
+
+- [Best practices](https://code.claude.com/docs/en/best-practices), from the Claude Code documentation. Specific prompts, checks, reviews and steering.
+- [Common workflows](https://code.claude.com/docs/en/common-workflows), from the Claude Code documentation. Recipes for understanding code, fixing bugs, refactoring, tests and pull requests.
+- [Permission modes](https://code.claude.com/docs/en/permission-modes), from the Claude Code documentation. Plan mode and the others.
+- [Code review](https://code.claude.com/docs/en/code-review-local), from the Claude Code documentation. `/code-review` and its options.
