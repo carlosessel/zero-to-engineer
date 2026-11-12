@@ -28,6 +28,8 @@ Kinds of check (the `check:` field):
                    Needs the network: runs only when EXAMPLES_NETWORK=1.
   docker           A shell script that needs Docker. Runs only when EXAMPLES_DOCKER=1.
   vitest           Checked by a named test in tests/web-examples.test.ts.
+  js               JavaScript, run in Node by tests/js-blocks.test.ts with console output
+                   compared (`output`, `output_contains`, `throws`, `expect`).
   web              HTML or CSS, validated by tests/web-blocks.test.ts (html-validate,
                    css-tree). `expect_problems` for examples that are wrong on purpose.
   browser          As web, and rendered in real Chrome by e2e/examples.e2e.ts, which
@@ -60,7 +62,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CHAPTERS = ROOT / "content" / "chapters"
 FENCE = re.compile(r"^(`{3,})(\w+)\n(.*?)\n\1[ \t]*$", re.S | re.M)
-KINDS = {"python", "python-fake-api", "heavy", "shell", "sql", "pip", "docker", "vitest", "web", "browser", "illustration", "not-run"}
+KINDS = {"python", "python-fake-api", "heavy", "shell", "sql", "pip", "docker", "vitest", "web", "browser", "js", "illustration", "not-run"}
 AUTOMATED = {"python", "shell", "sql", "pip", "docker", "vitest"}
 
 
@@ -154,6 +156,8 @@ class Chapter:
             raise Skip(f"checked in tests/web-examples.test.ts ({e['test']})")
         if kind == "web":
             raise Skip("validated in tests/web-blocks.test.ts")
+        if kind == "js":
+            raise Skip("run in tests/js-blocks.test.ts")
         if kind == "browser":
             raise Skip("validated in tests/web-blocks.test.ts and rendered in a real browser by e2e/examples.e2e.ts")
         if kind == "illustration":

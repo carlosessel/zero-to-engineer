@@ -1,5 +1,6 @@
 // Builds the page shown in an example's preview from its HTML, CSS and JavaScript.
 // Pure functions with no DOM, so they can be unit-tested.
+import { showValue } from './show-value';
 
 export interface Sources {
   html: string;
@@ -11,11 +12,7 @@ export interface Sources {
 export function bridgeScript(frameId: string): string {
   return `(function () {
   var id = ${JSON.stringify(frameId)};
-  function show(v) {
-    if (typeof v === 'string') return v;
-    if (v instanceof Element) return '<' + v.tagName.toLowerCase() + (v.id ? ' id="' + v.id + '"' : '') + '>';
-    try { var s = JSON.stringify(v); return s === undefined ? String(v) : s; } catch (e) { return String(v); }
-  }
+  var show = ${showValue.toString()};
   function send(level, parts) {
     parent.postMessage({ zte: 'playground', id: id, level: level, text: Array.prototype.map.call(parts, show).join(' ') }, '*');
   }
@@ -23,15 +20,32 @@ export function bridgeScript(frameId: string): string {
     var original = console[level];
     console[level] = function () { send(level, arguments); return original.apply(console, arguments); };
   });
+  // An error nobody caught stops the script. Browsers word the message differently
+  // (Chrome starts it with "Uncaught "), so it is tidied to one form.
   window.addEventListener('error', function (e) {
-    send('error', [e.message + (e.lineno ? ' (line ' + e.lineno + ')' : '')]);
+    var m = String(e.message).replace(/^Uncaught /, '');
+    send('uncaught', ['The code stopped with an error: ' + m + (e.lineno ? ' (line ' + e.lineno + ')' : '')]);
+  });
+  window.addEventListener('unhandledrejection', function (e) {
+    send('uncaught', ['The code stopped with an error: ' + show(e.reason)]);
   });
   // Tell the page how tall the example is, so the frame can fit it.
+  // The body is measured (not the whole document, which is at least as tall as the
+  // frame), and again whenever its size changes, because the first measurement can
+  // come before layout has finished.
   function size() {
-    parent.postMessage({ zte: 'playground', id: id, level: 'size', text: String(document.documentElement.scrollHeight) }, '*');
+    var b = document.body;
+    if (!b) return;
+    var cs = getComputedStyle(b);
+    var h = b.getBoundingClientRect().height + parseFloat(cs.marginTop) + parseFloat(cs.marginBottom);
+    parent.postMessage({ zte: 'playground', id: id, level: 'size', text: String(Math.ceil(h)) }, '*');
   }
-  window.addEventListener('load', size);
-  if (window.ResizeObserver) new ResizeObserver(size).observe(document.documentElement);
+  window.addEventListener('load', function () {
+    size();
+    setTimeout(size, 250);
+    if (window.ResizeObserver) new ResizeObserver(size).observe(document.body);
+    parent.postMessage({ zte: 'playground', id: id, level: 'loaded', text: '' }, '*');
+  });
   document.addEventListener('submit', function (e) {
     e.preventDefault();
     var pairs = [];

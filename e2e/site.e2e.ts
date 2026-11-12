@@ -231,7 +231,10 @@ test('Python runs in the browser, including input() and errors @network', async 
 
 test('an HTML example shows a live result that can be edited, with console messages', async ({ page }) => {
   await page.goto('/se/javascript/');
-  const box = page.locator('.playground-result').first();
+  // Hidden until asked for: no empty frame before the button is pressed.
+  // The page has a JavaScript example before and after this one; the HTML example is the second.
+  const box = page.locator('.playground-result').nth(1);
+  await expect(box.locator('iframe')).toBeHidden();
   await box.getByRole('button', { name: 'Show the result' }).click();
   const frame = box.frameLocator('iframe');
   await frame.getByRole('button', { name: 'Like' }).click();
@@ -283,4 +286,24 @@ test('a preview grows to fit its example', async ({ page }) => {
   await page.goto('/web/design-basics/');
   const frame = page.locator('.playground-result iframe').first();
   await expect.poll(async () => (await frame.boundingBox())?.height ?? 0).toBeGreaterThan(400);
+});
+
+test('a JavaScript example can be run, edited and shows errors plainly', async ({ page }) => {
+  await page.goto('/se/javascript/');
+  const box = page.locator('.playground-result').first();
+  await box.getByRole('button', { name: 'Run' }).click();
+  const out = box.locator('.playground-console');
+  await expect(out).toHaveText(['Kofi 10', 'empty', '10', '20', '30', 'Total is 60'].join(''));
+  await expect(box.locator('iframe')).toBeHidden();
+
+  await box.getByRole('button', { name: 'Edit' }).click();
+  const editor = page.locator('.runner-editor').first();
+  await editor.fill('const prices = [10, 20];\nconsole.log(prices, { name: "Ama" });\nprice.push(30);');
+  await editor.press('Control+Enter');
+  await expect(out.locator('.playground-line').first()).toHaveText('[10, 20] { name: "Ama" }');
+  await expect(out.locator('.error')).toContainText('The code stopped with an error: ReferenceError: price is not defined');
+
+  await editor.fill('let x = 1;');
+  await box.getByRole('button', { name: 'Run' }).click();
+  await expect(out).toContainText('The code ran and printed nothing.');
 });

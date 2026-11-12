@@ -8,6 +8,7 @@ whether it is what the chapter claims. Never overwrites an existing file.
 Usage: .venv/bin/python scripts/examples_draft.py [chapter ...]
 """
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -57,7 +58,14 @@ def draft(chapter):
             e["check"] = "sql"
         elif lang in ("html", "css"):
             e["check"] = "web"
-        elif lang in ("js", "jsx"):
+        elif lang in ("js", "javascript"):
+            e["check"] = "js"
+            out = subprocess.run(["node", "scripts/js_output.ts", chapter, str(i)], capture_output=True, text=True).stdout
+            body = out.split("\n", 1)
+            if "stopped with" in body[0]:
+                e["DRAFT_PROBLEM"] = body[0]
+            e["output"] = Block(body[1] if len(body) > 1 else "")
+        elif lang == "jsx":
             e["check"] = "vitest"
             e["test"] = f"{chapter} block {i}"
         elif lang == "text":

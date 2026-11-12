@@ -3,6 +3,7 @@
 // - Code blocks inside <Playground> are one example: the HTML, CSS and JavaScript
 //   are combined into one page, and the preview is shown straight away.
 // - An HTML block on its own gets a "Show the result" button.
+// - A JavaScript block on its own gets a "Run" button that shows what it prints.
 // The preview is a sandboxed frame: its code cannot read this site's storage or
 // your progress, and nothing is sent anywhere.
 import { buildDocument, webNewline, type Sources } from '../lib/playground';
@@ -29,11 +30,16 @@ class Group {
   edit = button('Edit');
   reset = button('Reset');
   show = button('Show the result', 'btn');
+  run = button('Run', 'btn');
+  active = false;
+  printed = false;
   timer = 0;
   resized = false;
   escaped = false;
 
-  constructor(pres: HTMLElement[], public anchor: HTMLElement, immediate: boolean) {
+  /** live: shown at once and updated as you type; show: shown when asked; run: JavaScript only, output shown when run. */
+  constructor(pres: HTMLElement[], public anchor: HTMLElement, public mode: 'live' | 'show' | 'run') {
+    const immediate = mode === 'live';
     for (const pre of pres) {
       const lang = LANG[pre.dataset.language ?? ''];
       if (lang) this.blocks.push({ pre, lang, original: pre.textContent ?? '' });
@@ -45,18 +51,27 @@ class Group {
     this.frame.title = 'Result of the example';
     this.frame.setAttribute('sandbox', 'allow-scripts allow-forms allow-modals');
     this.frame.hidden = !immediate;
+    this.active = immediate;
     // Once someone drags the frame's corner, stop resizing it for them.
     this.frame.addEventListener('pointerdown', () => (this.resized = true));
     this.output.className = 'playground-console';
     this.output.setAttribute('role', 'log');
     this.output.setAttribute('aria-label', 'Messages from the example');
     this.output.hidden = true;
-    this.bar.append(...(immediate ? [] : [this.show]), this.edit, this.reset);
+    const first = mode === 'run' ? [this.run] : mode === 'show' ? [this.show] : [];
+    this.bar.append(...first, this.edit, this.reset);
+    if (mode === 'run') this.output.setAttribute('aria-label', 'What the code printed');
     box.append(this.bar, this.frame, this.output);
     anchor.after(box);
     this.show.addEventListener('click', () => {
       this.frame.hidden = false;
+      this.active = true;
       this.show.remove();
+      this.render();
+    });
+    // JavaScript on its own runs in a frame that is never shown; only its output is.
+    this.run.addEventListener('click', () => {
+      this.active = true;
       this.render();
     });
     this.edit.addEventListener('click', () => this.openEditors());
@@ -72,13 +87,15 @@ class Group {
   }
 
   render() {
-    if (this.frame.hidden) return;
+    if (!this.active) return;
     this.output.textContent = '';
     this.output.hidden = true;
+    this.printed = false;
     this.frame.srcdoc = buildDocument(this.sources(), this.id);
   }
 
   later() {
+    if (this.mode === 'run') return; // run only when asked: half-typed code would only show errors
     clearTimeout(this.timer);
     this.timer = window.setTimeout(() => this.render(), 300);
   }
@@ -91,10 +108,24 @@ class Group {
 
   log(level: string, text: string) {
     this.output.hidden = false;
+    this.printed = true;
     const line = document.createElement('div');
-    line.className = `playground-line ${level}`;
-    line.textContent = (level === 'error' ? 'Error: ' : '') + text;
+    line.className = `playground-line ${level === 'uncaught' ? 'error' : level}`;
+    line.textContent = text;
     this.output.appendChild(line);
+  }
+
+  /** Called when the example's page has loaded: say so if a JavaScript example printed nothing. */
+  loaded() {
+    if (this.mode !== 'run') return;
+    window.setTimeout(() => {
+      if (this.printed) return;
+      this.output.hidden = false;
+      const line = document.createElement('div');
+      line.className = 'playground-line hint';
+      line.textContent = 'The code ran and printed nothing. Use console.log(…) to see a value.';
+      this.output.appendChild(line);
+    }, 300);
   }
 
   openEditors() {
@@ -104,7 +135,9 @@ class Group {
       t.value = b.original;
       t.spellcheck = false;
       t.setAttribute('autocapitalize', 'off');
-      t.setAttribute('aria-label', `${b.lang.toUpperCase()} you can change; the result updates as you type. To leave with the keyboard, press Escape and then Tab.`);
+      t.setAttribute('aria-label', this.mode === 'run'
+        ? 'JavaScript you can change. Press Run, or Control and Enter, to run it. To leave with the keyboard, press Escape and then Tab.'
+        : `${b.lang.toUpperCase()} you can change; the result updates as you type. To leave with the keyboard, press Escape and then Tab.`);
       t.rows = Math.max(3, b.original.split('\n').length + 1);
       t.addEventListener('input', () => this.later());
       t.addEventListener('keydown', (e) => this.key(e, t));
@@ -115,7 +148,7 @@ class Group {
     }
     this.edit.hidden = true;
     this.reset.hidden = false;
-    if (this.frame.hidden) this.show.click();
+    if (this.mode === 'show' && this.frame.hidden) this.show.click();
     this.blocks[0]?.editor?.focus();
   }
 
@@ -140,6 +173,12 @@ class Group {
       this.escaped = true;
       return;
     }
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      this.active = true;
+      this.render();
+      return;
+    }
     if (e.key === 'Tab' && !e.shiftKey && !this.escaped && !e.ctrlKey && !e.altKey && !e.metaKey) {
       e.preventDefault();
       insert('  ');
@@ -158,16 +197,22 @@ window.addEventListener('message', (e: MessageEvent) => {
   // Only accept messages from that group's own frame.
   if (!g || e.source !== g.frame.contentWindow) return;
   if (d.level === 'size') g.fit(Number(d.text));
+  else if (d.level === 'loaded') g.loaded();
   else g.log(String(d.level), String(d.text));
 });
 
 // Examples grouped with <Playground>.
 for (const wrap of Array.from(document.querySelectorAll<HTMLElement>('[data-playground]'))) {
   const pres = Array.from(wrap.querySelectorAll<HTMLElement>('pre[data-language]'));
-  if (pres.length) new Group(pres, wrap, true);
+  if (pres.length) new Group(pres, wrap, 'live');
 }
 // HTML examples on their own.
 for (const pre of Array.from(document.querySelectorAll<HTMLElement>('.body pre[data-language="html"]'))) {
   if (pre.closest('[data-playground]')) continue;
-  new Group([pre], pre.closest<HTMLElement>('.codewrap') ?? pre, false);
+  new Group([pre], pre.closest<HTMLElement>('.codewrap') ?? pre, 'show');
+}
+// JavaScript examples on their own.
+for (const pre of Array.from(document.querySelectorAll<HTMLElement>('.body pre[data-language="js"], .body pre[data-language="javascript"]'))) {
+  if (pre.closest('[data-playground]')) continue;
+  new Group([pre], pre.closest<HTMLElement>('.codewrap') ?? pre, 'run');
 }
