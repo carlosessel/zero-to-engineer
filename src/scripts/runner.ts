@@ -66,7 +66,10 @@ class Runner {
     wrap.after(box);
     box.append(this.bar, this.out, this.ask);
 
-    this.run.addEventListener('click', () => this.start(true));
+    this.run.addEventListener('click', () => {
+      document.dispatchEvent(new CustomEvent('zte:tried', { detail: { pre: this.pre } }));
+      this.start(true);
+    });
     this.stop.addEventListener('click', () => this.halt());
     this.edit.addEventListener('click', () => this.openEditor());
     this.reset.addEventListener('click', () => this.closeEditor());

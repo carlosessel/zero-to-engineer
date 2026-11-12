@@ -1,0 +1,252 @@
+/* The redesign: a brighter, warmer look, and everything for points, streaks,
+   badges and celebrations. Loaded after global.css, so it overrides it. */
+
+body{background:var(--bg);font-feature-settings:"ss01"}
+body::after{
+  /* a soft glow of colour behind the top of every page */
+  content:"";position:fixed;inset:-20vh -10vw auto;height:70vh;z-index:-1;pointer-events:none;
+  background:radial-gradient(40% 50% at 15% 30%,rgba(91,61,245,.16),transparent 70%),
+             radial-gradient(35% 45% at 85% 20%,rgba(240,69,122,.13),transparent 70%),
+             radial-gradient(30% 40% at 60% 60%,rgba(255,159,28,.10),transparent 70%);
+}
+h1,h2,h3,.disp{font-weight:800;letter-spacing:-.02em}
+h1{font-size:clamp(34px,5.4vw,56px)}
+::selection{background:rgba(124,77,255,.28)}
+a{text-underline-offset:3px;text-decoration-thickness:1.5px}
+
+/* ---------- buttons ---------- */
+.btn{border-radius:12px;padding:10px 18px;font-weight:600;box-shadow:0 1px 0 rgba(255,255,255,.25) inset,0 6px 16px -6px rgba(85,54,232,.55);transition:transform .15s ease,box-shadow .15s ease,filter .15s}
+.btn:hover{transform:translateY(-1px);filter:brightness(1.06)}
+.btn:active{transform:translateY(1px)}
+.btn.ghost{box-shadow:none;background:var(--surface)}
+.btn.ghost:hover{border-color:var(--accent)}
+.btn.big{font-size:18px;padding:14px 24px;border-radius:14px}
+.btn.glow{background:var(--grad);color:#fff;text-shadow:0 1px 1px rgba(0,0,0,.25)}
+
+/* ---------- site header ---------- */
+.sitehead{position:sticky;top:0;z-index:15;background:color-mix(in srgb,var(--surface) 82%,transparent);backdrop-filter:saturate(1.6) blur(14px);-webkit-backdrop-filter:saturate(1.6) blur(14px);border-bottom:1px solid var(--line)}
+.sitenav{max-width:1100px;gap:4px 6px;padding:10px 18px}
+.sitenav > a{padding:6px 10px;border-radius:10px;text-decoration:none;color:var(--ink);font-weight:500}
+.sitenav > a:hover{background:var(--sunk)}
+.sitenav .logo{display:flex;align-items:center;gap:9px;font:800 18px/1 "Bricolage Grotesque",sans-serif;margin-right:8px;padding-left:0}
+.logo-mark{width:30px;height:30px;border-radius:9px;background:var(--grad);display:grid;place-items:center;color:#fff;font:800 15px/1 "Bricolage Grotesque",sans-serif;box-shadow:0 6px 14px -6px rgba(178,60,240,.8)}
+.sitenav .btn{margin-left:0}
+.navspacer{flex:1}
+.home{max-width:1100px}
+
+/* ---------- the player's chips: level, points, streak ---------- */
+.chips{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;background:var(--surface);border:1px solid var(--line);font:600 14px/1.2 "IBM Plex Sans",sans-serif;color:var(--ink);text-decoration:none;white-space:nowrap}
+a.chip:hover{border-color:var(--accent)}
+.chip .ico{font-size:15px;line-height:1}
+.chip.streak .ico{filter:grayscale(1);opacity:.6;transition:filter .3s}
+.chip.streak.live .ico{filter:none;opacity:1;animation:flicker 2.4s ease-in-out infinite}
+.chip.lvl{background:var(--grad);color:#fff;border-color:transparent;text-shadow:0 1px 1px rgba(0,0,0,.2)}
+@keyframes flicker{0%,100%{transform:scale(1) rotate(-2deg)}50%{transform:scale(1.12) rotate(3deg)}}
+.side .chips{margin:12px 6px 0}
+
+/* ---------- home: hero ---------- */
+.hero{position:relative;padding:34px 0 10px}
+.hero h1{font-size:clamp(40px,7vw,78px);line-height:1;margin:0 0 16px;max-width:14ch}
+.grad-text{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .lead{font-size:clamp(18px,2.2vw,22px);max-width:56ch}
+.hero-cta{display:flex;flex-wrap:wrap;gap:12px;align-items:center;margin:22px 0 8px}
+.hero > :not(.orbs){position:relative;z-index:1}
+.orbs{position:absolute;top:-30px;right:-60px;width:min(40vw,400px);aspect-ratio:1;pointer-events:none;z-index:0;opacity:.75}
+@media (max-width:1000px){.orbs{opacity:.28;right:-120px}}
+.orbs i{position:absolute;border-radius:50%;filter:blur(2px);opacity:.85;animation:float 12s ease-in-out infinite}
+.orbs i:nth-child(1){width:46%;height:46%;left:30%;top:8%;background:radial-gradient(circle at 30% 30%,#9C85FF,#5B3DF5 70%)}
+.orbs i:nth-child(2){width:30%;height:30%;left:8%;top:46%;background:radial-gradient(circle at 30% 30%,#FF9BB8,#F0457A 70%);animation-delay:-4s}
+.orbs i:nth-child(3){width:22%;height:22%;left:64%;top:58%;background:radial-gradient(circle at 30% 30%,#FFD27A,#FF9F1C 70%);animation-delay:-8s}
+@keyframes float{0%,100%{transform:translate(0,0)}33%{transform:translate(10px,-14px)}66%{transform:translate(-12px,8px)}}
+
+/* ---------- home: player card ---------- */
+.player{display:grid;grid-template-columns:auto 1fr auto;gap:18px 24px;align-items:center;background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:20px 24px;box-shadow:var(--shadow);margin:26px 0 34px;position:relative;overflow:hidden}
+.player::before{content:"";position:absolute;inset:0;background:var(--grad-soft);pointer-events:none}
+.player > *{position:relative}
+.player .who{display:flex;flex-direction:column;gap:2px;min-width:0}
+.player .who b{font:800 24px/1.1 "Bricolage Grotesque",sans-serif}
+.player .who span{color:var(--muted);font-size:15px}
+.xpbar{height:12px;border-radius:999px;background:var(--sunk);overflow:hidden;margin-top:8px;box-shadow:inset 0 1px 2px rgba(0,0,0,.08)}
+.xpbar i{display:block;height:100%;width:0;background:var(--grad);border-radius:inherit;transition:width .8s cubic-bezier(.2,.8,.2,1)}
+.player .stats{display:flex;gap:18px;flex-wrap:wrap}
+.stat{display:flex;flex-direction:column;align-items:center;min-width:64px}
+.stat b{font:800 26px/1 "Bricolage Grotesque",sans-serif}
+.stat span{font-size:13px;color:var(--muted);margin-top:4px}
+
+/* a ring that fills up, drawn with a conic gradient */
+.ring{--p:0;--size:84px;width:var(--size);height:var(--size);border-radius:50%;display:grid;place-items:center;
+  background:conic-gradient(var(--ring,var(--accent)) calc(var(--p)*1turn),var(--sunk) 0);transition:--p .8s}
+.ring::before{content:"";grid-area:1/1;width:calc(var(--size) - 16px);height:calc(var(--size) - 16px);border-radius:50%;background:var(--surface)}
+.ring > *{grid-area:1/1;z-index:1;text-align:center;line-height:1.05}
+.ring b{font:800 26px/1 "Bricolage Grotesque",sans-serif;display:block}
+.ring small{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.ring.goal{--ring:var(--pink)}
+.ring.goal.met{--ring:var(--good)}
+@property --p{syntax:"<number>";inherits:true;initial-value:0}
+
+/* ---------- home: course cards ---------- */
+.cards{grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:20px}
+.card{position:relative;padding:0 22px 20px;border-radius:22px;box-shadow:var(--shadow);overflow:hidden;transition:transform .2s ease,box-shadow .2s ease;display:flex;flex-direction:column}
+.card:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
+.card .band{height:96px;margin:0 -22px 0;position:relative;overflow:hidden;background:var(--band,var(--grad))}
+.card .band svg{position:absolute;right:14px;bottom:-14px;width:110px;height:110px;opacity:.95}
+.card[data-tone="1"]{--band:linear-gradient(120deg,#5B3DF5,#14B8A6)}
+.card[data-tone="2"]{--band:linear-gradient(120deg,#0EA5E9,#5B3DF5 70%)}
+.card[data-tone="3"]{--band:linear-gradient(120deg,#F0457A,#FF9F1C)}
+.card[data-tone="4"]{--band:linear-gradient(120deg,#B23CF0,#F0457A)}
+.card[data-tone="5"]{--band:linear-gradient(120deg,#14B8A6,#84CC16)}
+.card h2{margin:18px 0 8px;font-size:24px}
+.card h2 a{color:inherit;text-decoration:none}
+.card h2 a::after{content:"";position:absolute;inset:0;z-index:1}
+.card .btn,.card a:not(h2 a){position:relative;z-index:2}
+.card p{color:var(--muted);font-size:16px}
+.card .meta{display:flex;gap:10px;flex-wrap:wrap;margin:auto 0 12px}
+.pill{display:inline-block;padding:3px 10px;border-radius:999px;background:var(--sunk);font-size:13px;color:var(--ink)}
+.card .meter{margin:6px 0 0}
+.meter .bar{height:10px;border-radius:999px}
+.meter .bar i{background:var(--grad);border-radius:999px}
+
+/* ---------- home: tools ---------- */
+.tools{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;margin:0 0 34px}
+.tool{display:flex;flex-direction:column;gap:4px;padding:16px 18px;border-radius:18px;background:var(--surface);border:1px solid var(--line);text-decoration:none;color:var(--ink);transition:transform .2s,border-color .2s}
+.tool:hover{transform:translateY(-2px);border-color:var(--accent)}
+.tool b{font:800 18px/1.2 "Bricolage Grotesque",sans-serif}
+.tool span{font-size:14px;color:var(--muted)}
+.tool .ico{font-size:22px}
+
+/* ---------- course sidebar and chapters ---------- */
+.side{background:color-mix(in srgb,var(--surface) 92%,transparent)}
+.brand{font-weight:800}
+.nav a{border-radius:10px;transition:background .15s}
+.nav a[aria-current="page"]{background:var(--grad);color:#fff}
+.nav a.done .n::after{content:" ●";color:var(--good)}
+.part{text-transform:uppercase;letter-spacing:.07em;font-size:12px}
+article .crumb{font-weight:600;color:var(--accent)}
+.chapmeta{border-left:3px solid transparent;border-image:var(--grad) 1}
+.try{background:var(--surface);border:1px solid var(--line);border-left:0;border-radius:18px;position:relative;overflow:hidden;box-shadow:var(--shadow)}
+.try::before{content:"";position:absolute;inset:0 auto 0 0;width:5px;background:var(--grad)}
+.try h2::after{content:" · +15 points each";font:500 14px "IBM Plex Sans",sans-serif;color:var(--muted)}
+.try input{accent-color:var(--violet)}
+.note{border-radius:16px}
+pre{border-radius:14px;box-shadow:var(--shadow)}
+.solution{border-radius:14px}
+.toc a.done::after{content:" ✓"}
+
+/* course page: part cards */
+.coursehead{position:relative;padding:28px 26px;border-radius:24px;margin:0 0 26px;color:#fff;background:var(--band,var(--grad));overflow:hidden;box-shadow:var(--shadow-lg)}
+.coursehead h1{margin:6px 0 10px;color:#fff}
+.coursehead .lead{color:rgba(255,255,255,.9);margin:0 0 18px}
+.coursehead .crumb{color:rgba(255,255,255,.85)}
+.coursehead .btn{background:#fff;color:#2A1A6E;box-shadow:0 8px 20px -8px rgba(0,0,0,.4)}
+.coursehead .meter span{color:rgba(255,255,255,.9)}
+.coursehead .meter .bar{background:rgba(255,255,255,.25)}
+.coursehead .meter .bar i{background:#fff}
+.partcard{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:4px 22px 12px;margin:0 0 18px;box-shadow:var(--shadow)}
+.partcard h2{display:flex;align-items:center;gap:10px;margin:18px 0 4px}
+.partcard h2 .num{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--grad);color:#fff;font-size:17px;flex:none}
+
+/* ---------- quiz ---------- */
+.quiz{border-top:0;margin-top:52px;padding:6px 24px 10px;border-radius:22px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.quiz h2::after{content:" · +20 points a right answer";font:500 14px "IBM Plex Sans",sans-serif;color:var(--muted)}
+.q button{border-radius:12px;padding:12px 16px;transition:transform .12s,border-color .12s,background .2s}
+.q button:hover{transform:translateX(3px);border-color:var(--accent)}
+.q button.right{animation:pop .35s ease}
+.q button.wrong{animation:shake .35s ease}
+@keyframes pop{50%{transform:scale(1.02)}}
+@keyframes shake{20%,60%{transform:translateX(-5px)}40%,80%{transform:translateX(5px)}}
+
+/* ---------- finishing a chapter ---------- */
+.foot{align-items:center}
+.foot [data-done]{background:var(--grad);color:#fff;font-size:17px;padding:12px 22px}
+
+/* ---------- celebrations ---------- */
+.toasts{position:fixed;right:16px;bottom:16px;z-index:60;display:flex;flex-direction:column;gap:10px;align-items:flex-end;pointer-events:none;max-width:calc(100vw - 32px)}
+.toast{pointer-events:auto;display:flex;align-items:center;gap:12px;background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:16px;padding:12px 16px;box-shadow:var(--shadow-lg);animation:toast-in .4s cubic-bezier(.2,1.4,.4,1);font-size:15px;max-width:360px}
+.toast.leaving{animation:toast-out .3s ease forwards}
+.toast .big{font:800 20px/1 "Bricolage Grotesque",sans-serif}
+.toast .medal{width:42px;height:42px;flex:none}
+.toast b{display:block;font-weight:700}
+.toast small{color:var(--muted)}
+.toast.pts{background:var(--grad);color:#fff;border-color:transparent}
+.toast.pts small{color:rgba(255,255,255,.85)}
+@keyframes toast-in{from{opacity:0;transform:translateY(20px) scale(.9)}}
+@keyframes toast-out{to{opacity:0;transform:translateX(30px)}}
+.floater{position:fixed;z-index:61;pointer-events:none;font:800 20px/1 "Bricolage Grotesque",sans-serif;color:var(--violet);text-shadow:0 2px 10px rgba(124,77,255,.35);animation:float-up 1.1s ease-out forwards}
+@keyframes float-up{from{opacity:0;transform:translateY(6px) scale(.8)}20%{opacity:1;transform:translateY(-6px) scale(1.1)}to{opacity:0;transform:translateY(-46px)}}
+#confetti{position:fixed;inset:0;width:100%;height:100%;pointer-events:none;z-index:59}
+
+dialog.levelup{border:0;border-radius:28px;padding:0;max-width:min(420px,calc(100vw - 32px));background:var(--surface);color:var(--ink);box-shadow:var(--shadow-lg);text-align:center;overflow:hidden}
+dialog.levelup::backdrop{background:rgba(13,10,24,.55);backdrop-filter:blur(4px)}
+dialog.levelup .top{background:var(--grad);color:#fff;padding:28px 20px 22px}
+dialog.levelup .top .n{font:800 84px/1 "Bricolage Grotesque",sans-serif;display:block;text-shadow:0 6px 24px rgba(0,0,0,.25)}
+dialog.levelup h2{margin:6px 0 0;color:#fff;font-size:26px}
+dialog.levelup .body{padding:18px 24px 24px}
+dialog.levelup[open]{animation:pop-in .45s cubic-bezier(.2,1.5,.4,1)}
+@keyframes pop-in{from{opacity:0;transform:scale(.7)}}
+
+/* ---------- badges ---------- */
+.badges{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:14px;margin:0 0 30px}
+.badge{display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:18px 12px 14px;border-radius:20px;background:var(--surface);border:1px solid var(--line);box-shadow:var(--shadow)}
+.badge b{font:800 16px/1.2 "Bricolage Grotesque",sans-serif}
+.badge span{font-size:13px;color:var(--muted);line-height:1.35}
+.badge.locked .medal{filter:grayscale(1);opacity:.35}
+.badge.locked b{color:var(--muted)}
+.badge.fresh{outline:3px solid var(--amber);outline-offset:2px}
+.medal{width:64px;height:64px}
+
+/* ---------- activity heatmap ---------- */
+.heat{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,14px);grid-auto-columns:14px;justify-content:start;gap:4px;overflow-x:auto;padding:4px 0 10px;max-width:100%}
+.heat i{width:14px;height:14px;border-radius:4px;background:var(--sunk)}
+.heat i[data-l="1"]{background:color-mix(in srgb,var(--violet) 35%,var(--sunk))}
+.heat i[data-l="2"]{background:color-mix(in srgb,var(--violet) 65%,var(--sunk))}
+.heat i[data-l="3"]{background:var(--violet)}
+.heat i[data-l="4"]{background:var(--pink)}
+.heat i.today{outline:2px solid var(--ink);outline-offset:1px}
+.legend{display:flex;gap:6px;align-items:center;font-size:13px;color:var(--muted)}
+.legend .heat{display:flex;padding:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin:0 0 28px}
+.tile{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:14px 16px;box-shadow:var(--shadow)}
+.tile b{display:block;font:800 30px/1.1 "Bricolage Grotesque",sans-serif}
+.tile span{font-size:14px;color:var(--muted)}
+.goals{display:flex;flex-wrap:wrap;gap:8px;margin:8px 0 26px}
+.goals button{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 14px}
+.goals button[aria-pressed="true"]{background:var(--grad);color:#fff;border-color:transparent}
+
+@media (max-width:860px){
+  .player{grid-template-columns:auto 1fr;padding:18px}
+  .player .stats{grid-column:1/-1;justify-content:space-around}
+  .topbar .chips .chip:not(.streak):not(.pts){display:none}
+  .orbs{opacity:.5}
+}
+@media (max-width:520px){
+  .sitenav > a:not(.logo){font-size:14px;padding:5px 8px}
+  .hero h1{font-size:44px}
+}
+@media (prefers-reduced-motion:reduce){
+  *,*::before,*::after{animation:none!important;transition:none!important}
+}
+@media print{
+  body::after,.chips,.toasts,#confetti,.orbs{display:none!important}
+}
+
+/* ---------- small screens ---------- */
+.home,.hero{overflow-x:clip}
+body::after{inset:-20vh 0 auto}
+@media (max-width:620px){
+  .sitenav{gap:4px;padding:8px 12px}
+  .logo-text{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  .sitenav .logo{margin-right:2px}
+  .sitenav .chips{order:5}
+  .sitenav [data-theme-toggle]{order:6;padding:4px 10px;font-size:13px}
+  .navspacer{display:none}
+  .player .stats{gap:10px}
+}
+@media (max-width:860px){
+  .topbar{gap:8px}
+  .topbar .home{flex:1;min-width:0}
+  .topbar .home b{display:block;font-size:16px;line-height:1.2}
+  .topbar .chips{flex-wrap:nowrap;gap:4px}
+  .topbar .chip{padding:3px 8px;font-size:13px}
+  .topbar #menuBtn{padding:6px 12px}
+}

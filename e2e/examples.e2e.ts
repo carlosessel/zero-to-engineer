@@ -53,7 +53,7 @@ for (const { chapter, entry, blocks } of cases) {
     for (const n of entry.combine ?? [entry.block]) {
       const [lang, code] = blocks[n - 1];
       if (lang === 'jsx' || lang === 'tsx') {
-        react = { compiled: compile(code, lang, sucrase), runtimeUrl: 'http://localhost:4323/vendor/react-runtime.js' };
+        react = { compiled: compile(code, lang, sucrase), runtimeUrl: `http://localhost:${process.env.E2E_PORT || 4323}/vendor/react-runtime.js` };
         continue;
       }
       if (lang === 'ts') {

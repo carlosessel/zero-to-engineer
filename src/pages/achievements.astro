@@ -1,0 +1,66 @@
+---
+import Page from '../layouts/Page.astro';
+import { BADGES, POINTS, TITLES, levelStart } from '../lib/game';
+import { GOALS } from '../lib/progress';
+import { medalSvg } from '../lib/medal';
+---
+<Page title="Trophies · Zero to Engineer" heading="Your trophies" description="Your level, streak, daily goal, activity and badges.">
+  <p class="lead">Every chapter, exercise and right answer earns points. Learn a little every day to grow your streak. Everything here is worked out from your progress in this browser.</p>
+
+  <section class="player" aria-label="Your level">
+    <div class="ring" data-g="levelring" style="--size:96px"><div><small>Level</small><b data-g="level">1</b></div></div>
+    <div class="who">
+      <b data-g="title">Newcomer</b>
+      <span><span data-g="points">0</span> points · <span data-g="into">0 / 100</span> through this level</span>
+      <div class="xpbar" role="presentation"><i data-g="bar"></i></div>
+    </div>
+    <div class="stats">
+      <div class="stat"><b><span aria-hidden="true">🔥</span> <span data-g="streak">0</span></b><span>day streak</span></div>
+      <div class="stat"><b data-g="best">0</b><span>best streak</span></div>
+    </div>
+  </section>
+
+  <div class="tiles">
+    <div class="tile"><b data-g="today">0</b><span>points today</span></div>
+    <div class="tile"><b data-g="chapters">0</b><span>chapters finished</span></div>
+    <div class="tile"><b data-g="badges">0</b><span>trophies</span></div>
+  </div>
+
+  <h2>Daily goal</h2>
+  <p class="hint">How many points a day you are aiming for. Reaching it gets a small celebration; the streak only needs some points each day.</p>
+  <div class="goals" role="group" aria-label="Daily goal">
+    {GOALS.map((g, i) => <button type="button" data-goal={g} aria-pressed="false">{['Gentle', 'Steady', 'Keen', 'Intense'][i]}: {g} points</button>)}
+  </div>
+
+  <h2>Your activity</h2>
+  <div class="heat" data-heat="18" role="img" aria-label="Activity"></div>
+  <p class="legend">Less <span class="heat" aria-hidden="true"><i></i><i data-l="1"></i><i data-l="2"></i><i data-l="3"></i><i data-l="4"></i></span> More</p>
+
+  <h2>Badges</h2>
+  <div class="badges">
+    {BADGES.map((b) => (
+      <div class="badge locked" data-badge={b.id}>
+        <Fragment set:html={medalSvg(b)} />
+        <b>{b.name}</b>
+        <span>{b.how}</span>
+        <span data-when>Not yet</span>
+      </div>
+    ))}
+  </div>
+
+  <h2>How points work</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>For</th><th>Points</th></tr></thead>
+      <tbody>
+        <tr><td>Finishing a chapter</td><td>{POINTS.done}</td></tr>
+        <tr><td>Getting every question in a chapter quiz right</td><td>{POINTS.perfect} bonus</td></tr>
+        <tr><td>A right answer in a chapter quiz</td><td>{POINTS.answer}</td></tr>
+        <tr><td>Ticking an exercise</td><td>{POINTS.check}</td></tr>
+        <tr><td>A right answer on the review page (once a day per question)</td><td>{POINTS.review}</td></tr>
+        <tr><td>Running, showing or editing a code example</td><td>{POINTS.tried}</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="hint">Each thing earns its points once, so there is nothing to gain by unticking and ticking again: the points are for learning, not for clicking. Levels: {TITLES.slice(0, 6).map((t, i) => `${t} (${levelStart(i + 1)})`).join(', ')}, and on up to {TITLES[TITLES.length - 1]}.</p>
+</Page>

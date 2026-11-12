@@ -1,5 +1,6 @@
 import { dueKeys, parseKey, prune, recordReviewAnswer, summary } from '../lib/review';
 import { $, save, state, today } from './store';
+import { award } from './game';
 
 interface Question { question: string; options: string[]; answer: number; explanation: string }
 interface SiteData { chapters: Record<string, { title: string; href: string; course: string }>; quiz: Record<string, Question[]> }
@@ -56,6 +57,7 @@ function show() {
       buttons.forEach((x) => (x.disabled = true));
       const result = recordReviewAnswer(state.progress, key, correct, today());
       save();
+      if (correct) award(`review:${key}:${today()}`, buttons[i]);
       answered++;
       const when = result === 'retired' ? 'You have now got this right five times in a row, so it leaves your review list.' : `It comes back on ${nice(state.progress.review[key].due)}.`;
       why.hidden = false;

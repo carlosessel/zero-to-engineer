@@ -1,14 +1,14 @@
 ---
-import { getCourses, href } from '../lib/load';
-const courses = await getCourses();
+import { href } from '../lib/load';
+import PlayerChips from './PlayerChips.astro';
 ---
 <nav class="sitenav" aria-label="Site">
-  <a href={href('/')}>Home</a>
-  {courses.map((c) => <a href={href(`/${c.id}/`)}>{c.title}</a>)}
+  <a class="logo" href={href("/")}><span class="logo-mark" aria-hidden="true">Z</span><span class="logo-text">Zero to Engineer</span></a>
+  <a href={href('/#courses')}>Courses</a>
   <a href={href('/review/')}>Review<span data-review-count></span></a>
-  <a href={href('/planner/')}>Planner</a>
+  <a href={href('/achievements/')}>Trophies</a>
   <a href={href('/search/')}>Search</a>
-  <a href={href('/glossary/')}>Glossary</a>
-  <a href={href('/progress/')}>Progress</a>
+  <span class="navspacer"></span>
+  <PlayerChips />
   <button class="btn ghost" type="button" data-theme-toggle>Theme: auto</button>
 </nav>

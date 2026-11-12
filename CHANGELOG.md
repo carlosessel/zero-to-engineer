@@ -4,6 +4,18 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: A new look, and points, streaks and trophies
+
+Added
+- **A redesign.** A brighter palette in light and dark mode (violet, pink and amber on a soft background), heavier headings, a gradient logo, a home page with a big headline and a "player card", course cards with a coloured band and a picture each, coloured course headers, part cards, and a sticky, translucent header.
+- **Points, levels and streaks.** Finishing a chapter (100), getting a whole quiz right (50 bonus), a right quiz answer (20), ticking an exercise (15), a right review answer (10, once a day per question) and running or showing a code example (5) earn points. Each thing earns once, so unticking and ticking again gains nothing. Thirteen levels from Newcomer to Legend; a streak of days in a row with any points; a daily goal (30, 60, 120 or 200 points).
+- **Celebrations.** A floating "+20" where points are earned, confetti for finished chapters, perfect quizzes, new badges and the daily goal, messages for streaks and badges, and a level-up window. They respect "reduce motion": with it on, there is no animation.
+- **Trophies page** (`/achievements/`): level, streak, best streak, daily goal, an activity grid of the last 18 weeks, and 16 badges with drawn medals.
+- The header on every page shows your level, points and streak.
+- Progress files are now version 3 (they add points, badges and the goal). Versions 1 and 2 are still read, and chapters and exercises finished before points existed count towards the total, though not towards any day's streak.
+- Tests: the points rules (`tests/game.test.ts`), and browser tests for earning, the level-up window, the trophies page and accessibility on it.
+- The browser tests can use their own build folder and port (`DIST_DIR`, `E2E_PORT`), so two builds can be tested at once.
+
 ### 2026-11-12: Mastering Claude and Claude Code, parts 4 to 6 (the course is complete)
 
 Added

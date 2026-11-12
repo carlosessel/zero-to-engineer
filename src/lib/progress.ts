@@ -1,7 +1,7 @@
 // Learner progress: pure logic, no DOM. Stored in the browser as one JSON record.
 
 export const STORAGE_KEY = 'zte-progress';
-export const VERSION = 2;
+export const VERSION = 3;
 
 export interface ReviewItem {
   /** Leitner box, 1 to 5. A higher box means a longer wait before the question returns. */
@@ -17,7 +17,7 @@ export interface PlannerSettings {
 }
 
 export interface Progress {
-  version: 2;
+  version: 3;
   /** chapter id -> true */
   done: Record<string, true>;
   /** chapter id -> chosen option for each question (null = not answered) */
@@ -28,9 +28,19 @@ export interface Progress {
   review: Record<string, ReviewItem>;
   /** What the learner last entered in the study planner */
   planner: PlannerSettings | null;
+  /** What has earned experience points, and on which day: "kind:id" -> YYYY-MM-DD
+   *  ("" for things done before points existed). See game.ts. */
+  earned: Record<string, string>;
+  /** Badge id -> the day it was first earned */
+  badges: Record<string, string>;
+  /** The learner's daily goal, in points */
+  goal: number;
   /** ISO time of the last change */
   updated: string | null;
 }
+
+export const GOALS = [30, 60, 120, 200];
+export const DEFAULT_GOAL = 60;
 
 export interface StorageLike {
   getItem(key: string): string | null;
@@ -39,7 +49,7 @@ export interface StorageLike {
 }
 
 export function empty(): Progress {
-  return { version: 2, done: {}, quiz: {}, checks: {}, review: {}, planner: null, updated: null };
+  return { version: 3, done: {}, quiz: {}, checks: {}, review: {}, planner: null, earned: {}, badges: {}, goal: DEFAULT_GOAL, updated: null };
 }
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -51,9 +61,10 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 /** Checks untrusted data (a stored record or an imported file) and returns a clean copy. */
 export function validate(data: unknown): { ok: true; progress: Progress } | { ok: false; error: string } {
   if (!isRecord(data)) return { ok: false, error: 'This is not a progress file.' };
-  // Version 1 had no review queue and no planner settings. It is read as-is and those start empty.
-  if (data.version !== 1 && data.version !== VERSION) {
-    return { ok: false, error: `This progress file is version ${String(data.version)}; this site reads versions 1 and ${VERSION}.` };
+  // Version 1 had no review queue and no planner settings; version 2 had no points or badges.
+  // Older records are read as-is, and what they lack starts empty.
+  if (data.version !== 1 && data.version !== 2 && data.version !== VERSION) {
+    return { ok: false, error: `This progress file is version ${String(data.version)}; this site reads versions 1 to ${VERSION}.` };
   }
   const p = empty();
   for (const field of ['done', 'checks'] as const) {
@@ -66,7 +77,7 @@ export function validate(data: unknown): { ok: true; progress: Progress } | { ok
     if (!Array.isArray(v)) return { ok: false, error: `The quiz answers for "${k}" are damaged.` };
     p.quiz[k] = v.map((a) => (Number.isInteger(a) && (a as number) >= 0 ? (a as number) : null));
   }
-  if (data.version === VERSION) {
+  if (data.version === 2 || data.version === VERSION) {
     if (!isRecord(data.review)) return { ok: false, error: 'The "review" section is missing or damaged.' };
     for (const [k, v] of Object.entries(data.review)) {
       if (isRecord(v) && Number.isInteger(v.box) && (v.box as number) >= 1 && (v.box as number) <= 5 && typeof v.due === 'string' && DAY.test(v.due)) {
@@ -77,6 +88,14 @@ export function validate(data: unknown): { ok: true; progress: Progress } | { ok
     if (isRecord(pl) && typeof pl.course === 'string' && typeof pl.hoursPerWeek === 'number' && pl.hoursPerWeek > 0 && typeof pl.start === 'string' && DAY.test(pl.start)) {
       p.planner = { course: pl.course, hoursPerWeek: pl.hoursPerWeek, start: pl.start };
     }
+  }
+  if (data.version === VERSION) {
+    for (const field of ['earned', 'badges'] as const) {
+      const src = data[field];
+      if (!isRecord(src)) continue;
+      for (const [k, v] of Object.entries(src)) if (typeof v === 'string' && (v === '' || DAY.test(v)) && k.length < 300) p[field][k] = v;
+    }
+    if (typeof data.goal === 'number' && GOALS.includes(data.goal)) p.goal = data.goal;
   }
   p.updated = typeof data.updated === 'string' ? data.updated : null;
   return { ok: true, progress: p };

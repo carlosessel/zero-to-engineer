@@ -113,7 +113,7 @@ describe('export and import', () => {
     ['not JSON at all', 'hello'],
     ['JSON from somewhere else', '{"name":"package"}'],
     ['a list', '[1,2,3]'],
-    ['a future version', '{"app":"zero-to-engineer","version":3,"done":{},"quiz":{},"checks":{},"review":{}}'],
+    ['a future version', '{"app":"zero-to-engineer","version":4,"done":{},"quiz":{},"checks":{},"review":{}}'],
     ['a version 2 file with no review section', '{"app":"zero-to-engineer","version":2,"done":{},"quiz":{},"checks":{}}'],
     ['a missing section', '{"app":"zero-to-engineer","version":1,"done":{},"checks":{}}'],
     ['damaged quiz answers', '{"app":"zero-to-engineer","version":1,"done":{},"quiz":{"a":"x"},"checks":{}}'],

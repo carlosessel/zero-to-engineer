@@ -1,29 +1,75 @@
 ---
-import Page from '../layouts/Page.astro';
+import Base from '../layouts/Base.astro';
+import SiteNav from '../components/SiteNav.astro';
 import { getCourses, href } from '../lib/load';
 const courses = await getCourses();
+
+// A simple picture for each course, drawn in white on its coloured band.
+const ICONS: Record<string, string> = {
+  ai: '<circle cx="50" cy="50" r="10"/><circle cx="20" cy="25" r="7"/><circle cx="80" cy="25" r="7"/><circle cx="20" cy="75" r="7"/><circle cx="80" cy="75" r="7"/><path d="M26 29 42 44M74 29 58 44M26 71 42 56M74 71 58 56" stroke-width="5"/>',
+  se: '<path d="M36 22 14 50l22 28M64 22l22 28-22 28M56 16 44 84" stroke-width="8" fill="none"/>',
+  web: '<rect x="10" y="18" width="80" height="64" rx="10" fill="none" stroke-width="7"/><path d="M10 36h80" stroke-width="7"/><circle cx="22" cy="27" r="3.5"/><circle cx="32" cy="27" r="3.5"/><path d="M30 52l10 8-10 8M50 68h18" stroke-width="6" fill="none"/>',
+};
+ICONS.mastery = '<path d="M8 86 38 34l14 22 10-14 30 44z" fill="none" stroke-width="7"/><path d="M38 34V12l18 7-18 7" stroke-width="5"/>';
+ICONS.claude = '<path d="M16 20h68a8 8 0 0 1 8 8v36a8 8 0 0 1-8 8H44L26 86V72H16a8 8 0 0 1-8-8V28a8 8 0 0 1 8-8z" fill="none" stroke-width="7"/><path d="M28 40l10 8-10 8M48 56h20" stroke-width="6" fill="none"/>';
+ICONS.backend = '<rect x="14" y="14" width="72" height="22" rx="6" fill="none" stroke-width="7"/><rect x="14" y="44" width="72" height="22" rx="6" fill="none" stroke-width="7"/><circle cx="28" cy="25" r="4"/><circle cx="28" cy="55" r="4"/><path d="M50 66v14M30 86h40" stroke-width="7"/>';
+const FALLBACK = '<path d="M50 10l10 30h32L66 58l10 32-26-19-26 19 10-32L8 40h32z"/>';
+const icon = (id: string) =>
+  `<svg viewBox="0 0 100 100" aria-hidden="true" fill="#fff" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" opacity=".9">${ICONS[id] ?? FALLBACK}</svg>`;
 ---
-<Page title="Zero to Engineer" heading="Zero to Engineer" description={`Free courses that start from nothing: ${courses.map((c) => c.title).join(', ')}.`}>
-    <p class="lead">Free courses that assume you know nothing to begin with. Courses share their beginner chapters, so starting one gives you a head start on the others.</p>
+<Base title="Zero to Engineer" description={`Free courses that start from nothing: ${courses.map((c) => c.title).join(', ')}.`}>
+  <header class="sitehead"><SiteNav /></header>
+  <main id="main" class="home" tabindex="-1">
+    <section class="hero">
+      <div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
+      <h1>Learn to build. <span class="grad-text">From zero.</span></h1>
+      <p class="lead">Free courses that assume you know nothing to begin with. Read, run real code in your browser, tick off exercises, and watch your level, streak and trophies grow.</p>
+      <div class="hero-cta">
+        <a class="btn glow big" href={href(`/${courses[0].id}/`)} data-continue>Start learning</a>
+        <a class="btn ghost big" href={href('/achievements/')}>Your trophies</a>
+      </div>
+    </section>
+
+    <section class="player" aria-label="Your progress">
+      <div class="ring" data-g="levelring" style="--size:96px">
+        <div><small>Level</small><b data-g="level">1</b></div>
+      </div>
+      <div class="who">
+        <b data-g="title">Newcomer</b>
+        <span><span data-g="points">0</span> points · <span data-g="tonext">100</span> to the next level</span>
+        <div class="xpbar" role="presentation"><i data-g="bar"></i></div>
+      </div>
+      <div class="stats">
+        <div class="stat"><b><span aria-hidden="true">🔥</span> <span data-g="streak">0</span></b><span>day streak</span></div>
+        <div class="ring goal" data-g="goalring" style="--size:76px"><div><b data-g="today" style="font-size:20px">0</b><small>of <span data-g="goal">60</span></small></div></div>
+        <div class="stat"><b data-g="badges">0 / 16</b><span>trophies</span></div>
+      </div>
+    </section>
+
+    <h2 id="courses">Pick a course</h2>
     <div class="cards">
-      {courses.map((c) => (
-        <section class="card">
+      {courses.map((c, i) => (
+        <section class="card" data-tone={String((i % 5) + 1)}>
+          <div class="band" set:html={icon(c.id)}></div>
           <h2><a href={href(`/${c.id}/`)}>{c.title}</a></h2>
           <p>{c.description}</p>
-          <p class="hint">{c.chapters.length} chapters in {c.parts.length} parts</p>
+          <div class="meta"><span class="pill">{c.chapters.length} chapters</span><span class="pill">{c.parts.length} parts</span></div>
           <div class="meter" data-meter={c.chapters.map((x) => x.id).join(' ')}><div class="bar"><i></i></div><span></span></div>
-          <p><a class="btn" href={href(`/${c.id}/`)}>Open the course</a></p>
         </section>
       ))}
     </div>
-    <div class="note">
-      <p><strong>This site is being built in the open and is not finished.</strong> Every chapter shows its own status. Many chapters are still short first drafts moved over from a prototype. The code examples are run under automatic tests, but the contents of the linked resources have not all been reviewed, and no subject expert has reviewed the chapters.</p>
+
+    <h2>Tools that make it stick</h2>
+    <div class="tools">
+      <a class="tool" href={href('/review/')}><span class="ico" aria-hidden="true">↺</span><b>Review<span data-review-count></span></b><span>Questions you got wrong come back, spaced out over days and weeks.</span></a>
+      <a class="tool" href={href('/achievements/')}><span class="ico" aria-hidden="true">🏆</span><b>Trophies</b><span>Your streak, daily goal, activity and badges.</span></a>
+      <a class="tool" href={href('/planner/')}><span class="ico" aria-hidden="true">🗓</span><b>Study planner</b><span>Your hours a week, turned into a schedule.</span></a>
+      <a class="tool" href={href('/search/')}><span class="ico" aria-hidden="true">⌕</span><b>Search</b><span>Every chapter, and the <span>glossary</span> of every term.</span></a>
+      <a class="tool" href={href('/progress/')}><span class="ico" aria-hidden="true">⇩</span><b>Save your progress</b><span>Download it as a file, or move it to another device.</span></a>
     </div>
-    <h2>Study tools</h2>
-    <ul>
-      <li><a href={href('/review/')}>Review</a>: quiz questions you got wrong come back, spaced out over days and weeks.</li>
-      <li><a href={href('/planner/')}>Study planner</a>: enter your hours a week and get a schedule.</li>
-      <li><a href={href('/search/')}>Search</a> every chapter, and the <a href={href('/glossary/')}>glossary</a> of every term.</li>
-      <li><a href={href('/progress/')}>Save or restore your progress</a> as a file.</li>
-    </ul>
-</Page>
+
+    <div class="note">
+      <p><strong>Built in the open, and not finished.</strong> Every chapter shows its own status. The code examples are run under automatic tests, but no subject expert has reviewed the chapters yet. Your progress stays in this browser: nothing is sent anywhere.</p>
+    </div>
+  </main>
+</Base>

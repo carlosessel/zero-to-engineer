@@ -78,6 +78,7 @@ class Group {
     box.append(this.bar, this.frame, this.output);
     anchor.after(box);
     this.show.addEventListener('click', () => {
+      this.tried();
       this.frame.hidden = false;
       this.active = true;
       this.show.remove();
@@ -85,6 +86,7 @@ class Group {
     });
     // JavaScript on its own runs in a frame that is never shown; only its output is.
     this.run.addEventListener('click', () => {
+      this.tried();
       this.active = true;
       this.render();
     });
@@ -92,6 +94,12 @@ class Group {
     this.reset.addEventListener('click', () => this.closeEditors());
     groups.set(this.id, this);
     if (immediate) this.render();
+  }
+
+  /** Tells the points system that a person ran or showed this example. */
+  tried() {
+    const pre = this.blocks[this.blocks.length - 1]?.pre;
+    if (pre) document.dispatchEvent(new CustomEvent('zte:tried', { detail: { pre } }));
   }
 
   rendering = 0;
@@ -163,6 +171,7 @@ class Group {
   }
 
   openEditors() {
+    this.tried();
     for (const b of this.blocks) {
       const t = document.createElement('textarea');
       t.className = 'runner-editor';

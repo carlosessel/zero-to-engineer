@@ -5,7 +5,8 @@ import http from 'node:http';
 import path from 'node:path';
 
 const port = Number(process.argv[2] || 4323);
-const root = path.resolve('dist');
+// DIST_DIR lets two builds be tested side by side (for example by two people or tools at once).
+const root = path.resolve(process.env.DIST_DIR || 'dist');
 const types = {
   '.html': 'text/html; charset=utf-8', '.js': 'text/javascript', '.mjs': 'text/javascript', '.css': 'text/css',
   '.json': 'application/json', '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff',

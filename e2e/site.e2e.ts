@@ -7,6 +7,11 @@ const stored = (page: import('@playwright/test').Page) => page.evaluate(() => JS
 test('marking a chapter done survives a reload and counts in both courses', async ({ page }) => {
   await page.goto('/ai/terminal-files/');
   await page.getByRole('button', { name: 'Mark done and continue' }).click();
+  // 100 points: level 2. The level-up message waits to be closed before moving on.
+  const levelUp = page.getByRole('dialog', { name: 'Level 2: Explorer' });
+  await expect(levelUp).toBeVisible();
+  await expect(page.locator('.chip.pts').first()).toContainText('100');
+  await levelUp.getByRole('button', { name: 'Keep going' }).click();
   await expect(page).toHaveURL(/\/ai\/setup\/$/);
   await page.reload();
   await expect(page.locator('.side .meter span')).toHaveText('1 of 41 chapters done');
@@ -185,7 +190,7 @@ test('@phone the chapter menu opens and closes, and nothing overflows sideways',
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-const AXE_PAGES = ['/', '/ai/', '/web/', '/web/web-the-map/', '/web/web-setup/', '/web/git-basics/', '/web/html-from-zero/', '/web/html-forms-tables/', '/web/web-accessibility/', '/web/css-from-zero/', '/web/css-box-model/', '/web/css-layout/', '/web/responsive-design/', '/web/design-basics/', '/web/js-values-variables/', '/web/js-logic-functions/', '/web/js-arrays-objects/', '/web/js-dom-events/', '/web/js-debugging/', '/web/js-async-fetch/', '/web/js-modules-tooling/', '/web/react-basics/', '/web/react-state-forms/', '/web/react-data-routing/', '/web/typescript-basics/', '/web/js-testing/', '/web/web-performance/', '/claude/', '/claude/cl-models/', '/claude/cc-settings/', '/claude/cl-api-deep/', '/claude/glossary/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
+const AXE_PAGES = ['/', '/ai/', '/web/', '/web/web-the-map/', '/web/web-setup/', '/web/git-basics/', '/web/html-from-zero/', '/web/html-forms-tables/', '/web/web-accessibility/', '/web/css-from-zero/', '/web/css-box-model/', '/web/css-layout/', '/web/responsive-design/', '/web/design-basics/', '/web/js-values-variables/', '/web/js-logic-functions/', '/web/js-arrays-objects/', '/web/js-dom-events/', '/web/js-debugging/', '/web/js-async-fetch/', '/web/js-modules-tooling/', '/achievements/', '/web/react-basics/', '/web/react-state-forms/', '/web/react-data-routing/', '/web/typescript-basics/', '/web/js-testing/', '/web/web-performance/', '/claude/', '/claude/cl-models/', '/claude/cc-settings/', '/claude/cl-api-deep/', '/claude/glossary/', '/mastery/', '/mastery/m-data-representation/', '/mastery/m-memory-gc/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
 for (const theme of ['light', 'dark'] as const) {
   test(`accessibility checks pass in ${theme} mode`, async ({ page }) => {
     test.setTimeout(300_000); // many pages, each analysed in full
@@ -334,4 +339,26 @@ test('a TypeScript example runs with its types removed, and says it does not che
   await expect(box.locator('.playground-console')).toContainText('£4.50');
   await expect(box.locator('.playground-console .error')).toContainText('price.toFixed is not a function (line 2)');
   await expect(page.locator('.runner-note').first()).toContainText('It does not check the types');
+});
+
+test('points are earned once, and the trophies page shows level, streak and badges', async ({ page }) => {
+  await page.goto('/web/react-basics/');
+  const box = page.locator('input[data-check]').first();
+  await box.check();
+  await expect(page.locator('.side .chip.pts')).toContainText('15');
+  // Unticking and ticking again earns nothing more.
+  await box.uncheck();
+  await box.check();
+  await expect(page.locator('.side .chip.pts')).toContainText('15');
+  await expect(page.locator('.side .chip.streak')).toContainText('1');
+
+  await page.goto('/achievements/');
+  await expect(page.locator('.player [data-g="points"]')).toHaveText('15');
+  await expect(page.locator('.player [data-g="streak"]')).toHaveText('1');
+  await expect(page.locator('[data-badge="first-steps"]')).toHaveClass(/locked/);
+  await page.getByRole('button', { name: 'Keen: 120 points' }).click();
+  await expect(page.getByRole('button', { name: 'Keen: 120 points' })).toHaveAttribute('aria-pressed', 'true');
+  await page.reload();
+  await expect(page.getByRole('button', { name: 'Keen: 120 points' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.heat i.today')).toHaveAttribute('data-l', '1');
 });

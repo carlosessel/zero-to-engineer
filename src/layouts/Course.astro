@@ -1,6 +1,7 @@
 ---
 import Base from './Base.astro';
 import { chapterHref, href } from '../lib/load';
+import PlayerChips from '../components/PlayerChips.astro';
 import type { Course } from '../lib/model';
 interface Props { course: Course; current?: string; title: string; description?: string }
 const { course, current, title, description } = Astro.props;
@@ -8,11 +9,13 @@ const { course, current, title, description } = Astro.props;
 <Base title={title} description={description}>
   <div class="topbar">
     <a class="home" href={href('/')}><b>{course.title}</b></a>
+    <PlayerChips />
     <button class="btn ghost" id="menuBtn" aria-expanded="false" aria-controls="side">Chapters</button>
   </div>
   <div class="shell">
     <aside class="side" id="side">
       <p class="brand"><a href={href(`/${course.id}/`)}>{course.title}</a><small>{course.tagline}</small></p>
+      <PlayerChips />
       <div class="meter" data-meter={course.chapters.map((c) => c.id).join(' ')}>
         <div class="bar"><i></i></div><span></span>
       </div>
@@ -30,6 +33,7 @@ const { course, current, title, description } = Astro.props;
       </nav>
       <p class="sidelinks">
         <a href={href('/')}>All courses</a>
+        <a href={href('/achievements/')}>Trophies and streak</a>
         <a href={href('/review/')}>Review<span data-review-count></span></a>
         <a href={href('/planner/')}>Study planner</a>
         <a href={href('/search/')}>Search</a>

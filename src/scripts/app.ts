@@ -3,6 +3,7 @@
 import * as P from '../lib/progress';
 import { recordChapterAnswer, summary } from '../lib/review';
 import { $, $$, download, save, state, storage, today } from './store';
+import { award, confetti, paintGame } from './game';
 
 // ---------- painting progress onto the page ----------
 function paint() {
@@ -48,7 +49,22 @@ for (const btn of $$<HTMLButtonElement>('[data-done]')) {
     P.setDone(state.progress, btn.dataset.done!, true);
     save();
     paint();
-    if (btn.dataset.next) window.location.href = btn.dataset.next;
+    const next = btn.dataset.next;
+    const go = () => {
+      if (next) window.location.href = next;
+    };
+    // A finished chapter is worth a celebration: confetti, then on to the next one,
+    // after a moment so it can be seen (or when a level-up message is closed).
+    let leveled = false;
+    const result = award(`done:${btn.dataset.done}`, btn, () => {
+      if (leveled) go();
+    });
+    leveled = result.leveledUp;
+    if (!result.points) go();
+    else {
+      confetti(1.2);
+      if (!result.leveledUp && next) setTimeout(go, window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 400 : 1500);
+    }
   });
 }
 for (const btn of $$<HTMLButtonElement>('[data-undone]')) {
@@ -66,6 +82,7 @@ for (const box of $$<HTMLInputElement>('input[data-check]')) {
   box.addEventListener('change', () => {
     P.setCheck(state.progress, chapter, key, box.checked);
     save();
+    if (box.checked) award(`check:${chapter}/${key}`, box.closest('label'));
   });
 }
 
@@ -102,6 +119,14 @@ for (const quiz of $$('[data-quiz]')) {
         recordChapterAnswer(state.progress, chapter, qi, chosen === Number(q.dataset.answer), today());
         save();
         paint();
+        if (chosen === Number(q.dataset.answer)) {
+          award(`answer:${chapter}#${qi}`, b);
+          // Every question in this quiz right at once: a bonus.
+          const latest = state.progress.quiz[chapter] ?? [];
+          if ($$('.q', quiz).every((x) => latest[Number(x.dataset.q)] === Number(x.dataset.answer))) {
+            if (award(`perfect:${chapter}`, quiz).points) confetti(1);
+          }
+        }
       });
     }
   }
@@ -227,3 +252,4 @@ if (resetBtn) {
 }
 
 paint();
+paintGame();
