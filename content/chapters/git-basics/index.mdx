@@ -1,0 +1,386 @@
+---
+title: "Git from zero: saving your work"
+summary: "Commits, history, undoing mistakes and putting your work on GitHub."
+prerequisites: [terminal-files, web-setup]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will be able to save snapshots of your work, look back through its history, undo mistakes safely, keep secrets and clutter out, and put your project on GitHub where others can see it. Every project in this course lives in Git from its first day.
+
+## Why save points matter
+
+Without help, a project folder only ever holds the latest version of each file. Break something on Tuesday that worked on Monday and Monday's version is gone. People work around this with copies called `final.html`, `final-2.html` and `final-REALLY.html`, and soon nobody knows which is which.
+
+**Git** solves this. It is a **version control** system: a program that records snapshots of a whole project, each with a note about what changed and why. You can look at any snapshot, compare two of them, and go back. It also lets many people work on the same project, which the chapter on Git with other people covers later.
+
+The words you need:
+
+- A **repository** (often "repo") is a project folder that Git is tracking. Git keeps its records in a hidden folder called `.git` inside it.
+- A **commit** is one snapshot of the project, with a message, an author, a date, and a unique code called its **commit hash** (such as `3f2a9c1`).
+- The **working folder** is the files as they are on your disk right now, which you edit in VS Code.
+- The **staging area** is a list of changes you have chosen to include in the next commit. You add changes to it, then commit them together.
+
+Think of packing a parcel. You edit files in the working folder. You choose which changes go in the parcel (staging). Then you seal it and write the label (commit). Staging lets you commit some changes now and keep others for later.
+
+## One-time setup
+
+Every commit records who made it. Tell Git your name and email once per computer. Use the same email as your GitHub account if you want commits linked to your profile.
+
+```bash
+git config --global user.name "Ama Mensah"
+git config --global user.email "ama@example.com"
+git config --global init.defaultBranch main
+```
+
+The third line names the first line of history in each new repository `main`, which is what GitHub expects. (Git's own default is still the older name `master`.) The `--global` part means "for every repository on this computer". To check what you set, run `git config --global --list`.
+
+## A worked example: your first repository
+
+Follow along in the terminal. Each step shows the command and then what it does.
+
+### 1. Create the repository
+
+```bash
+cd web-course
+mkdir first-repo
+cd first-repo
+git init
+```
+
+`git init` turns the current folder into a repository. It prints a line such as `Initialized empty Git repository in /Users/ama/web-course/first-repo/.git/`. Nothing else seems to change, because `.git` is hidden.
+
+### 2. Ask Git what it sees
+
+```bash
+git status
+```
+
+```text
+On branch main
+
+No commits yet
+
+nothing to commit (create/copy files and use "git add" to track)
+```
+
+`git status` is the command you will run most. It never changes anything; it only reports. When unsure, run it.
+
+### 3. Add a file
+
+In VS Code, open the `first-repo` folder and create `index.html` with a heading, as in the setup chapter. Then:
+
+```bash
+git status
+```
+
+```text
+On branch main
+
+No commits yet
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	index.html
+
+nothing added to commit but untracked files present (use "git add" to track)
+```
+
+**Untracked** means Git sees the file but has never saved it.
+
+### 4. Stage it and commit
+
+```bash
+git add index.html
+git commit -m "Add first page"
+```
+
+`git add` puts the file's current contents in the staging area. `git commit` seals the snapshot; `-m` gives the message in the same line. Git replies with something like:
+
+```text
+[main (root-commit) 3f2a9c1] Add first page
+ 1 file changed, 10 insertions(+)
+ create mode 100644 index.html
+```
+
+Your hash and line count will differ. Run `git status` again and it says `nothing to commit, working tree clean`: everything on disk is saved in a commit.
+
+### 5. Change something and commit again
+
+Edit the sentence in `index.html` and save. Then see exactly what changed:
+
+```bash
+git diff
+```
+
+Lines starting with `-` were removed and lines starting with `+` were added. Then stage and commit, as before:
+
+```bash
+git add index.html
+git commit -m "Reword the introduction"
+```
+
+`git add .` (with a full stop, meaning "this folder") stages every change in the folder at once. It is convenient, and it is also how unwanted files sneak into commits, so run `git status` first and read the list.
+
+### 6. Look at the history
+
+```bash
+git log --oneline
+```
+
+```text
+8c41d0e (HEAD -> main) Reword the introduction
+3f2a9c1 Add first page
+```
+
+Newest first. **HEAD** means "where you are now". To see one commit in full, including its changes, run `git show` followed by its hash, for example `git show 3f2a9c1`. Press `q` to leave the view.
+
+## Writing good commit messages
+
+The message is for a person reading the history months later, often you. Say what changed, in the imperative, as if completing the sentence "This commit will…":
+
+- Good: `Add contact form`, `Fix menu overlapping the logo on phones`, `Remove unused images`.
+- Not useful: `changes`, `update`, `fixed stuff`, `asdf`.
+
+Commit small and often: one finished idea per commit. Small commits are easy to understand and easy to undo.
+
+## Undoing things safely
+
+Git's undo commands depend on how far a change has travelled.
+
+| Situation | Command | What it does |
+| --- | --- | --- |
+| You edited a file and want to throw the edits away | `git restore index.html` | Puts the file back as it was in the last commit. The edits are gone for good. |
+| You staged a file by mistake | `git restore --staged index.html` | Takes it out of the staging area. Your edits stay in the file. |
+| A commit you made introduced a bug | `git revert` followed by the commit's hash | Makes a **new** commit that undoes that one. History is kept. |
+
+### A worked example: rescuing a broken file
+
+You deleted half of `index.html` by accident and saved. Nothing is staged.
+
+```bash
+git status
+git restore index.html
+git status
+```
+
+The first `git status` lists `modified: index.html`. After `git restore`, the second says the working tree is clean, and the file in VS Code is back to the last commit.
+
+**Be careful:** `git restore` on a file throws away every edit since the last commit, and those edits were never saved by Git, so they cannot be recovered. Commit often and this costs you little.
+
+You will see advice online to use commands such as `git reset --hard` or `git push --force`. They rewrite or destroy history. Leave them alone until you understand exactly what they do; `git restore` and `git revert` cover what you need now.
+
+## Keeping things out: .gitignore
+
+Some files must never be committed:
+
+- **secrets**, such as passwords and API keys, usually kept in a file called `.env`;
+- **files that can be rebuilt**, such as the `node_modules` folder that npm fills with thousands of files;
+- **system clutter**, such as `.DS_Store` files that macOS creates.
+
+A file named `.gitignore` in the repository lists them, one pattern per line. Create it in VS Code with this content:
+
+```text
+node_modules/
+.env
+.DS_Store
+```
+
+Then commit it like any other file. Git now leaves those files out of `git status` and `git add .`.
+
+**If you ever commit a secret**, deleting it in a later commit is not enough: it stays in the history, and once pushed to GitHub, automated programs can find exposed keys within minutes. Treat it as stolen: cancel the key with whoever issued it and create a new one.
+
+## GitHub: your work online
+
+Git works entirely on your computer. **GitHub** is a website that stores copies of Git repositories online. A copy on GitHub is called a **remote**. It is a backup, it lets you work from several computers, it is how teams share code, and your public repositories are your portfolio.
+
+### Signing in from the terminal
+
+GitHub does not accept your account password for Git commands. The simplest way to sign in is GitHub's own command-line tool, **GitHub CLI** (`gh`).
+
+1. Install it from cli.github.com: on a Mac with Homebrew, `brew install gh`; on Windows, the installer on that page; on Linux, your package manager.
+2. Sign in, then let Git use that sign-in:
+
+```bash
+gh auth login
+gh auth setup-git
+```
+
+`gh auth login` asks a few questions (choose GitHub.com and HTTPS) and opens your browser to confirm. `gh auth setup-git` tells Git to use GitHub CLI for passwords from now on.
+
+### A worked example: putting first-repo on GitHub
+
+1. On github.com, click **New repository**. Name it `first-repo`. Leave "Add a README" and the other boxes unticked, so the new repository is empty. Click **Create repository**.
+2. GitHub shows the repository's address. Back in the terminal, inside `first-repo`, connect your repository to it (replace `YOUR-NAME` with your GitHub username) and send your commits:
+
+```bash
+git remote add origin https://github.com/YOUR-NAME/first-repo.git
+git push -u origin main
+```
+
+`origin` is the usual nickname for the main remote. `git push` sends commits that GitHub does not have yet. `-u origin main` is needed only the first time: it remembers that your `main` goes to `origin`'s `main`.
+
+3. Refresh the repository page on GitHub. Your files and both commits are there.
+
+From then on, after committing, send new commits with:
+
+```bash
+git push
+```
+
+To get a copy of any repository onto a computer, including your own on a new laptop, use `git clone` followed by its address. That creates a folder, downloads the files and the whole history, and sets up `origin` for you.
+
+## Common mistakes
+
+- **`fatal: not a git repository`.** You are not inside a repository folder. Run `pwd`, then `cd` into the project.
+- **Running `git init` in your home folder or the whole `web-course` folder.** Git then tracks everything below it. Each project gets its own repository. If it happens, delete the hidden `.git` folder you created in the wrong place (it only holds Git's records; your files are untouched) and run `git init` in the right folder.
+- **Committing without staging.** `git commit` says `nothing added to commit but untracked files present` or `no changes added to commit`. Run `git add` first.
+- **Forgetting `-m`.** Git opens a text editor for the message, often one called Vim, which is confusing the first time. To leave Vim without saving: press Esc, type `:q!` and press Enter. Then commit again with `-m "message"`.
+- **`error: failed to push some refs` the first time you push.** GitHub has a commit you do not, almost always because "Add a README" was ticked when the repository was created. Practice problem 11 below gives the fix.
+- **`Authentication failed`, or Git asks for a password.** Your account password will not work. Run `gh auth login` and `gh auth setup-git`.
+
+## Practice
+
+**1. (warm-up)** Put these in the order you would run them for a brand-new project: `git commit -m "Start"`, `git init`, `git add index.html`.
+
+<Solution>
+
+`git init` (make the folder a repository), then `git add index.html` (stage the file), then `git commit -m "Start"` (save the snapshot).
+
+</Solution>
+
+**2. (warm-up)** What does `git status` change in your project?
+
+<Solution>
+
+Nothing. It only reports what Git sees. That is why it is safe to run whenever you are unsure.
+
+</Solution>
+
+**3. (warm-up)** Which of these files belong in `.gitignore`: `index.html`, `.env`, `style.css`, `node_modules/`?
+
+<Solution>
+
+`.env` (it holds secrets) and `node_modules/` (npm can rebuild it). `index.html` and `style.css` are your work and must be committed.
+
+</Solution>
+
+**4. (standard)** `git status` shows:
+
+```text
+Changes to be committed:
+	modified:   index.html
+
+Changes not staged for commit:
+	modified:   style.css
+```
+
+If you run `git commit -m "Update page"` now, which file's changes are saved?
+
+<Solution>
+
+Only `index.html`. Its changes are staged. The changes to `style.css` are not staged, so they stay in the working folder, uncommitted, until you `git add style.css` and commit again.
+
+</Solution>
+
+**5. (standard)** Rewrite these commit messages to be useful: `stuff`, `fixed it`, `changes to css`.
+
+<Solution>
+
+Answers vary; good ones say what changed. For example: `Add opening hours to the footer`; `Fix contact form sending when the email is empty`; `Make the menu stack vertically on phones`. Each completes the sentence "This commit will…".
+
+</Solution>
+
+**6. (standard)** You edited `about.html` for an hour, then decided the old version was better. Nothing is staged. Which command brings back the last committed version, and what happens to the hour of edits?
+
+<Solution>
+
+`git restore about.html`. The hour of edits is thrown away for good, because Git never saved them. If you might want them later, commit them first (perhaps on a separate branch, which the chapter on Git with other people explains) or copy the file somewhere before restoring.
+
+</Solution>
+
+**7. (standard)** Yesterday's commit `a1b2c3d` broke the menu, and you have already pushed it to GitHub. Which command undoes it while keeping the history honest?
+
+<Solution>
+
+`git revert a1b2c3d`. It makes a new commit that does the opposite of `a1b2c3d`. Then `git push`. Nothing in the shared history is rewritten, so anyone else's copy stays consistent.
+
+</Solution>
+
+**8. (standard)** You run `git commit -m "Add footer"` and Git says `nothing added to commit but untracked files present (use "git add" to track)`. What happened, and what do you do?
+
+<Solution>
+
+The new file has never been staged, so the commit had nothing in it. Stage it with `git add footer.html` (or `git add .` after checking `git status`), then run the commit again.
+
+</Solution>
+
+**9. (standard)** Read this history and answer: what was the most recent change, and what was the first?
+
+```text
+d4e5f60 (HEAD -> main) Add dark mode
+b2c3d4e Fix typo in heading
+a1b2c3d Add first page
+```
+
+<Solution>
+
+`git log` lists newest first, so the most recent is "Add dark mode" (`d4e5f60`, where HEAD points) and the first is "Add first page" (`a1b2c3d`).
+
+</Solution>
+
+**10. (standard)** A classmate committed a file `.env` containing an API key and pushed it to a public GitHub repository. Then they deleted the file and pushed again. Are they safe?
+
+<Solution>
+
+No. The key is still in the earlier commit, which anyone can view in the history, and automated programs scan GitHub for keys constantly. They must cancel (revoke) the key with the service that issued it and create a new one, and add `.env` to `.gitignore` so it cannot happen again.
+
+</Solution>
+
+**11. (stretch)** Your first `git push -u origin main` fails with `failed to push some refs`, and the hint mentions fetching. You remember ticking "Add a README" when you created the repository on GitHub. Explain the problem and the fix.
+
+<Solution>
+
+GitHub made a commit (the README) that your computer does not have, and your computer has commits GitHub does not have. Git refuses to push because that would throw away GitHub's commit. The two histories also started separately, so a plain `git pull` refuses too. Bring GitHub's commit in, combine the two histories, then push:
+
+```bash
+git pull --no-rebase --no-edit --allow-unrelated-histories origin main
+git push -u origin main
+```
+
+`--no-rebase` combines them with a merge commit, `--no-edit` accepts Git's message for that commit instead of opening an editor, and `--allow-unrelated-histories` permits combining two histories with no shared start. You will rarely need that last option again. Next time, create the repository on GitHub with nothing ticked, or delete the repository on GitHub and create it again empty.
+
+</Solution>
+
+**12. (stretch)** You want to commit your changes to `index.html` and `style.css`, but not a half-finished `contact.html` that is also changed. Write the commands.
+
+<Solution>
+
+```bash
+git add index.html style.css
+git commit -m "Restyle the home page"
+```
+
+Then `git status` still shows `contact.html` as modified and unstaged, ready for a later commit. This is what the staging area is for.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Git** records snapshots (**commits**) of a project. A **repository** is a folder Git tracks.
+- Set your name, email and default branch once with `git config --global`.
+- The everyday loop: edit, `git status`, `git add`, `git commit -m "…"`. `git diff` shows unstaged changes; `git log --oneline` shows history.
+- The **staging area** lets you choose which changes go in the next commit.
+- Undo: `git restore file` throws away edits; `git restore --staged file` unstages; `git revert hash` undoes a commit with a new commit.
+- `.gitignore` keeps secrets, rebuildable files and clutter out. A committed secret must be cancelled, not just deleted.
+- **GitHub** stores a **remote** copy. Sign in with `gh auth login` and `gh auth setup-git`; connect with `git remote add origin …`; send with `git push`; copy with `git clone`.
+
+## Go deeper
+
+- [Pro Git](https://git-scm.com/book/en/v2), by Scott Chacon and Ben Straub. The standard book on Git, free to read online. Chapters 1 and 2 match this chapter; chapter 3 covers branches.
+- [Learn Git Branching](https://learngitbranching.js.org/). Interactive puzzles in the browser that draw your commits as you type commands. Good practice before the chapter on Git with other people.
+- [GitHub: Hello World](https://docs.github.com/en/get-started/start-your-journey/hello-world). GitHub's own tutorial for repositories, branches, commits and pull requests, done entirely on the website.
+- [GitHub: Set up Git](https://docs.github.com/en/get-started/git-basics/set-up-git). GitHub's instructions for installing Git, setting your name and email, and signing in.
+- [The Missing Semester: Version Control (Git)](https://missing.csail.mit.edu/2020/version-control/). Lecture notes from an MIT class, explaining how Git stores its data underneath. Read it once the commands feel familiar.

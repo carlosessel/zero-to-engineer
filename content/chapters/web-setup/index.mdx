@@ -1,0 +1,221 @@
+---
+title: "Set up your tools"
+summary: "A code editor, a browser's developer tools, Node.js and Git, installed and checked."
+prerequisites: [terminal-files]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will have every tool this course uses installed, checked and working, and you will have made your first web page and run your first JavaScript program. Set aside one unhurried session. Installing things is fiddly, and it only needs doing once.
+
+## What you need, and why
+
+| Tool | What it is for | Cost |
+| --- | --- | --- |
+| A code editor (VS Code) | Writing and organising code | Free |
+| Two browsers (for example Chrome and Firefox) | Viewing your pages, and checking they work in more than one browser | Free |
+| Node.js | Running JavaScript outside the browser, and installing tools | Free |
+| Git | Saving the history of your work | Free |
+| A GitHub account | Storing your work online and showing it to others | Free |
+
+Any computer from the last ten years running Windows, macOS or Linux is enough. A phone or tablet alone is not, because you need to install programs and use a terminal. If you are on a Chromebook, turn on its Linux development environment in Settings first and follow the Linux instructions.
+
+## A code editor: Visual Studio Code
+
+A **code editor** is a program for writing code. It looks like a plain text editor, but it colours the code so it is easier to read, spots some mistakes as you type, and lets you open a whole folder of files at once. Word processors such as Microsoft Word are not suitable: they add hidden formatting and change straight quotes `"` into curly ones `“`, which breaks code.
+
+This course uses **Visual Studio Code** (VS Code), a free editor from Microsoft that runs on Windows, macOS and Linux and is very widely used for web work.
+
+1. Go to code.visualstudio.com and download the version for your computer.
+2. **Windows:** run the installer. When it offers "Add to PATH", leave it ticked. **macOS:** open the downloaded file and drag Visual Studio Code into Applications. **Linux:** install the `.deb` or `.rpm` package as the site describes.
+3. Open VS Code. Choose **File → Auto Save** so your work is saved as you type. Forgetting to save is the most common reason "my change did nothing".
+
+The one habit to learn now: in VS Code, open a **folder**, not a single file (File → Open Folder). The editor then shows every file in your project down the left side, and its built-in terminal starts in the right place.
+
+## Browsers and their developer tools
+
+You already have a browser. Install a second one that works differently underneath: if you use Chrome or Edge, add Firefox; if you use Firefox or Safari, add Chrome. Pages occasionally behave differently in different browsers, and checking in two catches that.
+
+Every modern browser has **developer tools** (often called **DevTools**): panels that show what the page is made of and what it is doing. You will use them constantly. Try them now on any website:
+
+- Open them with **F12**, or **Ctrl+Shift+I** on Windows and Linux, or **Cmd+Option+I** on a Mac. You can also right-click any part of a page and choose **Inspect**.
+- The **Elements** panel (called Inspector in Firefox) shows the page's HTML. Hover over a line and the matching part of the page lights up.
+- The **Console** panel shows messages and errors from the page's JavaScript, and lets you type JavaScript and run it immediately.
+
+### A worked example: your first command in the Console
+
+1. Open any page, open the developer tools and click **Console**.
+2. Click after the `>` prompt, type `2 + 3` and press Enter. The Console answers `5`.
+3. Type `"Hello, " + "Ama"` and press Enter. It answers with the joined text, `'Hello, Ama'` (browsers differ in which quote marks they show).
+
+You have just run JavaScript. The browser has a whole programming language built in, which is why the web is built on it. (If the Console warns you about pasting code, that is a safety feature against scams: never paste code you do not understand into a Console when someone asks you to. Typing your own is fine.)
+
+## Your first web page
+
+1. In the terminal, make a folder for this course and move into it:
+
+```bash
+mkdir web-course
+cd web-course
+```
+
+2. In VS Code, choose File → Open Folder and open `web-course`.
+3. Create a new file called `index.html` (the name `index.html` is the one web servers show by default) and type this:
+
+```html
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>My first page</title>
+  </head>
+  <body>
+    <h1>Hello, web</h1>
+    <p>I made this page myself.</p>
+  </body>
+</html>
+```
+
+4. Open the file in your browser: find it in your file manager and double-click it, or drag it onto a browser window. You should see a large heading and a sentence.
+5. Change the sentence, save, and refresh the browser (F5, or Cmd+R on a Mac). Your change appears.
+
+Do not worry about what each line means yet; the next part of the course explains every one. What matters now is the loop you just did: **edit, save, refresh, look**. You will do it thousands of times.
+
+## Node.js: JavaScript outside the browser
+
+The browser runs JavaScript inside web pages. **Node.js** (usually just "Node") runs JavaScript on its own, in the terminal, the same way the browser would but without a page. Later in the course it runs your server. Before then, you will use it to run tools that build and test your code. Node comes with **npm**, which installs those tools.
+
+1. Go to nodejs.org and download the version marked **LTS** (long-term support). LTS versions are kept stable and receive fixes for years. When this chapter was checked (November 2026), the LTS version was 26.
+2. **Windows and macOS:** run the installer and accept the defaults. **Linux:** use the instructions on the site's download page for your distribution.
+3. **Close your terminal and open a new one.** A terminal that was already open does not know about programs installed after it started.
+
+### A worked example: your first program
+
+In VS Code, inside `web-course`, create a file called `hello.js` and type:
+
+```js
+const name = "Ama";
+console.log("Hello from Node, " + name);
+```
+
+Then, in the terminal (in VS Code, choose Terminal → New Terminal, which starts in your project folder), run it:
+
+```bash
+node hello.js
+```
+
+You should see:
+
+```text
+Hello from Node, Ama
+```
+
+`console.log` means "print this". The same line would print into the browser's Console if it were inside a web page.
+
+## Git: the history of your work
+
+**Git** records snapshots of a project so you can see what changed, go back to an earlier version, and share your work. Every developer uses it. The chapter after this one teaches it from the start; for now, just install it.
+
+- **Windows:** download Git from git-scm.com and run the installer. The defaults are fine. It also installs **Git Bash**, a terminal that understands the same commands as macOS and Linux, which is handy if PowerShell ever behaves differently from an example.
+- **macOS:** the first time you type `git` in the terminal, macOS offers to install its command line tools, which include Git. Accept.
+- **Linux:** install the `git` package with your package manager, for example `sudo apt install git`.
+
+Then create a free account at github.com. Use an email address you will keep; your GitHub profile becomes part of your portfolio.
+
+## Check that everything works
+
+Open a new terminal and run:
+
+```bash
+node --version
+npm --version
+git --version
+```
+
+Each line should print a version number, such as `v26.13.1`, `11.8.0` and `git version 2.50.1`. Your numbers may be higher. If one says "command not found" or "is not recognized", see Common mistakes below.
+
+## Keeping your work tidy
+
+Keep everything for this course inside one folder, `web-course`, with one folder per project inside it. Use names with lower-case letters and hyphens and no spaces, such as `first-page` or `todo-app`. Spaces in folder names make terminal commands harder to type, and web addresses treat capital letters as different from lower-case ones.
+
+## Common mistakes
+
+- **"command not found" (macOS and Linux) or "is not recognized" (Windows) straight after installing.** The terminal was open before the install. Close it completely and open a new one. If that does not help on Windows, run the installer again and make sure any "Add to PATH" option is ticked; the **PATH** is the list of folders your computer searches for programs.
+- **"No such file or directory" when running `node hello.js`.** The terminal is in a different folder from the file. Run `pwd` to see where you are, `ls` to see what is there, and `cd` into the right folder. Opening the folder in VS Code and using its built-in terminal avoids this.
+- **Windows saved the file as `index.html.txt`.** Windows hides file extensions by default, so a file you named `index.html` in some programs secretly ends `.txt`. In File Explorer, choose View → Show → File name extensions, then rename the file.
+- **The page did not change after editing.** The file was not saved, or the browser was not refreshed. Turn on Auto Save and refresh.
+- **Typing code into a word processor.** Curly quotes and hidden formatting break code. Use VS Code.
+
+## Practice
+
+**1. (warm-up)** You installed Node, then typed `node --version` in the terminal you already had open and got "command not found". What do you do first?
+
+<Solution>
+
+Close the terminal completely and open a new one, then try again. A terminal only knows about programs that were installed before it started.
+
+</Solution>
+
+**2. (warm-up)** Which developer tools panel would you open to see the HTML of a page, and which to see an error message from the page's JavaScript?
+
+<Solution>
+
+The Elements panel (Inspector in Firefox) for the HTML; the Console for JavaScript errors.
+
+</Solution>
+
+**3. (standard)** You run `node hello.js` and get "Error: Cannot find module '…/hello.js'". Give two likely causes and how to check each.
+
+<Solution>
+
+The terminal is in the wrong folder: run `pwd` and `ls` to see where you are and whether `hello.js` is listed, then `cd` to the right folder. Or the file is not called exactly `hello.js`: it might be `Hello.js`, `hello.js.txt` or still unsaved as "Untitled". Check the name in VS Code's file list and make sure file extensions are shown.
+
+</Solution>
+
+**4. (standard)** In the browser Console, type `"5" + 3` and then `5 + 3`. Predict both answers before pressing Enter, then explain the difference.
+
+<Solution>
+
+`"5" + 3` gives `'53'` and `5 + 3` gives `8`. In the first, `"5"` is text (it is in quotes), and `+` on text joins pieces together, so the 3 is joined on. In the second, both are numbers, so `+` adds them. You will meet this again in the JavaScript chapters; mixing up text and numbers is one of the commonest beginner bugs.
+
+</Solution>
+
+**5. (standard)** Change `hello.js` so it prints two lines: your own name, then the sentence `I am learning web development.` Run it.
+
+<Solution>
+
+```js
+console.log("Kofi");
+console.log("I am learning web development.");
+```
+
+Running `node hello.js` prints the two lines in order. Each `console.log` prints one line.
+
+</Solution>
+
+**6. (stretch)** Your friend's `index.html` shows the raw code (the tags with angle brackets) in the browser instead of a formatted page. What has probably gone wrong?
+
+<Solution>
+
+The file is probably not really an `.html` file: most often it is `index.html.txt`, so the browser treats it as plain text and shows it as it is. Show file extensions and rename it. (Less often, the file was opened through a viewer that shows source code, such as VS Code's preview of the text, rather than in a browser.)
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- You need a code editor (VS Code), two browsers, Node.js, Git and a GitHub account. All are free.
+- Open a **folder** in VS Code, and turn on Auto Save.
+- Developer tools (F12) show a page's HTML in Elements and its JavaScript messages in the Console, where you can also run JavaScript.
+- The loop of web work is: edit, save, refresh, look.
+- **Node.js** runs JavaScript outside the browser; `node hello.js` runs a file. It comes with **npm** for installing tools.
+- After installing anything, open a **new** terminal before using it.
+- Check your tools with `node --version`, `npm --version` and `git --version`.
+
+## Go deeper
+
+- [MDN: Installing basic software](https://developer.mozilla.org/en-US/docs/Learn_web_development/Getting_started/Environment_setup/Installing_software), from Mozilla. Recommends the same editor and the two-browser habit, and explains why.
+- [Getting started with VS Code](https://code.visualstudio.com/docs/getstarted/overview), from Microsoft. The official guide to installing VS Code and finding your way around it.
+- [Chrome DevTools overview](https://developer.chrome.com/docs/devtools/overview), from Google. What each panel of the developer tools is for. Firefox users: [Firefox DevTools user docs](https://firefox-source-docs.mozilla.org/devtools-user/).
+- [Node.js downloads](https://nodejs.org/en/download), the official place to get Node. Always install from here or from your system's package manager, not from download sites that bundle other software.

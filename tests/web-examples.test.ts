@@ -122,3 +122,18 @@ describe('frontend chapter', () => {
     await React.act(async () => root.unmount());
   });
 });
+
+describe('web-setup chapter', () => {
+  it('web-setup block 2', () => {
+    const html = block('web-setup', 2);
+    const doc = new JSDOM(html).window.document;
+    expect(doc.title).toBe('My first page');
+    expect(doc.documentElement.lang).toBe('en');
+    expect(doc.querySelector('meta[charset]')?.getAttribute('charset')).toBe('utf-8');
+    expect(doc.querySelector('h1')?.textContent).toBe('Hello, web');
+    expect(doc.querySelector('p')?.textContent).toBe('I made this page myself.');
+    const opened = (html.match(/<(html|head|title|body|h1|p)\b/g) ?? []).length;
+    const closed = (html.match(/<\/(html|head|title|body|h1|p)>/g) ?? []).length;
+    expect(opened).toBe(closed);
+  });
+});

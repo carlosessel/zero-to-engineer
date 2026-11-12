@@ -1,0 +1,49 @@
+- question: "What is a commit?"
+  options:
+    - "A snapshot of the whole project, with a message, an author and a date"
+    - "A file that lists what Git should ignore"
+    - "A copy of the project on GitHub"
+  answer: 0
+  explanation: "Each commit records the project as it was, with a note saying what changed and why. The history is a chain of commits."
+- question: "You changed index.html and style.css, then ran `git add index.html` and `git commit -m \"Update\"`. What is in the commit?"
+  options:
+    - "Both files' changes"
+    - "Only the changes to index.html"
+    - "Nothing, because you did not add style.css"
+  answer: 1
+  explanation: "Only staged changes are committed. style.css stays changed in the working folder until you add and commit it."
+- question: "Which command throws away your unsaved edits to a file and brings back the last committed version?"
+  options:
+    - "git restore index.html"
+    - "git restore --staged index.html"
+    - "git revert index.html"
+  answer: 0
+  explanation: "git restore with just a file name puts it back as it was in the last commit. --staged only unstages; git revert works on commits, not files."
+- question: "A commit you already pushed broke the site. What is the safe way to undo it?"
+  options:
+    - "Delete the .git folder"
+    - "git revert with the commit's hash, then git push"
+    - "Edit the history on GitHub"
+  answer: 1
+  explanation: "git revert makes a new commit that undoes the old one, so the shared history is kept and nobody's copy breaks."
+- question: "Which file should go in .gitignore?"
+  options:
+    - "index.html"
+    - ".env, which holds your API key"
+    - "README.md"
+  answer: 1
+  explanation: "Secrets must never be committed. index.html and README.md are your work and belong in the repository."
+- question: "Git asks for your GitHub password when you push, and your account password is refused. Why?"
+  options:
+    - "You typed it wrongly"
+    - "GitHub no longer accepts account passwords for Git commands; sign in with GitHub CLI or a token"
+    - "Your repository is private"
+  answer: 1
+  explanation: "GitHub removed password sign-in for Git. `gh auth login` followed by `gh auth setup-git` sets up a sign-in Git can use."
+- question: "What does `git status` change?"
+  options:
+    - "It stages every changed file"
+    - "It commits your work"
+    - "Nothing; it only reports"
+  answer: 2
+  explanation: "That is why it is safe to run whenever you are unsure what state your project is in."

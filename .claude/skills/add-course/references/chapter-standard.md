@@ -119,7 +119,7 @@ status: deepened
 
 `status` is shown to readers, so it must be true:
 - `deepened`: written to this standard; resources not all opened and checked.
-- `code-verified`: as above, and every code block runs under test.
-- `resources-verified`: as above, and every resource opened and recorded in `resources.yaml`.
+- `code-verified`: as above, and every code block has a check in `examples.yaml` that passes (the chapter page lists how each kind was checked, including any that cannot be run).
+- `resources-verified`: as above, and every resource opened and recorded in `resources.yaml`. A chapter with no code can be `resources-verified` once its resources are checked.
 
 Do not set a status the chapter has not earned.

@@ -185,7 +185,7 @@ test('@phone the chapter menu opens and closes, and nothing overflows sideways',
   expect(overflow).toBeLessThanOrEqual(0);
 });
 
-const AXE_PAGES = ['/', '/ai/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
+const AXE_PAGES = ['/', '/ai/', '/web/', '/web/web-the-map/', '/web/web-setup/', '/web/git-basics/', '/ai/the-map/', '/ai/math-numbers/', '/ai/python-basics/', '/ai/sampling/', '/ai/library/', '/se/algorithms/', '/se/html-css/', '/se/glossary/', '/review/', '/planner/', '/search/', '/glossary/', '/progress/'];
 for (const theme of ['light', 'dark'] as const) {
   test(`accessibility checks pass in ${theme} mode`, async ({ page }) => {
     test.slow();

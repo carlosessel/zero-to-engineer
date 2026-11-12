@@ -17,7 +17,9 @@ const COURSES = [
   { id: 'se', legacy: 'legacy/software-engineer-course.html' },
 ];
 const squash = (s) => s.replace(/\s+/g, '');
-const words = (s) => s.split(/\s+/).filter(Boolean).length;
+// Words are counted with a space between every element, so a term and its
+// definition in neighbouring tags count as two words, not one.
+const words = (node) => node.innerHTML.replace(/<[^>]+>/g, ' ').split(/\s+/).filter(Boolean).length;
 let failures = 0;
 let checked = 0;
 const fail = (msg) => {
@@ -58,8 +60,8 @@ for (const course of COURSES) {
     const built = body.textContent;
     if (status === 'migrated') {
       if (squash(original) !== squash(built)) fail(`${where}: text differs ${firstDifference(squash(original), squash(built))}`);
-    } else if (words(built) < words(original)) {
-      fail(`${where}: ${words(built)} words, shorter than the original ${words(original)}`);
+    } else if (words(body) < words(art)) {
+      fail(`${where}: ${words(body)} words, shorter than the original ${words(art)}`);
     }
 
     if (doc.querySelector('h1')?.textContent !== art.dataset.title) fail(`${where}: title differs`);

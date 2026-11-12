@@ -1,0 +1,48 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  script: |
+    bash -e "$BLOCK"
+    test -d web-course
+- block: 2
+  lang: html
+  check: vitest
+  test: web-setup block 2
+- block: 3
+  lang: js
+  check: shell
+  note: Saved as hello.js inside web-course and run with Node.
+  script: |
+    cp "$BLOCK" web-course/hello.js
+- block: 4
+  lang: bash
+  check: shell
+  script: |
+    cd web-course
+    bash -e "$BLOCK"
+  output_contains:
+  - Hello from Node, Ama
+- block: 5
+  lang: text
+  check: illustration
+  note: The output of the command above, which is checked when it runs.
+  verify: |
+    assert block == 'Hello from Node, Ama'
+- block: 6
+  lang: bash
+  check: shell
+  note: Needs Node.js, npm and Git on the test machine, as the chapter asks the reader to install.
+  script: |
+    bash -e "$BLOCK"
+  output_contains:
+  - v
+  - git version
+- block: 7
+  lang: js
+  check: shell
+  note: 'A practice solution: saved as hello.js and run with Node.'
+  script: |
+    cp "$BLOCK" sol.js
+    node sol.js > out.txt
+    printf "Kofi\nI am learning web development.\n" | cmp - out.txt

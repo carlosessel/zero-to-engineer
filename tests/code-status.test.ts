@@ -11,6 +11,9 @@ describe('codeStatus', () => {
       'Code: 2 examples run under automatic tests; 1 model API example run against a stand-in server, not the live API; 2 examples needing PyTorch or a model download, checked in a separate heavy run; 1 example that cannot be run automatically.',
     );
   });
+  it('uses the plural', () => {
+    expect(codeStatus([{ check: 'illustration' }, { check: 'illustration' }])).toBe('Code: 2 worked examples or sample outputs checked by hand-written assertions.');
+  });
   it('uses the singular', () => {
     expect(codeStatus([{ check: 'illustration' }])).toBe('Code: 1 worked example or sample output checked by hand-written assertions.');
   });

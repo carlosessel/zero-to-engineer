@@ -1,0 +1,265 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  note: Run with Git pointed at a throwaway settings file, so the real settings on the test machine are never touched.
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    bash -e "$BLOCK"
+    test "$(git config --global --get init.defaultBranch)" = main
+    test "$(git config --global --get user.name)" = "Ama Mensah"
+    git config --global --list
+  output_contains:
+  - user.email=ama@example.com
+- block: 2
+  lang: bash
+  check: shell
+  note: The check first creates web-course, which the setup chapter made.
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    mkdir -p web-course
+    bash -e "$BLOCK"
+    test -d web-course/first-repo/.git
+  output_contains:
+  - Initialized empty Git repository in
+  - first-repo/.git/
+- block: 3
+  lang: bash
+  check: shell
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    cd web-course/first-repo
+    bash -e "$BLOCK"
+  output_contains:
+  - No commits yet
+- block: 4
+  lang: text
+  check: illustration
+  note: Compared with what git status really prints at this point.
+  verify: |
+    import os, subprocess
+    repo = tmp / "web-course" / "first-repo"
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(tmp / "gitconfig"), "GIT_AUTHOR_NAME": "Learner", "GIT_AUTHOR_EMAIL": "learner@example.com", "GIT_COMMITTER_NAME": "Learner", "GIT_COMMITTER_EMAIL": "learner@example.com"}
+    def git(*args, cwd=repo):
+        return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout
+    out_real = git('status')
+    assert out_real.rstrip() == block.rstrip(), repr(out_real)
+- block: 5
+  lang: bash
+  check: shell
+  note: The check creates a ten-line index.html, standing in for the one the reader types in VS Code.
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    cd web-course/first-repo
+    cat > index.html <<'HTML'
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <title>My first page</title>
+      </head>
+      <body>
+        <h1>Hello, web</h1>
+        <p>I made this page myself.</p>
+      </body>
+    HTML
+    bash -e "$BLOCK"
+  output_contains:
+  - 'Untracked files:'
+- block: 6
+  lang: text
+  check: illustration
+  note: Compared with what git status really prints at this point.
+  verify: |
+    import os, subprocess
+    repo = tmp / "web-course" / "first-repo"
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(tmp / "gitconfig"), "GIT_AUTHOR_NAME": "Learner", "GIT_AUTHOR_EMAIL": "learner@example.com", "GIT_COMMITTER_NAME": "Learner", "GIT_COMMITTER_EMAIL": "learner@example.com"}
+    def git(*args, cwd=repo):
+        return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout
+    out_real = git('status')
+    assert out_real.rstrip() == block.rstrip(), repr(out_real)
+- block: 7
+  lang: bash
+  check: shell
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    cd web-course/first-repo
+    bash -e "$BLOCK"
+    git status
+  output_contains:
+  - (root-commit)
+  - '] Add first page'
+  - ' 1 file changed, 10 insertions(+)'
+  - ' create mode 100644 index.html'
+  - nothing to commit, working tree clean
+- block: 8
+  lang: text
+  check: illustration
+  note: 'Example output: the hash differs every time. Its other lines are checked when the commands above are run.'
+  verify: |
+    import re
+    first, *rest = block.splitlines()
+    assert re.fullmatch(r'\[main \(root-commit\) [0-9a-f]{7}\] Add first page', first)
+    assert rest == [' 1 file changed, 10 insertions(+)', ' create mode 100644 index.html']
+- block: 9
+  lang: bash
+  check: shell
+  note: The check first changes the sentence, standing in for the reader's edit.
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    cd web-course/first-repo
+    sed -i.bak 's/I made this page myself./I am learning to build the web./' index.html && rm index.html.bak
+    bash -e "$BLOCK"
+  output_contains:
+  - '-    <p>I made this page myself.</p>'
+  - +    <p>I am learning to build the web.</p>
+- block: 10
+  lang: bash
+  check: shell
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    cd web-course/first-repo
+    bash -e "$BLOCK"
+  output_contains:
+  - Reword the introduction
+  - 1 file changed, 1 insertion(+), 1 deletion(-)
+- block: 11
+  lang: bash
+  check: shell
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    cd web-course/first-repo
+    bash -e "$BLOCK"
+  output_contains:
+  - Reword the introduction
+  - Add first page
+- block: 12
+  lang: text
+  check: illustration
+  note: 'Compared in shape with the real history: hashes differ every time, so only their form is checked. Terminals show the (HEAD -> main) label; it is asked for explicitly here because tests do not run in a terminal.'
+  verify: |
+    import os, subprocess
+    repo = tmp / "web-course" / "first-repo"
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(tmp / "gitconfig"), "GIT_AUTHOR_NAME": "Learner", "GIT_AUTHOR_EMAIL": "learner@example.com", "GIT_COMMITTER_NAME": "Learner", "GIT_COMMITTER_EMAIL": "learner@example.com"}
+    def git(*args, cwd=repo):
+        return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout
+    import re
+    real = git('log', '--oneline', '--decorate').splitlines()
+    shape = lambda l: re.sub(r'^[0-9a-f]{7} ', 'HASH ', l)
+    assert [shape(l) for l in real] == [shape(l) for l in block.splitlines()], real
+- block: 13
+  lang: bash
+  check: shell
+  note: The check first deletes half of index.html, standing in for the accident in the text, then confirms the file is back to its committed contents.
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    cd web-course/first-repo
+    cp index.html ../saved.html
+    head -5 index.html > half && mv half index.html
+    bash -e "$BLOCK"
+    cmp index.html ../saved.html
+  output_contains:
+  - 'modified:   index.html'
+  - nothing to commit, working tree clean
+- block: 14
+  lang: text
+  check: illustration
+  note: Checked by writing it as a real .gitignore beside the three kinds of file it names and asking Git what it would show.
+  verify: |
+    import os, subprocess
+    repo = tmp / "web-course" / "first-repo"
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(tmp / "gitconfig"), "GIT_AUTHOR_NAME": "Learner", "GIT_AUTHOR_EMAIL": "learner@example.com", "GIT_COMMITTER_NAME": "Learner", "GIT_COMMITTER_EMAIL": "learner@example.com"}
+    def git(*args, cwd=repo):
+        return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout
+    (repo / ".gitignore").write_text(block + "\n")
+    (repo / ".env").write_text("API_KEY=not-a-real-key\n")
+    (repo / ".DS_Store").write_text("x")
+    (repo / "node_modules" / "some-package").mkdir(parents=True)
+    (repo / "node_modules" / "some-package" / "index.js").write_text("x")
+    shown = git("status", "--porcelain", "--untracked-files=all").split()
+    assert shown == ["??", ".gitignore"], shown
+    git("add", ".gitignore"); git("commit", "-q", "-m", "Add .gitignore")
+- block: 15
+  lang: bash
+  check: not-run
+  reason: Signs in to a real GitHub account through a web browser, which an automatic test cannot do. The commands and what they do were checked against the GitHub CLI manual (gh auth login, gh auth setup-git) on 12 November 2026.
+- block: 16
+  lang: bash
+  check: shell
+  note: GitHub is replaced by a local stand-in repository, so the address in the first line is swapped for it. Everything else runs as written.
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    git init -q --bare origin.git
+    cd web-course/first-repo
+    sed "s|https://github.com/YOUR-NAME/first-repo.git|$PWD/../../origin.git|" "$BLOCK" > ../push.sh
+    grep -q "origin.git" ../push.sh
+    bash -e ../push.sh
+    test "$(git rev-parse HEAD)" = "$(git --git-dir=../../origin.git rev-parse main)"
+  output_contains:
+  - main -> main
+- block: 17
+  lang: bash
+  check: shell
+  note: 'Continues with the stand-in for GitHub: makes one more commit, pushes it, and checks it arrived.'
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    cd web-course/first-repo
+    echo "<p>More.</p>" >> index.html && git commit -qam "Add a line"
+    bash -e "$BLOCK"
+    test "$(git rev-parse HEAD)" = "$(git --git-dir=../../origin.git rev-parse main)"
+- block: 18
+  lang: text
+  check: illustration
+  note: An excerpt of git status. Checked by setting up exactly that situation and confirming every line shown appears in Git's real output.
+  verify: |
+    import os, subprocess
+    repo = tmp / "web-course" / "first-repo"
+    env = {**os.environ, "GIT_CONFIG_GLOBAL": str(tmp / "gitconfig"), "GIT_AUTHOR_NAME": "Learner", "GIT_AUTHOR_EMAIL": "learner@example.com", "GIT_COMMITTER_NAME": "Learner", "GIT_COMMITTER_EMAIL": "learner@example.com"}
+    def git(*args, cwd=repo):
+        return subprocess.run(["git", *args], cwd=cwd, env=env, capture_output=True, text=True, check=True).stdout
+    d = tmp / "practice4"
+    d.mkdir()
+    git("init", "-q", cwd=d)
+    for f in ("index.html", "style.css"):
+        (d / f).write_text("one\n")
+    git("add", ".", cwd=d); git("commit", "-q", "-m", "Start", cwd=d)
+    (d / "index.html").write_text("two\n"); (d / "style.css").write_text("two\n")
+    git("add", "index.html", cwd=d)
+    real = git("status", cwd=d).splitlines()
+    for line in block.splitlines():
+        if line.strip():
+            assert line in real, (line, real)
+- block: 19
+  lang: text
+  check: illustration
+  note: A made-up history for the reader to interpret, not the output of a command run here.
+- block: 20
+  lang: bash
+  check: shell
+  note: 'Reproduces the situation: a stand-in for GitHub with a README commit, and a separate local repository whose first push is refused. Then the two commands run as written.'
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    git init -q --bare readme-origin.git
+    git clone -q readme-origin.git on-github 2>/dev/null
+    (cd on-github && echo "# first-repo" > README.md && git add . && git commit -qm "Initial commit" && git push -q origin main)
+    mkdir local && cd local && git init -q && echo hi > index.html && git add . && git commit -qm "Add first page"
+    git remote add origin ../readme-origin.git
+    if git push -q -u origin main 2>/dev/null; then echo "the first push should have been refused"; exit 1; fi
+    bash -e "$BLOCK"
+    test -f README.md
+    test -n "$(git log --oneline --grep="Add first page")"
+    test "$(git rev-parse HEAD)" = "$(git --git-dir=../readme-origin.git rev-parse main)"
+  output_contains:
+  - README.md
+- block: 21
+  lang: bash
+  check: shell
+  note: Sets up three changed files, runs the two commands, and checks that contact.html is left out.
+  script: |
+    export GIT_CONFIG_GLOBAL="$PWD/gitconfig"
+    mkdir three && cd three && git init -q
+    for f in index.html style.css contact.html; do echo one > $f; done
+    git add . && git commit -qm "Start"
+    for f in index.html style.css contact.html; do echo two > $f; done
+    bash -e "$BLOCK"
+    test "$(git status --porcelain)" = " M contact.html"

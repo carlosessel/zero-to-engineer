@@ -1,0 +1,136 @@
+---
+title: "What a web developer actually does"
+summary: "Front end, back end and full stack, what you will build in this course, and how to study it."
+prerequisites: []
+estimated_minutes: 60
+status: resources-verified
+---
+
+By the end of this chapter you will know what the job involves, what the different kinds of web developer do, and how this course takes you from nothing to building and launching your own web applications.
+
+## What a web developer builds
+
+A **website** is a set of pages you read: a bakery's opening hours, a news article, a school's term dates. A **web application** is a website you *do things with*: an online shop, a banking page, a to-do list, a booking form, a chat. The line between them is blurry, and web developers build both.
+
+Everything you use in a **browser** (the program you open web pages with, such as Chrome, Firefox, Safari or Edge) was written by someone. A web developer is that someone. Day to day, the job is:
+
+- turning an idea or a design into pages that work on a phone and on a laptop;
+- writing the code that makes those pages respond when people click and type;
+- writing the code that runs on a **server** (a computer, usually in a data centre, that is always on and answers requests from browsers), which stores data and applies the rules;
+- testing all of it, fixing what breaks, and putting new versions online safely;
+- working with other people: designers, other developers, and the people the software is for.
+
+## Front end, back end and full stack
+
+Think of a restaurant. The dining room is what customers see: the menu, the tables, the waiter taking orders. The kitchen is hidden: it stores the ingredients, follows the recipes and decides what can be served.
+
+- The **front end** is the dining room: everything that runs in the browser and that people see and touch. It is built with three languages. **HTML** says what is on the page. **CSS** says how it looks. **JavaScript** makes it respond.
+- The **back end** is the kitchen: code on a server that receives requests from the browser, checks they are allowed, reads and writes the **database** (an organised store of data that survives when programs stop), and sends back an answer.
+- A **full stack** developer works on both. Most beginners start at the front, because you can see what you build immediately, and then learn the back end so they can build complete applications on their own.
+
+### A worked example: buying a book online
+
+Follow one click through the whole system.
+
+1. You open a bookshop's site. Your browser downloads the HTML, CSS and JavaScript for the page and draws it. *Front end.*
+2. You type "gardening" into the search box. JavaScript in the page notices the typing and asks the shop's server for matching books. *Front end, then a request to the back end.*
+3. The server looks up "gardening" in its database and sends back a list of books as data. *Back end.*
+4. JavaScript in the page turns that data into a list you can see, with pictures and prices. *Front end.*
+5. You press "Buy". The page sends your order to the server. The server checks you are logged in, checks the book is in stock, takes the payment through a payment company, records the order in the database, and replies "Order confirmed". *Back end.*
+6. The page shows a green confirmation message. *Front end.*
+
+Every web application you will build in this course has this same shape: a front end in the browser talking to a back end on a server, which talks to a database.
+
+## What you will learn, in order
+
+This course assumes you have never written code. Each part builds on the one before:
+
+<Route />
+
+You will learn one programming language properly, **JavaScript**, and use it for everything: in the browser, and on the server through a tool called Node.js. That is deliberate. Learning one language well first is easier than learning two at once, and almost every web job uses JavaScript.
+
+Along the way you will use the tools professionals use every day: the **terminal** (typing commands instead of clicking), a code editor, the browser's developer tools, and **Git** (a tool that saves the history of your work).
+
+## How to study this course
+
+- **Type the code yourself.** Copying and pasting skips the part where your fingers and eyes learn the shapes. Paste only when you are told to.
+- **Change things and predict.** After an example works, change one thing and say out loud what you expect to happen before you look.
+- **Do the practice problems before opening the solutions.** Getting one wrong and then seeing why is how it sticks.
+- **Build the projects.** The project ladder near the end of the course is where reading turns into skill. Employers look at what you have built.
+- **Expect to be stuck.** Being stuck, reading an error and getting unstuck is what the work feels like at every level. When you have been stuck for twenty minutes, search for the exact error message, or use the "Ask a tutor" box at the bottom of each chapter.
+- **Little and often.** Forty-five minutes a day beats one long weekend session. The Study planner in the menu turns your hours per week into a schedule, and the Review page brings back quiz questions you got wrong.
+
+How long it takes depends on you. As a very rough guide, people starting from nothing usually need many months of steady practice, not weeks, to reach the level of a junior developer. The course does not promise a date.
+
+## Common mistakes
+
+- **Trying to learn everything at once.** There are hundreds of web tools and new ones every month. You need very few of them to start. This course chooses for you; ignore the rest until you have finished it.
+- **Watching tutorials without building.** Following along feels like progress. Building something on your own, with nobody telling you the next step, is what actually makes you a developer.
+- **Skipping HTML and CSS because they look easy.** Most bugs and most interview questions in front-end work are about layout, accessibility and how the page is structured.
+- **Thinking you need to be good at maths.** Web development needs arithmetic and clear thinking, not advanced maths.
+
+## Practice
+
+**1. (warm-up)** For each task, say whether it is front end or back end: (a) making a button turn blue when the mouse is over it; (b) checking that a password is correct; (c) remembering which books are in stock; (d) showing an error under a form field that was left empty.
+
+<Solution>
+
+(a) Front end: it happens in the browser, and CSS can do it alone. (b) Back end: the correct password must never be sent to the browser, so the check happens on the server. (c) Back end: stock is shared by every customer, so it lives in the database on the server. (d) Front end, usually: JavaScript in the page can see the field is empty and show the message straight away. (The server should check again too, because anything the browser does can be bypassed. You will learn why in the security chapter.)
+
+</Solution>
+
+**2. (warm-up)** Which language does each of these jobs: the text and headings on a page; the colours and spacing; what happens when you press a button?
+
+<Solution>
+
+HTML for the text and headings (what is on the page), CSS for colours and spacing (how it looks), JavaScript for what happens when you press a button (how it responds).
+
+</Solution>
+
+**3. (standard)** A weather site shows today's forecast for your town. Describe, in the order they happen, what the front end and the back end each do between you opening the page and seeing the forecast.
+
+<Solution>
+
+1. Your browser asks the site's server for the page and receives HTML, CSS and JavaScript. (Front end receives; back end sends.)
+2. The browser draws the page, perhaps with an empty space for the forecast. (Front end.)
+3. JavaScript in the page asks the server for the forecast for your town. (Front end sends a request.)
+4. The server looks up the forecast, probably in its database or from a weather data company, and sends it back as data. (Back end.)
+5. JavaScript puts the forecast into the page. (Front end.)
+
+Some sites do steps 3 to 5 on the server before sending the page at all. Both designs are common; you will meet both.
+
+</Solution>
+
+**4. (standard)** A friend says: "If the page checks the form, the server doesn't need to." Are they right?
+
+<Solution>
+
+No. Checks in the browser are for convenience: they tell people about a mistake quickly. But anyone can change what runs in their own browser, or send requests to the server without using the page at all. Anything that matters, such as a price, a permission or a stock level, must be checked again on the server.
+
+</Solution>
+
+**5. (stretch)** Pick a web application you use often. List three things it does that must happen on the back end, and say why each cannot happen only in the browser.
+
+<Solution>
+
+Answers vary. For a messaging app, for example: storing messages so they are there tomorrow and on your other devices (the browser's memory is wiped and is not shared between devices); delivering a message to the other person (their browser cannot reach yours directly; both talk to the server); checking that you are allowed to read a conversation (a check in your own browser could be removed by you). The common thread: anything shared between people, anything that must last, and anything that must be trusted lives on the back end.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A website is mainly for reading; a web application is for doing things. Web developers build both.
+- The **front end** runs in the browser and is built with HTML (content), CSS (appearance) and JavaScript (behaviour).
+- The **back end** runs on a server, applies the rules and stores data in a database. A **full stack** developer does both.
+- Every application in this course has the same shape: browser, server, database.
+- You will learn one language, JavaScript, and use it in the browser and on the server.
+- Type the code, predict before you run, do the practice before the solutions, and build the projects.
+
+## Go deeper
+
+- [MDN: Learn web development](https://developer.mozilla.org/en-US/docs/Learn_web_development), from Mozilla. A free, beginner-friendly set of modules written by the people behind the most-used web reference. Good to read alongside this course.
+- [The MDN Curriculum](https://developer.mozilla.org/en-US/curriculum/), from Mozilla. A list of the skills Mozilla considers essential for front-end developers. Useful as a checklist of what "job-ready" means.
+- [The Odin Project: Foundations](https://www.theodinproject.com/paths/foundations/courses/foundations). A free, project-based course run by volunteers; its foundations cover much of the first half of this course with different projects.
+- [roadmap.sh: Full Stack Developer roadmap](https://roadmap.sh/full-stack). A community-made map of what full stack developers learn. Handy for seeing the whole field at once; do not let its size discourage you.

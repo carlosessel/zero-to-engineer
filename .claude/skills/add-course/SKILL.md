@@ -30,19 +30,19 @@ Wait for approval. The outline determines all the later work, so a misunderstand
 
 ### 3. Create the files
 
-Save the approved outline to the scratchpad and run:
+Save the approved outline as `docs/plans/<course-id>-outline.yaml`, with a comment saying when it was approved and which parts exist so far. Then create **only the part you are about to write**: copy that part into a small outline file in the scratchpad (same format, same `course:` line) and run:
 
 ```bash
-.venv/bin/python .claude/skills/add-course/scripts/scaffold.py OUTLINE.yaml
+.venv/bin/python .claude/skills/add-course/scripts/scaffold.py PART-OUTLINE.yaml
 ```
 
-It creates the course file and one folder per new chapter with marked drafts (`DRAFT:`), and refuses id clashes and missing chapters. It never overwrites an existing chapter.
+It creates (or extends) the course file and one folder per new chapter with marked drafts (`DRAFT:`), and refuses id clashes and missing chapters. It never overwrites an existing chapter. Creating one part at a time means the site only ever lists chapters that are written; update the comment in the saved outline as each part is created.
 
 ### 4. Write the chapters, a part at a time
 
 Read `references/chapter-standard.md` before writing the first chapter: it is the standard every chapter meets (who the reader is, the chapter shape, writing rules, practice problems with `<Solution>` boxes, quizzes, exercises, tested code, checked resources, status).
 
-For each chapter: write `index.mdx`, `quiz.yaml`, `exercises.yaml`, `resources.yaml`; add new terms to `content/glossary.yaml`; draft and review `examples.yaml` for its code. Write a whole part, check it (step 5), commit, and tell the learner what is done before starting the next part. A full course is many sessions of work; finishing parts properly is better than a whole course of thin drafts.
+For each chapter: write `index.mdx`, `quiz.yaml`, `exercises.yaml`, `resources.yaml`; draft and review `examples.yaml` for its code. For the glossary, write the part's new terms in a small YAML list (`term`, `definition`, `courses`) and run `.venv/bin/python scripts/glossary_update.py NEW_TERMS.yaml`. It adds them, and adds the course to every existing term its chapters put in bold. Read what it changed with `git diff content/glossary.yaml`: a bold word can match a term with a different meaning (as "prompt" did), and then the entry needs both meanings. Write a whole part, check it (step 5), commit, and tell the learner what is done before starting the next part. A full course is many sessions of work; finishing parts properly is better than a whole course of thin drafts.
 
 ### 5. Check
 

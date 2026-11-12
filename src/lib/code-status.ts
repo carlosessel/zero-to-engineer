@@ -13,7 +13,7 @@ export function codeStatus(checks: { check: string }[]): string | null {
   if (tested) parts.push(`${plural(tested, 'example')} run under automatic tests`);
   if (fake) parts.push(`${plural(fake, 'model API example')} run against a stand-in server, not the live API`);
   if (heavy) parts.push(`${plural(heavy, 'example')} needing PyTorch or a model download, checked in a separate heavy run`);
-  if (shown) parts.push(`${plural(shown, 'worked example or sample output')} checked by hand-written assertions`);
+  if (shown) parts.push(`${plural(shown, 'worked example or sample output', 'worked examples or sample outputs')} checked by hand-written assertions`);
   if (notRun) parts.push(`${plural(notRun, 'example')} that cannot be run automatically`);
   return `Code: ${parts.join('; ')}.`;
 }

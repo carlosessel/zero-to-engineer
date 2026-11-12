@@ -4,6 +4,22 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: Zero to Web Developer, part 1
+
+Added
+- A third course, **Zero to Web Developer**, for people with no experience. The outline (43 chapters in 8 parts, JavaScript throughout, with a Node and Express back end) was approved and is saved in `docs/plans/web-outline.yaml`. Parts are added one at a time, so only finished chapters appear on the site.
+- Part 1, "Start here": three new chapters, "What a web developer actually does", "Set up your tools" and "Git from zero: saving your work", plus three reused chapters (how computers work, the terminal, how the internet works). The new chapters have worked examples, 23 practice problems with hidden solutions, 19 quiz questions, 14 exercises, and 14 linked resources, each opened on 12 November 2026 and recorded in `resources.yaml`.
+- 18 glossary terms; `scripts/glossary_update.py` adds terms and marks which courses use each one.
+- Every code example in the new chapters is checked: Git commands run in a throwaway folder against a local stand-in for GitHub, and the `git status` output shown in the chapter is compared with what Git really prints.
+
+Fixed
+- The glossary's "Prompt" entry gave only the AI meaning, but the terminal chapter links to it for the terminal's prompt. It now gives both meanings (the AI and software engineering glossaries are marked "corrected").
+- Chapter status wording no longer claims "every code example runs under test" when some cannot be run; the code line underneath says exactly how they were checked.
+- The no-lost-text check counted a term and its definition as one word when their tags touched.
+
+Found while writing
+- Advice that is common online ("just run `git pull`") does not fix a first push to a GitHub repository created with a README: the histories are unrelated. The chapter gives the command that works, and a test reproduces the situation.
+
 ### 2026-11-12: Adding courses
 
 Added
