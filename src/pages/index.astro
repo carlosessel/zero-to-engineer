@@ -2,18 +2,14 @@
 import Page from '../layouts/Page.astro';
 import { getCourses, href } from '../lib/load';
 const courses = await getCourses();
-const blurb: Record<string, string> = {
-  ai: 'From your first line of Python to building, testing and shipping products on top of language models. The maths is taught from arithmetic.',
-  se: 'From how a computer works to building, testing, deploying and running real software with other people.',
-};
 ---
-<Page title="Zero to Engineer" heading="Zero to Engineer" description="Two free courses that start from nothing: Zero to AI Engineer and Zero to Software Engineer.">
-    <p class="lead">Two free courses that assume you know nothing about programming. They share their beginner chapters, so starting one gives you a head start on the other.</p>
+<Page title="Zero to Engineer" heading="Zero to Engineer" description={`Free courses that start from nothing: ${courses.map((c) => c.title).join(', ')}.`}>
+    <p class="lead">Free courses that assume you know nothing to begin with. Courses share their beginner chapters, so starting one gives you a head start on the others.</p>
     <div class="cards">
       {courses.map((c) => (
         <section class="card">
           <h2><a href={href(`/${c.id}/`)}>{c.title}</a></h2>
-          <p>{blurb[c.id]}</p>
+          <p>{c.description}</p>
           <p class="hint">{c.chapters.length} chapters in {c.parts.length} parts</p>
           <div class="meter" data-meter={c.chapters.map((x) => x.id).join(' ')}><div class="bar"><i></i></div><span></span></div>
           <p><a class="btn" href={href(`/${c.id}/`)}>Open the course</a></p>
@@ -21,7 +17,7 @@ const blurb: Record<string, string> = {
       ))}
     </div>
     <div class="note">
-      <p><strong>This site is being built in the open and is not finished.</strong> Every chapter shows its own status. At the moment the chapters are short first drafts moved over from a prototype: the code in them has not yet been run under test, the contents of the linked resources have not been reviewed, and no subject expert has reviewed them.</p>
+      <p><strong>This site is being built in the open and is not finished.</strong> Every chapter shows its own status. Many chapters are still short first drafts moved over from a prototype. The code examples are run under automatic tests, but the contents of the linked resources have not all been reviewed, and no subject expert has reviewed the chapters.</p>
     </div>
     <h2>Study tools</h2>
     <ul>

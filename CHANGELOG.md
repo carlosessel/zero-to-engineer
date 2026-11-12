@@ -4,6 +4,13 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: Adding courses
+
+Added
+- **`add-course` skill** (`.claude/skills/add-course/`): when you ask Claude Code in this folder to add a course or chapters, it researches, proposes an outline for approval, creates the files with `scripts/scaffold.py`, writes chapters to the standard in `references/chapter-standard.md`, and runs every check.
+- Course files now carry their own `description` and `order`; the home page no longer assumes two courses. A course file with a missing field or a duplicate id stops the build with a plain message.
+- `<Solution>` box for practice problems: the answer stays hidden until the learner opens it.
+
 ### 2026-11-12: Phase 4, code examples verified
 
 Added
@@ -13,6 +20,11 @@ Added
 - `tests/web-examples.test.ts` for the JavaScript, HTML, CSS and React examples.
 - Each chapter page now states how its code was checked.
 - CI runs every example on every push (including package installs and the Docker build); a weekly job runs the PyTorch and model-download examples.
+- Results on 12 November 2026: 142 checks pass and 24 are skipped on a Mac (Docker, network and heavy examples run separately; examples that are checked by hand or in the JavaScript tests are reported as skipped, not passed). The Docker examples pass. All 16 PyTorch and model-download checks pass in a Linux container.
+
+Found but not changed (for the deepening phases)
+- PyTorch could not be installed on this Intel Mac with Python 3.14 ("no matching distribution"). Learners on similar machines will hit the same wall; the deep-learning chapters point to Colab, which avoids it, but the setup chapter should say so.
+- In the Python-from-zero chapters, lines that are just a value (`7 + 2  # 9`) show their result in the browser runner and at the `>>>` prompt, but print nothing when saved in a file and run with `python hello.py`, which is how the chapter says real programs are run. A beginner will be confused; the chapter should explain it.
 
 Fixed in the chapters (status changed to "corrected")
 - **The model API examples would have failed.** They passed `temperature=0`, which Anthropic's current Python SDK rejects with an error, and read replies as `msg.content[0].text`, which fails when a reply begins with a thinking block, as replies from current models can. Affected: Your first model call, Prompt engineering, Structured output, Tool use, RAG. They now use a small `reply_text` helper, introduced in "Your first model call", and `max_tokens` values with room for the model's thinking.

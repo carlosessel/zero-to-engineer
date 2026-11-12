@@ -1,5 +1,5 @@
 ---
-// Every glossary term from both courses on one page, with the chapters that mention each.
+// Every glossary term from every course on one page, with the chapters that mention each.
 import { getCollection } from 'astro:content';
 import Page from '../layouts/Page.astro';
 import { getCourses, getGlossary, chapterHref } from '../lib/load';
@@ -34,8 +34,8 @@ const terms = getGlossary().map((e) => {
 });
 const letters = [...new Set(terms.map((t) => t.term[0].toUpperCase()))];
 ---
-<Page title="Glossary · Zero to Engineer" heading="Glossary" description="Every term used in the two courses, in one sentence each, with the chapters that mention it.">
-  <p class="lead">Every piece of jargon in both courses, in one sentence each. In a chapter, a term is a dotted link the first time it is introduced; it brings you here.</p>
+<Page title="Glossary · Zero to Engineer" heading="Glossary" description="Every term used in the courses, in one sentence each, with the chapters that mention it.">
+  <p class="lead">Every piece of jargon in every course, in one sentence each. In a chapter, a term is a dotted link the first time it is introduced; it brings you here.</p>
   <nav class="letters" aria-label="Jump to a letter">
     {letters.map((l) => <a href={`#letter-${l}`}>{l}</a>)}
   </nav>

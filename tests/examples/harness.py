@@ -142,10 +142,14 @@ class Chapter:
         lang, code = self.blocks[n - 1]
         e = self.spec[n - 1]
         kind = e["check"]
-        if kind in ("not-run", "vitest"):
-            return None
+        if kind == "not-run":
+            raise Skip(f"not run: {e['reason']}")
+        if kind == "vitest":
+            raise Skip(f"checked in tests/web-examples.test.ts ({e['test']})")
         if kind == "illustration":
-            return self._verify(e, code, "", {}) if e.get("verify") else None
+            if not e.get("verify"):
+                raise Skip(f"checked by hand: {e['note']}")
+            return self._verify(e, code, "", {})
         if kind == "heavy" and os.environ.get("EXAMPLES_HEAVY") != "1":
             raise Skip("needs PyTorch or a model download; set EXAMPLES_HEAVY=1")
         if kind == "docker" and os.environ.get("EXAMPLES_DOCKER") != "1":

@@ -5,7 +5,8 @@ const meta = (id: string, extra: Partial<ChapterMeta> = {}): ChapterMeta => ({ i
 const course = (id: string, parts: Record<string, string[]>): CourseManifest => ({
   id,
   title: id,
-  tagline: '',
+  tagline: 't',
+  description: 'd',
   parts: Object.entries(parts).map(([name, chapters]) => ({ name, blurb: '', chapters })),
 });
 
@@ -49,6 +50,19 @@ describe('buildCourses', () => {
   it('refuses a prerequisite that does not exist', () => {
     const bad = metas.map((m) => (m.id === 'web' ? meta('web', { prerequisites: ['ghost'] }) : m));
     expect(() => buildCourses(manifests, bad)).toThrow(/prerequisite "ghost"/);
+  });
+});
+
+describe('course files', () => {
+  it('orders courses by their order field', () => {
+    const [first] = buildCourses([{ ...manifests[0], order: 2 }, { ...manifests[1], order: 1 }], metas);
+    expect(first.id).toBe('se');
+  });
+  it('refuses a course with no description', () => {
+    expect(() => buildCourses([{ ...manifests[0], description: '' }, manifests[1]], metas)).toThrow(/no description/);
+  });
+  it('refuses two courses with the same id', () => {
+    expect(() => buildCourses([manifests[0], { ...manifests[1], id: 'ai' }], metas)).toThrow(/Two course files/);
   });
 });
 
