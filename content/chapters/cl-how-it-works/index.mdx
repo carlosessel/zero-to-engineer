@@ -1,0 +1,259 @@
+---
+title: "How Claude works, for people who use it"
+summary: "Tokens, the context window, training, why answers vary, and why it can be confidently wrong."
+prerequisites: [cl-the-map]
+estimated_minutes: 120
+status: deepened
+---
+
+By the end of this chapter you will have a working picture of what happens when you send Claude a message: what it actually receives, how it produces a reply, what it can and cannot know, and why it sometimes gets things wrong with total confidence. Nearly every technique in the rest of the course follows from this picture, so it is worth an hour.
+
+You do not need maths or programming for this chapter. (If you want the machinery underneath, <Ref to="tokens-embeddings" /> and <Ref to="attention" /> in the AI course go further.)
+
+## Text in, text out, one piece at a time
+
+A model like Claude does one thing, over and over: given some text, it predicts what text should come next. To answer your question it predicts the first piece of a reply, adds that piece to the text, predicts the next piece, and so on, until it predicts that the reply is finished. Everything else, from summarising a contract to fixing a bug, is built on that loop.
+
+The pieces are called **tokens**. A token is a chunk of text the model treats as one unit: often a whole common word, sometimes part of a longer or rarer word, a space, or a punctuation mark. Code, numbers and unusual words split into more tokens than ordinary English. The model never sees letters directly, only tokens, which explains a few odd weaknesses, such as miscounting the letters in a word.
+
+Tokens matter to you for three practical reasons:
+
+1. **Limits are measured in tokens.** How much Claude can read at once, and how long it can reply, are both counted in tokens.
+2. **Prices are measured in tokens.** The API charges per million tokens read (**input tokens**) and per million written (**output tokens**), and output costs several times more.
+3. **Time is roughly proportional to output tokens.** A long answer takes longer to produce than a short one.
+
+How many tokens is a page of text? Anthropic's documentation (checked November 2026) says that on the current tokeniser, one million tokens is roughly 555,000 English words. That is about 1.8 tokens per word. A rough estimate is enough for planning:
+
+```python
+def estimate_tokens(words):
+    """Rough token count for English prose, from Anthropic's figure of about
+    555,000 words per million tokens on the current tokeniser."""
+    return round(words * 1_000_000 / 555_000)
+
+for name, words in [("an email", 200), ("a 10-page report", 5_000), ("a 300-page book", 90_000)]:
+    print(f"{name}: about {estimate_tokens(words):,} tokens")
+```
+
+An email is about 360 tokens, a ten-page report about 9,000, a long book about 162,000. For exact counts, the API has a token-counting endpoint; you will meet it in the API part of the course.
+
+## The context window: everything Claude can see
+
+When Claude writes a reply, the only things it can take into account are its training (more on that below) and the text in front of it right now. That text is the **context**, and the most it can hold is the **context window**. Every current Claude model has a context window of 1 million tokens (checked November 2026): several long books' worth.
+
+What goes into the context for one reply:
+
+- the **system prompt**: instructions set by whoever built the app or tool you are using, which you may not see;
+- **the conversation so far**: every message from you and every reply from Claude;
+- anything **attached**: files, pasted text, images;
+- the results of any **tools** Claude used: search results, file contents it read, command output;
+- in apps with a memory feature, **remembered notes** that the app adds for you.
+
+Here is the crucial point: **the model itself remembers nothing between replies.** Each time, the app sends the whole conversation again, and the model reads it from the start. It feels like a continuing conversation because the history is resent every time. You can see this directly in the API, where your program has to send the full list of messages on every call:
+
+```python
+conversation = [
+    {"role": "user", "content": "My name is Ama. What is a context window?"},
+    {"role": "assistant", "content": "It is everything the model can see when it writes a reply..."},
+    {"role": "user", "content": "And what was my name?"},
+]
+
+# The model can answer "Ama" only because the first message is sent again.
+for turn in conversation:
+    print(f'{turn["role"]:>9}: {turn["content"]}')
+print(len(conversation), "messages are sent with this one request")
+```
+
+Three things follow, and they explain a great deal of behaviour:
+
+1. **A new conversation starts from nothing.** Claude does not know what you discussed yesterday unless you (or a memory or project feature) put it into this conversation.
+2. **What is not in the context does not exist for Claude.** It cannot see your screen, your other files, your company's conventions or what you meant but did not say. Most disappointing results come from this. The fix is almost always to provide the missing context.
+3. **Long conversations have a cost.** Every reply rereads the whole history, so long chats cost more and take longer, and material that is no longer relevant still takes up attention. Anthropic's guidance on building agents treats context as a limited resource for this reason: more is not automatically better. When a conversation has drifted, starting a fresh one with a short summary often works better than carrying on.
+
+## Where Claude's knowledge comes from
+
+Claude's general knowledge comes from **training**. In the first stage, called **pre-training**, the model learnt to predict the next token over an enormous amount of text and code. That is where its knowledge of language, facts, programming and reasoning patterns comes from. Later stages trained it to be a helpful, honest and careful assistant: to follow instructions, answer rather than ramble, use tools, and decline harmful requests.
+
+Two consequences:
+
+- **Knowledge has a cutoff date.** Training data stops at some point. For the current models, Anthropic gives the reliable knowledge cutoff as June 2026. Claude does not know about anything after that unless it is put into the context, for example by a web search tool or by you pasting it in.
+- **Knowledge is stored as patterns, not as a database of facts.** The model does not look facts up. It produces what is likely given everything it learnt. For widely discussed facts that is almost always right. For rare facts (a minor library's function name, a citation, a statistic, a person who is not famous), it can produce something that *sounds* right and is not.
+
+## Why it can be confidently wrong
+
+Producing plausible but false information is called **hallucination** (some people prefer *confabulation*). It is not a bug that will be patched next month; it follows from how the model works. The model's job is to produce a likely continuation, and a confident, specific, well-formatted wrong answer can be a very likely-looking continuation.
+
+Hallucination is most likely when:
+
+- the question is about something **rare or recent**: an obscure API, a new release, a small company;
+- the answer needs **exact details**: version numbers, quotations, references, URLs, figures;
+- the request **assumes something false** ("Which function in pandas does X?" when none does);
+- there is **pressure to answer**: nothing in the context says it may say "I don't know".
+
+And it becomes much less likely when you:
+
+- **give Claude the source** (paste the document, point Claude Code at the file) and ask it to answer from that;
+- **ask for quotations or citations** from the material you gave it, so you can check them;
+- **allow uncertainty** explicitly: "If the documents don't say, tell me so";
+- **give it tools** to look things up (web search, reading files, running code) and ask it to check rather than recall;
+- **verify** anything that matters: run the code, open the link, check the number.
+
+Code is a special case, and a fortunate one: code can be checked mechanically. Running it, testing it and type-checking it turn "sounds right" into "is right". That is why so much of the Claude Code part of this course is about giving Claude a way to check its own work.
+
+## Why answers vary
+
+Ask the same question twice and you may get two differently worded answers. At each step the model has a range of likely next tokens, and it picks among them with a little randomness rather than always taking the single most likely one. This is called **sampling** (<Ref to="sampling" /> explains the details). It makes writing less repetitive, and it means:
+
+- a result you got once is not guaranteed next time, which matters when you build products;
+- if an answer is shaky, asking again (or asking Claude to check its answer) can reveal it; a confident fact that changes between attempts is a warning sign;
+- for repeatable results, **structure** helps more than hope: precise instructions, examples, and a required output format.
+
+## Thinking before answering
+
+Current Claude models can **think** before replying: they write out working (reasoning steps, plans, checks) that is not part of the final answer, then answer. On the current models this is **adaptive**: the model decides how much thinking a request deserves. A simple question gets little or none; a hard bug gets a lot. Thinking makes answers to hard problems markedly better, at the cost of more tokens and more time.
+
+How much it thinks and how thoroughly it works is steered with **effort**, a setting with levels from `low` to `max`. In the apps and Claude Code you choose it from a menu; in the API it is a request setting. The next chapter, <Ref to="cl-models" />, covers effort and model choice together.
+
+## Tools: going beyond what the model knows
+
+On its own, a model can only produce text from what is in its context and its training. **Tools** extend that: functions the model can ask to have run, such as searching the web, reading or editing a file, running a command, querying a database, or calling an API. The model writes a request ("run the tests"), the surrounding program runs it, and the result is added to the context for the model to read.
+
+This is the loop that turns a model into an **agent**:
+
+```text
+1. Read the context (the task, files read so far, results so far).
+2. Decide the next action: answer, or use a tool.
+3. If a tool: the program runs it and adds the result to the context.
+4. Go back to 1, until the task is done.
+```
+
+Claude Code is this loop with tools for reading and editing files and running commands in your project. The quality of the result depends on the same things as always: what is in the context, what the model can check, and how clearly the goal was stated.
+
+## Putting it together: a mental model
+
+When a result disappoints you, run through this list. It catches most problems:
+
+| Question | If the answer is no |
+|---|---|
+| Did Claude have the information it needed in its context? | Provide it: paste, attach, point to files, or let it search |
+| Was the goal and what "done" looks like stated? | Say what you want, for whom, in what form, and how to tell it worked |
+| Could it check its work? | Give it a way: tests to run, a source to quote, a format to validate |
+| Was the question about something rare, recent or exact? | Verify the answer independently |
+| Has the conversation grown long and drifted? | Start fresh with a short summary of what matters |
+| Was the task too big for one step? | Break it into steps, or ask for a plan first |
+
+## Common misunderstandings
+
+- **"It remembers our last chat."** Only if a memory or project feature put that information into this conversation. The model itself starts fresh every time.
+- **"It looked that up."** Not unless it used a search or file tool, which the app usually shows. Otherwise it is recalling patterns from training.
+- **"It sounded certain, so it is probably right."** Tone tells you nothing about accuracy. Check exact details.
+- **"More context is always better."** Relevant context is better. Pasting everything, or carrying a long, wandering conversation, can make results worse and costs more.
+- **"It knows about last week's release."** Not without a search tool or your help: its knowledge stops at the cutoff.
+- **"The same prompt will give the same answer."** Not word for word. Design for variation.
+
+## Practice
+
+**1. (warm-up)** In one sentence, what does a language model do at each step of writing a reply?
+
+<Solution>
+
+It predicts the next token given all the text so far (its context), adds it, and repeats until it predicts the reply is complete.
+
+</Solution>
+
+**2. (warm-up)** You start a new conversation and ask "What did I tell you about my project yesterday?" Claude says it does not know. Why, and how could you avoid it?
+
+<Solution>
+
+The model keeps nothing between conversations; it only sees what is in this conversation's context. Avoid it by pasting a short summary of the project at the start, or by using a feature that adds it for you, such as a project with instructions and files, or a memory feature.
+
+</Solution>
+
+**3. (warm-up)** Using the figure of roughly 555,000 words per million tokens, about how many tokens is a 2,000-word article?
+
+<Solution>
+
+2,000 × 1,000,000 ÷ 555,000 ≈ **3,600 tokens** (3,604 to the nearest token). Treat it as an estimate: code, numbers and unusual words take more tokens per word.
+
+</Solution>
+
+**4. (standard)** List four things that can be in Claude's context when it writes a reply in a chat app, besides your latest message.
+
+<Solution>
+
+Any four of: the system prompt from the app; the earlier messages from you and replies from Claude; attached files or images; pasted text; results of tools it used (search results, file contents); notes added by a memory or project feature.
+
+</Solution>
+
+**5. (standard)** A colleague asks Claude for "the exact name of the function in our internal billing library that refunds a payment". Claude answers `refund_payment()`, which does not exist. Explain why this happened, and rewrite the request so it is much less likely.
+
+<Solution>
+
+The internal library is not in Claude's training or its context, so it produced a plausible-sounding name: a hallucination. Better: give it the source and permission to be uncertain. For example, in Claude Code: "Search the billing library in this repository for the function that refunds a payment. Show me the file and line where it is defined. If there isn't one, say so." Now it can look rather than guess, and you can check the file and line it gives.
+
+</Solution>
+
+**6. (standard)** Why might a very long conversation give worse answers than a fresh one with a good summary, even though the window is large enough to hold it?
+
+<Solution>
+
+Every reply rereads the whole conversation, including early attempts, abandoned ideas and outdated details. Irrelevant or contradictory material competes for the model's attention and can steer it wrong, and it also costs more and is slower. A fresh conversation with a short summary of what still matters gives it a clean, focused context.
+
+</Solution>
+
+**7. (standard)** You ask the same factual question three times in new conversations and get three different years for an event. What should you conclude, and what should you do?
+
+<Solution>
+
+The model does not reliably know the answer; with sampling it is producing different plausible guesses. Do not trust any of them. Find an authoritative source, or give Claude a search tool and ask it to cite where the date comes from, then check the citation.
+
+</Solution>
+
+**8. (standard)** Which of these is Claude most likely to get wrong without tools, and why? (a) explaining what a for loop does, (b) the date a small open-source library released version 3.2, (c) rewriting a paragraph more clearly.
+
+<Solution>
+
+**(b)**. It is a rare, exact, possibly recent fact: exactly the kind of detail that is weakly represented in training and may be after the cutoff. (a) is widely discussed and stable; (c) needs no outside facts at all, only what is in the context.
+
+</Solution>
+
+**9. (stretch)** Write out the agent loop for this task, step by step, as Claude Code might do it: "The tests are failing; fix them."
+
+<Solution>
+
+1. Read the task. Decide it needs to see the failure: use a tool to run the tests.
+2. The program runs the tests; the failure output is added to the context.
+3. Read the output: one test fails, with an error in `price.js`. Use a tool to read `price.js` and the test.
+4. Both files are added to the context. Decide on a fix: use a tool to edit `price.js`.
+5. The edit is made. Use a tool to run the tests again.
+6. They pass. Answer: summarise what was wrong and what changed.
+
+At every step the decision is made from what is in the context, which is why being able to run the tests (a check) makes the result trustworthy.
+
+</Solution>
+
+**10. (stretch)** A friend says "AI just makes things up, so it's useless for real work." Using this chapter, write a short reply that is fair to both sides.
+
+<Solution>
+
+Something like: "It does sometimes produce confident, wrong details, especially rare or exact facts it hasn't been given, because it generates likely text rather than looking things up. But that is predictable and manageable. Give it the real source material, let it use tools to search or run code, ask it to cite or test its work, and check anything that matters. Used that way, for drafting, explaining, writing and checking code, and working through documents you provide, it is very useful. Used as an oracle for exact facts with no checking, it isn't."
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Claude produces replies one **token** at a time, each predicted from everything before it. Limits, prices and speed are all measured in tokens: roughly 1.8 tokens per English word on the current tokeniser.
+- The **context window** (1 million tokens on current models) holds everything Claude can see: system prompt, conversation, attachments, tool results, remembered notes.
+- The model **remembers nothing between replies**; the history is resent each time. What is not in the context does not exist for it.
+- Knowledge comes from **training**, stops at a **cutoff** (June 2026 for current models), and is stored as patterns, not a fact database.
+- **Hallucination**, plausible but false output, is most likely for rare, recent or exact details. Give sources, allow "I don't know", use tools, and verify.
+- **Sampling** makes answers vary; **thinking** and **effort** trade time and tokens for better answers to hard problems.
+- **Tools** plus a loop make an **agent**: read, act, observe, repeat.
+
+## Go deeper
+
+- [Models overview](https://platform.claude.com/docs/en/about-claude/models/overview), from Anthropic. Context windows, knowledge cutoffs and token figures for every current model.
+- [Context windows](https://platform.claude.com/docs/en/build-with-claude/context-windows), from Anthropic. What fills the window and how it is managed.
+- [Reduce hallucinations](https://platform.claude.com/docs/en/test-and-evaluate/strengthen-guardrails/reduce-hallucinations), from Anthropic. Official techniques for grounding answers.
+- [How Claude Code works](https://code.claude.com/docs/en/how-claude-code-works), from Anthropic. The agent loop as Claude Code implements it.

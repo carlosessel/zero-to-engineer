@@ -1,0 +1,42 @@
+- question: "Why does Claude seem to remember earlier messages in a conversation?"
+  options:
+    - "The model stores each conversation in its memory"
+    - "The app sends the whole conversation again with every new message"
+    - "It learns from each message as you type"
+  answer: 1
+  explanation: "The model itself keeps nothing between replies. The history is part of the context each time."
+- question: "Which request is Claude most likely to answer with a confident but wrong detail, if it has no tools?"
+  options:
+    - "Explain what recursion is"
+    - "Give the exact version number in which a small library added a feature"
+    - "Make this paragraph shorter"
+  answer: 1
+  explanation: "Rare, exact details are weakly represented in training and may be after the cutoff. Give a source or let it search, and verify."
+- question: "A long conversation has wandered through several abandoned approaches and answers are getting worse. What usually helps most?"
+  options:
+    - "Switching to a model with a larger context window"
+    - "Starting a fresh conversation with a short summary of what matters"
+    - "Asking the same question again in the same conversation"
+  answer: 1
+  explanation: "Irrelevant and outdated material in the context competes for attention. A clean, focused context works better."
+- question: "What is a token?"
+  options:
+    - "A chunk of text, such as a word, part of a word or punctuation, that the model treats as one unit"
+    - "A password for the API"
+    - "Exactly one word"
+  answer: 0
+  explanation: "Limits and prices are counted in tokens. In English there are roughly 1.8 per word on the current tokeniser."
+- question: "Which change most reduces the chance of a made-up answer about your company's refund policy?"
+  options:
+    - "Asking more politely"
+    - "Pasting the policy and asking Claude to answer only from it, quoting the relevant line, and to say if it is not covered"
+    - "Asking for a longer answer"
+  answer: 1
+  explanation: "Grounding the answer in the source, asking for quotations and allowing 'not covered' all reduce hallucination."
+- question: "Asked the same factual question three times, Claude gives three different answers. What does that suggest?"
+  options:
+    - "All three are probably right"
+    - "It does not reliably know; check an authoritative source"
+    - "The servers are overloaded"
+  answer: 1
+  explanation: "Sampling picks among likely continuations. A fact that changes between attempts is not known reliably."

@@ -1,0 +1,49 @@
+- question: "What is the quickest test of whether a prompt is clear enough?"
+  options:
+    - "Count its words"
+    - "Imagine giving it to a capable colleague with no context: would they know exactly what to do?"
+    - "Check it uses XML tags"
+  answer: 1
+  explanation: "Anthropic's guide suggests this test: if a colleague with little context would be confused, Claude will be too."
+- question: "Why give a reason with an instruction, such as why replies must be under 80 words?"
+  options:
+    - "Claude ignores instructions without reasons"
+    - "With the reason, Claude can apply the intent to cases the instruction did not mention"
+    - "Reasons make the prompt longer, which improves quality"
+  answer: 1
+  explanation: "Knowing it is for a phone notification, Claude will also avoid other things that would not fit there."
+- question: "You give Claude a 60-page report and a question about it. Where should the question go?"
+  options:
+    - "Before the report"
+    - "After the report, at the end"
+    - "It makes no difference"
+  answer: 1
+  explanation: "Long material first, question last; Anthropic's tests showed up to 30% better answers this way with complex inputs."
+- question: "Your few-shot examples all have two-word answers, and now every answer is two words even when it should be longer. What went wrong?"
+  options:
+    - "Too many examples"
+    - "The examples were not diverse, so Claude copied an accidental pattern"
+    - "Examples never work for length"
+  answer: 1
+  explanation: "Examples should be varied, covering different cases, so only the intended pattern is learnt."
+- question: "What is the main purpose of XML tags in a prompt?"
+  options:
+    - "Claude only understands XML"
+    - "To separate instructions, examples and material clearly so they are not confused"
+    - "To make the prompt look professional"
+  answer: 1
+  explanation: "Tags mark where each kind of content starts and ends, and let you refer to parts by name."
+- question: "A program needs Claude's reply in an exact JSON shape every time. What is the most reliable approach?"
+  options:
+    - "Write 'Reply only in JSON' in capital letters"
+    - "Prefill the reply with an opening brace"
+    - "Use the API's structured outputs, and validate the result"
+  answer: 2
+  explanation: "Structured outputs enforce a schema. Prefilling is no longer supported on current models, and forceful wording is not a guarantee."
+- question: "A prompt gave a disappointing result. What is the best next step?"
+  options:
+    - "Rewrite the whole prompt from scratch"
+    - "Identify the specific failure and what missing context caused it, change one thing, and test again"
+    - "Switch to a different model"
+  answer: 1
+  explanation: "Treat it as a bug: diagnose, make one change, and test on several inputs."

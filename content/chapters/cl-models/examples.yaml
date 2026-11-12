@@ -1,0 +1,23 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python-fake-api
+  verify: |
+    req = requests[-1]
+    assert req['model'] == 'claude-opus-5-5'
+    assert req['output_config'] == {'effort': 'high'}
+    assert req['max_tokens'] == 4096
+  note: 'Run against the stand-in server: checks the request is valid for the SDK and has the settings the text describes. Not the live API.'
+- block: 2
+  lang: python
+  check: python
+  output: |
+    claude-fable-5-2: $0.06800 each, $68,000 for a million
+    claude-opus-5-5: $0.03400 each, $34,000 for a million
+    claude-sonnet-5-5: $0.01700 each, $17,000 for a million
+    claude-haiku-5-5: $0.00085 each, $850 for a million
+  verify: |
+    assert abs(ns['cost']('claude-opus-5-5', 6_000, 500) - 0.034) < 1e-12
+    assert abs(ns['cost']('claude-haiku-5-5', 6_000, 500) - 0.00085) < 1e-12
+    assert abs(ns['cost']('claude-sonnet-5-5', 20_000, 1_000) - 0.05) < 1e-12
+    assert abs(ns['cost']('claude-opus-5-5', 1_500, 3_300) - 0.072) < 1e-12

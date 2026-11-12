@@ -1,0 +1,217 @@
+# Outline approved 12 November 2026. Written in the order: claude, then mastery, then backend.
+# One course with three tracks (C# and .NET, Java, Node.js and TypeScript). Shared m-* chapters come from the mastery course, so each part is created only once the chapters it reuses exist.
+# Parts are created one at a time with the add-course skill. Created so far: none.
+course: backend
+title: Zero to Backend Engineer
+tagline: Pick C#, Java or Node, and build real services.
+description: From your first line of code to designing, building, testing, securing, deploying and running back-end services in C# and .NET, Java and Spring, or Node.js and TypeScript.
+order: 5
+parts:
+- name: Start here
+  blurb: What back-end engineers do, your tools, and how the web works
+  chapters:
+  - id: be-the-map
+    title: What a back-end engineer actually does
+    summary: Services, APIs, data and operations; the three tracks in this course and how to choose one.
+    minutes: 45
+  - how-computers-work
+  - terminal-files
+  - git-basics
+  - internet
+  - id: be-setup
+    title: Set up your tools
+    summary: Installing the .NET 10 SDK, Java 25 or Node.js 26 (the current long-term-support versions), an editor, Docker and an HTTP client.
+    minutes: 120
+- name: 'Track: C# and .NET'
+  blurb: Programming from zero in C#, the language of .NET
+  chapters:
+  - id: cs-basics
+    title: 'C# from zero: values, types and control flow'
+    summary: Variables, types, decisions, loops and methods, with the dotnet command line.
+    minutes: 300
+  - id: cs-objects
+    title: 'C#: classes, interfaces and records'
+    summary: 'Object-oriented C#: classes, properties, interfaces, records, inheritance and nullable references.'
+    minutes: 270
+  - id: cs-collections-linq
+    title: 'C#: collections and LINQ'
+    summary: Lists, dictionaries, sets, and querying them with LINQ.
+    minutes: 240
+  - id: cs-errors-async
+    title: 'C#: exceptions, async and await'
+    summary: Handling errors, Task, async and await, and cancellation.
+    minutes: 240
+  - id: dotnet-projects-testing
+    title: .NET projects, packages and tests
+    summary: Solutions and projects, NuGet, and unit tests with xUnit.
+    minutes: 180
+- name: 'Track: Java'
+  blurb: Programming from zero in Java
+  chapters:
+  - id: java-basics
+    title: 'Java from zero: values, types and control flow'
+    summary: Variables, types, decisions, loops and methods, compiling and running Java.
+    minutes: 300
+  - id: java-objects
+    title: 'Java: classes, interfaces and records'
+    summary: 'Object-oriented Java: classes, interfaces, records, inheritance, enums and Optional.'
+    minutes: 270
+  - id: java-collections-streams
+    title: 'Java: collections, generics and streams'
+    summary: Lists, maps and sets, generics, and processing data with streams and lambdas.
+    minutes: 240
+  - id: java-errors-concurrency
+    title: 'Java: exceptions, threads and virtual threads'
+    summary: Checked and unchecked exceptions, threads, executors, CompletableFuture and virtual threads.
+    minutes: 240
+  - id: java-build-testing
+    title: Java builds, dependencies and tests
+    summary: Maven and Gradle, dependencies, and unit tests with JUnit.
+    minutes: 180
+- name: 'Track: Node.js and TypeScript'
+  blurb: Programming from zero in JavaScript and TypeScript, on the server
+  chapters:
+  - js-values-variables
+  - js-logic-functions
+  - js-arrays-objects
+  - js-async-fetch
+  - js-modules-tooling
+  - typescript-basics
+  - id: node-server-basics
+    title: 'Node.js: JavaScript on the server'
+    summary: Running scripts, files, streams, the event loop, environment variables, and testing with Vitest.
+    minutes: 210
+- name: HTTP and APIs
+  blurb: Building web APIs in your track
+  chapters:
+  - id: be-http
+    title: HTTP for back-end engineers
+    summary: 'Requests and responses in detail: methods, status codes, headers, content types, cookies and CORS.'
+    minutes: 180
+  - m-api-design
+  - m-realtime
+  - id: be-api-aspnet
+    title: Building an API with ASP.NET Core
+    summary: Minimal APIs and controllers, routing, model binding, validation, errors and OpenAPI.
+    minutes: 270
+  - id: be-api-spring
+    title: Building an API with Spring Boot
+    summary: Controllers, routing, request bodies, validation, error handling and OpenAPI.
+    minutes: 270
+  - id: be-api-node
+    title: Building an API with Node.js
+    summary: Express with TypeScript, routing, validation with Zod, errors and OpenAPI; a look at Fastify and NestJS.
+    minutes: 270
+  - id: be-dependency-injection
+    title: Dependency injection and structuring a service
+    summary: Layers, dependency injection in .NET, Spring and Node, configuration and the options pattern.
+    minutes: 210
+- name: Data
+  blurb: Databases from your service
+  chapters:
+  - sql
+  - m-relational
+  - m-schema-design
+  - id: be-data-efcore
+    title: Data in .NET with Entity Framework Core
+    summary: DbContext, mapping, queries, migrations, transactions and the N+1 problem.
+    minutes: 240
+  - id: be-data-jpa
+    title: Data in Java with Spring Data JPA
+    summary: Entities, repositories, queries, Flyway migrations, transactions and lazy-loading traps.
+    minutes: 240
+  - id: be-data-node
+    title: Data in Node.js with PostgreSQL
+    summary: Parameterised queries, a query builder or ORM (Drizzle or Prisma), migrations and transactions.
+    minutes: 240
+  - m-caching
+  - m-nosql
+- name: Security
+  blurb: Accounts, permissions and keeping attackers out
+  chapters:
+  - m-appsec
+  - m-identity
+  - id: be-auth-stacks
+    title: Authentication in your stack
+    summary: Password sign-in, sessions and JWTs, and permission checks with ASP.NET Core Identity, Spring Security and Node.
+    minutes: 270
+- name: Testing services
+  blurb: Unit, integration and contract tests for back ends
+  chapters:
+  - m-testing
+  - id: be-integration-tests
+    title: Integration testing a service
+    summary: Mocks and fakes, then testing the real API and database with WebApplicationFactory, Spring Boot tests, Supertest and Testcontainers.
+    minutes: 210
+- name: Background work and messaging
+  blurb: Work that happens outside a request
+  chapters:
+  - m-async
+  - id: be-background-jobs
+    title: Background jobs and scheduled work
+    summary: Hosted services, scheduled tasks and job queues in each stack.
+    minutes: 180
+  - m-messaging
+  - m-kafka
+  - id: be-kafka-clients
+    title: Using Kafka from your service
+    summary: Producers and consumers in .NET, Spring and Node, retries, dead letters and the outbox pattern in code.
+    minutes: 240
+- name: Design and architecture
+  blurb: Designing services that last
+  chapters:
+  - m-solid
+  - m-patterns-behavioural
+  - m-ddd
+  - m-architecture
+  - m-enterprise-patterns
+  - m-distributed-basics
+  - m-resilience
+  - m-system-design
+- name: Shipping and running
+  blurb: Containers, delivery, observability and production
+  chapters:
+  - m-containers
+  - m-load-balancing
+  - id: be-deploy
+    title: Deploying a service
+    summary: Twelve-factor configuration and secrets, health checks, containerising each stack, and deploying with a database.
+    minutes: 210
+  - m-delivery
+  - m-observability
+  - id: be-observability-stacks
+    title: Logging, metrics and tracing in your stack
+    summary: Structured logs, metrics and OpenTelemetry tracing in .NET, Spring and Node.
+    minutes: 180
+  - m-memory-gc
+  - m-performance
+  - m-reliability
+- name: AI in the back end
+  blurb: Calling language models from your services
+  chapters:
+  - first-call
+  - tools
+  - structured-output
+  - rag
+- name: The job
+  blurb: Teams, projects and getting hired
+  chapters:
+  - git-teamwork
+  - teamwork
+  - ai-tools
+  - id: be-projects
+    title: The project ladder
+    summary: Projects from a single endpoint to a production-ready service with a queue, each with a specification and a checklist.
+    minutes: 60
+  - career
+- name: Reference
+  blurb: Checked free materials and a glossary
+  chapters:
+  - id: be-library
+    title: 'The library: checked free materials'
+    summary: The best free courses, documentation and books for each track, each opened and checked.
+    minutes: 30
+  - id: be-glossary
+    title: Glossary
+    summary: Every term in this course, one sentence each.
+    minutes: 15

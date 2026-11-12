@@ -4,6 +4,21 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-12: Three new courses planned; Mastering Claude and Claude Code, parts 1 and 2
+
+Added
+- Outlines, approved, for three new courses, in docs/plans: Mastering Claude and Claude Code (24 new chapters), Software Engineering Mastery (71 new chapters; examples in TypeScript, with Java and C# where the languages differ) and Zero to Backend Engineer (one course with C#/.NET, Java and Node.js tracks; 30 new chapters, reusing 46, most of them from the Mastery course). They are written in that order, a part at a time.
+- Mastering Claude and Claude Code, part 1 (How Claude works: the map, how Claude works, choosing a model) and part 2 (Using Claude well: prompting, the apps in depth, learning and writing with Claude). Six chapters, about 14,700 words, 39 practice problems, 31 quiz questions.
+- Every fact about models, prices, effort levels and app features was checked against Anthropic's documentation and help centre on 12 November 2026, and every linked page opened. The API example runs against the stand-in server; the cost and token arithmetic is asserted in the example checks.
+- 27 glossary terms for the new course.
+
+Fixed
+- The glossary said a token is roughly three-quarters of a word. On Claude's current tokeniser an English word is about 1.8 tokens (Anthropic's figure: about 555,000 words per million tokens), so the entry now says it depends on the tokeniser. "Batch" now gives both meanings (a training batch, and an API batch at half price).
+
+Not verified
+- Sample prompts in these chapters were written to Anthropic's guidance but not measured against a live model. No API key is used anywhere.
+- Plan limits and menu names in the apps chapter change often; they are dated November 2026.
+
 ### 2026-11-12: Zero to Web Developer, part 4 (Front-end applications)
 
 Added

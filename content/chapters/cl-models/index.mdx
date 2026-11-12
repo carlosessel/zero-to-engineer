@@ -1,0 +1,226 @@
+---
+title: "Choosing a model"
+summary: "Fable, Opus, Sonnet and Haiku: capability, speed, cost, effort settings, and picking one per task."
+prerequisites: [cl-how-it-works]
+estimated_minutes: 60
+status: deepened
+---
+
+By the end of this chapter you will be able to pick a model and an effort level for a task on purpose, rather than leaving whatever is selected, and work out what a piece of work will cost before you start it. Good engineers treat model choice like any other engineering trade-off: capability against speed against cost.
+
+Everything in this chapter was checked against Anthropic's documentation in **November 2026**. Models and prices change several times a year, so check the [models overview](https://platform.claude.com/docs/en/about-claude/models/overview) before relying on a number.
+
+## The current models
+
+Claude comes in a few lines, each released in versions over time. In November 2026 the current ones were:
+
+| Model | Best for (in Anthropic's words, shortened) | Speed | Price per million tokens: input / output | API id |
+|---|---|---|---|---|
+| **Claude Fable 5.2** | demanding reasoning and long-horizon agentic work | moderate | $8 / $40 | `claude-fable-5-2` |
+| **Claude Opus 5.5** | long-running agentic coding and knowledge work; Anthropic's suggested starting point | moderate | $4 / $20 | `claude-opus-5-5` |
+| **Claude Sonnet 5.5** | the best combination of speed and intelligence | fast | $2 / $10 | `claude-sonnet-5-5` |
+| **Claude Haiku 5.5** | high-volume, quick tasks such as classification, extraction and routing | fastest | from $0.10 / from $0.50 | `claude-haiku-5-5` |
+
+All four have a 1-million-token context window, can write up to 128,000 tokens in one reply, accept images as well as text, can use tools, and have a reliable knowledge cutoff of June 2026. (There is also a Mythos line, available only to organisations verified through Anthropic's programmes, and older models that are still offered for existing users.)
+
+The **API id** is the exact name a program uses to ask for a model. In the apps and Claude Code you pick by name from a menu instead.
+
+## Capability, speed and cost
+
+The three trade off against each other:
+
+- **More capable models** solve harder problems, follow long and subtle instructions better, make fewer mistakes over long agent tasks, and need less hand-holding. They cost more per token and are slower.
+- **Faster, cheaper models** are excellent for simple, well-defined tasks, and for anything run thousands of times, where cost and speed add up.
+
+A rule of thumb that matches Anthropic's own guidance: **start with Opus 5.5 for most work. Move up to Fable when a task is hard and Opus is not enough. Move down to Sonnet or Haiku when a task is simple, latency matters, or you run it at volume and have checked that quality holds.**
+
+Some examples:
+
+| Task | Sensible first choice | Why |
+|---|---|---|
+| A large refactor across a codebase, run as an agent for an hour | Opus 5.5, or Fable 5.2 if it struggles | Long agentic coding is exactly what they are for |
+| A subtle concurrency bug no one has found in a week | Fable 5.2 | The hardest reasoning |
+| Everyday questions and drafting in the app | Opus 5.5 or Sonnet 5.5 | Good quality, fast enough |
+| A customer-support reply bot that must answer in a second or two | Sonnet 5.5 or Haiku 5.5 | Speed, and cost at volume |
+| Sorting 2 million support emails into 12 categories | Haiku 5.5 | Simple task, enormous volume |
+
+The only reliable way to choose for a product is to **measure**: run the candidate models on a set of real examples and compare quality, speed and cost. That is what evals are for (<Ref to="evals" />).
+
+## Effort: how hard the model works
+
+Within one model, **effort** controls how thoroughly it works: how much it thinks before answering, how many tool calls it makes, how much it checks. The levels are `low`, `medium`, `high`, `xhigh` and `max` (not every model supports every level).
+
+| Level | Use it for |
+|---|---|
+| `low` | simple, quick tasks; small helper tasks inside a bigger job |
+| `medium` | a balance of speed, cost and quality; the API default on Opus 5.5 and Haiku 5.5 |
+| `high` | complex reasoning and hard coding; the API default on Fable 5.2 and Sonnet 5.5 |
+| `xhigh` | long-running agentic and coding work |
+| `max` | the hardest problems, when time and tokens do not matter; often only a small gain over `xhigh` |
+
+Two points from Anthropic's documentation are worth remembering. First, **effort is a signal, not a strict budget**: at low effort the model still thinks on a hard problem, just less. Second, **effort barely changes how long the visible reply is**; to get shorter or longer answers, ask for that in your prompt.
+
+Effort is often a better lever than switching model. A capable model at lower effort can be cheaper and faster than you expect, and raising effort on a hard task can help more than switching to a different model.
+
+## Choosing in each place you use Claude
+
+**In the apps**, the model menu next to the message box lets you choose a model, and there is a setting for how much it thinks. A sensible habit: use the default for everyday work; switch to the most capable model for a hard problem; and for a quick question, a faster model saves time.
+
+**In Claude Code**, use the `/model` command during a session (on its own it opens a picker), or start with `claude --model opus`. The names `opus`, `sonnet` and `haiku` mean the latest version of each, and `fable` means the Fable model for the hardest, longest tasks. `/effort` sets the effort level, for example `/effort high`. The default model depends on your account; for most it was Opus 5.5 when checked.
+
+**In the API**, your program names the model and can set effort in each request:
+
+```python
+import anthropic
+
+client = anthropic.Anthropic()
+
+response = client.messages.create(
+    model="claude-opus-5-5",
+    max_tokens=4096,
+    messages=[{"role": "user", "content": "Compare a queue and a log as ways to pass messages between services."}],
+    output_config={"effort": "high"},
+)
+
+for block in response.content:
+    if block.type == "text":
+        print(block.text)
+```
+
+`output_config={"effort": "high"}` raises the effort above Opus 5.5's default of `medium`. Thinking counts towards `max_tokens`, so do not set that limit too low at high effort. (The API part of the course explains every line.)
+
+## Working out what it costs
+
+API prices are per **million tokens** (often written MTok), with input and output priced separately. To estimate the cost of a request:
+
+cost = input tokens × input price ÷ 1,000,000 + output tokens × output price ÷ 1,000,000
+
+A worked example. A program sends Claude a 6,000-token document and asks for a 500-token summary, using Opus 5.5 ($4 in, $20 out):
+
+- input: 6,000 × $4 ÷ 1,000,000 = $0.024
+- output: 500 × $20 ÷ 1,000,000 = $0.010
+- total: **$0.034** per document, about 3.4 cents.
+
+The same with Haiku 5.5 at its starting price ($0.10 in, $0.50 out) is 6,000 × 0.10 ÷ 1,000,000 + 500 × 0.50 ÷ 1,000,000 = $0.00085, under a tenth of a cent. For one document the difference does not matter. For a million documents it is $34,000 against $850.
+
+The same calculation as a small program you can reuse:
+
+```python
+PRICES = {  # dollars per million tokens (input, output), checked November 2026
+    "claude-fable-5-2": (8.00, 40.00),
+    "claude-opus-5-5": (4.00, 20.00),
+    "claude-sonnet-5-5": (2.00, 10.00),
+    "claude-haiku-5-5": (0.10, 0.50),  # Haiku's starting price
+}
+
+def cost(model, input_tokens, output_tokens):
+    price_in, price_out = PRICES[model]
+    return input_tokens * price_in / 1_000_000 + output_tokens * price_out / 1_000_000
+
+for model in PRICES:
+    one = cost(model, 6_000, 500)
+    print(f"{model}: ${one:.5f} each, ${one * 1_000_000:,.0f} for a million")
+```
+
+Three more facts change real costs a great deal:
+
+- **Thinking tokens are output tokens.** A hard question at high effort can produce thousands of thinking tokens before a short answer. Budget for them.
+- **Batches are half price.** Requests that do not need an answer straight away can be sent as a **batch**, processed within hours at 50% off.
+- **Prompt caching** makes repeated input much cheaper: when many requests start with the same long text (a system prompt, a document, a codebase), the repeated part can be cached and read back for a fraction of the normal input price (10% of it on most models, less on some). The API part of the course shows how.
+
+Subscriptions to the apps (and Claude Code with them) are priced differently: a monthly plan with usage limits rather than per token. The token arithmetic still explains why long conversations, big attachments and high effort use your limits faster.
+
+## Common mistakes
+
+- **Never changing the default.** Use a faster model for simple things and the strongest for hard ones; it saves time, money or both.
+- **Choosing the cheapest model for a product without measuring.** A cheaper model that gets 10% of answers wrong may cost far more in support and lost trust. Compare on real examples first.
+- **Assuming a bigger model fixes a vague prompt.** If the task or the context is unclear, every model struggles. Fix the instructions first.
+- **Forgetting output costs more.** Output tokens cost five times as much as input on these models, and thinking counts as output.
+- **Setting `max` effort everywhere.** It is slower and costs more, usually for a small gain. Raise effort where you have seen it help.
+- **Trusting prices in old blog posts** (or in this chapter, a year from now). Check the pricing page.
+
+## Practice
+
+Check your arithmetic with the `cost` function above, by pressing **Edit**.
+
+**1. (warm-up)** Which current model would you start with for (a) an hour-long agentic refactor, (b) tagging 500,000 product reviews as positive, negative or neutral?
+
+<Solution>
+
+(a) **Opus 5.5** (moving to Fable 5.2 if it struggles): long agentic coding. (b) **Haiku 5.5**: a simple, well-defined task at very high volume, where cost and speed dominate. Check its accuracy on a sample first.
+
+</Solution>
+
+**2. (warm-up)** What does raising effort from `medium` to `high` change, and what does it not reliably change?
+
+<Solution>
+
+It makes the model work more thoroughly: more and deeper thinking, more tool calls and checking, which costs more tokens and time. It does not reliably change the length of the visible reply; to change that, ask for it in the prompt.
+
+</Solution>
+
+**3. (standard)** A request to Sonnet 5.5 ($2 in, $10 out) sends 20,000 tokens and gets back 1,000. What does it cost?
+
+<Solution>
+
+20,000 × 2 ÷ 1,000,000 = $0.04 input, plus 1,000 × 10 ÷ 1,000,000 = $0.01 output: **$0.05**.
+
+</Solution>
+
+**4. (standard)** The same job as problem 3 is run 40,000 times a month. What is the monthly cost on Sonnet 5.5, and on Opus 5.5 ($4 / $20)?
+
+<Solution>
+
+Sonnet: $0.05 × 40,000 = **$2,000** a month. Opus: 20,000 × 4 ÷ 1,000,000 + 1,000 × 20 ÷ 1,000,000 = $0.08 + $0.02 = $0.10 each, so **$4,000** a month. Exactly double, because both prices are double.
+
+</Solution>
+
+**5. (standard)** The job in problem 4 does not need answers straight away. What would it cost on Opus 5.5 as a batch?
+
+<Solution>
+
+Batches are 50% off: **$2,000** a month, the same as Sonnet at full price. Batching is worth checking before downgrading the model.
+
+</Solution>
+
+**6. (standard)** A question at high effort produced 3,000 thinking tokens and a 300-token answer from 1,500 input tokens, on Opus 5.5. What did it cost, and what share of that was the thinking?
+
+<Solution>
+
+Output tokens: 3,000 + 300 = 3,300, at $20 per million: $0.066. Input: 1,500 × 4 ÷ 1,000,000 = $0.006. Total **$0.072**. The thinking alone was 3,000 × 20 ÷ 1,000,000 = $0.06, which is 0.06 ÷ 0.072 ≈ **83%** of the cost.
+
+</Solution>
+
+**7. (standard)** In Claude Code, how would you switch to the Fable model for one hard problem, and set the effort to `xhigh`?
+
+<Solution>
+
+Type `/model fable`, then `/effort xhigh`. (Or start the session with `claude --model fable`.) Switch back with `/model` afterwards if the rest of the work is routine.
+
+</Solution>
+
+**8. (stretch)** Your team's product uses Opus 5.5 for every request. Someone proposes switching everything to Haiku 5.5 to cut costs. Describe how you would decide.
+
+<Solution>
+
+Measure rather than guess. Collect a few hundred real, representative requests with known good answers (or a way to grade answers). Run them through both models, perhaps also Sonnet 5.5 and Opus at lower effort. Compare quality (how many are acceptable), speed and cost. You might find Haiku fine for most requests but not the hard ones, which suggests routing: a cheap model for simple requests and a strong one for hard ones. Also check whether batching or prompt caching cuts costs without changing models. Decide on the evidence, and keep the eval to re-run when models or prompts change.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The current models (November 2026) are **Fable 5.2** (hardest reasoning and long agentic work), **Opus 5.5** (the suggested default), **Sonnet 5.5** (speed and intelligence) and **Haiku 5.5** (fastest and cheapest), all with 1M-token context.
+- Trade capability against speed against cost. Start with Opus; go up for hard problems, down for simple or high-volume ones; **measure** before choosing for a product.
+- **Effort** (`low` to `max`) controls how thoroughly a model works. It is a signal, not a budget, and does not set reply length.
+- Choose with the model menu in the apps, `/model` and `/effort` in Claude Code, and `model` and `output_config` in the API.
+- Cost = input tokens × input price + output tokens × output price, per million. Output costs more, thinking is output, batches are half price, and cached input is much cheaper.
+
+## Go deeper
+
+- [Models overview](https://platform.claude.com/docs/en/about-claude/models/overview), from Anthropic. Every model's id, prices, limits and cutoffs.
+- [Choosing a model](https://platform.claude.com/docs/en/about-claude/models/choosing-a-model), from Anthropic. How to set criteria and compare.
+- [Effort](https://platform.claude.com/docs/en/build-with-claude/effort), from Anthropic. Each level, and per-model recommendations.
+- [Pricing](https://platform.claude.com/docs/en/about-claude/pricing), from Anthropic. Batch, caching and long-context prices.
+- [Model configuration](https://code.claude.com/docs/en/model-config), from the Claude Code documentation. `/model`, aliases and `/effort`.

@@ -13,7 +13,7 @@
   courses: [web]
 - term: "Agent"
   definition: "A model that uses tools in a loop and decides its own next step until a task is done."
-  courses: [ai]
+  courses: [ai, claude]
 - term: "Algorithm"
   definition: "A precise step-by-step recipe for solving a problem."
   courses: [se]
@@ -27,6 +27,9 @@
     se: "A set of URLs or functions one program offers for other programs to call."
     web: "A set of addresses or functions one program offers for other programs to call, such as GitHub's API for user details."
   courses: [ai, se, web]
+- term: "API id"
+  definition: "The exact name a program uses to request a particular model, such as claude-opus-5-5."
+  courses: [claude]
 - term: "API key"
   definition: "A secret password that identifies your account when you call an API."
   courses: [ai]
@@ -42,6 +45,9 @@
 - term: "Arrow function"
   definition: "A short way to write a function: (n) => n * 2."
   courses: [web]
+- term: "Artifact"
+  definition: "Something Claude makes for you to keep or share, such as a document, slides, a design or a small interactive app, shown beside the chat."
+  courses: [claude]
 - term: "Assertion"
   definition: "A check in a test that must hold, such as expect(total).toBe(8.25)."
   courses: [web]
@@ -71,8 +77,8 @@
   definition: "The method that works out how much each weight contributed to the error."
   courses: [ai]
 - term: "Batch"
-  definition: "A small group of examples processed together in one training step."
-  courses: [ai]
+  definition: "Two meanings. In training, a small group of examples processed together in one training step. In the Claude API, a group of requests sent together and answered within hours, at half the normal price."
+  courses: [ai, claude]
 - term: "Big O"
   definition: "A way of describing how an algorithm’s work grows as its input grows."
   courses: [se]
@@ -137,6 +143,9 @@
 - term: "Classification"
   definition: "Predicting a category, such as spam or not spam."
   courses: [ai]
+- term: "Claude"
+  definition: "Anthropic's family of AI models, used through the Claude apps, Claude Code and the Claude API."
+  courses: [claude]
 - term: "Cleanup function"
   definition: "A function returned from a React effect that stops what the effect started, such as a timer."
   courses: [web]
@@ -149,6 +158,9 @@
 - term: "Code editor"
   definition: "A program for writing code that colours it, spots some mistakes and opens whole project folders; this course uses VS Code."
   courses: [web]
+- term: "Code execution"
+  definition: "A capability that lets Claude write and run code in a sandbox, so analysis and files come from computation rather than recall."
+  courses: [claude]
 - term: "Code splitting"
   definition: "Putting parts of an app into separate files that are downloaded only when needed."
   courses: [web]
@@ -178,12 +190,18 @@
   aliases: ["concatenates"]
   definition: "To join strings together end to end."
   courses: [web]
+- term: "Connectors"
+  definition: "Links that let the Claude apps reach your other services, such as a drive, a tracker or a calendar, often built on MCP."
+  courses: [claude]
 - term: "Container"
   definition: "A package of an application with everything it needs to run the same anywhere."
   courses: [se]
+- term: "Context"
+  definition: "Everything a model can see when it writes a reply: instructions, the conversation, attached files and tool results."
+  courses: [claude]
 - term: "Context window"
   definition: "The maximum amount of text, in tokens, a model can read at once."
-  courses: [ai]
+  courses: [ai, claude]
 - term: "Contrast"
   definition: "How much text stands out from its background, measured as a ratio; at least 4.5:1 for normal text."
   courses: [web]
@@ -210,6 +228,9 @@
   aliases: ["custom properties"]
   definition: "Named values defined with -- and used with var(), so a design's colours and spacing are set in one place."
   courses: [web]
+- term: "Custom connector"
+  definition: "A connector you add yourself by pointing the Claude apps at a remote MCP server."
+  courses: [claude]
 - term: "Database"
   definition: "Software that stores data safely and answers questions about it."
   courses: [se, web]
@@ -276,6 +297,9 @@
 - term: "Effect"
   definition: "In React, code run after rendering to keep a component in step with something outside React, written with useEffect."
   courses: [web]
+- term: "Effort"
+  definition: "A setting from low to max that controls how thoroughly a Claude model works: how much it thinks, calls tools and checks."
+  courses: [claude]
 - term: "Element"
   definition: "One part of an HTML page, usually an opening tag, content and a closing tag, such as a paragraph or a link."
   courses: [web, se]
@@ -317,6 +341,9 @@
 - term: "Feature"
   definition: "One input value a model uses, such as a house’s size."
   courses: [ai]
+- term: "Few-shot prompting"
+  definition: "Giving a model a few examples of input and the output you want, so it follows the same pattern."
+  courses: [claude]
 - term: "Field data"
   definition: "Performance measured on real visitors' devices and connections."
   courses: [web]
@@ -386,7 +413,7 @@
   courses: [web]
 - term: "Hallucination"
   definition: "A model stating something false as if it were true."
-  courses: [ai]
+  courses: [ai, claude]
 - term: "Hash"
   definition: "The output of a one-way function, used for fast lookup and for storing passwords."
   courses: [se]
@@ -428,6 +455,9 @@
 - term: "INP"
   definition: "Interaction to Next Paint: how long a page takes to respond visibly to a click, tap or key. Good is 200 milliseconds or less."
   courses: [web]
+- term: "Input tokens"
+  definition: "The tokens a model reads in a request: the prompt, conversation and attachments. Priced separately from output tokens."
+  courses: [claude]
 - term: "Integration test"
   aliases: ["integration tests"]
   definition: "A test of several pieces working together."
@@ -459,6 +489,9 @@
 - term: "Key"
   definition: "Two meanings. In a Python dictionary, the name a value is stored under and looked up by. In React, a unique, stable value on each item of a list, so React can tell the items apart when the list changes."
   courses: [web, ai, se]
+- term: "Knowledge cutoff (cutoff)"
+  definition: "The date after which a model's training data stops, so it knows nothing later unless it is put into the context."
+  courses: [claude, ai]
 - term: "Lab data"
   definition: "Performance measured in one test under controlled conditions."
   courses: [web]
@@ -519,10 +552,13 @@
   courses: [web]
 - term: "MCP"
   definition: "Model Context Protocol: an open standard for connecting models to tools and data."
-  courses: [ai]
+  courses: [ai, claude]
 - term: "Media query"
   definition: "A CSS block that applies only when a condition is true, such as the window being at least 700 pixels wide."
   courses: [web]
+- term: "Memory"
+  definition: "In the Claude apps, saved topics about you that the app adds to new conversations; you can view, edit, pause and reset them."
+  courses: [claude]
 - term: "Method"
   aliases: ["methods"]
   definition: "Two meanings. In programming, a function that belongs to a value or object, called after a dot, such as text.toUpperCase(). In HTTP, the kind of request, such as GET to read or POST to create."
@@ -541,7 +577,7 @@
   courses: [web]
 - term: "Model"
   definition: "A file of learned numbers plus the recipe for using them to turn input into output."
-  courses: [ai]
+  courses: [ai, claude]
 - term: "Module"
   aliases: ["modules"]
   definition: "A file of code that shares chosen parts with export and uses other files' parts with import."
@@ -577,6 +613,9 @@
 - term: "Optional chaining"
   definition: "The ?. operator, which gives undefined instead of crashing when the thing before it is undefined or null."
   courses: [web]
+- term: "Output tokens"
+  definition: "The tokens a model writes, including its thinking. They cost several times more than input tokens."
+  courses: [claude]
 - term: "Overfitting"
   definition: "When a model memorises its training data and does badly on new data."
   courses: [ai]
@@ -604,16 +643,37 @@
 - term: "Playwright"
   definition: "A tool for end-to-end tests that drives real browsers."
   courses: [web]
+- term: "Plugin"
+  definition: "A package that bundles skills and other extensions so they can be installed and shared together."
+  courses: [claude]
+- term: "Pre-training"
+  definition: "The first stage of training a language model: learning to predict the next token over a huge amount of text and code."
+  courses: [claude]
+- term: "Prefilling"
+  definition: "Writing the start of a model's reply for it to continue. No longer supported on current Claude models."
+  courses: [claude]
+- term: "Project"
+  definition: "In the Claude apps, a workspace with its own chats, instructions and knowledge files."
+  courses: [claude]
 - term: "Promise"
   aliases: ["promises"]
   definition: "An object standing for a result that is not ready yet; it is pending, then fulfilled or rejected."
   courses: [web, se]
 - term: "Prompt"
   definition: "Two meanings. In a terminal, the text (often ending in $ or >) that shows it is waiting for you to type a command. In AI, the text you send to a model: instructions, context and the question."
-  courses: [ai, se, web]
+  courses: [ai, se, web, claude]
+- term: "Prompt caching"
+  definition: "Reusing the processed start of a prompt that many requests share, so that repeated input is much cheaper and faster."
+  courses: [claude]
+- term: "Prompt chaining"
+  definition: "Splitting a task into a sequence of prompts, each using the previous one's output."
+  courses: [claude, ai]
+- term: "Prompt engineering"
+  definition: "The craft of writing prompts that reliably produce what you need."
+  courses: [claude]
 - term: "Prompt injection"
   definition: "An attack where hidden instructions in data hijack the model’s behaviour."
-  courses: [ai]
+  courses: [ai, claude]
 - term: "Property"
   aliases: ["properties"]
   definition: "A named value inside an object, such as name in { name: \"Ama\" }."
@@ -667,6 +727,9 @@
 - term: "Repository"
   definition: "A project’s folder together with its Git history."
   courses: [se, web]
+- term: "Research"
+  definition: "A mode in the Claude apps that searches and reads many sources and writes a report with citations."
+  courses: [claude]
 - term: "Responsive design"
   definition: "Building pages that adapt to any screen size with one set of HTML and CSS."
   courses: [web, se]
@@ -682,6 +745,9 @@
 - term: "Rubber duck debugging"
   definition: "Explaining your code aloud, line by line, to find the line that does not do what you thought."
   courses: [web]
+- term: "Sampling"
+  definition: "Choosing each next token with a little randomness among the likely ones, which is why the same question can get different answers."
+  courses: [claude]
 - term: "Scope"
   definition: "Where in the code a variable exists; a variable made inside a block exists only in that block."
   courses: [web]
@@ -703,6 +769,9 @@
 - term: "Single-page application"
   definition: "A web app that loads one page and then swaps what is shown with JavaScript, instead of loading a new page for each link."
   courses: [web]
+- term: "Skill"
+  definition: "A folder of instructions, and optionally scripts, that teaches Claude a workflow; it is loaded only when a task needs it."
+  courses: [claude]
 - term: "Skip link"
   definition: "A link at the top of a page that lets keyboard users jump past the navigation to the main content."
   courses: [web]
@@ -736,6 +805,9 @@
 - term: "String"
   definition: "A value made of text, written inside quotes."
   courses: [web]
+- term: "Structured outputs"
+  definition: "An API feature that makes a model's reply follow a schema you define, so programs can read it reliably."
+  courses: [claude]
 - term: "SVG"
   definition: "An image format made of shapes rather than pixels, which stays sharp at any size."
   courses: [web]
@@ -744,7 +816,7 @@
   courses: [web]
 - term: "System prompt"
   definition: "Standing instructions that set a model’s role and rules for a conversation."
-  courses: [ai]
+  courses: [ai, claude]
 - term: "Tag"
   aliases: ["opening tag", "closing tag"]
   definition: "The markers that start and end an HTML element, such as <p> and </p>."
@@ -768,15 +840,21 @@
 - term: "Test suite"
   definition: "A project's collection of automatic tests."
   courses: [web]
+- term: "Thinking"
+  definition: "Working a model writes before its answer, such as reasoning steps and checks, which improves answers to hard problems at the cost of tokens and time."
+  courses: [claude]
 - term: "Token"
-  definition: "A chunk of text, roughly three-quarters of a word, that a model reads and writes."
-  courses: [ai, se]
+  definition: "A chunk of text, often a word or part of one, that a model reads and writes. How many words a token holds depends on the model's tokeniser: on Claude's current tokeniser, an English word is about 1.8 tokens."
+  courses: [ai, se, claude]
 - term: "Tool use"
   definition: "Letting a model request that your code run a function, such as a database lookup."
   courses: [ai]
+- term: "Tools"
+  definition: "Functions a model can ask to have run, such as searching the web, reading a file or running a command, whose results are added to its context."
+  courses: [claude]
 - term: "Training"
   definition: "Adjusting a model’s numbers using examples until its predictions are good."
-  courses: [ai]
+  courses: [ai, claude]
 - term: "Transaction"
   definition: "A group of database changes that all succeed or all fail together."
   courses: [se]
@@ -877,3 +955,6 @@
 - term: "Working folder"
   definition: "In Git, your project's files as they are on disk right now, including changes not yet committed."
   courses: [web]
+- term: "XML tags"
+  definition: "Labels in angle brackets, such as <document> and </document>, used in prompts to mark where each kind of content starts and ends."
+  courses: [claude]

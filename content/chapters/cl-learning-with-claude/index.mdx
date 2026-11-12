@@ -1,0 +1,173 @@
+---
+title: "Learning, writing and thinking with Claude"
+summary: "Using Claude as a tutor, editor and reviewer, and checking what it tells you."
+prerequisites: [cl-apps]
+estimated_minutes: 90
+status: deepened
+---
+
+By the end of this chapter you will be able to use Claude to learn faster and more deeply, to write better, and to think problems through, without the trap that catches many people: handing over the thinking and ending up understanding less. For anyone working through this site's courses, this chapter is the difference between Claude making you a better engineer and Claude making you a dependent one.
+
+## The trap: answers without understanding
+
+Claude can produce a correct answer to almost any exercise in this site's courses in seconds. If you let it, you will finish the exercises and learn very little, because learning happens in the effort of working something out: retrieving what you know, getting it wrong, and correcting it. Research on learning has long found that this kind of effortful practice, and testing yourself, build lasting understanding far better than rereading or being shown answers.
+
+So the rule for learning with Claude is simple: **use Claude to make your thinking better, not to replace it.** Concretely:
+
+- **Attempt first.** Try the problem yourself before asking. Even a wrong attempt makes the explanation stick.
+- **Ask for hints, not answers.** "What is the first thing I have wrong?" teaches more than "What is the answer?"
+- **Explain it back.** Write your own explanation and ask Claude to find what is missing or wrong.
+- **Test yourself.** Ask Claude to quiz you, and answer without looking.
+
+## Claude as a tutor
+
+Set up a tutor once, in a project's instructions (<Ref to="cl-apps" />), so every chat behaves the same way:
+
+```text
+You are my tutor for a software engineering course. I learn best by doing.
+
+- When I ask about a concept: explain it in plain words with one concrete
+  example, then ask me one question to check I understood.
+- When I paste my attempt at an exercise: never give the full solution.
+  Tell me what is right, then point to the first mistake with a hint or a
+  question. If I am stuck after three hints, show only the next step.
+- When I type "quiz me on X": ask five questions, one at a time, mixing
+  easy and hard, and tell me after each whether I was right and why.
+- If I state something false with confidence, correct it plainly.
+```
+
+Some prompts that work well for learning:
+
+| To… | Ask |
+|---|---|
+| Get started on a hard topic | "Explain Kafka consumer groups as if I know what a queue is but nothing else. Then give me a small scenario to reason about." |
+| Find the gaps in your understanding | "Here is my explanation of how a hash table handles collisions. What is missing, wrong or vague?" |
+| See an idea from another angle | "Explain dependency inversion three ways: with an analogy, with code, and with what goes wrong without it." |
+| Practise | "Give me five problems on binary search, getting harder, one at a time. Don't show answers until I answer." |
+| Connect ideas | "How does a database index relate to the B-trees I studied last week?" |
+| Prepare for an interview | "Ask me a system design question for a junior role and play the interviewer, including follow-ups." |
+
+The **Ask a tutor** box at the end of each chapter on this site writes a ready-made prompt containing your question and the chapter's text; paste it into Claude and adjust it.
+
+### Check what the tutor says
+
+A tutor that is right 98% of the time is still wrong sometimes, and a confident wrong explanation is worse than none. Habits that keep you safe:
+
+- **Run the code.** Any code example can be tested; do it.
+- **Cross-check facts that matter** against official documentation or the resources in each chapter's "Go deeper".
+- **Ask for its confidence and its sources**: "How sure are you about that version number? Where would I check?"
+- **Watch for drift**: if an explanation changes when you ask again, find a source.
+
+## Claude as an editor and writing partner
+
+Good engineers write a lot: design documents, pull request descriptions, bug reports, messages to colleagues. Claude is an excellent editor, if you keep your voice and your thinking in charge.
+
+**Write your draft first, then ask for specific feedback.** Generic "make this better" produces generic, slightly bland prose that no longer sounds like you. Specific requests produce useful edits:
+
+```text
+Here is my draft design document for moving our image uploads to object
+storage. The readers are the other four engineers on my team.
+
+1. Where is my reasoning weakest? Quote the sentence and say why.
+2. What would a sceptical senior engineer ask that I have not answered?
+3. Point out any sentence that is ambiguous. Do not rewrite the whole
+   document; suggest edits for those sentences only.
+```
+
+Other uses that keep you in control:
+
+- **Shorten**: "Cut this to half the length without losing any decision or number."
+- **Change the reader**: "Rewrite this paragraph for the finance team, who don't know what a cache is."
+- **Find gaps**: "What questions will readers have after reading this?"
+- **Check tone**: "Does this message sound annoyed? I want it to sound firm but friendly."
+
+What not to hand over: the decisions, the facts only you know, and the parts where the point is to show *your* thinking (a design you will defend, a cover letter, coursework). And remember that anything you paste goes into the conversation: do not paste confidential material where you are not allowed to.
+
+## Claude as a thinking partner
+
+Some of Claude's most valuable uses involve no code and no finished text at all: thinking a problem through.
+
+- **Rubber duck, with replies.** Explain the bug or the design out loud, in writing. Often you find the answer while explaining; if not, Claude asks the next question.
+- **Steelman the other option.** "I'm leaning towards a message queue here. Make the strongest case for a simple database table instead."
+- **Pre-mortem.** "Imagine this migration failed badly in six months. Give the five most likely reasons."
+- **Make a decision explicit.** "Turn this rambling note into a decision record: context, options, decision, consequences."
+
+The value comes from *your* engagement: you judge the arguments, you decide. Claude's ideas are input, not verdicts, and it can be talked into agreeing with you, so ask it to argue against you when you want a real test.
+
+## Keeping your own skills sharp
+
+The goal of the courses on this site is that *you* become an excellent engineer. Claude Code will soon be writing a great deal of your code (that is the next part), and that is fine, as long as you can still:
+
+- **read and judge** any code it writes: is it correct, clear, secure, appropriate?
+- **debug** without it, when the tool is not available or is going round in circles;
+- **design**: decide what should be built and how the pieces fit;
+- **explain** your system to others.
+
+A practical balance, used by many experienced engineers: let Claude do the typing and the searching, but **do the thinking yourself on anything you need to learn**, and regularly solve problems with no AI help at all, as you would in an interview. If you notice you cannot explain code that is in your own project, stop and study it until you can.
+
+## Common mistakes
+
+- **Asking for the answer to an exercise** before trying it. You finish faster and learn less.
+- **Accepting a confident explanation unchecked**, especially exact facts and version-specific details.
+- **"Make this better"** on your writing, and losing your own voice and points in the process. Ask for specific feedback.
+- **Letting Claude agree with you.** Ask it to argue the other side.
+- **Pasting confidential material** into a tool you are not allowed to use for it.
+- **Never practising without help**, then finding you cannot work without it.
+
+## Practice
+
+**1. (warm-up)** Rewrite this request so that it helps you learn rather than doing the work for you: "Solve this dynamic programming problem."
+
+<Solution>
+
+For example: "Here is a dynamic programming problem and my attempt so far. Don't solve it. Tell me whether my definition of the subproblem is right, and if not, ask me a question that points me towards a better one."
+
+</Solution>
+
+**2. (warm-up)** Name three ways to check an explanation Claude gives you about a programming concept.
+
+<Solution>
+
+Any three of: run its code example and change it to see what happens; compare with the official documentation or a resource from the chapter's "Go deeper"; ask it how confident it is and where to check; ask the same question again and see whether the explanation changes; explain it back and ask Claude (or a person) to find errors.
+
+</Solution>
+
+**3. (standard)** Write a prompt asking Claude for feedback on a pull request description you wrote, without having it rewritten.
+
+<Solution>
+
+For example: "Here is my pull request description. The reviewers are two engineers who haven't seen this code. Don't rewrite it. Tell me: (1) what a reviewer will not understand, quoting the sentence; (2) what is missing for them to test the change; (3) anything that overstates what the change does."
+
+</Solution>
+
+**4. (standard)** You think you understand how garbage collection works. Design a ten-minute session with Claude that would reveal whether you really do.
+
+<Solution>
+
+For example: write your own explanation from memory first, then ask Claude to point out what is wrong or missing. Next ask "Quiz me on garbage collection with five questions, harder each time, one at a time, no answers until I answer." Finish with "Give me a short program and ask me which objects can be collected at a marked line." Mistakes in the quiz show you what to restudy.
+
+</Solution>
+
+**5. (stretch)** A colleague says using Claude for everything has made them faster but they now struggle to debug without it. Suggest a plan to get the benefits without the loss.
+
+<Solution>
+
+Keep using Claude for typing, searching and boilerplate, but set rules for learning: attempt problems before asking; ask for hints rather than answers when learning something new; read and be able to explain every change Claude makes before committing it; and practise regularly with no AI help, for example one debugging session or interview-style problem a week. When they find code in their own project they cannot explain, study it until they can.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Learning happens in effortful practice. **Use Claude to improve your thinking, not replace it**: attempt first, ask for hints, explain back, test yourself.
+- Set up a **tutor** in a project's instructions so every chat coaches rather than solves; the **Ask a tutor** box on each chapter gives a starting point.
+- **Check** what the tutor says: run code, cross-check facts, ask for confidence and sources.
+- As an **editor**, Claude helps most with specific requests on your own draft; keep the decisions and your voice.
+- As a **thinking partner**, ask it to argue against you, run a pre-mortem, or turn notes into a decision record.
+- Keep your own skills: read and judge all code, debug and design yourself, and practise regularly without help.
+
+## Go deeper
+
+- [Claude 101](https://academy.claude.com/), on Claude Academy. Anthropic's free introductory course, and its AI Fluency series on working with AI well.
+- [Prompting best practices](https://platform.claude.com/docs/en/build-with-claude/prompt-engineering/claude-prompting-best-practices), from Anthropic. Many of the prompts here use its techniques.
