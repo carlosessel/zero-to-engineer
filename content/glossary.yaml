@@ -164,7 +164,7 @@
 - term: "At-least-once delivery"
   aliases: ["at-least-once", "at-most-once", "at-most-once delivery"]
   definition: "Delivery that retries until acknowledged, so messages may be duplicated; at-most-once never retries, so they may be lost."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Atomic operation"
   aliases: ["atomic"]
   definition: "An operation that happens as one indivisible step, so no other thread sees it half done."
@@ -465,6 +465,10 @@
 - term: "Change tracking"
   definition: "An ORM remembering which loaded entities changed, so it can save just the changes."
   courses: [backend]
+- term: "Channel"
+  aliases: ["channels"]
+  definition: "A thread-safe queue for passing values between concurrent producers and consumers, as in Go or .NET's System.Threading.Channels."
+  courses: [backend, mastery]
 - term: "Chaos engineering"
   definition: "Deliberately causing failures in controlled experiments to find weaknesses."
   courses: [mastery]
@@ -606,7 +610,7 @@
   courses: [mastery]
 - term: "Competing consumers"
   definition: "Several consumers on one queue, each message going to one of them."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Compiler"
   definition: "A program that translates source code into machine code ahead of time."
   courses: [se, web, mastery, backend]
@@ -649,7 +653,7 @@
 - term: "Concurrency"
   aliases: ["parallelism"]
   definition: "Making progress on many things over the same period; parallelism is running several at the same instant on several cores."
-  courses: [mastery, se]
+  courses: [mastery, se, backend]
 - term: "Concurrency token"
   definition: "A column, such as a version number, that an ORM checks on update so a stale change fails instead of overwriting."
   courses: [backend]
@@ -690,10 +694,10 @@
   courses: [backend]
 - term: "Consumer group"
   definition: "Consumers sharing a topic's partitions, each partition read by one of them."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Consumer lag"
   definition: "How far a consumer group is behind the latest records."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Container"
   definition: "A package of an application with everything it needs to run the same anywhere."
   courses: [se, mastery, backend]
@@ -900,7 +904,7 @@
 - term: "Dead-letter queue"
   aliases: ["poison message"]
   definition: "A queue where messages that keep failing are moved so they stop blocking others."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Deadlock"
   aliases: ["Coffman conditions"]
   definition: "Threads waiting for each other forever, usually each holding a lock the other needs."
@@ -1088,6 +1092,9 @@
 - term: "Dummy"
   definition: "A test double passed only to fill a parameter, never used."
   courses: [mastery, backend]
+- term: "Durable job queue"
+  definition: "A queue that stores jobs in a database or Redis so they survive restarts, are shared between instances and are retried."
+  courses: [backend]
 - term: "Dynamic array"
   definition: "An array that grows by allocating a bigger block and copying when full, such as ArrayList or List<T>."
   courses: [mastery]
@@ -1203,7 +1210,7 @@
 - term: "Eventual consistency"
   aliases: ["eventually consistent"]
   definition: "Data that may be briefly out of date but becomes consistent once pending updates are applied."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Eviction"
   aliases: ["LRU", "LFU"]
   definition: "Removing entries when a cache is full, for example the least recently used."
@@ -1214,7 +1221,7 @@
 - term: "Exactly-once processing"
   aliases: ["exactly-once", "exactly-once semantics"]
   definition: "At-least-once delivery plus idempotent processing, so each message's effect happens once."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Exception"
   aliases: ["exceptions"]
   definition: "An object describing a failure, thrown by code that cannot continue and caught by code that can handle it."
@@ -1408,7 +1415,7 @@
 - term: "Future"
   aliases: ["futures"]
   definition: "An object standing for a result not ready yet, such as a CompletableFuture or Task; JavaScript calls it a promise."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "G1"
   definition: "Java's default garbage collector on server-class machines, dividing the heap into regions and aiming for a pause target."
   courses: [mastery]
@@ -1458,6 +1465,9 @@
   aliases: ["fallbacks"]
   definition: "Keeping core features working, with fallbacks, when parts of a system fail."
   courses: [mastery]
+- term: "Graceful shutdown"
+  definition: "Stopping a service by refusing new work, finishing work in progress, then exiting."
+  courses: [backend]
 - term: "Gradient"
   definition: "The direction to change each weight to change the loss."
   courses: [ai]
@@ -1560,6 +1570,10 @@
 - term: "Horizontal scaling"
   definition: "Handling more load by adding servers rather than buying a bigger one."
   courses: [mastery, se]
+- term: "Hosted service"
+  aliases: ["hosted services", "BackgroundService"]
+  definition: "In .NET, a long-running background task started and stopped with the application."
+  courses: [backend]
 - term: "Hot spot"
   aliases: ["hot spots", "hot keys"]
   definition: "A partition or key receiving far more load than others."
@@ -1593,6 +1607,9 @@
 - term: "Idempotent"
   definition: "Safe to repeat: doing it twice has the same effect as doing it once."
   courses: [mastery, backend]
+- term: "Idempotent consumer"
+  definition: "A message consumer that produces the same result however many times it receives a message."
+  courses: [backend, mastery]
 - term: "Identity map"
   definition: "Ensuring each database row is loaded as at most one object within a unit of work."
   courses: [mastery]
@@ -1617,11 +1634,11 @@
 - term: "In-sync replicas"
   aliases: ["ISR", "replication factor"]
   definition: "Kafka replicas fully caught up with the partition leader."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Inbox pattern"
   aliases: ["inbox"]
   definition: "Recording received message ids with the work they cause, so duplicates are ignored."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Incident commander"
   definition: "The person who coordinates an incident response and makes decisions."
   courses: [mastery]
@@ -1785,7 +1802,7 @@
   courses: [mastery]
 - term: "Kafka"
   definition: "A distributed, durable log for event streams, with topics, partitions and consumer groups."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Keep-alive"
   definition: "Keeping a connection open after a request so later requests can reuse it."
   courses: [mastery]
@@ -1816,7 +1833,7 @@
   courses: [claude, ai]
 - term: "KRaft"
   definition: "Kafka's Raft-based controller, which replaced ZooKeeper."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Kubernetes"
   aliases: ["k8s"]
   definition: "A platform that schedules containers across machines and keeps them in the desired state."
@@ -1959,7 +1976,7 @@
 - term: "Log compaction"
   aliases: ["tombstone"]
   definition: "Keeping at least the latest record per key; a tombstone removes a key."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Logarithm"
   definition: "The power a base must be raised to in order to give a number; log2 of n is how many times n can be halved to reach 1."
   courses: [mastery, ai]
@@ -2071,10 +2088,10 @@
   courses: [claude]
 - term: "Message broker"
   definition: "A server that receives, stores and delivers messages between producers and consumers."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Message queue"
   definition: "A broker structure holding messages until a consumer takes and acknowledges them."
-  courses: [mastery, se]
+  courses: [mastery, se, backend]
 - term: "Messages API"
   definition: "The Claude API endpoint that takes a conversation and returns the model's next reply as a list of content blocks."
   courses: [claude]
@@ -2410,7 +2427,7 @@
 - term: "Partitioning"
   aliases: ["sharding", "shard", "partition", "range partitioning", "hash partitioning"]
   definition: "Splitting data so each node stores only part of it."
-  courses: [mastery, se]
+  courses: [mastery, se, backend]
 - term: "Passkey"
   aliases: ["passkeys", "WebAuthn"]
   definition: "A phishing-resistant login using a key pair on the user's device instead of a password."
@@ -2527,7 +2544,7 @@
 - term: "Prefetch"
   aliases: ["prefetches"]
   definition: "Loading data into a cache before it is asked for, because the access pattern predicts it will be."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Prefilling"
   definition: "Writing the start of a model's reply for it to continue. No longer supported on current Claude models."
   courses: [claude]
@@ -2665,7 +2682,7 @@
   courses: [mastery, backend]
 - term: "Queue"
   definition: "A collection where the first item added is the first removed (FIFO)."
-  courses: [mastery, se]
+  courses: [mastery, se, backend]
 - term: "Queue-based load levelling"
   definition: "A queue between requests and work so bursts are processed at a steady rate."
   courses: [mastery]
@@ -2681,7 +2698,7 @@
   courses: [mastery]
 - term: "RabbitMQ"
   definition: "A message broker that routes messages through exchanges and bindings to queues."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Race condition"
   definition: "A bug where the result depends on the timing of simultaneous operations."
   courses: [se, web, mastery, backend]
@@ -2715,7 +2732,7 @@
 - term: "Reactive programming"
   aliases: ["reactive"]
   definition: "Programming with streams of events and operators to transform and combine them, as in Reactor or RxJS."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Read model"
   definition: "Data shaped for queries and kept up to date from the write side's events."
   courses: [mastery]
@@ -2733,7 +2750,7 @@
 - term: "Rebalance"
   aliases: ["rebalances"]
   definition: "Reassigning partitions among a consumer group's members when membership changes."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Rebalancing"
   definition: "Moving data between partitions or nodes as data grows or nodes change."
   courses: [mastery]
@@ -2805,7 +2822,7 @@
 - term: "Replication"
   aliases: ["single-leader", "leader", "followers"]
   definition: "Keeping copies of the same data on several machines; in single-leader replication one leader takes writes and followers copy them."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Replication lag"
   definition: "How far a follower is behind its leader."
   courses: [mastery]
@@ -2844,6 +2861,9 @@
 - term: "Retry budget"
   definition: "A limit on retries as a share of normal traffic, to prevent retry storms."
   courses: [mastery]
+- term: "Retry topic"
+  definition: "A Kafka topic where failed messages wait to be retried after a delay, without blocking the main topic."
+  courses: [backend]
 - term: "Reverse proxy"
   definition: "A server in front of applications that handles requests on their behalf, such as Nginx."
   courses: [mastery]
@@ -2940,7 +2960,7 @@
 - term: "Schema registry"
   aliases: ["compatibility mode"]
   definition: "A service storing message schemas and rejecting incompatible changes."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Scope"
   definition: "Where in the code a variable exists; a variable made inside a block exists only in that block."
   courses: [web, backend]
@@ -3176,7 +3196,7 @@
 - term: "Starvation"
   aliases: ["thread-pool starvation"]
   definition: "A thread or task that never gets the resource it needs because others always win; thread-pool starvation is a pool with no free threads."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "State"
   definition: "The data a program is currently holding that its behaviour depends on."
   courses: [se, web, mastery]
@@ -3297,7 +3317,7 @@
   courses: [mastery]
 - term: "Sync-over-async"
   definition: "Blocking a thread to wait for async work (.Result, .Wait()), which can starve the thread pool or deadlock."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Synchronous"
   definition: "Running in order, each step finishing before the next starts."
   courses: [web, mastery, backend]
@@ -3383,7 +3403,7 @@
 - term: "Thread pool"
   aliases: ["thread pools"]
   definition: "A set of reusable threads that pick up queued work."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Thread-safe"
   definition: "Behaving correctly when used from many threads at once without extra locking by callers."
   courses: [mastery]
@@ -3452,7 +3472,7 @@
 - term: "Transactional outbox"
   aliases: ["outbox"]
   definition: "Saving events in the same database transaction as the change, then publishing them from that table."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Transcript"
   definition: "A written version of audio or video content."
   courses: [web]
@@ -3551,7 +3571,7 @@
 - term: "Unhandled rejection"
   aliases: ["unhandled rejections"]
   definition: "A failed promise that nothing awaits or handles; Node.js stops the process by default."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Unicode"
   definition: "The universal list that gives every character in every writing system a number, its code point."
   courses: [mastery]

@@ -1,0 +1,437 @@
+---
+title: "Using Kafka from your service"
+summary: "Producers and consumers in .NET, Spring and Node, retries, dead letters and the outbox pattern in code."
+prerequisites: [m-kafka, be-background-jobs]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will publish and consume **Kafka** events from your stack with safe settings, handle failures with retries and **dead-letter topics**, make consumers **idempotent** so redelivered messages do no harm, and publish events reliably with the **transactional outbox**. <Ref to="m-messaging" /> and <Ref to="m-kafka" /> explain topics, partitions, consumer groups and delivery guarantees; this chapter is the code.
+
+## The events
+
+When an order is placed, the orders service publishes an `OrderPlaced` event to the topic `orders.placed`, and the kitchen service, in its own consumer group, bakes for it. Two choices matter before any code:
+
+- **The key** is the order id. Kafka sends every message with the same key to the same partition, so all events for one order are read in the order they were written.
+- **The value** is JSON here, for readability. Many teams use Avro or Protobuf with a **schema registry**, so producers and consumers agree on the format and incompatible changes are refused (<Ref to="m-api-design" />).
+
+To run the code below you need a Kafka broker. The quickest is the official image: `docker run -d --name kafka -p 9092:9092 apache/kafka:4.4.0`, which starts a single-node broker on `localhost:9092`. Each example reads the address from `KAFKA_BOOTSTRAP`, defaulting to that.
+
+## Producer settings that matter
+
+- **`acks=all`**: the broker confirms only when the message is stored on all in-sync replicas, so an acknowledged message survives a broker failure.
+- **Idempotence** (`enable.idempotence=true`, the default in current clients): retries after a network error cannot write the same message twice to the partition.
+- **Wait for the result**, or handle the delivery callback: a send is asynchronous, and failures (an unknown topic, a broker down for longer than the retry window) must be logged and handled, never ignored.
+
+## Consumer settings that matter
+
+- **`group.id`**: consumers with the same group share the partitions; each message goes to one of them. Another service uses its own group and gets every message too.
+- **Commit after processing**: turn off automatic offset commits and commit only when the message has been handled. A crash then means the message is delivered again (**at-least-once**), rather than lost.
+- **`auto.offset.reset=earliest`**: a brand-new group starts from the oldest retained message rather than only new ones.
+- **Close cleanly** on shutdown, so the group rebalances at once instead of waiting for a timeout.
+
+At-least-once delivery means **every consumer must cope with duplicates**, which is the subject of the second half of this chapter.
+
+## .NET: Confluent.Kafka
+
+**Confluent.Kafka** is the standard .NET client, built on the C library librdkafka. A producer:
+
+```csharp
+#:package Confluent.Kafka@2.16.0
+
+using System.Text.Json;
+using Confluent.Kafka;
+
+var config = new ProducerConfig
+{
+    BootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP") ?? "localhost:9092",
+    Acks = Acks.All,
+    EnableIdempotence = true,
+    LingerMs = 5,
+};
+
+using var producer = new ProducerBuilder<string, string>(config).Build();
+
+var placed = new OrderPlaced("o-1042", "c-17", 1250, DateTimeOffset.UtcNow);
+var result = await producer.ProduceAsync("orders.placed", new Message<string, string>
+{
+    Key = placed.OrderId,
+    Value = JsonSerializer.Serialize(placed),
+    Headers = new Headers { { "event-type", "OrderPlaced"u8.ToArray() } },
+});
+Console.WriteLine($"stored in partition {result.Partition.Value} at offset {result.Offset.Value}");
+
+producer.Flush(TimeSpan.FromSeconds(10));
+
+record OrderPlaced(string OrderId, string CustomerId, int TotalPence, DateTimeOffset PlacedAt);
+```
+
+A consumer, committing each message after handling it:
+
+```csharp
+#:package Confluent.Kafka@2.16.0
+
+using System.Text.Json;
+using Confluent.Kafka;
+
+var config = new ConsumerConfig
+{
+    BootstrapServers = Environment.GetEnvironmentVariable("KAFKA_BOOTSTRAP") ?? "localhost:9092",
+    GroupId = "kitchen",
+    AutoOffsetReset = AutoOffsetReset.Earliest,
+    EnableAutoCommit = false,
+};
+
+using var cts = new CancellationTokenSource();
+Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
+
+using var consumer = new ConsumerBuilder<string, string>(config).Build();
+consumer.Subscribe("orders.placed");
+try
+{
+    while (!cts.IsCancellationRequested)
+    {
+        var record = consumer.Consume(cts.Token);
+        var placed = JsonSerializer.Deserialize<OrderPlaced>(record.Message.Value)!;
+        await HandleAsync(placed);
+        consumer.Commit(record);
+    }
+}
+catch (OperationCanceledException)
+{
+}
+finally
+{
+    consumer.Close();
+}
+
+static Task HandleAsync(OrderPlaced placed)
+{
+    Console.WriteLine($"kitchen: bake for {placed.OrderId}");
+    return Task.CompletedTask;
+}
+
+record OrderPlaced(string OrderId, string CustomerId, int TotalPence, DateTimeOffset PlacedAt);
+```
+
+In an ASP.NET Core service, the producer is a **singleton** (it is thread-safe and expensive to create), and the consumer loop runs in a **`BackgroundService`** (<Ref to="be-background-jobs" />), with the stopping token passed to `Consume`. `Consume` blocks a thread while waiting, so run the loop on its own thread (`Task.Run` or `Task.Factory.StartNew` with `LongRunning`), not on the thread that starts the host.
+
+## Spring: Spring for Apache Kafka
+
+**Spring for Apache Kafka** gives you a **`KafkaTemplate`** for sending and **`@KafkaListener`** for consuming, configured from properties. Add `spring-boot-starter-kafka`, and set:
+
+```properties
+spring.kafka.bootstrap-servers=${KAFKA_BOOTSTRAP:localhost:9092}
+spring.kafka.producer.acks=all
+spring.kafka.producer.properties.enable.idempotence=true
+spring.kafka.consumer.group-id=kitchen
+spring.kafka.consumer.auto-offset-reset=earliest
+spring.kafka.listener.ack-mode=record
+```
+
+The publisher, the listener and the error handling:
+
+```java
+package com.bakery;
+
+import java.time.Instant;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.kafka.annotation.KafkaListener;
+import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.kafka.listener.DeadLetterPublishingRecoverer;
+import org.springframework.kafka.listener.DefaultErrorHandler;
+import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
+import org.springframework.util.backoff.ExponentialBackOff;
+import tools.jackson.databind.json.JsonMapper;
+
+record OrderPlaced(String orderId, String customerId, int totalPence, Instant placedAt) {}
+
+@Service
+class OrderEventPublisher {
+    private final KafkaTemplate<String, String> kafka;
+    private final JsonMapper json;
+
+    OrderEventPublisher(KafkaTemplate<String, String> kafka, JsonMapper json) {
+        this.kafka = kafka;
+        this.json = json;
+    }
+
+    void publish(OrderPlaced event) {
+        kafka.send("orders.placed", event.orderId(), json.writeValueAsString(event))
+            .whenComplete((result, error) -> {
+                if (error != null) {
+                    System.err.println("publish failed for " + event.orderId() + ": " + error.getMessage());
+                }
+            });
+    }
+}
+
+@Component
+class KitchenListener {
+    private final JsonMapper json;
+
+    KitchenListener(JsonMapper json) {
+        this.json = json;
+    }
+
+    @KafkaListener(topics = "orders.placed")
+    void onOrderPlaced(ConsumerRecord<String, String> record) {
+        OrderPlaced event = json.readValue(record.value(), OrderPlaced.class);
+        System.out.println("kitchen: bake for " + event.orderId());
+    }
+}
+
+@Configuration
+class KafkaErrorHandling {
+    @Bean
+    DefaultErrorHandler errorHandler(KafkaTemplate<String, String> kafka) {
+        var backOff = new ExponentialBackOff(1_000, 2.0);
+        backOff.setMaxAttempts(3);
+        return new DefaultErrorHandler(new DeadLetterPublishingRecoverer(kafka), backOff);
+    }
+}
+```
+
+- `ack-mode=record` commits each record's offset after the listener returns successfully.
+- When the listener throws, the **`DefaultErrorHandler`** retries it in place with **exponential backoff** (1 s, 2 s, 4 s), then hands it to the **`DeadLetterPublishingRecoverer`**, which publishes it to `orders.placed-dlt` with headers describing the failure, and moves on. Nothing is lost, and one bad message cannot block the partition for ever.
+- `JsonMapper` is Jackson 3's mapper, which Spring Boot 4 configures as a bean.
+
+## Node.js: Confluent's JavaScript client
+
+**`@confluentinc/kafka-javascript`** is Confluent's supported Node client, built on librdkafka, with an API compatible with the older KafkaJS library (which is no longer maintained). Its settings use the same names as the other clients:
+
+```ts
+import { KafkaJS } from "@confluentinc/kafka-javascript";
+
+type OrderPlaced = { orderId: string; customerId: string; totalPence: number; placedAt: string };
+
+const kafka = new KafkaJS.Kafka({});
+const brokers = process.env.KAFKA_BOOTSTRAP ?? "localhost:9092";
+
+export async function publishOrderPlaced(event: OrderPlaced): Promise<void> {
+  const producer = kafka.producer({
+    "bootstrap.servers": brokers,
+    "enable.idempotence": true,
+    acks: -1,
+  });
+  await producer.connect();
+  try {
+    await producer.send({
+      topic: "orders.placed",
+      messages: [{ key: event.orderId, value: JSON.stringify(event), headers: { "event-type": "OrderPlaced" } }],
+    });
+  } finally {
+    await producer.disconnect();
+  }
+}
+
+export async function runKitchen(signal: AbortSignal): Promise<void> {
+  const consumer = kafka.consumer({
+    "bootstrap.servers": brokers,
+    "group.id": "kitchen",
+    "auto.offset.reset": "earliest",
+    "enable.auto.commit": false,
+  });
+  await consumer.connect();
+  await consumer.subscribe({ topics: ["orders.placed"] });
+  await consumer.run({
+    eachMessage: async ({ topic, partition, message }) => {
+      const event = JSON.parse(message.value?.toString() ?? "{}") as OrderPlaced;
+      console.log(`kitchen: bake for ${event.orderId}`);
+      await consumer.commitOffsets([{ topic, partition, offset: (BigInt(message.offset) + 1n).toString() }]);
+    },
+  });
+  signal.addEventListener("abort", () => void consumer.disconnect(), { once: true });
+}
+```
+
+The offset you commit is the **next** one to read, hence `offset + 1`. As in the other stacks, create one producer for the whole process and reuse it; the example connects per call only to stay short.
+
+## Retries and dead letters
+
+When handling a message fails, there are three kinds of failure, and each needs different treatment:
+
+| Failure | Example | What to do |
+|---|---|---|
+| Temporary | The database is briefly unreachable | Retry with backoff, a few times |
+| Permanent | The message is malformed, or refers to an order that never existed | Do not retry; send it to a **dead-letter topic** at once |
+| Poison under load | A bug that fails on one particular message | Retries exhaust, then the dead-letter topic |
+
+A **dead-letter topic** (DLT) holds messages that could not be processed, with the error, for people to inspect, fix and replay. Alert when anything arrives there (<Ref to="m-observability" />). Spring has this built in, as shown; in .NET and Node you write it: catch the failure after the last retry, produce the original message (with headers saying why) to `orders.placed.dlt`, then commit the offset. Long retries inside the consumer hold up the whole partition, so for delays longer than seconds, publish to a **retry topic** that a separate consumer reads after a delay.
+
+## Idempotent consumers
+
+At-least-once delivery means a consumer **will** sometimes see a message twice: after a crash before the commit, after a rebalance, or because the producer side published twice (as in the outbox below). Two ways to make that harmless:
+
+- **Naturally idempotent effects**: "set the order's status to paid" can run twice safely; "add £5 to the balance" cannot.
+- **Deduplicate by message id**: record each processed message id in the same database transaction as the effect, and skip ids already recorded.
+
+## The transactional outbox
+
+A service that saves an order and then publishes an event has a gap: if it crashes between the two, the order exists but nobody hears about it; if it publishes first and the save fails, the kitchen bakes for an order that does not exist. The **transactional outbox** closes the gap: write the event to an **outbox** table **in the same database transaction** as the order, and let a separate **relay** publish unsent outbox rows to Kafka and mark them sent (<Ref to="m-messaging" />).
+
+The relay can still crash after publishing and before marking a row sent, so the event may be published twice; that is why consumers must be idempotent. This program shows the whole flow on a real PostgreSQL database (PGlite, <Ref to="be-data-node" />), with an array standing in for the broker and a crash injected into the relay:
+
+```ts
+import { randomUUID } from "node:crypto";
+import { PGlite } from "@electric-sql/pglite";
+
+const db = new PGlite();
+await db.exec(`
+  CREATE TABLE orders (id text PRIMARY KEY, customer text NOT NULL, total_pence int NOT NULL);
+  CREATE TABLE outbox (
+    id uuid PRIMARY KEY,
+    topic text NOT NULL,
+    message_key text NOT NULL,
+    payload jsonb NOT NULL,
+    created_at timestamptz NOT NULL DEFAULT now(),
+    sent_at timestamptz
+  );
+  CREATE TABLE kitchen_tickets (order_id text PRIMARY KEY, created_by_message uuid NOT NULL);
+  CREATE TABLE processed_messages (message_id uuid PRIMARY KEY);
+`);
+
+// 1. Placing an order writes the order and its event in ONE transaction.
+async function placeOrder(id: string, customer: string, totalPence: number): Promise<void> {
+  await db.transaction(async (tx) => {
+    await tx.query("INSERT INTO orders (id, customer, total_pence) VALUES ($1, $2, $3)", [id, customer, totalPence]);
+    await tx.query("INSERT INTO outbox (id, topic, message_key, payload) VALUES ($1, $2, $3, $4)", [
+      randomUUID(), "orders.placed", id, JSON.stringify({ orderId: id, customer, totalPence }),
+    ]);
+  });
+}
+
+// 2. A relay publishes unsent outbox rows, then marks them sent.
+type Message = { id: string; topic: string; key: string; payload: { orderId: string } };
+const broker: Message[] = [];
+let crashAfterPublish = false;
+
+async function relayOnce(): Promise<number> {
+  const { rows } = await db.query<{ id: string; topic: string; message_key: string; payload: { orderId: string } }>(
+    "SELECT id, topic, message_key, payload FROM outbox WHERE sent_at IS NULL ORDER BY created_at, id LIMIT 100",
+  );
+  for (const row of rows) {
+    broker.push({ id: row.id, topic: row.topic, key: row.message_key, payload: row.payload });
+    if (crashAfterPublish) {
+      crashAfterPublish = false;
+      throw new Error("relay crashed after publishing, before marking the row sent");
+    }
+    await db.query("UPDATE outbox SET sent_at = now() WHERE id = $1", [row.id]);
+  }
+  return rows.length;
+}
+
+// 3. The consumer is idempotent: the effect and the "processed" mark share a transaction.
+async function handle(message: Message): Promise<"handled" | "duplicate ignored"> {
+  return db.transaction(async (tx) => {
+    const first = await tx.query("INSERT INTO processed_messages (message_id) VALUES ($1) ON CONFLICT DO NOTHING", [message.id]);
+    if (first.affectedRows === 0) return "duplicate ignored";
+    await tx.query("INSERT INTO kitchen_tickets (order_id, created_by_message) VALUES ($1, $2)", [message.payload.orderId, message.id]);
+    return "handled";
+  });
+}
+
+await placeOrder("o-1", "Ama", 1250);
+await placeOrder("o-2", "Kofi", 450);
+
+crashAfterPublish = true;
+try {
+  await relayOnce();
+} catch (error) {
+  console.log((error as Error).message);
+}
+console.log(`published so far: ${broker.length}; unsent rows: ${(await db.query("SELECT 1 FROM outbox WHERE sent_at IS NULL")).rows.length}`);
+
+console.log(`relay restarted, published ${await relayOnce()}`);
+console.log(`messages on the broker: ${broker.map((m) => m.key).join(", ")}`);
+
+for (const message of broker) console.log(`${message.key}: ${await handle(message)}`);
+const tickets = await db.query<{ order_id: string }>("SELECT order_id FROM kitchen_tickets ORDER BY order_id");
+console.log(`kitchen tickets: ${tickets.rows.map((r) => r.order_id).join(", ")}`);
+```
+
+It prints:
+
+```text
+relay crashed after publishing, before marking the row sent
+published so far: 1; unsent rows: 2
+relay restarted, published 2
+messages on the broker: o-1, o-1, o-2
+o-1: handled
+o-1: duplicate ignored
+o-2: handled
+kitchen tickets: o-1, o-2
+```
+
+The crash left `o-1`'s row unsent, so the restarted relay published it again: the broker holds a duplicate. The consumer's `INSERT ... ON CONFLICT DO NOTHING` into `processed_messages`, in the same transaction as the kitchen ticket, recognised the second copy and ignored it, so each order got exactly one ticket. The same design works in every stack; instead of a polling relay, many teams use **change data capture** (Debezium reading the database's log) to publish outbox rows (<Ref to="m-kafka" />). Delete or archive sent outbox rows regularly.
+
+## Testing
+
+Test handlers as ordinary functions with fakes, without Kafka. Test the wiring (serialisation, topics, error handling) against a real broker: **Testcontainers** has Kafka modules for every stack (<Ref to="be-integration-tests" />), and Spring's `spring-kafka-test` adds an embedded broker for `@SpringBootTest`. Always test the duplicate path: deliver the same message twice and assert one effect.
+
+## Common mistakes
+
+- **Ignoring send failures**, or not waiting for delivery before reporting success.
+- **Auto-committing offsets** before processing, so a crash loses messages.
+- **Non-idempotent consumers**, so redelivery doubles effects.
+- **Saving and publishing separately** without an outbox.
+- **Retrying a bad message for ever**, blocking its partition.
+- **No key**, or a key that does not match the ordering you need.
+- **A new producer per message.**
+- **Breaking the event format** without versioning it.
+
+## Practice
+
+**1. (warm-up)** Why is the order id a good key for `orders.placed`, and what would go wrong with a random key?
+
+<Solution>
+
+All events for one order then land in one partition and are read in order, so "placed", "paid" and "cancelled" for the same order are never processed out of order. With a random key, an order's events would spread across partitions and could be handled in any order (a cancellation before the placement), while load would still spread across partitions because there are many orders.
+
+</Solution>
+
+**2. (standard)** A consumer handles a message and then crashes before committing its offset. What happens next, and what must the consumer do about it?
+
+<Solution>
+
+After the restart (or after another consumer in the group takes over the partition), consumption resumes from the last committed offset, so the same message is delivered again: at-least-once delivery. The consumer must be idempotent: its effect must be safe to repeat, or it must record processed message ids in the same transaction as the effect and skip ones it has already handled.
+
+</Solution>
+
+**3. (standard)** Classify each failure as temporary or permanent, and say whether to retry: (a) the JSON cannot be parsed; (b) the payments service returns 503; (c) the event refers to a product code that does not exist; (d) a database deadlock.
+
+<Solution>
+
+(a) Permanent: send it to the dead-letter topic at once; retrying cannot fix it. (b) Temporary: retry with backoff. (c) Permanent for this message (unless products can arrive later, in which case a delayed retry may make sense): dead-letter it and alert. (d) Temporary: retry, usually at once or after a very short delay.
+
+</Solution>
+
+**4. (stretch)** In the outbox program, what would happen if the consumer recorded the message id in `processed_messages` in one transaction, and created the kitchen ticket in a separate, later transaction? Give the failure case.
+
+<Solution>
+
+If the consumer crashed between the two transactions, the message id would be recorded as processed but no ticket would exist. On redelivery, the consumer would see the id, skip the message as a duplicate, and the order would never be baked: a lost effect. Recording the id and producing the effect in **one** transaction makes them succeed or fail together, which is the whole point.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Key messages by the entity whose events must stay **in order**; agree on the format, ideally with a **schema registry**.
+- Producers: **`acks=all`**, **idempotence**, and handle delivery results. Consumers: a **group id**, **commit after processing**, close cleanly.
+- .NET: **Confluent.Kafka** with a singleton producer and a `BackgroundService` consumer. Spring: **`KafkaTemplate`**, **`@KafkaListener`**, `DefaultErrorHandler` with a **dead-letter** recoverer. Node: **`@confluentinc/kafka-javascript`**.
+- Retry temporary failures with backoff; dead-letter permanent ones; use retry topics for long delays.
+- Make consumers **idempotent**: record processed ids in the same transaction as the effect.
+- Publish reliably with the **transactional outbox**; expect, and absorb, duplicates.
+
+## Go deeper
+
+- [Confluent's .NET client for Apache Kafka](https://docs.confluent.io/kafka-clients/dotnet/current/overview.html), Confluent. Producers, consumers and configuration in .NET.
+- [Spring for Apache Kafka reference](https://docs.spring.io/spring-kafka/reference/), the Spring team. `KafkaTemplate`, listeners, error handlers and dead letters.
+- [Confluent's JavaScript client](https://github.com/confluentinc/confluent-kafka-javascript), Confluent. The Node client, its KafkaJS-compatible API and migration notes.
+- [Apache Kafka documentation: configuration](https://kafka.apache.org/documentation/#configuration), the Apache Software Foundation. Every producer and consumer setting.
+- [Pattern: transactional outbox](https://microservices.io/patterns/data/transactional-outbox.html), Chris Richardson. The outbox and its variations.

@@ -4,6 +4,16 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 9 (Background work and messaging)
+
+Added
+- Two chapters. Background jobs: the same receipt queue, retry with exponential backoff, scheduled report and graceful shutdown built with a .NET `BackgroundService` and `Channel`, with Spring's `@Scheduled` and a virtual-thread worker, and with a Node worker loop; when to move to a durable job queue (Hangfire, Quartz, JobRunr, BullMQ, pg-boss); idempotency, jitter, dead letters and running schedules once. Kafka clients: producer and consumer settings, Confluent.Kafka, Spring for Apache Kafka with a dead-letter error handler, Confluent's JavaScript client, retries and dead-letter topics, idempotent consumers and the transactional outbox. The part also reuses the Mastery chapters on async, messaging and Kafka.
+- The background job programs run in the checks and print the same lines in all three stacks. The Kafka client code is compiled (.NET, Spring) or type-checked (Node) against the real libraries, and the outbox program runs on PGlite with a crash injected into the relay, showing the duplicate it causes being ignored by the idempotent consumer.
+- 6 glossary terms, and the course added to the existing terms the chapters use.
+
+Not verified
+- No person has reviewed these chapters. No Kafka broker was available where the checks ran, so the Kafka producers and consumers were compiled but not run against one; the BullMQ example needs Redis and was not run.
+
 ### 2026-11-13: Zero to Backend Engineer, part 8 (Testing services)
 
 Added

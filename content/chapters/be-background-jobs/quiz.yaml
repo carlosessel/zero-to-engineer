@@ -1,0 +1,36 @@
+- question: Why put a receipt email on a queue instead of sending it in the request?
+  options:
+  - The customer need not wait, and failures can be retried later
+  - Queues make emails smaller
+  answer: 0
+  explanation: The request answers at once; a worker does the slow part.
+- question: What does a bounded queue do when it is full?
+  options:
+  - Makes producers wait or fail, instead of using unlimited memory
+  - Drops the oldest job silently
+  answer: 0
+  explanation: Bound queues so a flood slows producers.
+- question: Why add jitter to retry delays?
+  options:
+  - So many failing jobs do not retry at the same moments
+  - To make retries faster
+  answer: 0
+  explanation: Synchronised retries hit a recovering service in waves.
+- question: Why must background jobs be idempotent?
+  options:
+  - A job may run twice after a retry or crash
+  - Idempotent jobs run faster
+  answer: 0
+  explanation: Use keys and already-done checks.
+- question: Your service has three instances, each with @Scheduled or a timer. How often does a nightly job run?
+  options:
+  - Three times, once per instance
+  - Once
+  answer: 0
+  explanation: Use a lock, a durable scheduler or the platform's scheduler.
+- question: What is lost when a process with an in-memory queue crashes?
+  options:
+  - Every job still in the queue
+  - Nothing
+  answer: 0
+  explanation: Use a durable queue for work that must happen.

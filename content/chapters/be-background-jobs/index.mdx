@@ -1,0 +1,436 @@
+---
+title: "Background jobs and scheduled work"
+summary: "Hosted services, scheduled tasks and job queues in each stack."
+prerequisites: [m-async, be-dependency-injection]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will move slow or unreliable work out of requests: a queue that a request adds to and a **worker** that processes in the background, with retries and backoff; jobs that run on a **schedule**; and a **graceful shutdown** that finishes work in progress. You will build the same small system in each stack, and then learn when an in-process queue is not enough and you need a durable job queue or a message broker (<Ref to="m-messaging" />).
+
+## Why work in the background
+
+Some work does not belong inside a request:
+
+- **Slow work**: sending emails, generating PDFs, resizing images, calling a slow partner. The customer should not wait for it.
+- **Unreliable work**: calls to other services that may fail and need retrying later.
+- **Scheduled work**: nightly reports, clearing expired baskets, reminding customers.
+
+The request records what needs doing, answers at once (often `202 Accepted`), and a worker does the rest. The trade-off: the work now happens **later**, so the system is **eventually consistent**, and failures must be handled without a user waiting to see an error (<Ref to="m-async" />).
+
+## The plan
+
+Each implementation below does the same thing:
+
+- Three orders are placed; each request puts a "send receipt" job on a bounded queue and returns immediately.
+- A worker takes jobs one at a time and sends each receipt. The email service fails twice for order `o-2`, so the worker **retries with exponential backoff** (100 ms, then 200 ms) and succeeds on the third attempt.
+- A report job runs every 600 ms (standing in for "every night").
+- When the application is asked to stop, it stops taking new work, finishes the job in progress, and exits.
+
+Each prints the same lines; because the worker and the timer run independently, the report lines can appear slightly earlier or later in your run:
+
+```text
+request for o-1 answered at once; receipt queued
+request for o-2 answered at once; receipt queued
+request for o-3 answered at once; receipt queued
+  receipt for o-1 sent (attempt 1)
+  receipt for o-2 failed: email service timed out; retrying in 100 ms
+  receipt for o-2 failed: email service timed out; retrying in 200 ms
+  receipt for o-2 sent (attempt 3)
+  receipt for o-3 sent (attempt 1)
+  report run 1
+  report run 2
+stopped cleanly
+```
+
+## .NET: hosted services and channels
+
+In .NET, long-running background work is a **hosted service**: a class deriving from **`BackgroundService`**, registered with `AddHostedService`, whose `ExecuteAsync` runs for the life of the application and receives a token that is cancelled at shutdown. A **`Channel<T>`** is a fast, thread-safe in-memory queue; a bounded one makes producers wait when it is full, instead of using unlimited memory. **`PeriodicTimer`** runs work at intervals.
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using System.Threading.Channels;
+
+var builder = Host.CreateApplicationBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.Services.AddSingleton(Channel.CreateBounded<ReceiptJob>(new BoundedChannelOptions(100) { FullMode = BoundedChannelFullMode.Wait }));
+builder.Services.AddSingleton<IReceiptSender, FlakyReceiptSender>();
+builder.Services.AddHostedService<ReceiptWorker>();
+builder.Services.AddHostedService<NightlyReport>();
+using var host = builder.Build();
+
+await host.StartAsync();
+var queue = host.Services.GetRequiredService<Channel<ReceiptJob>>();
+foreach (var id in new[] { "o-1", "o-2", "o-3" })
+{
+    await queue.Writer.WriteAsync(new ReceiptJob(id, "ama@example.com"));
+    Console.WriteLine($"request for {id} answered at once; receipt queued");
+}
+await Task.Delay(1500);
+await host.StopAsync();
+Console.WriteLine("stopped cleanly");
+
+record ReceiptJob(string OrderId, string Email);
+
+interface IReceiptSender { Task SendAsync(ReceiptJob job, CancellationToken ct); }
+
+class FlakyReceiptSender : IReceiptSender
+{
+    private int _calls;
+    public async Task SendAsync(ReceiptJob job, CancellationToken ct)
+    {
+        await Task.Delay(50, ct);
+        if (job.OrderId == "o-2" && Interlocked.Increment(ref _calls) <= 2) throw new HttpRequestException("email service timed out");
+    }
+}
+
+class ReceiptWorker(Channel<ReceiptJob> queue, IReceiptSender sender) : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        await foreach (var job in queue.Reader.ReadAllAsync(stoppingToken))
+        {
+            for (var attempt = 1; ; attempt++)
+            {
+                try
+                {
+                    await sender.SendAsync(job, stoppingToken);
+                    Console.WriteLine($"  receipt for {job.OrderId} sent (attempt {attempt})");
+                    break;
+                }
+                catch (HttpRequestException e) when (attempt < 5)
+                {
+                    var delay = TimeSpan.FromMilliseconds(100 * Math.Pow(2, attempt - 1));
+                    Console.WriteLine($"  receipt for {job.OrderId} failed: {e.Message}; retrying in {delay.TotalMilliseconds} ms");
+                    await Task.Delay(delay, stoppingToken);
+                }
+            }
+        }
+    }
+}
+
+class NightlyReport : BackgroundService
+{
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromMilliseconds(600));
+        var runs = 0;
+        while (await timer.WaitForNextTickAsync(stoppingToken))
+        {
+            Console.WriteLine($"  report run {++runs}");
+        }
+    }
+}
+```
+
+Notes:
+
+- In an ASP.NET Core app, the same services are registered on `builder.Services`, and endpoints receive the `Channel<ReceiptJob>` (or a small wrapper) to write to.
+- Hosted services are singletons. To use scoped services such as a `DbContext` inside one, create a scope per job with `IServiceScopeFactory` (<Ref to="be-dependency-injection" />).
+- `StopAsync` cancels the `stoppingToken`. Pass it to everything the worker awaits, so shutdown is prompt. The host waits for hosted services to finish (30 seconds by default, `HostOptions.ShutdownTimeout`), and orchestrators such as Kubernetes send SIGTERM and wait a grace period before killing the process (<Ref to="m-containers" />).
+- An exception escaping `ExecuteAsync` stops the whole application by default (.NET 6 and later), so catch and handle errors per job.
+
+## Spring: @Scheduled and a worker thread
+
+Spring Boot runs scheduled methods with **`@Scheduled`** once **`@EnableScheduling`** is on. For a queue, a `BlockingQueue` and a worker thread (a virtual thread here) do the same job as .NET's channel; for simple fire-and-forget calls, **`@Async`** runs a method on Spring's task executor.
+
+```java
+package com.bakery;
+
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.event.ContextClosedEvent;
+import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.stereotype.Component;
+
+@SpringBootApplication
+@EnableScheduling
+public class BakeryJobs {
+    public static void main(String[] args) {
+        SpringApplication.run(BakeryJobs.class, args).close();
+        System.out.println("stopped cleanly");
+    }
+
+    @Bean
+    CommandLineRunner placeOrders(ReceiptQueue receipts) {
+        return args -> {
+            for (String id : new String[] { "o-1", "o-2", "o-3" }) {
+                receipts.enqueue(new ReceiptJob(id, "ama@example.com"));
+                System.out.println("request for " + id + " answered at once; receipt queued");
+            }
+            Thread.sleep(1500);
+        };
+    }
+}
+
+record ReceiptJob(String orderId, String email) {}
+
+@Component
+class ReceiptQueue {
+    private final BlockingQueue<ReceiptJob> jobs = new LinkedBlockingQueue<>(100);
+    private final AtomicInteger o2Calls = new AtomicInteger();
+    private volatile boolean running = true;
+    private final Thread worker = Thread.ofVirtual().name("receipt-worker").start(this::work);
+
+    void enqueue(ReceiptJob job) throws InterruptedException {
+        if (!jobs.offer(job, 1, TimeUnit.SECONDS)) throw new IllegalStateException("receipt queue full");
+    }
+
+    private void work() {
+        while (running || !jobs.isEmpty()) {
+            try {
+                ReceiptJob job = jobs.poll(100, TimeUnit.MILLISECONDS);
+                if (job != null) sendWithRetries(job);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+    }
+
+    private void sendWithRetries(ReceiptJob job) throws InterruptedException {
+        for (int attempt = 1; ; attempt++) {
+            try {
+                send(job);
+                System.out.println("  receipt for " + job.orderId() + " sent (attempt " + attempt + ")");
+                return;
+            } catch (IllegalStateException e) {
+                if (attempt == 5) throw e;
+                long delay = 100L << (attempt - 1);
+                System.out.println("  receipt for " + job.orderId() + " failed: " + e.getMessage() + "; retrying in " + delay + " ms");
+                Thread.sleep(delay);
+            }
+        }
+    }
+
+    private void send(ReceiptJob job) throws InterruptedException {
+        Thread.sleep(50);
+        if (job.orderId().equals("o-2") && o2Calls.incrementAndGet() <= 2) throw new IllegalStateException("email service timed out");
+    }
+
+    @EventListener(ContextClosedEvent.class)
+    void drain() throws InterruptedException {
+        running = false;
+        worker.join(5000);
+    }
+}
+
+@Component
+class NightlyReport {
+    private final AtomicInteger runs = new AtomicInteger();
+
+    @Scheduled(fixedRate = 600, initialDelay = 600)
+    void run() {
+        System.out.println("  report run " + runs.incrementAndGet());
+    }
+}
+```
+
+Run it with `./gradlew bootRun` (the build only needs `spring-boot-starter`). Notes:
+
+- `@Scheduled(fixedRate = 600)` runs every 600 ms; `fixedDelay` waits 600 ms after each run finishes; `cron = "0 0 2 * * *"` runs at 2 a.m. every day, with an optional `zone`.
+- The `ContextClosedEvent` listener stops the worker taking new jobs and waits for it to finish what is queued; Spring Boot's `server.shutdown=graceful` (the default) does the same for web requests in flight.
+- `@Async` and `@Scheduled`, like `@Transactional`, work through proxies: they do nothing when called from the same class.
+
+## Node.js: a worker loop
+
+Node runs one thread of JavaScript, so a "worker" is an async loop that awaits jobs, and timers come from `setInterval`. The queue below hands a job straight to a waiting worker, or stores it until one asks:
+
+```ts
+import { setTimeout as sleep } from "node:timers/promises";
+
+type ReceiptJob = { orderId: string; email: string };
+
+class JobQueue<T> {
+  private items: T[] = [];
+  private waiting: ((item: T | undefined) => void)[] = [];
+  private closed = false;
+  private readonly limit: number;
+
+  constructor(limit: number) {
+    this.limit = limit;
+  }
+
+  push(item: T): void {
+    if (this.closed) throw new Error("queue closed");
+    if (this.items.length >= this.limit) throw new Error("queue full");
+    const waiter = this.waiting.shift();
+    if (waiter) waiter(item);
+    else this.items.push(item);
+  }
+
+  next(): Promise<T | undefined> {
+    const item = this.items.shift();
+    if (item !== undefined || this.closed) return Promise.resolve(item);
+    return new Promise((resolve) => this.waiting.push(resolve));
+  }
+
+  close(): void {
+    this.closed = true;
+    for (const waiter of this.waiting.splice(0)) waiter(undefined);
+  }
+}
+
+let o2Calls = 0;
+async function sendReceipt(job: ReceiptJob): Promise<void> {
+  await sleep(50);
+  if (job.orderId === "o-2" && ++o2Calls <= 2) throw new Error("email service timed out");
+}
+
+async function runWorker(queue: JobQueue<ReceiptJob>): Promise<void> {
+  for (let job = await queue.next(); job; job = await queue.next()) {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        await sendReceipt(job);
+        console.log(`  receipt for ${job.orderId} sent (attempt ${attempt})`);
+        break;
+      } catch (error) {
+        if (attempt === 5) {
+          console.error(`  receipt for ${job.orderId} gave up: ${(error as Error).message}`);
+          break;
+        }
+        const delay = 100 * 2 ** (attempt - 1);
+        console.log(`  receipt for ${job.orderId} failed: ${(error as Error).message}; retrying in ${delay} ms`);
+        await sleep(delay);
+      }
+    }
+  }
+}
+
+const queue = new JobQueue<ReceiptJob>(100);
+const worker = runWorker(queue);
+
+let runs = 0;
+const report = setInterval(() => console.log(`  report run ${++runs}`), 600);
+
+for (const orderId of ["o-1", "o-2", "o-3"]) {
+  queue.push({ orderId, email: "ama@example.com" });
+  console.log(`request for ${orderId} answered at once; receipt queued`);
+}
+
+async function shutdown(): Promise<void> {
+  clearInterval(report);
+  queue.close();
+  await worker;
+  console.log("stopped cleanly");
+}
+
+process.once("SIGTERM", shutdown);
+await sleep(1500);
+await shutdown();
+```
+
+Notes:
+
+- The worker's waiting does not block anything: while it awaits a job or a retry delay, the event loop serves requests (<Ref to="node-server-basics" />). CPU-heavy jobs, though, would block it; run those in a worker thread or a separate process.
+- On `SIGTERM`, `shutdown` stops the timer, closes the queue so the loop ends after the current job, and waits for it.
+- For real work, use a library: **node-cron** for schedules, and a durable queue such as **BullMQ** (Redis) or **pg-boss** (PostgreSQL) for jobs, described next.
+
+## When an in-process queue is not enough
+
+The queues above live in the application's memory. That is fine for work you can afford to lose, but:
+
+- If the process **crashes or is redeployed**, queued jobs are lost.
+- With **several instances**, each has its own queue and its own scheduler, so a nightly report runs once **per instance**.
+- There is no record of what failed, and no way to retry it later.
+
+For work that must happen, use a **durable job queue** that stores jobs in a database or Redis, survives restarts, shares work between instances, retries with backoff, and keeps failed jobs for inspection: **Hangfire** or **Quartz.NET** in .NET, **JobRunr** or **Quartz** in Java (with **ShedLock** to make `@Scheduled` run on one instance only), **BullMQ** or **pg-boss** in Node. A BullMQ producer and worker look like this:
+
+```ts
+import { Queue, Worker } from "bullmq";
+
+const connection = { host: process.env.REDIS_HOST ?? "localhost", port: 6379 };
+
+export const receipts = new Queue("receipts", { connection });
+
+// In a request handler: durable, retried up to 5 times with exponential backoff.
+await receipts.add("send", { orderId: "o-2", email: "ama@example.com" }, {
+  jobId: "receipt:o-2",
+  attempts: 5,
+  backoff: { type: "exponential", delay: 1_000 },
+  removeOnComplete: 1_000,
+});
+
+// In the worker process: any number of instances share the jobs.
+const worker = new Worker("receipts", async (job) => {
+  await sendReceipt(job.data);
+}, { connection, concurrency: 10 });
+
+process.on("SIGTERM", async () => {
+  await worker.close();
+});
+```
+
+The `jobId` makes adding the same job twice harmless. For work that other services must react to, or that must be published exactly when a database change commits, use a **message broker** and the **outbox pattern** instead (<Ref to="m-messaging" />, <Ref to="be-kafka-clients" />).
+
+## Rules for background work
+
+- **Make jobs idempotent**: a job may run twice (a retry after a timeout that actually succeeded, a crash after the work but before marking it done). Use idempotency keys, upserts and "already done" checks (<Ref to="m-distributed-basics" />).
+- **Retry with exponential backoff and jitter**, with a maximum number of attempts; then park the job as **failed** (a **dead letter**) and alert, rather than retrying for ever (<Ref to="m-resilience" />).
+- **Bound your queues**, so a flood of work slows producers instead of exhausting memory.
+- **Shut down gracefully**: stop accepting work, finish or hand back what is in progress, then exit within the grace period.
+- **Run each schedule once**, not once per instance: a durable scheduler, a lock, or the platform's scheduler (a Kubernetes CronJob, a cloud scheduler).
+- **Observe it**: log each job's start, result and duration with its id; measure queue length, age of the oldest job and failure rate (<Ref to="m-observability" />).
+
+## Common mistakes
+
+- **Fire-and-forget tasks** started from a request (`_ = SendAsync()`, an un-awaited promise) that are lost on errors or restarts.
+- **Unbounded in-memory queues.**
+- **Retrying immediately and for ever**, which hammers a struggling service.
+- **Non-idempotent jobs**, so a retry sends two receipts or charges twice.
+- **Scheduled jobs running on every instance.**
+- **Ignoring shutdown**, so deployments cut jobs off halfway.
+- **Using a scoped `DbContext` from a singleton** hosted service.
+
+## Practice
+
+**1. (warm-up)** Which of these should run in the background? (a) checking a customer's password; (b) sending an order confirmation email; (c) generating a monthly sales PDF; (d) checking that an order's items are in stock.
+
+<Solution>
+
+(b) and (c). The customer does not need to wait for the email or the PDF, and both may be slow or fail temporarily. (a) and (d) decide the response itself, so they must happen within the request.
+
+</Solution>
+
+**2. (standard)** The worker retries after 100, 200, 400 and 800 ms. Change the delay to add **jitter** (a random part), and explain why jitter matters when many jobs fail at once.
+
+<Solution>
+
+Use "full jitter": a random delay between 0 and the exponential value. In Node, `const delay = Math.random() * 100 * 2 ** (attempt - 1);`; in C#, `Random.Shared.NextDouble() * 100 * Math.Pow(2, attempt - 1)`; in Java, `ThreadLocalRandom.current().nextLong(100L << (attempt - 1))`. If the email service fails for a minute, hundreds of jobs fail together; without jitter they all retry at the same moments, hitting the recovering service in synchronised waves. Jitter spreads the retries out.
+
+</Solution>
+
+**3. (stretch)** Your service runs on three instances, and the nightly report runs three times. Give two ways to make it run once, and say what happens if the instance running it crashes halfway.
+
+<Solution>
+
+(1) Move the schedule out of the service: a Kubernetes CronJob or cloud scheduler starts one run (a short-lived process, or a call to an internal endpoint) each night. (2) Keep it in the service but take a **distributed lock** first: ShedLock in Spring, a Hangfire or Quartz clustered job store, or a PostgreSQL advisory lock or a "locked until" row in Node; only the instance that gets the lock runs it. If the runner crashes halfway, the lock expires (choose a timeout longer than a normal run) and the job can run again, so the report job must be **idempotent**: write the report under a key for that night, replacing any partial one, rather than appending.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Move slow, unreliable and scheduled work out of requests; answer at once and let a **worker** do it.
+- .NET: **`BackgroundService`**, **`Channel<T>`**, **`PeriodicTimer`**. Spring: **`@Scheduled`** with `@EnableScheduling`, `@Async`, a `BlockingQueue` worker. Node: an async worker loop, `setInterval`, libraries such as node-cron.
+- **Retry with exponential backoff and jitter**, then dead-letter; make jobs **idempotent**; bound queues; **shut down gracefully**.
+- In-process queues lose work on restarts and run per instance; use a **durable job queue** (Hangfire, Quartz, JobRunr, BullMQ, pg-boss) or a **message broker** when work must happen, and make each schedule run once.
+
+## Go deeper
+
+- [Background tasks with hosted services in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/host/hosted-services), Microsoft. `BackgroundService`, queued work and scoped services.
+- [Channels in .NET](https://learn.microsoft.com/en-us/dotnet/core/extensions/channels), Microsoft. Bounded and unbounded producer-consumer queues.
+- [Spring Framework: task execution and scheduling](https://docs.spring.io/spring-framework/reference/integration/scheduling.html), the Spring team. `@Scheduled`, `@Async` and executors.
+- [BullMQ documentation](https://docs.bullmq.io/), Taskforce.sh. Durable queues, retries and workers for Node.
+- [Exponential backoff and jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/), Marc Brooker, AWS. Why and how to add jitter to retries.

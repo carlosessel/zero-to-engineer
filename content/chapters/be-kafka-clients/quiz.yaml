@@ -1,0 +1,36 @@
+- question: Why key order events by order id?
+  options:
+  - All events for one order go to one partition and are read in order
+  - Keys make messages smaller
+  answer: 0
+  explanation: Ordering in Kafka is per partition.
+- question: What does acks=all give a producer?
+  options:
+  - An acknowledgement only once all in-sync replicas have stored the message
+  - Faster sends
+  answer: 0
+  explanation: Acknowledged messages survive a broker failure.
+- question: When should a consumer commit its offset?
+  options:
+  - After the message has been handled
+  - As soon as it is received
+  answer: 0
+  explanation: Committing first can lose messages after a crash.
+- question: What is a dead-letter topic for?
+  options:
+  - Messages that could not be processed, kept with the error for inspection and replay
+  - Deleted messages
+  answer: 0
+  explanation: Alert when anything arrives there.
+- question: What problem does the transactional outbox solve?
+  options:
+  - Saving data and publishing its event without a gap between them
+  - Making Kafka faster
+  answer: 0
+  explanation: The event is written in the same database transaction.
+- question: How does a consumer ignore duplicates safely?
+  options:
+  - Record processed message ids in the same transaction as the effect
+  - Commit the offset twice
+  answer: 0
+  explanation: Effect and record succeed or fail together.

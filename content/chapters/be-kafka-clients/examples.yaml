@@ -1,0 +1,142 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: csharp
+  check: shell
+  needs: network
+  script: |
+    mkdir b1 && cd b1
+    cp "$BLOCK" app.cs
+    dotnet build app.cs > build.log 2>&1 || { grep -E " error " build.log; exit 1; }
+    echo compiled
+  output_contains:
+  - compiled
+  note: Compiled against Confluent.Kafka; running it needs a Kafka broker.
+- block: 2
+  lang: csharp
+  check: shell
+  needs: network
+  script: |
+    mkdir b2 && cd b2
+    cp "$BLOCK" app.cs
+    dotnet build app.cs > build.log 2>&1 || { grep -E " error " build.log; exit 1; }
+    echo compiled
+  output_contains:
+  - compiled
+  note: Compiled against Confluent.Kafka; running it needs a Kafka broker.
+- block: 3
+  lang: properties
+  check: illustration
+  note: Spring Kafka settings; block 4's check compiles the project with them.
+- block: 4
+  lang: java
+  check: shell
+  needs: network
+  script: |
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    mkdir sk && cd sk
+    echo 'rootProject.name = "bakery-kafka"' > settings.gradle.kts
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+        id("org.springframework.boot") version "4.1.2"
+        id("io.spring.dependency-management") version "1.1.7"
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-kafka")
+        implementation("org.springframework.boot:spring-boot-starter-json")
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/resources/application.properties)
+    cat > src/main/resources/application.properties <<'SRC_EOF'
+    spring.kafka.bootstrap-servers=${KAFKA_BOOTSTRAP:localhost:9092}
+    spring.kafka.producer.acks=all
+    spring.kafka.producer.properties.enable.idempotence=true
+    spring.kafka.consumer.group-id=kitchen
+    spring.kafka.consumer.auto-offset-reset=earliest
+    spring.kafka.listener.ack-mode=record
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/BakeryKafkaApplication.java)
+    cat > src/main/java/com/bakery/BakeryKafkaApplication.java <<'SRC_EOF'
+    package com.bakery;
+
+    import org.springframework.boot.SpringApplication;
+    import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+    @SpringBootApplication
+    public class BakeryKafkaApplication {
+        public static void main(String[] args) {
+            SpringApplication.run(BakeryKafkaApplication.class, args);
+        }
+    }
+    SRC_EOF
+    cp "$BLOCK" src/main/java/com/bakery/OrderEvents.java
+    "$GRADLE" --no-daemon -q compileJava
+    ls build/classes/java/main/com/bakery | sort
+  output_contains:
+  - 'KafkaErrorHandling.class
+
+    KitchenListener.class
+
+    OrderEventPublisher.class
+
+    OrderPlaced.class'
+  note: Compiled with Spring Boot 4.1 and Spring for Apache Kafka; running it needs a Kafka broker.
+- block: 5
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir nk && cd nk
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund @confluentinc/kafka-javascript@1.11.0
+    npm install --silent --no-audit --no-fund --save-dev typescript@6.0.3 @types/node
+    cp "$BLOCK" kafka.ts
+    npx tsc --noEmit --strict --module nodenext --moduleResolution nodenext --target es2022 --types node kafka.ts
+    node -e "import('./kafka.ts').then(m => console.log(Object.keys(m).join(', ')))"
+  output_contains:
+  - publishOrderPlaced, runKitchen
+  note: Type-checked with the client's own type definitions and loaded; running it needs a Kafka broker.
+- block: 6
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir ob && cd ob
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund @electric-sql/pglite@0.5.16
+    cp "$BLOCK" outbox.ts
+    node outbox.ts
+  output_contains:
+  - 'relay crashed after publishing, before marking the row sent
+
+    published so far: 1; unsent rows: 2
+
+    relay restarted, published 2
+
+    messages on the broker: o-1, o-1, o-2
+
+    o-1: handled
+
+    o-1: duplicate ignored
+
+    o-2: handled
+
+    kitchen tickets: o-1, o-2'
+- block: 7
+  lang: text
+  check: illustration
+  note: The output of the outbox program, which block 6's check compares.
