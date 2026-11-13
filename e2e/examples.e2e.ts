@@ -88,11 +88,18 @@ for (const { chapter, entry, blocks } of cases) {
         else await page.fill(step.fill[0], step.fill[1]);
       }
       for (const expression of size.expect) {
-        const result = await page.evaluate((code) => {
-          // eslint-disable-next-line no-new-func
-          return new Function(`return (${code});`)();
-        }, expression);
-        expect(result, `at ${size.viewport.width} pixels wide: ${expression}`).toBe(true);
+        // Retried for a few seconds: after a click, React (and React Router especially)
+        // may update the page a moment later, and slower machines take longer.
+        await expect
+          .poll(
+            () =>
+              page.evaluate((code) => {
+                // eslint-disable-next-line no-new-func
+                return new Function(`return (${code});`)();
+              }, expression),
+            { message: `at ${size.viewport.width} pixels wide: ${expression}`, timeout: 5000 },
+          )
+          .toBe(true);
       }
     }
     expect(errors).toEqual([]);
