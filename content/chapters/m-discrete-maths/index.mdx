@@ -48,11 +48,11 @@ Two more facts that prevent bugs:
 
 A **set** is a collection of distinct items, where order does not matter. The operations:
 
-| Operation | Meaning | Example: A = {1, 2, 3}, B = {2, 3, 4} |
+| Operation | Meaning | Example: A = `{1, 2, 3}`, B = `{2, 3, 4}` |
 |---|---|---|
-| union A ∪ B | in A or B (or both) | {1, 2, 3, 4} |
-| intersection A ∩ B | in both | {2, 3} |
-| difference A \ B | in A but not B | {1} |
+| union A ∪ B | in A or B (or both) | `{1, 2, 3, 4}` |
+| intersection A ∩ B | in both | `{2, 3}` |
+| difference A \ B | in A but not B | `{1}` |
 | subset A ⊆ B | everything in A is in B | false here |
 
 Sets are everywhere in code: permissions (does the user's set of roles intersect the allowed roles?), finding what changed between two lists, removing duplicates. Using a real set type makes membership checks fast (about constant time with a hash set, versus scanning a list), which matters inside loops:

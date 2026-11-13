@@ -1,0 +1,332 @@
+---
+title: "Complexity: Big O, properly"
+summary: "Time and space complexity, best, worst and average cases, amortised cost, and measuring in practice."
+prerequisites: [m-discrete-maths]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will be able to look at a piece of code and say how its running time and memory grow as its input grows, compare two designs before writing either, spot the loop that will bring a service down when the data gets ten times bigger, and explain the limits of that analysis. This is the vocabulary of every algorithms discussion, design review and coding interview. <Ref to="big-o" /> gave a short introduction; this chapter is the full treatment.
+
+## Counting steps, not seconds
+
+Seconds depend on the machine, the language, the compiler and what else is running. To compare *algorithms*, we count something that does not: the number of basic steps (comparisons, additions, memory reads) as a function of the input size, usually called *n*.
+
+Take finding the largest number in an array of *n* numbers. Each element is looked at once, so the work is about *n* steps (plus a constant amount of setup). Twice the data, twice the work. Compare checking whether any two numbers in the array are equal by comparing every pair:
+
+```ts
+function hasDuplicatePairs(values: number[]): { found: boolean; comparisons: number } {
+  let comparisons = 0;
+  for (let i = 0; i < values.length; i++) {
+    for (let j = i + 1; j < values.length; j++) {
+      comparisons++;
+      if (values[i] === values[j]) return { found: true, comparisons };
+    }
+  }
+  return { found: false, comparisons };
+}
+
+function hasDuplicateSet(values: number[]): { found: boolean; steps: number } {
+  const seen = new Set<number>();
+  let steps = 0;
+  for (const v of values) {
+    steps++;
+    if (seen.has(v)) return { found: true, steps };
+    seen.add(v);
+  }
+  return { found: false, steps };
+}
+
+for (const n of [1_000, 2_000, 4_000]) {
+  const values = Array.from({ length: n }, (_, i) => i);
+  console.log(n, hasDuplicatePairs(values).comparisons, hasDuplicateSet(values).steps);
+}
+```
+
+This prints:
+
+```text
+1000 499500 1000
+2000 1999000 2000
+4000 7998000 4000
+```
+
+With no duplicates, the pairwise version makes *n*(*n* − 1) ÷ 2 comparisons: doubling *n* roughly **quadruples** the work. The set version takes *n* steps: doubling *n* doubles the work. At a million items, that is about 500 billion comparisons against a million steps. No amount of tuning the first version closes that gap; only changing the algorithm does.
+
+## Big O
+
+**Big O notation** describes how a cost grows for large inputs, keeping only the part that dominates and ignoring constant factors. We say the pairwise version is **O(*n*²)** ("order *n* squared") and the set version is **O(*n*)**.
+
+The rules for simplifying:
+
+- **Drop constants.** 3*n* + 20 is O(*n*). Constants matter in practice (and the performance chapter measures them), but they do not change how the cost *grows*.
+- **Keep the fastest-growing term.** *n*² + 1,000*n* is O(*n*²): for large enough *n*, the *n*² term swamps the rest.
+- **Different inputs keep different letters.** Comparing every item of list A with every item of list B is O(*a* × *b*), not O(*n*²).
+
+Formally, Big O is an **upper bound**: a cost is O(*f*(*n*)) if, beyond some size, it is never more than a constant times *f*(*n*). (Related notations: Ω for a lower bound, Θ when both hold. In everyday engineering talk, people say "O" and mean the tight bound.)
+
+### The common growth rates
+
+| Big O | Name | Typical example | Doubling *n*… | At *n* = 1,000,000 |
+|---|---|---|---|---|
+| O(1) | constant | reading an array element; a hash-table lookup on average | no change | 1 |
+| O(log *n*) | logarithmic | binary search; a balanced-tree lookup | adds one step | about 20 |
+| O(*n*) | linear | a single loop over the data | doubles | 1,000,000 |
+| O(*n* log *n*) | linearithmic | good sorting algorithms | slightly more than doubles | about 20,000,000 |
+| O(*n*²) | quadratic | comparing every pair | quadruples | 10¹² |
+| O(2ⁿ) | exponential | trying every subset | squares (for each extra item, doubles) | impossible |
+| O(*n*!) | factorial | trying every ordering | worse still | impossible |
+
+A useful rule of thumb: a modern machine does very roughly 10⁸ to 10⁹ simple steps a second. So O(*n* log *n*) on a million items is instant, O(*n*²) on a million items takes minutes or hours, and anything exponential is hopeless beyond a few dozen items (<Ref to="m-computability" />).
+
+## Analysing code
+
+Read code from the inside out, and combine:
+
+- **Sequential parts add**, and the biggest wins: an O(*n*) loop followed by an O(*n*²) loop is O(*n*²).
+- **Nested loops multiply**: a loop of *n* containing a loop of *m* is O(*n* × *m*).
+- **A loop that halves (or doubles) its range each time** runs O(log *n*) times.
+- **Calls cost what the called function costs.** The trap is a cheap-looking call inside a loop that is not cheap.
+
+That last one causes most real-world quadratic bugs. Each line here looks innocent:
+
+```ts
+const orders = Array.from({ length: 5_000 }, (_, i) => ({ id: i, customerId: i % 500 }));
+const customers = Array.from({ length: 500 }, (_, i) => ({ id: i, name: `Customer ${i}` }));
+
+// O(orders × customers): find() scans the whole customer list for every order.
+let slowSteps = 0;
+for (const order of orders) {
+  customers.find((c) => {
+    slowSteps++;
+    return c.id === order.customerId;
+  });
+}
+
+// O(orders + customers): build a lookup once, then each look-up is O(1) on average.
+const byId = new Map(customers.map((c) => [c.id, c]));
+let fastSteps = customers.length;
+for (const order of orders) {
+  byId.get(order.customerId);
+  fastSteps++;
+}
+
+console.log(slowSteps, fastSteps);
+```
+
+It prints `1252500 5500`: the `find` inside a loop did over 220 times more work. Other hidden linear-time operations inside loops: `array.includes`, `indexOf`, `list.contains` on a list, removing from the front of an array, `string +=` in some languages, and copying an array with spread to add one item.
+
+### Space complexity
+
+The same notation describes memory. The set version of the duplicate check uses O(*n*) extra space for the set; the pairwise version uses O(1). That is a typical trade: **spend memory to save time**. Space includes the call stack, so a recursive function that goes *n* calls deep uses O(*n*) space even if it allocates nothing else (<Ref to="m-memory-gc" />).
+
+## Best, worst and average cases
+
+The cost can depend on *which* input of size *n* you get, not just its size. Searching an unsorted array for a value:
+
+- **Best case**: it is the first element: O(1).
+- **Worst case**: it is last or absent: O(*n*).
+- **Average case**: for a random position, about *n* ÷ 2 steps: still O(*n*).
+
+Engineers usually care most about the **worst case**, because that is what a slow request, a timeout or an attacker will find. **Average** is meaningful only when you know the inputs really are random. Some algorithms are fast on average but have a bad worst case that crafted input can trigger: a naive quicksort on already-sorted data, or a hash table flooded with keys designed to collide (<Ref to="m-arrays-hashing" />). Attackers have used exactly that to take services down.
+
+## Amortised cost
+
+Some operations are usually cheap but occasionally expensive. Adding to a dynamic array (JavaScript's `Array`, Java's `ArrayList`, C#'s `List<T>`) normally just writes to the next free slot. When the array is full, it allocates a bigger block, typically 1.5 or 2 times the size, and copies everything across: O(*n*) for that one add.
+
+Averaged over many adds, though, the copying is cheap. With doubling, filling an array to *n* items copies 1 + 2 + 4 + … + *n*/2 < *n* items in total, so the copying adds less than one step per add. We say adding is **O(1) amortised**: any sequence of *k* adds costs O(*k*) in total, even though a single add can cost O(*n*).
+
+You can watch the capacity of a .NET list grow:
+
+```csharp
+var list = new List<int>();
+int last = -1;
+for (int i = 0; i < 40; i++)
+{
+    list.Add(i);
+    if (list.Capacity != last)
+    {
+        Console.Write(list.Capacity + " ");
+        last = list.Capacity;
+    }
+}
+Console.WriteLine();
+```
+
+It prints `4 8 16 32 64`: the capacity doubles each time it fills. (Java's `ArrayList` grows by half instead, 10, 15, 22, 33…, which wastes less space and copies a little more often; both are O(1) amortised.) If you know the final size in advance, create the list with that capacity and avoid the copying entirely.
+
+Amortised is not the same as average: amortised is a guarantee over any sequence of operations, while average depends on the inputs being random. But amortised costs still have occasional slow operations, which can matter for latency-sensitive code.
+
+## Measuring: where Big O stops
+
+Big O is a tool for thinking, not a stopwatch. Its limits:
+
+- **Constants and lower terms matter at real sizes.** An O(*n*) algorithm with a large constant can lose to an O(*n* log *n*) one for every input you will ever see. Linear search over 20 items beats a hash lookup, because 20 is small and arrays are cache-friendly (<Ref to="m-machine" />).
+- **Memory behaviour is invisible to Big O.** Two O(*n*) loops can differ by twenty times because of cache misses.
+- **Real inputs are not worst cases**, or they may be worse than the average.
+
+So the professional habit is: **use Big O to choose the approach and spot disasters; measure to decide between good options.** If the code is too slow, profile it to find where the time goes before changing anything (the performance chapter shows how).
+
+A quick sanity check is to time a function at *n*, 2*n* and 4*n*: if the time roughly doubles each step, it is linear; if it quadruples, quadratic.
+
+## Common mistakes
+
+- **A linear search inside a loop** (`find`, `includes`, `indexOf`, `contains` on a list), making the whole thing quadratic. Build a map or set first.
+- **Ignoring the worst case**, especially with input an attacker controls.
+- **Forgetting space**, including recursion depth.
+- **Dropping a term that matters**: O(*n* + *m*) is not O(*n*) if *m* can be much bigger.
+- **Trusting Big O for small inputs.** Measure.
+- **Optimising before knowing where the time goes.**
+
+## Practice
+
+**1. (warm-up)** Simplify: 5*n*² + 3*n* + 100; 2ⁿ + *n*³; 7 log *n* + 12; *n*(*n* + 1) ÷ 2.
+
+<Solution>
+
+O(*n*²); O(2ⁿ); O(log *n*); O(*n*²).
+
+</Solution>
+
+**2. (warm-up)** What is the time complexity of each? (a) printing every element of an array; (b) printing only the first element; (c) printing every pair of elements.
+
+<Solution>
+
+(a) O(*n*); (b) O(1); (c) O(*n*²).
+
+</Solution>
+
+**3. (warm-up)** An algorithm takes 1 second for 1,000 items. Roughly how long for 10,000 items if it is O(*n*)? O(*n*²)? O(*n* log *n*)?
+
+<Solution>
+
+O(*n*): about 10 seconds. O(*n*²): about 100 seconds. O(*n* log *n*): 10 × (log 10,000 ÷ log 1,000) = 10 × (13.3 ÷ 10) ≈ **13 seconds**.
+
+</Solution>
+
+**4. (standard)** What is the complexity of this function, in time and in space?
+
+```ts
+function pairsSummingTo(values: number[], target: number): number {
+  const seen = new Map<number, number>();
+  let count = 0;
+  for (const v of values) {
+    count += seen.get(target - v) ?? 0;
+    seen.set(v, (seen.get(v) ?? 0) + 1);
+  }
+  return count;
+}
+
+console.log(pairsSummingTo([1, 5, 7, -1, 5], 6));
+```
+
+<Solution>
+
+O(*n*) time: one loop, and each map operation is O(1) on average. O(*n*) space for the map. It prints **3**: the pairs (1, 5), (7, −1) and (1, 5) using the second 5.
+
+</Solution>
+
+**5. (standard)** This loop removes the first element repeatedly. Why is it O(*n*²), and how would you fix it?
+
+```ts
+const queue = Array.from({ length: 10_000 }, (_, i) => i);
+let processed = 0;
+while (queue.length > 0) {
+  queue.shift();
+  processed++;
+}
+console.log(processed);
+```
+
+<Solution>
+
+`shift()` removes the first element and moves every remaining element down one place: O(*n*) each time, and it runs *n* times, so O(*n*²) overall. Fix: keep an index of the next item instead of removing (`for (let i = 0; i < queue.length; i++)`), or use a real queue structure (<Ref to="m-lists-stacks-queues" />). It prints **10000** either way; only the time differs.
+
+</Solution>
+
+**6. (standard)** Give the complexity of a loop where `i` starts at 1 and doubles each time until it exceeds *n*. What if `i` instead increases by 2 each time?
+
+<Solution>
+
+Doubling: O(log *n*) iterations (about log₂ *n*). Increasing by 2: *n* ÷ 2 iterations, which is O(*n*).
+
+</Solution>
+
+**7. (standard)** You need to check, for each of 50,000 usernames in a sign-up batch, whether it is in a list of 2 million taken usernames. Compare two approaches and estimate the work.
+
+<Solution>
+
+Searching the list for each name: 50,000 × 2,000,000 = 10¹¹ comparisons in the worst case: hours. Building a hash set of the 2 million taken names once (2 million steps) and then checking each new name in O(1) on average (50,000 steps): about 2 million steps, well under a second. The set uses O(2 million) extra memory, which is a good trade.
+
+</Solution>
+
+**8. (standard)** Why is adding to a dynamic array O(1) amortised, even though some adds cost O(*n*)?
+
+<Solution>
+
+When the array fills, its capacity is multiplied (for example doubled), so the expensive copies happen at sizes 1, 2, 4, 8 … and the total copied while reaching *n* items is less than *n*. Spread over the *n* adds, that is less than one extra step each: O(*n*) total for *n* adds, so O(1) per add amortised.
+
+</Solution>
+
+**9. (standard)** What is the space complexity of a recursive function that sums a linked list of *n* nodes by calling itself on the rest of the list?
+
+<Solution>
+
+O(*n*): there are *n* nested calls before any return, each with its own stack frame. A loop would use O(1) space, and avoids a stack overflow on long lists.
+
+</Solution>
+
+**10. (stretch)** Explain why a hash table lookup is described as "O(1) on average" but "O(*n*) in the worst case", and why the worst case matters for a public web service.
+
+<Solution>
+
+Normally keys spread evenly over the buckets, so each bucket holds a few items and a lookup checks a constant number of them. If many keys land in the same bucket (by bad luck, a poor hash function, or on purpose), a lookup may have to check all of them: O(*n*). An attacker who knows the hash function can send many keys crafted to collide, making each request do far more work and exhausting the server's CPU. Defences include randomised hash seeds and, as Java's `HashMap` does, turning crowded buckets into balanced trees so the worst case is O(log *n*).
+
+</Solution>
+
+**11. (stretch)** A function is O(*n* log *n*) and takes 2 seconds for 1 million items. A colleague's O(*n*) version takes 3 seconds for the same input. Is the colleague's version worse? Under what conditions would it win?
+
+<Solution>
+
+Not necessarily: at this size it is slower, because its constant factor is larger (or its memory access is worse), but it grows more slowly. Since log₂ of a million is about 20, the first does about 20 million "units" in 2 s (0.1 µs each) and the second about 1 million units in 3 s (3 µs each). The O(*n*) version wins once *n* log₂ *n* × 0.1 µs exceeds *n* × 3 µs, that is when log₂ *n* > 30, so *n* > about a billion. If inputs never get that large, the O(*n* log *n*) version is the better choice. Big O picks the direction; measurement decides at your sizes.
+
+</Solution>
+
+**12. (stretch)** Write a function that returns the first value that appears twice in an array (or `undefined`), in O(*n*) time, and state its space complexity.
+
+<Solution>
+
+```ts
+function firstRepeated<T>(values: T[]): T | undefined {
+  const seen = new Set<T>();
+  for (const v of values) {
+    if (seen.has(v)) return v;
+    seen.add(v);
+  }
+  return undefined;
+}
+
+console.log(firstRepeated(["rye", "bun", "loaf", "bun", "rye"]));
+```
+
+One pass with a set: O(*n*) time, O(*n*) space. It prints **bun**: the first value whose second appearance comes earliest.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Measure algorithms by **how their cost grows** with input size *n*, not by seconds.
+- **Big O** keeps the dominant term and drops constants. Learn the common rates: O(1), O(log *n*), O(*n*), O(*n* log *n*), O(*n*²), O(2ⁿ).
+- Sequential parts add; nested loops multiply; halving gives log *n*; hidden linear work inside loops (`find`, `includes`, `shift`) is the usual cause of quadratic code. Build a map or set first.
+- **Space complexity** counts extra memory, including recursion depth; trading space for time is common.
+- **Worst case** matters most for services and attackers; **average** needs truly random inputs.
+- **Amortised** cost averages over a sequence: dynamic-array appends are O(1) amortised.
+- Big O chooses the approach; **measurement** decides between good options.
+
+## Go deeper
+
+- [Introduction to Algorithms (6.006, Spring 2020)](https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/), MIT OpenCourseWare. Asymptotic analysis and the data structures and algorithms of this whole part, with lecture notes and problem sets.
+- [Algorithms](https://jeffe.cs.illinois.edu/teaching/algorithms/), Jeff Erickson. A free textbook; its introduction covers analysis with care.
+- [Big-O Cheat Sheet](https://www.bigocheatsheet.com/), Eric Rowell. Complexities of common data structures and sorts on one page.

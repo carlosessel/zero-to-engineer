@@ -1,0 +1,414 @@
+---
+title: "Trees, heaps and tries"
+summary: "Binary search trees, balanced trees, B-trees, heaps and priority queues, tries."
+prerequisites: [m-lists-stacks-queues]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will understand the tree structures behind sorted maps, database indexes, priority queues, schedulers and autocomplete, and you will be able to choose and use them: when you need things in order, ranges of values, the smallest or most urgent item next, or everything starting with a prefix. A hash table cannot do any of these well; trees can.
+
+## Trees
+
+A **tree** is a structure of **nodes** in which each node has **children**, every node except one has exactly one **parent**, and the one without a parent is the **root**. Nodes without children are **leaves**. The **depth** of a node is how many steps it is from the root; the **height** of a tree is the greatest depth. File systems, HTML documents, organisation charts, JSON and the syntax of programs are all trees.
+
+A **binary tree** gives each node at most two children, *left* and *right*.
+
+## Binary search trees
+
+A **binary search tree** (BST) keeps one rule at every node: everything in the left subtree is smaller than the node's key, and everything in the right subtree is larger. To find a key, start at the root and go left or right by comparing, discarding half the remaining tree at each step if the tree is well shaped: O(log *n*), like binary search.
+
+```ts
+class TreeNode {
+  left: TreeNode | null = null;
+  right: TreeNode | null = null;
+  constructor(public key: number) {}
+}
+
+function insert(root: TreeNode | null, key: number): TreeNode {
+  if (!root) return new TreeNode(key);
+  if (key < root.key) root.left = insert(root.left, key);
+  else if (key > root.key) root.right = insert(root.right, key);
+  return root;
+}
+
+function contains(root: TreeNode | null, key: number): boolean {
+  while (root) {
+    if (key === root.key) return true;
+    root = key < root.key ? root.left : root.right;
+  }
+  return false;
+}
+
+function inOrder(root: TreeNode | null, out: number[] = []): number[] {
+  if (root) {
+    inOrder(root.left, out);
+    out.push(root.key);
+    inOrder(root.right, out);
+  }
+  return out;
+}
+
+function height(root: TreeNode | null): number {
+  return root ? 1 + Math.max(height(root.left), height(root.right)) : 0;
+}
+
+let tree: TreeNode | null = null;
+for (const k of [50, 30, 70, 20, 40, 60, 80]) tree = insert(tree, k);
+console.log(inOrder(tree), contains(tree, 60), contains(tree, 65), height(tree));
+
+let skewed: TreeNode | null = null;
+for (let k = 1; k <= 7; k++) skewed = insert(skewed, k);
+console.log(inOrder(skewed), height(skewed));
+```
+
+It prints the keys in order `[20, 30, 40, 50, 60, 70, 80]`, `true`, `false` and a height of **3**: seven keys in three levels. Visiting left subtree, node, right subtree (an **in-order traversal**) always produces the keys sorted, which is what makes a BST a *sorted* map.
+
+The second tree shows the catch. Inserting 1, 2, 3 … 7 in order gives each node only a right child: a height of **7**, a linked list in disguise, where every operation is O(*n*). Sorted input is common in real data (ids, timestamps), so a plain BST is not safe to use.
+
+### Balanced trees
+
+**Self-balancing** trees fix this by restructuring themselves (with small local moves called **rotations**) on insert and delete, so the height stays O(log *n*) whatever the order of insertion. The two classic designs are **AVL trees** and **red-black trees**. You will rarely write one, but you use them all the time:
+
+- Java's `TreeMap` and `TreeSet` are red-black trees (from the JDK source).
+- C#'s `SortedDictionary` and `SortedSet` are balanced binary search trees.
+- Many languages' standard ordered maps work the same way.
+
+What a sorted map adds over a hash map is **order-based queries**, all O(log *n*):
+
+```java
+import java.util.TreeMap;
+
+public class Main {
+    public static void main(String[] args) {
+        TreeMap<Integer, String> bookings = new TreeMap<>();
+        bookings.put(900, "Ama");
+        bookings.put(1030, "Kofi");
+        bookings.put(1200, "Priya");
+        bookings.put(1415, "Sam");
+
+        System.out.println("first: " + bookings.firstKey());
+        System.out.println("at or before 1100: " + bookings.floorKey(1100));
+        System.out.println("at or after 1100: " + bookings.ceilingKey(1100));
+        System.out.println("10:00 to 13:00: " + bookings.subMap(1000, true, 1300, true));
+    }
+}
+```
+
+It prints `first: 900`, `at or before 1100: 1030`, `at or after 1100: 1200`, and `10:00 to 13:00: {1030=Kofi, 1200=Priya}`. "The next booking after 11:00" or "everything between two times" are one call each. With a hash map you would have to scan everything.
+
+## B-trees: trees for disks
+
+A binary tree with a million keys is about 20 levels deep. In memory that is fine; on disk, where each node might be a separate read, 20 reads per lookup is slow. A **B-tree** gives each node *many* children (hundreds), with each node filling one disk page (often a few kilobytes) and holding many sorted keys. With hundreds of children per node, a billion keys fit in a tree only three or four levels deep, so a lookup touches three or four pages, and the top levels are usually cached in memory.
+
+This is the structure behind almost every **database index** (and many file systems). A common variant, the **B+ tree**, keeps all the data in the leaves and links the leaves together, so a range query ("orders from 1 to 30 June") finds the first leaf and then reads along the linked leaves in order. <Ref to="sql" /> introduced indexes; the relational databases chapter later in this course explains how to design them, and why an index on (`customer_id`, `created_at`) helps some queries and not others.
+
+## Heaps and priority queues
+
+Sometimes you do not need everything in order: only quick access to the **smallest** (or largest, or most urgent) item, repeatedly, as items come and go. That is a **priority queue**, and the usual implementation is a **binary heap**.
+
+A **min-heap** is a binary tree with one rule: every parent is smaller than or equal to its children. So the smallest item is always at the root. It is stored compactly in an **array**: the children of the item at index *i* are at 2*i* + 1 and 2*i* + 2, and its parent at ⌊(*i* − 1) ÷ 2⌋, so there are no pointers at all.
+
+- **Push**: put the new item at the end of the array, then swap it upwards while it is smaller than its parent ("sift up"). O(log *n*).
+- **Pop**: take the root, move the last item to the root, then swap it downwards with its smaller child while it is bigger ("sift down"). O(log *n*).
+- **Peek** at the smallest: O(1).
+
+```ts
+class MinHeap {
+  private items: number[] = [];
+
+  get size() {
+    return this.items.length;
+  }
+
+  push(value: number) {
+    const a = this.items;
+    a.push(value);
+    let i = a.length - 1;
+    while (i > 0) {
+      const parent = (i - 1) >> 1;
+      if (a[parent] <= a[i]) break;
+      [a[parent], a[i]] = [a[i], a[parent]];
+      i = parent;
+    }
+  }
+
+  pop(): number | undefined {
+    const a = this.items;
+    if (a.length === 0) return undefined;
+    const top = a[0];
+    const last = a.pop()!;
+    if (a.length > 0) {
+      a[0] = last;
+      let i = 0;
+      while (true) {
+        const l = 2 * i + 1, r = l + 1;
+        let smallest = i;
+        if (l < a.length && a[l] < a[smallest]) smallest = l;
+        if (r < a.length && a[r] < a[smallest]) smallest = r;
+        if (smallest === i) break;
+        [a[smallest], a[i]] = [a[i], a[smallest]];
+        i = smallest;
+      }
+    }
+    return top;
+  }
+}
+
+const heap = new MinHeap();
+for (const v of [42, 7, 19, 3, 25, 11]) heap.push(v);
+const out: number[] = [];
+while (heap.size > 0) out.push(heap.pop()!);
+console.log(out);
+```
+
+It prints `[3, 7, 11, 19, 25, 42]`: popping repeatedly gives the items in order (that is **heapsort**, O(*n* log *n*)).
+
+Every platform has one built in: Java's `PriorityQueue` (a binary heap, from the JDK source), C#'s `PriorityQueue<TElement, TPriority>`, Python's `heapq`. In C#, the priority is given separately from the item:
+
+```csharp
+var tasks = new PriorityQueue<string, int>();
+tasks.Enqueue("restock flour", 5);
+tasks.Enqueue("oven on fire", 1);
+tasks.Enqueue("reply to email", 3);
+while (tasks.Count > 0)
+{
+    Console.WriteLine(tasks.Dequeue());
+}
+```
+
+It prints `oven on fire`, `reply to email`, `restock flour`: lowest priority number first.
+
+Where priority queues are used:
+
+- **Scheduling**: the next timer to fire, the most urgent job, the next event in a simulation.
+- **Shortest paths**: Dijkstra's algorithm takes the nearest unvisited place next (<Ref to="m-graphs" />).
+- **Top-k**: the 10 largest of a billion values, by keeping a min-heap of size 10 and pushing out the smallest whenever a bigger value arrives: O(*n* log *k*) time and O(*k*) memory.
+- **Merging** many sorted lists (such as sorted files) into one.
+
+## Tries
+
+A **trie** (from re*trie*val, usually said "try") stores strings by their characters: each node is a position in a word, and each edge a letter. All words with the same prefix share the path for that prefix. Finding whether a word or prefix exists takes O(*L*) steps for a string of length *L*, regardless of how many words are stored, and listing every word with a given prefix is natural: walk to the prefix's node, then collect everything below.
+
+```ts
+class Trie {
+  private children = new Map<string, Trie>();
+  private isWord = false;
+
+  add(word: string) {
+    let node: Trie = this;
+    for (const ch of word) {
+      if (!node.children.has(ch)) node.children.set(ch, new Trie());
+      node = node.children.get(ch)!;
+    }
+    node.isWord = true;
+  }
+
+  startingWith(prefix: string): string[] {
+    let node: Trie | undefined = this;
+    for (const ch of prefix) {
+      node = node.children.get(ch);
+      if (!node) return [];
+    }
+    const results: string[] = [];
+    const collect = (n: Trie, soFar: string) => {
+      if (n.isWord) results.push(soFar);
+      for (const [ch, child] of n.children) collect(child, soFar + ch);
+    };
+    collect(node, prefix);
+    return results;
+  }
+}
+
+const words = new Trie();
+for (const w of ["bread", "breadstick", "brioche", "bun", "bagel", "baguette"]) words.add(w);
+console.log(words.startingWith("br"));
+console.log(words.startingWith("bag"));
+console.log(words.startingWith("x"));
+```
+
+It prints `["bread", "breadstick", "brioche"]`, `["bagel", "baguette"]` and `[]`. Tries power autocomplete, spell checkers, routing tables in network equipment, and URL routers in web frameworks. Their cost is memory: many small nodes. Compressed variants (radix trees) merge chains of single-child nodes to save space.
+
+## Choosing a structure
+
+| You need… | Use | Key operations |
+|---|---|---|
+| look up by exact key | hash map | O(1) average |
+| keys in order, ranges, nearest key | balanced BST (`TreeMap`, `SortedDictionary`) | O(log *n*) |
+| an index on disk | B-tree / B+ tree (inside your database) | a few page reads |
+| repeatedly the smallest or most urgent | heap / priority queue | O(log *n*) push and pop, O(1) peek |
+| the top *k* of many | a heap of size *k* | O(*n* log *k*) |
+| everything with a given prefix | trie | O(length of prefix) to find |
+
+## Common mistakes
+
+- **A plain BST with sorted input**, which degenerates into a list. Use a balanced tree.
+- **Sorting everything to get the top 10**: O(*n* log *n*) and all in memory. Use a heap of size 10.
+- **A hash map when you need ranges or order**, then scanning it all.
+- **Assuming a priority queue iterates in priority order.** Iterating Java's `PriorityQueue` gives the heap's internal array order; only repeated polling gives sorted order.
+- **Recursive tree code on very deep trees**, which can overflow the stack; balanced trees avoid deep recursion, unbalanced ones may need an explicit stack.
+
+## Practice
+
+**1. (warm-up)** Insert 8, 3, 10, 1, 6, 14 into an empty BST in that order. What is the root, and what is the in-order traversal?
+
+<Solution>
+
+The root is **8** (the first key). In-order gives the keys sorted: **1, 3, 6, 8, 10, 14**.
+
+</Solution>
+
+**2. (warm-up)** What is the height of a BST built by inserting 1 to 1,000 in increasing order? Of a balanced tree of 1,000 keys?
+
+<Solution>
+
+The plain BST becomes a chain: height **1,000**. A balanced tree: about log₂ 1,000 ≈ **10** levels (a red-black tree may be up to about twice that, still O(log *n*)).
+
+</Solution>
+
+**3. (warm-up)** In an array-stored heap, what are the indices of the children and parent of the item at index 4?
+
+<Solution>
+
+Children: 2 × 4 + 1 = **9** and **10**. Parent: ⌊(4 − 1) ÷ 2⌋ = **1**.
+
+</Solution>
+
+**4. (standard)** Which structure fits each? (a) find all orders placed between two timestamps; (b) always process the job with the earliest deadline next; (c) suggest product names as a user types; (d) check whether an email address is already registered.
+
+<Solution>
+
+(a) A sorted map or balanced tree (or a database index on the timestamp). (b) A priority queue keyed by deadline. (c) A trie. (d) A hash set.
+
+</Solution>
+
+**5. (standard)** Find the 3 largest values in a stream of numbers using a min-heap of size 3. Write it in TypeScript using the `MinHeap` above, for [5, 1, 9, 3, 7, 6, 8].
+
+<Solution>
+
+```ts
+class MinHeap {
+  items: number[] = [];
+  get size() { return this.items.length; }
+  peek() { return this.items[0]; }
+  push(v: number) {
+    const a = this.items; a.push(v);
+    let i = a.length - 1;
+    while (i > 0) { const p = (i - 1) >> 1; if (a[p] <= a[i]) break; [a[p], a[i]] = [a[i], a[p]]; i = p; }
+  }
+  pop() {
+    const a = this.items; const top = a[0]; const last = a.pop()!;
+    if (a.length) {
+      a[0] = last; let i = 0;
+      while (true) {
+        const l = 2 * i + 1, r = l + 1; let s = i;
+        if (l < a.length && a[l] < a[s]) s = l;
+        if (r < a.length && a[r] < a[s]) s = r;
+        if (s === i) break; [a[s], a[i]] = [a[i], a[s]]; i = s;
+      }
+    }
+    return top;
+  }
+}
+
+function topK(values: number[], k: number): number[] {
+  const heap = new MinHeap();
+  for (const v of values) {
+    if (heap.size < k) heap.push(v);
+    else if (v > heap.peek()) { heap.pop(); heap.push(v); }
+  }
+  return [...heap.items].sort((a, b) => b - a);
+}
+
+console.log(topK([5, 1, 9, 3, 7, 6, 8], 3));
+```
+
+The heap always holds the k largest seen so far, with the smallest of them at the top, ready to be pushed out. It prints **[9, 8, 7]**. O(*n* log *k*) time, O(*k*) memory.
+
+</Solution>
+
+**6. (standard)** Why does a database use a B-tree instead of a binary search tree for an index on disk?
+
+<Solution>
+
+Each node visited on disk costs a page read, which is slow. A B-tree node holds hundreds of keys and has hundreds of children, filling one page, so the tree is only a few levels deep even for billions of rows: a lookup needs a handful of page reads instead of the ~30 a binary tree would need. Its sorted, linked leaves also make range scans efficient.
+
+</Solution>
+
+**7. (standard)** Using Java's `TreeMap`, write code that, given opening hours stored as a map from start time to label, finds the label in force at 13:00 (the last start time at or before it).
+
+<Solution>
+
+```java
+import java.util.TreeMap;
+
+public class Main {
+    public static void main(String[] args) {
+        TreeMap<Integer, String> hours = new TreeMap<>();
+        hours.put(800, "breakfast");
+        hours.put(1130, "lunch");
+        hours.put(1500, "afternoon tea");
+        System.out.println(hours.floorEntry(1300).getValue());
+    }
+}
+```
+
+`floorEntry(1300)` finds the greatest key at or below 1300, which is 1130, so it prints **lunch**. O(log *n*).
+
+</Solution>
+
+**8. (stretch)** Add a `count(prefix)` method to the `Trie` above that returns how many words start with the prefix in O(length of prefix) time, by storing a count in each node.
+
+<Solution>
+
+```ts
+class CountingTrie {
+  private children = new Map<string, CountingTrie>();
+  private passing = 0;   // how many added words go through this node
+
+  add(word: string) {
+    let node: CountingTrie = this;
+    node.passing++;
+    for (const ch of word) {
+      if (!node.children.has(ch)) node.children.set(ch, new CountingTrie());
+      node = node.children.get(ch)!;
+      node.passing++;
+    }
+  }
+
+  count(prefix: string): number {
+    let node: CountingTrie | undefined = this;
+    for (const ch of prefix) {
+      node = node.children.get(ch);
+      if (!node) return 0;
+    }
+    return node.passing;
+  }
+}
+
+const t = new CountingTrie();
+for (const w of ["bread", "breadstick", "brioche", "bun", "bagel", "baguette"]) t.add(w);
+console.log(t.count("b"), t.count("br"), t.count("bread"), t.count("x"));
+```
+
+Each node counts the words passing through it, updated during `add`, so counting only walks the prefix. It prints **6 3 2 0**. (This assumes each word is added once; adding the same word twice would count it twice.)
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **tree** has a **root**, **children**, **parents** and **leaves**; its **height** sets the cost of walking it.
+- A **binary search tree** keeps smaller keys left and larger right; **in-order traversal** is sorted. Plain BSTs degenerate on sorted input; **balanced** trees (AVL, **red-black**) keep O(log *n*) height and power sorted maps with range and nearest-key queries (`TreeMap`, `SortedDictionary`).
+- **B-trees** have many keys and children per node, a few levels deep, one disk page each: the structure behind database indexes.
+- A **binary heap**, stored in an array, gives a **priority queue**: O(log *n*) push and pop, O(1) peek. Use it for scheduling, Dijkstra, top-*k* and merging.
+- A **trie** stores strings by character, answering prefix queries in time proportional to the prefix length: autocomplete and routing.
+- Choose by the question: exact key, order and ranges, smallest next, or prefix.
+
+## Go deeper
+
+- [Open Data Structures](https://opendatastructures.org/), Pat Morin. Free chapters on binary search trees, balanced trees, heaps and B-trees.
+- [TreeMap (Java SE 25)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/TreeMap.html), Oracle. A red-black-tree map and its navigation methods.
+- [PriorityQueue (.NET)](https://learn.microsoft.com/en-us/dotnet/api/system.collections.generic.priorityqueue-2), Microsoft. .NET's priority queue.
+- [VisuAlgo: binary search tree and AVL tree](https://visualgo.net/en/bst), VisuAlgo. Animated insertions, deletions and rotations.

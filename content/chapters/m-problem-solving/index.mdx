@@ -1,0 +1,378 @@
+---
+title: "Solving problems you have not seen before"
+summary: "A method for unfamiliar problems, the common patterns, and preparing for coding interviews."
+prerequisites: [m-recursion-dp]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will have a dependable method for problems you have never seen, a catalogue of signals that point to the right technique from this part of the course, and a plan for coding interviews. The difference between engineers who freeze at an unfamiliar problem and those who make steady progress is rarely talent; it is having a method and knowing the patterns.
+
+## A method that works
+
+When a problem is new, follow the same steps every time. They feel slow; they are faster than staring.
+
+1. **Understand the problem.** Restate it in your own words. What exactly is the input, and the output? How big can the input be? Can it be empty, contain duplicates, negative numbers, very long strings? Ask, or decide and write down the assumption.
+2. **Work small examples by hand**, including an awkward one. Solving three tiny cases on paper often reveals the method.
+3. **Find a brute-force solution first.** "Try every pair", "try every subset", "simulate it directly". It may be slow, but it is correct, it proves you understand the problem, and it gives you something to test a faster version against.
+4. **Find the bottleneck and the pattern.** What is the brute force repeating? Is there a structure (sorted order, a contiguous range, overlapping subproblems, a graph) that the catalogue below points to?
+5. **Write the better solution**, clearly, with good names.
+6. **Test it**: walk through your examples, then the edge cases (empty input, one element, all equal, the largest size). Compare it with the brute force on random inputs if you can.
+7. **State its complexity**, in time and space.
+
+## Signals and the patterns they suggest
+
+| If the problem… | Think about | Chapter |
+|---|---|---|
+| looks up "have I seen this?", counts, groups, or pairs values | a hash map or set | <Ref to="m-arrays-hashing" /> |
+| involves a sorted array, or would be easy if sorted | sorting, binary search, two pointers | <Ref to="m-sorting-searching" /> |
+| asks about contiguous runs (subarrays, substrings, time windows) | sliding window, prefix sums | <Ref to="m-sorting-searching" /> |
+| asks for "the smallest value that works" with a yes/no that flips once | binary search on the answer | <Ref to="m-sorting-searching" /> |
+| needs the next smallest, largest or most urgent repeatedly; top *k* | a heap | <Ref to="m-trees-heaps" /> |
+| involves order, ranges or "nearest" among changing data | a balanced tree (sorted map) | <Ref to="m-trees-heaps" /> |
+| involves prefixes of strings | a trie | <Ref to="m-trees-heaps" /> |
+| involves matching brackets, undo, or "the most recent unresolved" | a stack | <Ref to="m-lists-stacks-queues" /> |
+| involves connections, dependencies, routes, networks or grids | a graph: BFS, DFS, Dijkstra, topological sort, union-find | <Ref to="m-graphs" /> |
+| asks for all arrangements or any valid combination, small inputs | backtracking | <Ref to="m-recursion-dp" /> |
+| asks for the best or the number of ways, and choices build on smaller choices | dynamic programming | <Ref to="m-recursion-dp" /> |
+| has an obvious "best next step" you can justify | greedy, then test it | <Ref to="m-recursion-dp" /> |
+
+Input size is a strong hint too, because it tells you what complexity is acceptable (at roughly 10⁸ simple steps a second):
+
+| *n* up to about | Acceptable complexity |
+|---|---|
+| 10 to 20 | O(2ⁿ), O(*n*!) backtracking |
+| a few hundred to a few thousand | O(*n*²), O(*n*³) for small *n* |
+| 10⁵ to 10⁶ | O(*n* log *n*) or O(*n*) |
+| 10⁹ and above | O(log *n*), O(1), or a formula |
+
+## A worked example
+
+**Problem.** A bakery records the opening and closing times of its ovens during a day as intervals, for example [[9, 11], [10, 12], [13, 14], [14, 16], [18, 19]]. Report the periods when *at least one* oven was on, merging overlapping or touching intervals.
+
+**1. Understand.** Input: a list of [start, end] pairs, not necessarily sorted. Output: merged pairs, sorted. Assume end ≥ start. Do touching intervals ([13, 14] and [14, 16]) merge? Decide yes. Empty input gives empty output.
+
+**2. Examples.** [[9, 11], [10, 12]] → [[9, 12]]. [[13, 14], [14, 16]] → [[13, 16]]. [[1, 10], [2, 3]] → [[1, 10]]: a contained interval must not *shorten* the merged one, an easy case to get wrong.
+
+**3. Brute force.** Repeatedly scan all pairs and merge any two that overlap, until nothing changes: O(*n*²) or worse.
+
+**4. Pattern.** If the intervals were sorted by start time, each one could only overlap the interval just before it in the merged result. "Would be easy if sorted" points to sorting.
+
+**5. Write it.**
+
+```ts
+function mergeIntervals(intervals: [number, number][]): [number, number][] {
+  const sorted = [...intervals].sort((a, b) => a[0] - b[0]);
+  const merged: [number, number][] = [];
+  for (const [start, end] of sorted) {
+    const last = merged[merged.length - 1];
+    if (last && start <= last[1]) {
+      last[1] = Math.max(last[1], end);
+    } else {
+      merged.push([start, end]);
+    }
+  }
+  return merged;
+}
+
+console.log(mergeIntervals([[9, 11], [10, 12], [13, 14], [14, 16], [18, 19]]));
+console.log(mergeIntervals([[1, 10], [2, 3]]));
+console.log(mergeIntervals([]));
+```
+
+**6. Test.** It prints `[[9, 12], [13, 16], [18, 19]]`, `[[1, 10]]` and `[]`: the example, the contained interval (handled by `Math.max`), and empty input. It copies the input before sorting, so the caller's array is unchanged.
+
+**7. Complexity.** O(*n* log *n*) for the sort, then one O(*n*) pass; O(*n*) space for the result.
+
+## When you are stuck
+
+- **Simplify the problem**: solve it for sorted input, for small numbers, for one dimension, or without the hardest constraint; then add things back.
+- **Change the representation**: could it be a graph? Would counting help? What if you processed it backwards, or from both ends?
+- **Precompute**: would prefix sums, a lookup table, or sorting make each step cheap?
+- **Look for the invariant** (<Ref to="m-discrete-maths" />): what stays true as you move through the input?
+- **Solve a slightly different known problem** and adapt it.
+- **Take a break.** Genuinely: many people find the answer after stepping away.
+
+## Coding interviews
+
+Many companies still use algorithm problems in interviews. Whatever you think of that, it is a learnable skill, and the method above is most of it. What interviewers usually assess, beyond a correct answer:
+
+- **Communication**: thinking aloud, asking clarifying questions, explaining trade-offs. A silent correct answer often scores worse than a clearly reasoned, slightly imperfect one.
+- **Problem solving**: starting from a brute force, finding the improvement, recovering from wrong turns.
+- **Code quality**: clear names, small functions, handling edge cases.
+- **Testing**: walking through your code with an example and checking edge cases without being asked.
+- **Complexity**: stating time and space, and knowing when a better bound is possible.
+
+A practical preparation plan:
+
+1. **Learn the patterns, not hundreds of answers.** Work through problems grouped by pattern (the table above), a few of each, until you can recognise them.
+2. **Practise under realistic conditions**: a time limit, no running the code until you believe it is right, talking aloud (to a friend, or recording yourself).
+3. **Review every problem**: if you needed the answer, write down which signal you missed, and redo the problem a few days later without looking.
+4. **Spread it out.** Thirty minutes a day for two months beats two weekends of cramming (this site's review queue uses spaced repetition for exactly this reason).
+5. **Use AI tools as a tutor**, asking for hints rather than solutions (<Ref to="cl-learning-with-claude" />).
+
+Many interviews also include **system design** (later in this course) and conversations about your past work and how you collaborate; prepare for those too.
+
+## Practice
+
+These mix every chapter of this part. For each, follow the method: examples, brute force, pattern, code, tests, complexity. Try before opening the solution.
+
+**1. (standard)** Given a list of product ids, return the ids that appear more than once, in the order they first repeat.
+
+<Solution>
+
+```ts
+function repeatedIds(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const reported = new Set<string>();
+  const result: string[] = [];
+  for (const id of ids) {
+    if (seen.has(id) && !reported.has(id)) {
+      result.push(id);
+      reported.add(id);
+    }
+    seen.add(id);
+  }
+  return result;
+}
+
+console.log(repeatedIds(["a7", "b2", "a7", "c9", "b2", "a7"]));
+```
+
+Signal: "have I seen this?" → sets. O(*n*) time and space. It prints **["a7", "b2"]**.
+
+</Solution>
+
+**2. (standard)** Check whether a string is a palindrome (reads the same backwards), ignoring case and anything that is not a letter or digit. "A man, a plan, a canal: Panama" is one.
+
+<Solution>
+
+```ts
+function isPalindrome(s: string): boolean {
+  const clean = s.toLowerCase().replace(/[^a-z0-9]/g, "");
+  let i = 0, j = clean.length - 1;
+  while (i < j) {
+    if (clean[i++] !== clean[j--]) return false;
+  }
+  return true;
+}
+
+console.log(isPalindrome("A man, a plan, a canal: Panama"), isPalindrome("sourdough"));
+```
+
+Two pointers from both ends. O(*n*). It prints **true false**.
+
+</Solution>
+
+**3. (standard)** Given daily prices, find the best profit from buying on one day and selling on a later day (0 if no profit is possible).
+
+<Solution>
+
+```ts
+function bestProfit(prices: number[]): number {
+  let lowest = Infinity;
+  let best = 0;
+  for (const p of prices) {
+    lowest = Math.min(lowest, p);
+    best = Math.max(best, p - lowest);
+  }
+  return best;
+}
+
+console.log(bestProfit([7, 1, 5, 3, 6, 4]), bestProfit([7, 6, 4, 3]));
+```
+
+Brute force tries every pair, O(*n*²). The invariant: the best sale on each day uses the lowest price seen before it. One pass, O(*n*) time, O(1) space. It prints **5 0** (buy at 1, sell at 6).
+
+</Solution>
+
+**4. (standard)** Return the *k* most frequent words in a list, most frequent first.
+
+<Solution>
+
+```ts
+function topWords(words: string[], k: number): string[] {
+  const counts = new Map<string, number>();
+  for (const w of words) counts.set(w, (counts.get(w) ?? 0) + 1);
+  return [...counts]
+    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, k)
+    .map(([w]) => w);
+}
+
+console.log(topWords(["rye", "bun", "rye", "loaf", "bun", "rye", "tart"], 2));
+```
+
+Count with a map, then sort the distinct words by count (ties alphabetical): O(*n* + *d* log *d*) for *d* distinct words. A heap of size *k* would give O(*n* + *d* log *k*), which matters when *d* is huge. It prints **["rye", "bun"]**.
+
+</Solution>
+
+**5. (standard)** In a grid of '1' (land) and '0' (water), count the islands (groups of land connected up, down, left or right).
+
+<Solution>
+
+```ts
+function countIslands(grid: string[]): number {
+  const rows = grid.length, cols = grid[0]?.length ?? 0;
+  const seen = new Set<string>();
+  let islands = 0;
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (grid[r][c] !== "1" || seen.has(`${r},${c}`)) continue;
+      islands++;
+      const stack = [[r, c]];
+      seen.add(`${r},${c}`);
+      while (stack.length) {
+        const [y, x] = stack.pop()!;
+        for (const [dy, dx] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+          const ny = y + dy, nx = x + dx;
+          if (ny >= 0 && ny < rows && nx >= 0 && nx < cols && grid[ny][nx] === "1" && !seen.has(`${ny},${nx}`)) {
+            seen.add(`${ny},${nx}`);
+            stack.push([ny, nx]);
+          }
+        }
+      }
+    }
+  }
+  return islands;
+}
+
+console.log(countIslands(["11000", "11000", "00100", "00011"]));
+```
+
+Signal: connections in a grid → a graph; each unvisited land cell starts a search that marks its whole island. O(rows × cols). It prints **3**.
+
+</Solution>
+
+**6. (standard)** Given meeting times that may overlap, can one person attend them all?
+
+<Solution>
+
+```ts
+function canAttendAll(meetings: [number, number][]): boolean {
+  const sorted = [...meetings].sort((a, b) => a[0] - b[0]);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i][0] < sorted[i - 1][1]) return false;
+  }
+  return true;
+}
+
+console.log(canAttendAll([[9, 10], [10, 11], [13, 14]]), canAttendAll([[9, 11], [10, 12]]));
+```
+
+Sort by start; any meeting starting before the previous one ends is a clash. O(*n* log *n*). It prints **true false**.
+
+</Solution>
+
+**7. (standard)** Find the length of the shortest contiguous run of a list of positive numbers whose sum is at least a target (0 if none).
+
+<Solution>
+
+```ts
+function shortestRun(values: number[], target: number): number {
+  let best = Infinity, sum = 0, start = 0;
+  for (let end = 0; end < values.length; end++) {
+    sum += values[end];
+    while (sum >= target) {
+      best = Math.min(best, end - start + 1);
+      sum -= values[start++];
+    }
+  }
+  return best === Infinity ? 0 : best;
+}
+
+console.log(shortestRun([2, 3, 1, 2, 4, 3], 7), shortestRun([1, 1, 1], 10));
+```
+
+Signal: contiguous run of positive numbers → a sliding window that grows to reach the target and shrinks while it still holds. Each element enters and leaves once: O(*n*). It prints **2 0** ([4, 3]).
+
+</Solution>
+
+**8. (standard)** Given a list of tasks with dependencies, return an order to run them, or report that it is impossible.
+
+<Solution>
+
+Signal: dependencies → a topological sort. Use Kahn's algorithm from <Ref to="m-graphs" />: count each task's unmet dependencies, repeatedly run a task with none, and decrease the counts of the tasks it unlocks. If tasks remain that never reach zero, there is a cycle, and no order exists. O(*V* + *E*).
+
+</Solution>
+
+**9. (stretch)** How many ways can you make 12p from coins of 1, 2 and 5 pence (order does not matter)?
+
+<Solution>
+
+```ts
+function waysToMake(amount: number, coins: number[]): number {
+  const ways = new Array(amount + 1).fill(0);
+  ways[0] = 1;
+  for (const c of coins) {
+    for (let a = c; a <= amount; a++) ways[a] += ways[a - c];
+  }
+  return ways[amount];
+}
+
+console.log(waysToMake(12, [1, 2, 5]));
+```
+
+Signal: "the number of ways" with choices building on smaller amounts → DP. Looping over coins in the outer loop counts combinations rather than orderings. It prints **13**.
+
+</Solution>
+
+**10. (stretch)** A log has (time, user) login events sorted by time. Find the first time when 3 distinct users logged in within any 10-minute window (times in minutes).
+
+<Solution>
+
+```ts
+function firstBusyMoment(events: [number, string][], users: number, window: number): number | null {
+  const inWindow = new Map<string, number>();
+  let start = 0;
+  for (let end = 0; end < events.length; end++) {
+    const [time, user] = events[end];
+    inWindow.set(user, (inWindow.get(user) ?? 0) + 1);
+    while (time - events[start][0] >= window) {
+      const old = events[start++][1];
+      const n = inWindow.get(old)! - 1;
+      if (n === 0) inWindow.delete(old); else inWindow.set(old, n);
+    }
+    if (inWindow.size >= users) return time;
+  }
+  return null;
+}
+
+console.log(firstBusyMoment([[0, "ama"], [3, "ama"], [8, "kofi"], [15, "kofi"], [16, "priya"], [17, "sam"]], 3, 10));
+```
+
+A sliding window over time, with a map counting each user's events inside it, so the number of distinct users is the map's size. At time 16 the window holds kofi and priya; at 17 it holds kofi (15), priya and sam: three users. It prints **17**. O(*n*).
+
+</Solution>
+
+**11. (stretch)** Explain how you would decide between a hash map and a sorted map for storing bookings keyed by start time.
+
+<Solution>
+
+Ask what operations are needed. If you only fetch a booking by its exact start time, a hash map is simplest and O(1). If you need "the next booking after 11:00", "all bookings this afternoon" or "is there anything overlapping 14:00–15:00", you need order, so use a sorted map (balanced tree), O(log *n*) per operation, or a database index on the start time.
+
+</Solution>
+
+**12. (stretch)** A colleague's solution to "find any two numbers that sum to a target" sorts the array and uses two pointers. Another uses a hash map. Compare them.
+
+<Solution>
+
+Hash map: O(*n*) time, O(*n*) extra space, works on unsorted input, and can return the original indices. Sort and two pointers: O(*n* log *n*) time, O(1) extra space if sorting in place (but it reorders the input, losing original positions unless you sort a copy of index–value pairs). Choose by what matters: speed and indices favour the map; memory favours sorting; if the data is already sorted, two pointers is O(*n*) and O(1) space, best of both.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Use a method: understand and ask, small examples, **brute force first**, find the bottleneck and pattern, write it clearly, test edge cases, state complexity.
+- Learn the **signals**: lookups and counts → hash maps; sorted or sortable → binary search and two pointers; contiguous runs → windows and prefix sums; repeated minimum → heaps; connections → graphs; best or count with building choices → DP.
+- **Input size** tells you the acceptable complexity.
+- When stuck, simplify, change representation, precompute, find the invariant, or step away.
+- Interviews reward communication, testing and complexity analysis as well as correct code; prepare by pattern, practise realistically, and space your practice.
+
+## Go deeper
+
+- [NeetCode roadmap](https://neetcode.io/roadmap), NeetCode. Practice problems grouped by the patterns in this chapter, with explanations.
+- [Introduction to Algorithms (6.006, Spring 2020)](https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/), MIT OpenCourseWare. Problem sets with solutions covering this whole part.
+- [Algorithms](https://jeffe.cs.illinois.edu/teaching/algorithms/), Jeff Erickson. Exercises at every level at the end of each chapter.

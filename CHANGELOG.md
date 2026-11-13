@@ -4,6 +4,23 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 2 (Data structures and algorithms)
+
+Added
+- Eight chapters: complexity and Big O; arrays, strings and hash tables; linked lists, stacks, queues and deques; trees, heaps and tries; graphs; sorting, searching and core techniques; recursion, backtracking and dynamic programming; and solving problems you have not seen before. About 24,100 words, 80 practice problems, 38 quiz questions, 29 checked resources.
+- Every algorithm in the text runs: 65 TypeScript examples (runnable on the page) and 7 Java and C# examples, all with their output checked.
+- Platform facts checked against the source rather than memory: the JDK's HashMap (16 buckets, 0.75 load factor, tree bins at 8 entries), ArrayList's growth by half, Java's TimSort and dual-pivot quicksort, TreeMap as a red-black tree, PriorityQueue as a binary heap; .NET's doubling List and its documented unstable sort; V8's TimSort.
+- A new test (tests/mdx-braces.test.ts) fails when a chapter has { } in its prose outside code, which MDX would run as JavaScript.
+- About 75 glossary terms. "Root", "Children", "PATH" and "Chaining" now give the meaning for each course that uses them.
+
+Fixed (found by running the examples)
+- Part 1's discrete maths table showed the sets {1, 2, 3} and so on as "3": MDX evaluated the braces as JavaScript. Caught while building part 2; now in code formatting, and guarded by the new test.
+- Three of my own worked answers were wrong until the code was run: the oven-capacity binary search (15, not 20), the knapsack example (57 from butter, sugar and yeast, not 67), and the 80th Fibonacci number, which JavaScript numbers round (the chapter now uses this as a lesson about 2^53).
+- A word-ladder answer listed a different, equally short ladder from the one the code finds; the text now matches the code.
+
+Not verified
+- No person has reviewed these chapters. Problem counts are below the standard's 30 to 50 for foundational chapters (8 to 13 each, plus 12 in the problem-solving chapter); more practice sets would help.
+
 ### 2026-11-13: Software Engineering Mastery, part 1 (How the machine really works)
 
 Added

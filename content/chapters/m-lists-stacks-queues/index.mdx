@@ -1,0 +1,379 @@
+---
+title: "Linked lists, stacks, queues and deques"
+summary: "Pointer-based structures and the problems they solve."
+prerequisites: [m-arrays-hashing]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will be able to build and use the structures that hand out work in a fixed order: **stacks** (last in, first out), **queues** (first in, first out) and **deques** (both ends), and the **linked list** that can underlie them. You will know when each is the right tool, why the linked list is less useful in practice than textbooks suggest, and how a fixed-size **ring buffer** powers logs, metrics and network code.
+
+## Linked lists
+
+A **linked list** stores each element in its own **node**, together with a reference (pointer) to the next node. The list itself just remembers the first node, the **head**. A **doubly linked list** also gives each node a reference to the previous one, and remembers the last node, the **tail**.
+
+```ts
+class ListNode<T> {
+  constructor(public value: T, public next: ListNode<T> | null = null) {}
+}
+
+function fromArray<T>(values: T[]): ListNode<T> | null {
+  let head: ListNode<T> | null = null;
+  for (let i = values.length - 1; i >= 0; i--) head = new ListNode(values[i], head);
+  return head;
+}
+
+function toArray<T>(head: ListNode<T> | null): T[] {
+  const out: T[] = [];
+  for (let node = head; node; node = node.next) out.push(node.value);
+  return out;
+}
+
+function reverse<T>(head: ListNode<T> | null): ListNode<T> | null {
+  let previous: ListNode<T> | null = null;
+  let current = head;
+  while (current) {
+    const next = current.next;
+    current.next = previous;
+    previous = current;
+    current = next;
+  }
+  return previous;
+}
+
+const list = fromArray(["rye", "bun", "loaf", "tart"]);
+console.log(toArray(list));
+console.log(toArray(reverse(list)));
+```
+
+It prints `["rye", "bun", "loaf", "tart"]` and then `["tart", "loaf", "bun", "rye"]`. Reversing in place is a classic exercise: walk the list once, turning each node's `next` round to point backwards, keeping track of the previous and next nodes so nothing is lost. O(*n*) time, O(1) extra space.
+
+### Costs compared with arrays
+
+| Operation | Array | Linked list |
+|---|---|---|
+| read element *i* | O(1) | O(*n*): follow *i* links |
+| insert or remove at the front | O(*n*) | O(1) |
+| insert or remove next to a node you already hold | O(*n*) | O(1) |
+| append at the end | O(1) amortised | O(1) with a tail reference |
+| memory per element | the element | the element plus one or two references and an object header |
+| cache behaviour | excellent: sequential | poor: nodes scattered in memory |
+
+On paper, linked lists win wherever you insert or remove in the middle. In practice they lose more often than the table suggests, because following links is **pointer chasing**: each step can be a cache miss (<Ref to="m-machine" />), and the extra memory per node hurts too. For most sequences, a dynamic array is faster even when it has to shift elements, until the sequence is large and the insertions frequent. Java's own documentation recommends `ArrayDeque` over `LinkedList` for stacks and queues.
+
+Where linked structures genuinely shine:
+
+- when you hold a reference to a node and must remove it in O(1), as in an **LRU cache**, which keeps entries in a doubly linked list in order of use and a hash map from key to node, so both lookup and "move to most recent" are O(1) (<Ref to="m-memory-gc" /> built one with Java's `LinkedHashMap`, which works exactly this way);
+- in concurrent and persistent data structures, where nodes can be shared or swapped atomically;
+- inside other structures: hash-table chains, adjacency lists in graphs, free lists in memory allocators.
+
+## Stacks
+
+A **stack** is a collection where you add and remove only at one end, the **top**: the last item pushed is the first popped (**LIFO**, last in, first out). Two operations, **push** and **pop**, both O(1). A dynamic array is the natural implementation: push and pop at the end.
+
+You use stacks constantly, often without noticing:
+
+- the **call stack** of every program: each call pushes a frame, each return pops one (<Ref to="m-memory-gc" />);
+- **undo**: each action is pushed; undo pops the most recent;
+- **matching brackets** in code, HTML or JSON;
+- **depth-first search** (<Ref to="m-graphs" />), and turning recursion into a loop;
+- evaluating expressions, and parsing.
+
+Matching brackets is the textbook example:
+
+```ts
+function balanced(text: string): boolean {
+  const pairs: Record<string, string> = { ")": "(", "]": "[", "}": "{" };
+  const stack: string[] = [];
+  for (const ch of text) {
+    if (ch === "(" || ch === "[" || ch === "{") stack.push(ch);
+    else if (ch in pairs) {
+      if (stack.pop() !== pairs[ch]) return false;
+    }
+  }
+  return stack.length === 0;
+}
+
+console.log(balanced("{ items: [1, (2 + 3)] }"));
+console.log(balanced("{ items: [1, (2 + 3]) }"));
+console.log(balanced("(("));
+```
+
+It prints `true`, `false` and `false`. Every opening bracket is pushed; every closing bracket must match the most recent unmatched opening one, which is on top. Anything left on the stack at the end was never closed.
+
+## Queues
+
+A **queue** hands out items in the order they arrived: **FIFO**, first in, first out. You **enqueue** at the back and **dequeue** from the front. Queues appear wherever work must wait its turn:
+
+- **job queues**: emails to send, images to resize, orders to process (and, across machines, message queues such as RabbitMQ and Kafka, later in this course);
+- **breadth-first search** (<Ref to="m-graphs" />);
+- **buffers** between a fast producer and a slower consumer;
+- request queues in servers, and the operating system's scheduler queues (<Ref to="m-operating-systems" />).
+
+The trap: using a plain array and removing from the front with `shift()` or `remove(0)`, which is O(*n*) each time and makes processing quadratic (<Ref to="m-complexity" />). Use your language's real queue: `ArrayDeque` in Java, `Queue<T>` in C#, `collections.deque` in Python. JavaScript has no built-in queue; for large queues, keep a head index into an array, or use a ring buffer.
+
+```java
+import java.util.ArrayDeque;
+import java.util.Deque;
+
+public class Main {
+    public static void main(String[] args) {
+        Deque<String> queue = new ArrayDeque<>();
+        queue.addLast("order 1");
+        queue.addLast("order 2");
+        queue.addLast("order 3");
+        System.out.println("next: " + queue.pollFirst());
+
+        Deque<String> stack = new ArrayDeque<>();
+        stack.push("open file");
+        stack.push("type text");
+        stack.push("bold");
+        System.out.println("undo: " + stack.pop());
+
+        System.out.println(queue + " " + stack);
+    }
+}
+```
+
+It prints `next: order 1`, `undo: bold`, and `[order 2, order 3] [type text, open file]`. One class serves as both a queue and a stack, because it is a **deque**.
+
+## Deques
+
+A **deque** (double-ended queue, pronounced "deck") supports adding and removing at both ends in O(1). It can act as a stack or a queue, and some algorithms need both ends at once, such as the "sliding window maximum" problem, where a deque keeps the candidates for the largest value in a moving window (<Ref to="m-sorting-searching" />).
+
+## Ring buffers
+
+Arrays make cheap stacks, but a queue built on a plain array has to move items when the front advances. A **ring buffer** (or circular buffer) fixes that: a fixed-size array with two indices, where reads and writes wrap round to the start with `%` (<Ref to="m-discrete-maths" />). Both operations are O(1), no memory is allocated after creation, and the memory use is fixed.
+
+```ts
+class RingBuffer<T> {
+  private items: (T | undefined)[];
+  private head = 0;   // next item to read
+  private count = 0;
+
+  constructor(private capacity: number) {
+    this.items = new Array(capacity);
+  }
+
+  push(item: T): void {
+    const tail = (this.head + this.count) % this.capacity;
+    this.items[tail] = item;
+    if (this.count < this.capacity) this.count++;
+    else this.head = (this.head + 1) % this.capacity;   // full: overwrite the oldest
+  }
+
+  shift(): T | undefined {
+    if (this.count === 0) return undefined;
+    const item = this.items[this.head];
+    this.items[this.head] = undefined;
+    this.head = (this.head + 1) % this.capacity;
+    this.count--;
+    return item;
+  }
+
+  toArray(): T[] {
+    return Array.from({ length: this.count }, (_, i) => this.items[(this.head + i) % this.capacity] as T);
+  }
+}
+
+const recent = new RingBuffer<string>(3);
+for (const event of ["login", "view", "add to basket", "pay", "logout"]) recent.push(event);
+console.log(recent.toArray());
+console.log(recent.shift(), recent.toArray());
+```
+
+It prints `["add to basket", "pay", "logout"]`, then `add to basket ["pay", "logout"]`. This buffer keeps only the most recent three events, overwriting the oldest when full: exactly what you want for "the last 1,000 log lines" or "requests in the last minute". Other ring buffers refuse new items when full instead, which applies **back-pressure** to the producer (a theme in the messaging chapters).
+
+## Choosing
+
+| You need… | Use |
+|---|---|
+| the most recent item first | a stack: a dynamic array, or `ArrayDeque` |
+| items in arrival order | a queue: `ArrayDeque`, `Queue<T>`, `deque`, or a ring buffer |
+| both ends | a deque |
+| a bounded "last N items" | a ring buffer |
+| O(1) removal of a node you hold, plus lookup | a doubly linked list with a hash map (an LRU cache) |
+| random access by position | an array |
+
+## Common mistakes
+
+- **A queue built on an array with `shift()` or `remove(0)`**: O(*n*) per dequeue.
+- **Java's `LinkedList`** where `ArrayDeque` would be faster.
+- **Losing the rest of a linked list** while re-pointing nodes: keep a reference to `next` before changing it.
+- **Forgetting the empty case**: popping or dequeuing from an empty structure.
+- **Unbounded queues** that grow until memory runs out when consumers fall behind. Bound them, and decide what happens when full.
+- **Deep recursion** where an explicit stack would avoid a stack overflow.
+
+## Practice
+
+**1. (warm-up)** Push 1, 2, 3 onto a stack, then pop twice. What comes out? Do the same with a queue.
+
+<Solution>
+
+Stack: **3** then **2** (last in, first out). Queue: **1** then **2** (first in, first out).
+
+</Solution>
+
+**2. (warm-up)** What is the time cost of reading the 1,000th element of a linked list? Of an array?
+
+<Solution>
+
+Linked list: O(*n*), following 999 links from the head. Array: O(1).
+
+</Solution>
+
+**3. (warm-up)** Which structure suits each? (a) browser back button; (b) printing documents in the order they were sent; (c) keeping the last 500 temperature readings.
+
+<Solution>
+
+(a) A stack: back goes to the most recent page. (b) A queue. (c) A ring buffer of size 500.
+
+</Solution>
+
+**4. (standard)** Write a function that returns the middle node's value of a linked list in one pass, without knowing its length. (Hint: two pointers moving at different speeds.)
+
+<Solution>
+
+```ts
+class ListNode<T> {
+  constructor(public value: T, public next: ListNode<T> | null = null) {}
+}
+
+function middle<T>(head: ListNode<T>): T {
+  let slow: ListNode<T> = head;
+  let fast: ListNode<T> | null = head;
+  while (fast && fast.next) {
+    slow = slow.next!;
+    fast = fast.next.next;
+  }
+  return slow.value;
+}
+
+const five = new ListNode(1, new ListNode(2, new ListNode(3, new ListNode(4, new ListNode(5)))));
+console.log(middle(five));
+```
+
+The fast pointer moves two nodes for each one the slow pointer moves, so when fast reaches the end, slow is halfway. It prints **3**. (For an even length it returns the second of the two middle nodes.)
+
+</Solution>
+
+**5. (standard)** Use a stack to evaluate a postfix expression such as "3 4 + 2 *" (meaning (3 + 4) × 2).
+
+<Solution>
+
+```ts
+function evalPostfix(expression: string): number {
+  const stack: number[] = [];
+  for (const token of expression.split(" ")) {
+    if (["+", "-", "*", "/"].includes(token)) {
+      const b = stack.pop()!;
+      const a = stack.pop()!;
+      stack.push(token === "+" ? a + b : token === "-" ? a - b : token === "*" ? a * b : a / b);
+    } else {
+      stack.push(Number(token));
+    }
+  }
+  return stack.pop()!;
+}
+
+console.log(evalPostfix("3 4 + 2 *"), evalPostfix("10 2 8 * + 3 -"));
+```
+
+Numbers are pushed; each operator pops two, applies itself, and pushes the result. It prints **14 23** (10 + 2 × 8 − 3 = 23).
+
+</Solution>
+
+**6. (standard)** A worker processes 100,000 jobs from a JavaScript array with `jobs.shift()`. Why is it slow, and what are two fixes?
+
+<Solution>
+
+Each `shift()` moves every remaining element, so the total work is about 100,000²/2 = 5 × 10⁹ moves. Fixes: keep an index of the next job and read `jobs[i]` without removing; or use a queue structure such as a ring buffer or a deque library. (Large production queues usually live outside the process anyway, in a message queue.)
+
+</Solution>
+
+**7. (standard)** Design an LRU cache with O(1) `get` and `put`. Which two structures, and what does each do?
+
+<Solution>
+
+A hash map from key to node, for O(1) lookup; and a doubly linked list of nodes in order of use, for O(1) reordering and eviction. On `get`, find the node in the map and move it to the front of the list. On `put`, add or update the node and move it to the front; if the cache is over capacity, remove the node at the back of the list and its map entry.
+
+</Solution>
+
+**8. (standard)** Check whether a linked list has a cycle (some node's `next` points back to an earlier node) using O(1) extra space.
+
+<Solution>
+
+```ts
+class ListNode<T> {
+  constructor(public value: T, public next: ListNode<T> | null = null) {}
+}
+
+function hasCycle<T>(head: ListNode<T> | null): boolean {
+  let slow = head;
+  let fast = head;
+  while (fast && fast.next) {
+    slow = slow!.next;
+    fast = fast.next.next;
+    if (slow === fast) return true;
+  }
+  return false;
+}
+
+const a = new ListNode("a", new ListNode("b", new ListNode("c")));
+console.log(hasCycle(a));
+a.next!.next!.next = a.next;   // c points back to b
+console.log(hasCycle(a));
+```
+
+Two pointers, one moving twice as fast: if there is a cycle, the fast one eventually laps the slow one and they meet; if not, the fast one reaches the end. It prints **false**, then **true**. (A set of visited nodes also works, but uses O(*n*) space.)
+
+</Solution>
+
+**9. (stretch)** Implement a queue using two stacks, with O(1) amortised enqueue and dequeue.
+
+<Solution>
+
+```ts
+class TwoStackQueue<T> {
+  private inbox: T[] = [];
+  private outbox: T[] = [];
+
+  enqueue(item: T) {
+    this.inbox.push(item);
+  }
+
+  dequeue(): T | undefined {
+    if (this.outbox.length === 0) {
+      while (this.inbox.length > 0) this.outbox.push(this.inbox.pop()!);
+    }
+    return this.outbox.pop();
+  }
+}
+
+const q = new TwoStackQueue<number>();
+q.enqueue(1); q.enqueue(2); q.enqueue(3);
+console.log(q.dequeue(), q.dequeue());
+q.enqueue(4);
+console.log(q.dequeue(), q.dequeue());
+```
+
+New items go on the inbox stack. When the outbox is empty, the inbox is poured into it, which reverses the order so the oldest is on top. Each item is moved at most once, so the cost is O(1) amortised. It prints **1 2**, then **3 4**.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **linked list** stores elements in **nodes** linked by references: O(1) insertion and removal next to a node you hold, but O(*n*) access by position and poor cache behaviour. Arrays usually win; use linked lists where you hold nodes (LRU caches) or inside other structures.
+- A **stack** is LIFO (**push**, **pop**): call stacks, undo, bracket matching, depth-first search.
+- A **queue** is FIFO (**enqueue**, **dequeue**): job queues, breadth-first search, buffers. Never dequeue with `shift()` or `remove(0)` in a loop.
+- A **deque** works at both ends; Java's `ArrayDeque` is a good stack and queue.
+- A **ring buffer** is a fixed-size circular array: O(1), no allocation, perfect for "last N" and bounded queues.
+- Two-pointer tricks (fast and slow) find middles and cycles in O(1) space.
+
+## Go deeper
+
+- [Open Data Structures](https://opendatastructures.org/), Pat Morin. Free chapters on array-based and linked lists, stacks, queues and deques, with implementations.
+- [ArrayDeque (Java SE 25)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/ArrayDeque.html), Oracle. The recommended stack and queue in Java.
+- [VisuAlgo: linked list, stack, queue, deque](https://visualgo.net/en/list), VisuAlgo. Animations of each operation.

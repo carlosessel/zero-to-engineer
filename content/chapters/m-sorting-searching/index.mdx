@@ -1,0 +1,370 @@
+---
+title: "Sorting, searching and core techniques"
+summary: "The main sorts, binary search, two pointers, sliding windows, prefix sums and string search."
+prerequisites: [m-trees-heaps]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will understand how the main sorting algorithms work and what your language's built-in sort actually does, and you will have a toolkit of techniques that turn slow, nested-loop solutions into fast ones: binary search (including on answers, not just arrays), two pointers, sliding windows and prefix sums. These patterns solve a large share of everyday performance problems and coding-interview questions.
+
+## Why sorting matters
+
+Sorted data makes many other problems easy: binary search, finding duplicates (they end up next to each other), merging, finding the median, grouping, and "the closest pair". A sort costs O(*n* log *n*), and often turns an O(*n*²) problem into an O(*n* log *n*) one. You will almost never write a sort at work; your language's is excellent. But knowing how they work tells you what they cost, what "stable" means, and why sorting numbers in JavaScript can go wrong.
+
+## Three classic sorts
+
+**Insertion sort** builds a sorted section at the front, taking each next element and sliding it left into place, like sorting playing cards in your hand. O(*n*²) in general, but O(*n*) when the data is already nearly sorted, and very fast for small arrays, which is why real sorting routines use it for short runs.
+
+**Merge sort** splits the array in half, sorts each half (recursively), and **merges** the two sorted halves by repeatedly taking the smaller front element. Always O(*n* log *n*): there are log₂ *n* levels of halving, and each level's merging touches all *n* elements. It needs O(*n*) extra space, and it is **stable** (explained below).
+
+**Quicksort** picks a **pivot** element, **partitions** the array into elements smaller than the pivot and elements larger, then sorts each side. O(*n* log *n*) on average and in place, with excellent cache behaviour, so it is often the fastest in practice; but with consistently bad pivots (for example always the first element of already-sorted data) it degrades to O(*n*²). Good implementations choose pivots carefully, or randomly, and fall back to another method if partitioning goes badly.
+
+```ts
+function mergeSort(values: number[]): number[] {
+  if (values.length <= 1) return values;
+  const mid = values.length >> 1;
+  const left = mergeSort(values.slice(0, mid));
+  const right = mergeSort(values.slice(mid));
+  const merged: number[] = [];
+  let i = 0, j = 0;
+  while (i < left.length && j < right.length) {
+    merged.push(left[i] <= right[j] ? left[i++] : right[j++]);
+  }
+  return merged.concat(left.slice(i), right.slice(j));
+}
+
+function quickSort(values: number[]): number[] {
+  if (values.length <= 1) return values;
+  const pivot = values[values.length >> 1];
+  return [
+    ...quickSort(values.filter((v) => v < pivot)),
+    ...values.filter((v) => v === pivot),
+    ...quickSort(values.filter((v) => v > pivot)),
+  ];
+}
+
+const data = [38, 27, 43, 3, 9, 82, 10, 27];
+console.log(mergeSort(data));
+console.log(quickSort(data));
+```
+
+Both print `[3, 9, 10, 27, 27, 38, 43, 82]`. (This quicksort is written for clarity: it copies arrays rather than partitioning in place, but it shows the idea.)
+
+### The *n* log *n* limit, and beating it
+
+Any sort that works by **comparing** elements needs at least about *n* log₂ *n* comparisons in the worst case: there are *n*! possible orders, and each comparison can at best halve the possibilities. So O(*n* log *n*) is the best possible for comparison sorts.
+
+Sorts that do not compare can do better when the keys are small integers. **Counting sort** counts how many of each value there are, then writes them out in order: O(*n* + *k*) for values from 0 to *k*. Sorting a million exam marks from 0 to 100 needs one pass to count and one to write. **Radix sort** extends this to larger numbers digit by digit.
+
+### Stability
+
+A sort is **stable** if items that compare equal keep their original order. It matters when you sort by one key after another. Sort orders by time, then stably by customer, and each customer's orders stay in time order.
+
+## What your language actually does
+
+| Platform | Built-in sort | Stable? |
+|---|---|---|
+| JavaScript (V8) | TimSort | yes (required by the language since 2019) |
+| Java, objects (`List.sort`, `Arrays.sort(Object[])`) | TimSort | yes |
+| Java, primitives (`Arrays.sort(int[])`) | dual-pivot quicksort | not applicable (equal numbers are indistinguishable) |
+| C# (`Array.Sort`, `List<T>.Sort`) | an introspective sort | **no**: the documentation says equal elements may be reordered |
+| C# LINQ (`OrderBy`) | | yes |
+
+**TimSort** is a merge sort that finds runs already in order in the data and merges them, and uses insertion sort for short runs, so it is very fast on real data, which is often partly sorted.
+
+Two traps, one in JavaScript and one in C#:
+
+```ts
+console.log([10, 9, 1, 100].sort());
+console.log([10, 9, 1, 100].sort((a, b) => a - b));
+
+const orders = [
+  { customer: "Kofi", time: "09:00" },
+  { customer: "Ama", time: "09:30" },
+  { customer: "Kofi", time: "10:15" },
+  { customer: "Ama", time: "11:00" },
+];
+orders.sort((a, b) => a.customer.localeCompare(b.customer));
+console.log(orders.map((o) => `${o.customer} ${o.time}`));
+```
+
+The first line prints `[1, 10, 100, 9]`: with no comparison function, JavaScript sorts by converting values to **strings**, and "100" comes before "9" in text order. Always pass a comparator for numbers: `(a, b) => a - b` gives `[1, 9, 10, 100]`. The last line shows stability: `["Ama 09:30", "Ama 11:00", "Kofi 09:00", "Kofi 10:15"]`, each customer's orders still in time order. In C#, `List<T>.Sort` does not promise that; use LINQ's `OrderBy(...).ThenBy(...)` when the order of equal items matters.
+
+A comparator must be **consistent**: if it says *a* < *b* and *b* < *c*, it must say *a* < *c*, and it must not say both *a* < *b* and *b* < *a*. Comparators that are random or contradictory (a famous "shuffle" bug: `sort(() => Math.random() - 0.5)`) give biased or unpredictable results, and in Java can throw "Comparison method violates its general contract!".
+
+## Binary search
+
+**Binary search** finds a value in a **sorted** array by comparing with the middle element and discarding the half that cannot contain it. O(log *n*): about 20 steps for a million items, 30 for a billion (<Ref to="m-discrete-maths" />).
+
+It is famously easy to get subtly wrong (off-by-one errors, infinite loops), so learn one careful version: the **lower bound**, which returns the first position whose value is at least the target. It answers "is it present?", "where would it go?" and "how many are smaller?" all at once.
+
+```ts
+function lowerBound(sorted: number[], target: number): number {
+  let lo = 0;
+  let hi = sorted.length;          // the answer is somewhere in [lo, hi]
+  while (lo < hi) {
+    const mid = lo + ((hi - lo) >> 1);
+    if (sorted[mid] < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+const prices = [150, 275, 320, 320, 380, 450];
+console.log(lowerBound(prices, 320), lowerBound(prices, 330), lowerBound(prices, 999), lowerBound(prices, 100));
+console.log(prices[lowerBound(prices, 380)] === 380);
+```
+
+It prints `2 4 6 0` and `true`. The invariant (<Ref to="m-discrete-maths" />): the answer always lies in `[lo, hi]`, and each step shrinks that range, so the loop ends with `lo === hi` at the answer. `lo + ((hi - lo) >> 1)` computes the middle without the overflow that `(lo + hi) / 2` can cause with 32-bit integers in Java or C#: a real bug that sat unnoticed for years in widely used libraries.
+
+Use the built-ins when you can: `Arrays.binarySearch` and `Collections.binarySearch` in Java, `Array.BinarySearch` and `List<T>.BinarySearch` in C# (both return a negative number encoding the insertion point when the value is absent).
+
+### Binary search on the answer
+
+Binary search works on any yes/no question that flips once from "no" to "yes" as a number grows, even when there is no array. "What is the smallest oven capacity that bakes all orders within 8 hours?" If capacity *c* is enough, any larger capacity is too, so you can binary-search *c*:
+
+```ts
+function hoursNeeded(orders: number[], capacityPerHour: number): number {
+  return orders.reduce((hours, loaves) => hours + Math.ceil(loaves / capacityPerHour), 0);
+}
+
+function smallestCapacity(orders: number[], hourLimit: number): number {
+  let lo = 1;
+  let hi = Math.max(...orders);    // this capacity always works: one hour per order
+  while (lo < hi) {
+    const mid = lo + ((hi - lo) >> 1);
+    if (hoursNeeded(orders, mid) <= hourLimit) hi = mid;
+    else lo = mid + 1;
+  }
+  return lo;
+}
+
+console.log(smallestCapacity([30, 11, 23, 4, 20], 8));
+```
+
+It prints **15**. At 15 loaves an hour the orders take ⌈30/15⌉ + ⌈11/15⌉ + ⌈23/15⌉ + ⌈4/15⌉ + ⌈20/15⌉ = 2 + 1 + 2 + 1 + 2 = 8 hours, within the limit; at 14 they take 3 + 1 + 2 + 1 + 2 = 9 hours, which is not. The search never tried every capacity: it halved the range from 1 to 30 about five times. The pattern needs only a yes/no test that, once "yes", stays "yes" for all larger values; then it finds the boundary in O(log *range*) tests.
+
+When you write a search like this, check its answer at the boundary by hand: the answer should pass and the value just below it should fail. Writing this chapter, a first guess at the answer by eye was wrong; checking 14 and 15 settled it.
+
+## Two pointers
+
+Many problems on sorted arrays (or pairs of positions) become linear with **two pointers** moving towards each other or in the same direction, instead of checking all pairs. Finding two prices that sum to a budget in a sorted list:
+
+```ts
+function pairWithSum(sorted: number[], target: number): [number, number] | null {
+  let left = 0;
+  let right = sorted.length - 1;
+  while (left < right) {
+    const sum = sorted[left] + sorted[right];
+    if (sum === target) return [sorted[left], sorted[right]];
+    if (sum < target) left++;
+    else right--;
+  }
+  return null;
+}
+
+console.log(pairWithSum([1, 3, 4, 6, 8, 11], 10), pairWithSum([1, 3, 4, 6, 8, 11], 100));
+```
+
+It prints `[4, 6]` and `null`. If the sum is too small, the only way to increase it is to move the left pointer right; if too big, move the right pointer left. Each step discards one element for good: O(*n*) instead of O(*n*²). The fast-and-slow pointers in <Ref to="m-lists-stacks-queues" /> are the same family.
+
+## Sliding windows
+
+For questions about **contiguous** runs ("the busiest 60 minutes", "the longest stretch without a repeat", "the best 7-day sales"), a **sliding window** moves a range along the data, adding the element that enters and removing the one that leaves, so each step is O(1) instead of re-adding the whole window:
+
+```ts
+function bestWindow(daily: number[], days: number): { start: number; total: number } {
+  let total = daily.slice(0, days).reduce((a, b) => a + b, 0);
+  let best = { start: 0, total };
+  for (let i = days; i < daily.length; i++) {
+    total += daily[i] - daily[i - days];
+    if (total > best.total) best = { start: i - days + 1, total };
+  }
+  return best;
+}
+
+console.log(bestWindow([120, 80, 95, 200, 160, 70, 50, 210, 190], 3));
+```
+
+It prints `{ start: 2, total: 455 }`: days 2 to 4 (95 + 200 + 160). O(*n*) instead of O(*n* × days). The "longest run of distinct characters" problem in <Ref to="m-arrays-hashing" /> used a window whose size changes.
+
+## Prefix sums
+
+If you need the sum of many different ranges of the same array, precompute a **prefix sum** array, where `prefix[i]` is the sum of the first *i* elements. Then the sum of any range from *a* to *b* (exclusive of *b*) is `prefix[b] − prefix[a]`: O(1) per question after O(*n*) set-up.
+
+```ts
+const sales = [120, 80, 95, 200, 160, 70, 50];
+const prefix = [0];
+for (const s of sales) prefix.push(prefix[prefix.length - 1] + s);
+
+const rangeSum = (a: number, b: number) => prefix[b] - prefix[a];
+console.log(prefix);
+console.log(rangeSum(0, 7), rangeSum(2, 5), rangeSum(3, 4));
+```
+
+It prints the prefix array `[0, 120, 200, 295, 495, 655, 725, 775]` and the sums `775 455 200`. The same idea works in two dimensions (sums of rectangles in an image or a grid) and is how databases and analytics tools answer range totals quickly.
+
+## Searching text
+
+Finding one string inside another is built into every language (`indexOf`, `contains`, `IndexOf`) and well optimised; use those. The naive method compares the pattern at every position, O(*n* × *m*) in the worst case. Algorithms such as **Knuth–Morris–Pratt** (which never re-reads text it has already matched) and **Boyer–Moore** (which skips ahead using the pattern's last character) do better on long or repetitive inputs, and **Rabin–Karp** compares hashes of windows, useful for finding many patterns at once. For searching *many documents* by words, you need an index rather than an algorithm: the search engines in the data part of this course.
+
+## Common mistakes
+
+- **Sorting numbers in JavaScript without a comparator.**
+- **Relying on stability** with a sort that does not promise it (C#'s `List.Sort`).
+- **Binary search on unsorted data**, or with off-by-one errors. Learn one careful lower-bound pattern and reuse it.
+- **`(lo + hi) / 2` overflow** with 32-bit indices.
+- **Nested loops over pairs or windows** where two pointers, a window, or prefix sums would be linear.
+- **Inconsistent comparators**, including random ones for shuffling (use a proper shuffle, Fisher–Yates).
+- **Sorting the whole collection to get a few items** (use a heap, <Ref to="m-trees-heaps" />).
+
+## Practice
+
+**1. (warm-up)** What does `[3, 20, 100, 4].sort()` return in JavaScript, and why?
+
+<Solution>
+
+`[100, 20, 3, 4]`. Without a comparator, values are compared as strings: "100" < "20" < "3" < "4" in text order. Use `.sort((a, b) => a - b)` to get `[3, 4, 20, 100]`.
+
+</Solution>
+
+**2. (warm-up)** Which sorts are stable: merge sort, quicksort as usually written, TimSort, insertion sort?
+
+<Solution>
+
+Merge sort, TimSort and insertion sort are stable. Quicksort, as usually implemented in place, is not.
+
+</Solution>
+
+**3. (warm-up)** At most how many comparisons does binary search need for 1,000,000 sorted items?
+
+<Solution>
+
+About log₂ 1,000,000 ≈ 20.
+
+</Solution>
+
+**4. (standard)** Sort 10 million ages (whole numbers from 0 to 120). Which algorithm, and what is its cost?
+
+<Solution>
+
+Counting sort: count how many people have each of the 121 ages in one pass, then write the ages out in order. O(*n* + *k*) = about 10 million + 121 steps, beating any O(*n* log *n*) comparison sort, with only 121 counters of extra memory.
+
+</Solution>
+
+**5. (standard)** Using `lowerBound`, write a function that counts how many values in a sorted array fall in the range [*a*, *b*).
+
+<Solution>
+
+```ts
+function lowerBound(sorted: number[], target: number): number {
+  let lo = 0, hi = sorted.length;
+  while (lo < hi) {
+    const mid = lo + ((hi - lo) >> 1);
+    if (sorted[mid] < target) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
+const countInRange = (sorted: number[], a: number, b: number) => lowerBound(sorted, b) - lowerBound(sorted, a);
+console.log(countInRange([150, 275, 320, 320, 380, 450], 300, 400));
+```
+
+The values below *b* minus the values below *a*: two binary searches, O(log *n*). It prints **3** (320, 320 and 380).
+
+</Solution>
+
+**6. (standard)** Given hourly visitor counts, find the largest total over any 4 consecutive hours, in O(*n*). Use [5, 12, 8, 20, 15, 3, 9, 18, 22, 6].
+
+<Solution>
+
+A sliding window of size 4: the first window sums 5 + 12 + 8 + 20 = 45, then each step adds the new hour and subtracts the oldest. Totals: 45, 55, 46, 47, 45, 52, 55. The largest is **55**, first at hours 1 to 4 (12 + 8 + 20 + 15).
+
+</Solution>
+
+**7. (standard)** Remove duplicates from a sorted array in place in O(*n*) time and O(1) extra space, returning the new length.
+
+<Solution>
+
+```ts
+function dedupeSorted(values: number[]): number {
+  if (values.length === 0) return 0;
+  let write = 1;
+  for (let read = 1; read < values.length; read++) {
+    if (values[read] !== values[write - 1]) values[write++] = values[read];
+  }
+  return write;
+}
+
+const v = [1, 1, 2, 3, 3, 3, 7];
+const n = dedupeSorted(v);
+console.log(n, v.slice(0, n));
+```
+
+Two pointers moving the same way: `read` scans every element; `write` marks where the next new value goes. It prints **4 [1, 2, 3, 7]**.
+
+</Solution>
+
+**8. (standard)** Why does sorting orders by time and then stably by customer leave each customer's orders in time order?
+
+<Solution>
+
+The second, stable sort reorders by customer, but among orders with the same customer (equal under the second comparison) it keeps their existing relative order, which is time order from the first sort.
+
+</Solution>
+
+**9. (stretch)** For the oven example, check the program's answer of 15 by working out the hours needed at capacities 14, 15 and 16 for orders [30, 11, 23, 4, 20] with an 8-hour limit. Why is checking the boundary like this a good habit?
+
+<Solution>
+
+At 14: ⌈30/14⌉ + ⌈11/14⌉ + ⌈23/14⌉ + ⌈4/14⌉ + ⌈20/14⌉ = 3 + 1 + 2 + 1 + 2 = **9 hours** (too many). At 15: 2 + 1 + 2 + 1 + 2 = **8** (fits). At 16: 2 + 1 + 2 + 1 + 2 = **8** (fits). So 15 is the smallest capacity that fits, as the program says. Binary searches fail by being off by one, so checking that the answer passes and the value just below fails catches the most common bug in a minute.
+
+</Solution>
+
+**10. (stretch)** Given a list of meetings as [start, end] times, find the minimum number of rooms needed so no two overlapping meetings share a room. Use sorting and two pointers.
+
+<Solution>
+
+```ts
+function roomsNeeded(meetings: [number, number][]): number {
+  const starts = meetings.map((m) => m[0]).sort((a, b) => a - b);
+  const ends = meetings.map((m) => m[1]).sort((a, b) => a - b);
+  let rooms = 0, best = 0, e = 0;
+  for (const s of starts) {
+    while (ends[e] <= s) {
+      e++;
+      rooms--;
+    }
+    rooms++;
+    best = Math.max(best, rooms);
+  }
+  return best;
+}
+
+console.log(roomsNeeded([[900, 1000], [930, 1100], [1000, 1030], [1045, 1200]]));
+```
+
+Walk through start times in order; before starting each meeting, free the rooms of meetings that have ended. The most rooms in use at once is the answer: **2** here. O(*n* log *n*) for the sorts.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Sorting is O(*n* log *n*) for comparison sorts (a proven lower bound); **counting** and **radix** sorts beat it for small integer keys.
+- **Insertion sort** is fast on small or nearly sorted data; **merge sort** is always O(*n* log *n*) and **stable**; **quicksort** is fast in place on average but O(*n*²) with bad pivots.
+- Built-ins: TimSort in JavaScript and Java (objects), stable; dual-pivot quicksort for Java primitives; C#'s `Array.Sort` is **not stable** (use LINQ `OrderBy` when it matters).
+- JavaScript sorts as strings without a comparator. Comparators must be consistent.
+- **Binary search** is O(log *n*) on sorted data; learn a careful **lower bound**; avoid `(lo + hi) / 2` overflow; binary-search **answers** when a yes/no flips once.
+- **Two pointers**, **sliding windows** and **prefix sums** turn many O(*n*²) problems into O(*n*).
+- Use built-in string search; use an index for searching many documents.
+
+## Go deeper
+
+- [Algorithms, 4th edition: sorting](https://algs4.cs.princeton.edu/20sorting/), Robert Sedgewick and Kevin Wayne. Princeton's chapter on elementary sorts, merge sort, quicksort and priority queues.
+- [Getting things sorted in V8](https://v8.dev/blog/array-sort), V8 team. How and why V8 moved to TimSort.
+- [Array.Sort (.NET)](https://learn.microsoft.com/en-us/dotnet/api/system.array.sort), Microsoft. Including the note that the sort is unstable.
+- [VisuAlgo: sorting](https://visualgo.net/en/sorting), VisuAlgo. Animations of every sort in this chapter.

@@ -1,0 +1,462 @@
+---
+title: "Recursion, backtracking and dynamic programming"
+summary: "Thinking recursively, exploring choices, and turning slow recursion into fast tables; greedy algorithms."
+prerequisites: [m-graphs]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will be able to solve problems by breaking them into smaller versions of themselves, explore every possibility systematically when you must, and then make those solutions fast: turning exponential-time recursion into linear or polynomial time by remembering answers (dynamic programming), or by spotting when a simple greedy choice is provably enough. These techniques are behind diff tools, spell checkers, route planners, schedulers, pricing engines and a large share of interview questions.
+
+## Recursion
+
+A function is **recursive** when it calls itself on a smaller version of the same problem. Every recursive solution has two parts:
+
+1. **Base case(s)**: inputs small enough to answer directly, which stop the recursion.
+2. **Recursive case**: reduce the problem towards a base case, call yourself, and combine the result.
+
+The trick to writing recursion is to **trust the recursive call**: assume it correctly solves the smaller problem (this is induction, <Ref to="m-discrete-maths" />), and only think about how to use its answer.
+
+```ts
+// The total size of a folder: its files, plus the total size of each subfolder.
+type Folder = { files: number[]; folders: Folder[] };
+
+function totalSize(folder: Folder): number {
+  const own = folder.files.reduce((a, b) => a + b, 0);
+  return own + folder.folders.reduce((sum, sub) => sum + totalSize(sub), 0);
+}
+
+const project: Folder = {
+  files: [120, 40],
+  folders: [
+    { files: [300], folders: [] },
+    { files: [50, 50], folders: [{ files: [1000], folders: [] }] },
+  ],
+};
+console.log(totalSize(project));
+```
+
+It prints **1560**. Recursion fits naturally whenever the data is itself recursive: folders within folders, trees, nested JSON, expressions, HTML.
+
+Two cautions from earlier chapters: each call uses a **stack frame**, so very deep recursion can overflow the stack (<Ref to="m-memory-gc" />), and any recursion can be rewritten as a loop with an explicit stack when depth could be large.
+
+## Backtracking: exploring choices
+
+Some problems ask you to find a combination that satisfies constraints: arrange, select, assign, solve. **Backtracking** builds a solution one choice at a time; after each choice, it recurses; if that path cannot lead to a valid solution, it **undoes** the choice (backtracks) and tries the next one.
+
+Generating every subset of items to find which fit a budget exactly:
+
+```ts
+function combinationsWithin(prices: number[], budget: number): number[][] {
+  const results: number[][] = [];
+  const chosen: number[] = [];
+
+  function explore(start: number, remaining: number) {
+    if (remaining === 0) {
+      results.push([...chosen]);
+      return;
+    }
+    for (let i = start; i < prices.length; i++) {
+      if (prices[i] > remaining) continue;      // prune: this choice cannot fit
+      chosen.push(prices[i]);                   // choose
+      explore(i + 1, remaining - prices[i]);    // explore
+      chosen.pop();                             // un-choose
+    }
+  }
+
+  explore(0, budget);
+  return results;
+}
+
+console.log(combinationsWithin([2, 3, 5, 6, 8], 10));
+```
+
+It prints `[[2, 3, 5], [2, 8]]`: the two ways to spend exactly 10. The three steps, choose, explore, un-choose, are the shape of every backtracking algorithm. **Pruning** (skipping choices that cannot work) is what makes backtracking practical: without it, this tries all 2⁵ subsets; with it, it abandons hopeless branches early.
+
+Backtracking is still exponential in the worst case: it explores a tree of choices that can grow like 2ⁿ or *n*! (<Ref to="m-computability" />). Use it when inputs are small, or when constraints prune heavily (Sudoku, N-queens, scheduling a handful of meetings).
+
+## Overlapping subproblems
+
+Some recursive solutions repeat the same work many times. The classic example is the Fibonacci numbers, where each is the sum of the two before: 0, 1, 1, 2, 3, 5, 8…
+
+```ts
+let calls = 0;
+function fibSlow(n: number): number {
+  calls++;
+  return n < 2 ? n : fibSlow(n - 1) + fibSlow(n - 2);
+}
+
+console.log(fibSlow(25), calls);
+```
+
+It prints `75025 242785`: nearly a quarter of a million calls to compute the 25th number, because `fibSlow(23)` is computed twice, `fibSlow(22)` three times, and so on. The work grows exponentially (about 1.6ⁿ). Yet there are only 26 different questions being asked: `fib(0)` to `fib(25)`.
+
+When a recursive solution keeps solving the same **subproblems**, the fix is to remember the answers. That is **dynamic programming** (DP).
+
+## Dynamic programming
+
+There are two ways to do it.
+
+**Memoisation (top-down)**: keep the recursive function, but store each answer the first time it is computed and return the stored answer after that.
+
+**Tabulation (bottom-up)**: fill a table of answers from the smallest subproblems up, so that every value you need is already there when you need it.
+
+```ts
+const memo = new Map<number, number>();
+function fibMemo(n: number): number {
+  if (n < 2) return n;
+  if (!memo.has(n)) memo.set(n, fibMemo(n - 1) + fibMemo(n - 2));
+  return memo.get(n)!;
+}
+
+function fibTable(n: number): number {
+  let prev = 0, curr = 1;
+  for (let i = 0; i < n; i++) [prev, curr] = [curr, prev + curr];
+  return prev;
+}
+
+console.log(fibMemo(25), fibTable(25), fibTable(80));
+```
+
+It prints `75025 75025 23416728348467684`. Both are O(*n*). The table version needs only the last two values, so it uses O(1) memory: a common final refinement.
+
+Look closely at the last number. The 80th Fibonacci number is really 23,416,728,348,467,68**5**, but the program printed …684. It is larger than 2⁵³, beyond which JavaScript numbers cannot represent every integer (<Ref to="m-data-representation" />), so the sum was rounded. The algorithm is right; the number type is not big enough. With `BigInt` (`let prev = 0n, curr = 1n`) the result is exact.
+
+### How to design a DP solution
+
+The hard part of DP is not the code but finding the **subproblem**. A method that works:
+
+1. **Define the subproblem in words**: "*best*(*i*) is the best answer using only the first *i* items", or "*cost*(*i*, *j*) is the cost of turning the first *i* letters of one word into the first *j* letters of another".
+2. **Write the recurrence**: how a subproblem's answer is built from smaller ones, by considering the last choice.
+3. **Find the base cases.**
+4. **Choose the order** to fill the table so smaller subproblems come first.
+5. **Read off the answer**, and, if needed, trace back through the table to recover the choices.
+
+### Example: making change with the fewest coins
+
+With coins of 1, 4 and 5 pence, what is the fewest coins that make 12p? The obvious "take the largest coin that fits" gives 5 + 5 + 1 + 1 = 4 coins, but 4 + 4 + 4 = 3 coins is better. DP gets it right:
+
+- Subproblem: *fewest*(*a*) = the fewest coins that make amount *a*.
+- Recurrence: the last coin used is some coin *c*, so *fewest*(*a*) = 1 + the minimum of *fewest*(*a* − *c*) over all coins *c* ≤ *a*.
+- Base case: *fewest*(0) = 0.
+
+```ts
+function fewestCoins(coins: number[], amount: number): number {
+  const fewest = new Array(amount + 1).fill(Infinity);
+  fewest[0] = 0;
+  for (let a = 1; a <= amount; a++) {
+    for (const c of coins) {
+      if (c <= a && fewest[a - c] + 1 < fewest[a]) fewest[a] = fewest[a - c] + 1;
+    }
+  }
+  return fewest[amount];
+}
+
+console.log(fewestCoins([1, 4, 5], 12), fewestCoins([1, 4, 5], 13), fewestCoins([5, 10], 3));
+```
+
+It prints `3 3 Infinity`: 12 = 4 + 4 + 4, 13 = 4 + 4 + 5, and 3p cannot be made from 5p and 10p coins. O(amount × number of coins).
+
+### Example: edit distance
+
+The **edit distance** between two strings is the fewest single-character insertions, deletions or substitutions that turn one into the other. It powers spell checkers ("did you mean…?"), fuzzy search and DNA comparison, and diff tools use a close relative (the longest common subsequence).
+
+- Subproblem: *d*(*i*, *j*) = the edit distance between the first *i* letters of `a` and the first *j* letters of `b`.
+- Recurrence: look at the last letters. If they match, *d*(*i*, *j*) = *d*(*i* − 1, *j* − 1). Otherwise it is 1 plus the smallest of: delete from `a` (*d*(*i* − 1, *j*)), insert into `a` (*d*(*i*, *j* − 1)), or substitute (*d*(*i* − 1, *j* − 1)).
+- Base cases: *d*(*i*, 0) = *i* and *d*(0, *j*) = *j* (delete or insert everything).
+
+```ts
+function editDistance(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0)),
+  );
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      d[i][j] = a[i - 1] === b[j - 1]
+        ? d[i - 1][j - 1]
+        : 1 + Math.min(d[i - 1][j], d[i][j - 1], d[i - 1][j - 1]);
+    }
+  }
+  return d[a.length][b.length];
+}
+
+console.log(editDistance("kitten", "sitting"), editDistance("sourdough", "sourdoh"), editDistance("", "rye"));
+```
+
+It prints `3 2 3`: kitten → sitten → sittin → sitting is three edits. The table has (*m* + 1) × (*n* + 1) cells, each filled in O(1): O(*m* × *n*) time.
+
+### Example: the knapsack, with small weights
+
+<Ref to="m-computability" /> said the knapsack problem (most valuable items within a weight limit) is NP-hard in general, but solvable quickly "when the numbers are small integers". Here is why: a DP over capacities.
+
+- Subproblem: *best*(*w*) = the most value achievable with total weight at most *w*, using the items considered so far.
+- For each item (weight *wt*, value *v*), going through capacities from high to low (so each item is used at most once): *best*(*w*) = max(*best*(*w*), *v* + *best*(*w* − *wt*)).
+
+```ts
+function knapsack(items: { name: string; weight: number; value: number }[], capacity: number): number {
+  const best = new Array(capacity + 1).fill(0);
+  for (const { weight, value } of items) {
+    for (let w = capacity; w >= weight; w--) {
+      best[w] = Math.max(best[w], value + best[w - weight]);
+    }
+  }
+  return best[capacity];
+}
+
+const crates = [
+  { name: "flour", weight: 5, value: 30 },
+  { name: "butter", weight: 3, value: 25 },
+  { name: "sugar", weight: 4, value: 20 },
+  { name: "yeast", weight: 1, value: 12 },
+];
+console.log(knapsack(crates, 8));
+```
+
+It prints **57**: butter, sugar and yeast, weighing 3 + 4 + 1 = 8 and worth 25 + 20 + 12 = 57. Flour is the most valuable single crate, but taking it leaves only 3 units of capacity, and flour with butter (weight 8) is worth only 55. A greedy "most valuable first" rule would have taken flour and done worse; the table considered every combination implicitly. The cost is O(*n* × capacity), which is **pseudo-polynomial**: fast when the capacity is a small number, hopeless when weights are huge numbers, which is why the general problem is still hard. (Practice problem 9 recovers which items were chosen.)
+
+## Greedy algorithms
+
+A **greedy** algorithm makes the choice that looks best right now and never reconsiders. When greedy works, it is simple and fast; the danger is that it often looks right and is not, as with the 1p, 4p, 5p coins above.
+
+Greedy is correct for some important problems, and those are worth knowing:
+
+- **Activity selection**: to fit the most non-overlapping meetings into one room, repeatedly pick the meeting that **ends earliest** among those that start after the last one chosen. Ending earliest leaves the most room for the rest.
+- **Dijkstra's algorithm** and **Kruskal's algorithm** (<Ref to="m-graphs" />) are greedy, and proven correct.
+- **Huffman coding**, used in compression, greedily merges the two least frequent symbols.
+- **Standard coin systems** (such as 1, 2, 5, 10, 20, 50 pence) happen to work greedily; arbitrary ones do not.
+
+```ts
+function mostMeetings(meetings: [number, number][]): [number, number][] {
+  const byEnd = [...meetings].sort((a, b) => a[1] - b[1]);
+  const chosen: [number, number][] = [];
+  let freeFrom = -Infinity;
+  for (const [start, end] of byEnd) {
+    if (start >= freeFrom) {
+      chosen.push([start, end]);
+      freeFrom = end;
+    }
+  }
+  return chosen;
+}
+
+console.log(mostMeetings([[900, 1030], [930, 1000], [1000, 1100], [1030, 1200], [1100, 1130], [1130, 1300]]));
+```
+
+It prints `[[930, 1000], [1000, 1100], [1100, 1130], [1130, 1300]]`: four meetings. Choosing the long 9:00–10:30 meeting first would have allowed only three.
+
+To trust a greedy algorithm, you need an argument (an **exchange argument**: "any optimal solution can be changed to include the greedy choice without getting worse") or, at the very least, tests comparing it with a brute-force answer on many small random inputs. If you cannot find the argument and the tests find a counterexample, use DP.
+
+## Choosing an approach
+
+| The problem… | Try |
+|---|---|
+| has recursive structure (trees, nested data) | plain recursion |
+| asks for all combinations or any valid arrangement, inputs small | backtracking with pruning |
+| asks for the best or the count, and subproblems repeat | dynamic programming |
+| has a "best next choice" you can prove is safe | greedy |
+| is NP-hard with large inputs | heuristics and solvers (<Ref to="m-computability" />) |
+
+## Common mistakes
+
+- **No base case**, or a recursive call that does not get smaller, recursing forever.
+- **Forgetting to un-choose** in backtracking, so choices leak into other branches.
+- **Plain recursion with overlapping subproblems**, taking exponential time. Memoise.
+- **A vague subproblem definition**, the usual reason DP code does not work. Write it in words first.
+- **Iterating capacities upwards** in the 0/1 knapsack, which lets an item be used more than once.
+- **Trusting a greedy algorithm without proof or tests.**
+- **Very deep recursion** on large inputs, overflowing the stack. Use a table or explicit stack.
+
+## Practice
+
+**1. (warm-up)** Write a recursive function that reverses a string.
+
+<Solution>
+
+```ts
+function reverseString(s: string): string {
+  return s.length <= 1 ? s : reverseString(s.slice(1)) + s[0];
+}
+
+console.log(reverseString("sourdough"));
+```
+
+Base case: an empty or one-character string is its own reverse. Recursive case: reverse the rest, then put the first character at the end. It prints **hguodruos**. (Fine for short strings; deep recursion and string copying make it O(*n*²) and unsafe for long ones.)
+
+</Solution>
+
+**2. (warm-up)** How many calls does `fibSlow(5)` make? (Count by drawing the call tree.)
+
+<Solution>
+
+**15**. fib(5) calls fib(4) and fib(3); fib(4) makes 9 calls including itself, fib(3) makes 5, so 1 + 9 + 5 = 15. In general the count grows like the Fibonacci numbers themselves.
+
+</Solution>
+
+**3. (warm-up)** Give an example where "take the largest coin that fits" does not give the fewest coins.
+
+<Solution>
+
+Coins 1, 4 and 5, amount 8: greedy takes 5 + 1 + 1 + 1 (4 coins), but 4 + 4 (2 coins) is better.
+
+</Solution>
+
+**4. (standard)** Count the number of ways to climb a staircase of *n* steps, taking 1 or 2 steps at a time, for *n* = 10 and *n* = 40, efficiently.
+
+<Solution>
+
+```ts
+function ways(n: number): number {
+  let a = 1, b = 1;            // ways to reach steps 0 and 1
+  for (let i = 2; i <= n; i++) [a, b] = [b, a + b];
+  return b;
+}
+
+console.log(ways(10), ways(40));
+```
+
+The last move to step *n* is from *n* − 1 or *n* − 2, so ways(*n*) = ways(*n* − 1) + ways(*n* − 2): Fibonacci again. It prints **89 165580141**.
+
+</Solution>
+
+**5. (standard)** Generate every permutation of ["a", "b", "c"] with backtracking.
+
+<Solution>
+
+```ts
+function permutations<T>(items: T[]): T[][] {
+  const results: T[][] = [];
+  const current: T[] = [];
+  const used = new Array(items.length).fill(false);
+  function explore() {
+    if (current.length === items.length) {
+      results.push([...current]);
+      return;
+    }
+    for (let i = 0; i < items.length; i++) {
+      if (used[i]) continue;
+      used[i] = true; current.push(items[i]);     // choose
+      explore();                                   // explore
+      current.pop(); used[i] = false;              // un-choose
+    }
+  }
+  explore();
+  return results;
+}
+
+console.log(permutations(["a", "b", "c"]));
+```
+
+It prints the 3! = 6 permutations: abc, acb, bac, bca, cab, cba (as arrays).
+
+</Solution>
+
+**6. (standard)** Find the length of the longest increasing subsequence (not necessarily contiguous) of [10, 9, 2, 5, 3, 7, 101, 18], with DP.
+
+<Solution>
+
+```ts
+function longestIncreasing(values: number[]): number {
+  const best = values.map(() => 1);    // best[i]: longest increasing run ending at i
+  for (let i = 0; i < values.length; i++) {
+    for (let j = 0; j < i; j++) {
+      if (values[j] < values[i]) best[i] = Math.max(best[i], best[j] + 1);
+    }
+  }
+  return Math.max(...best);
+}
+
+console.log(longestIncreasing([10, 9, 2, 5, 3, 7, 101, 18]));
+```
+
+Subproblem: the longest increasing subsequence ending at position *i*; it extends the best one ending at any earlier, smaller value. It prints **4** (for example 2, 3, 7, 18). O(*n*²); an O(*n* log *n*) version exists using binary search.
+
+</Solution>
+
+**7. (standard)** What is the edit distance between "flour" and "floor", and between "bread" and "beard"?
+
+<Solution>
+
+"flour" → "floor": substitute u with o: **1**. "bread" → "beard": **2** (for example substitute r with e and e with r). Check with `editDistance`.
+
+</Solution>
+
+**8. (standard)** Count the paths from the top-left to the bottom-right of a 3 × 7 grid, moving only right or down.
+
+<Solution>
+
+```ts
+function gridPaths(rows: number, cols: number): number {
+  const paths = Array.from({ length: rows }, () => new Array(cols).fill(1));
+  for (let r = 1; r < rows; r++) {
+    for (let c = 1; c < cols; c++) paths[r][c] = paths[r - 1][c] + paths[r][c - 1];
+  }
+  return paths[rows - 1][cols - 1];
+}
+
+console.log(gridPaths(3, 7));
+```
+
+Each cell is reached from above or from the left, so its count is the sum of those two; the first row and column have one path each. It prints **28** (also C(8, 2) = 28: choose which 2 of the 8 moves go down).
+
+</Solution>
+
+**9. (stretch)** Modify the knapsack function to return which crates were chosen, not just the total value.
+
+<Solution>
+
+```ts
+function knapsackItems(items: { name: string; weight: number; value: number }[], capacity: number) {
+  const n = items.length;
+  const table = Array.from({ length: n + 1 }, () => new Array(capacity + 1).fill(0));
+  for (let i = 1; i <= n; i++) {
+    const { weight, value } = items[i - 1];
+    for (let w = 0; w <= capacity; w++) {
+      table[i][w] = table[i - 1][w];
+      if (weight <= w) table[i][w] = Math.max(table[i][w], value + table[i - 1][w - weight]);
+    }
+  }
+  const chosen: string[] = [];
+  for (let i = n, w = capacity; i > 0; i--) {
+    if (table[i][w] !== table[i - 1][w]) {
+      chosen.push(items[i - 1].name);
+      w -= items[i - 1].weight;
+    }
+  }
+  return { value: table[n][capacity], chosen: chosen.reverse() };
+}
+
+console.log(knapsackItems([
+  { name: "flour", weight: 5, value: 30 },
+  { name: "butter", weight: 3, value: 25 },
+  { name: "sugar", weight: 4, value: 20 },
+  { name: "yeast", weight: 1, value: 12 },
+], 8));
+```
+
+A full table (item by capacity) lets you trace back: where including an item changed the value, that item was taken, and the remaining capacity goes down by its weight. It prints `{ value: 57, chosen: ["butter", "sugar", "yeast"] }`, matching the chapter's answer. The table now uses O(*n* × capacity) memory instead of O(capacity), which is the price of being able to trace back.
+
+</Solution>
+
+**10. (stretch)** Explain why "always pick the meeting that starts earliest" is not a correct greedy rule for fitting the most meetings, with a counterexample.
+
+<Solution>
+
+A meeting from 9:00 to 17:00 starts earliest but blocks the whole day, while 9:30–10:00, 10:00–11:00 and 11:00–12:00 would all fit. Starting earliest says nothing about how much room is left; ending earliest does, which is why that rule is the correct one.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Recursion** solves a problem through smaller versions of itself: **base cases** plus a **recursive case**. Trust the recursive call. Watch stack depth.
+- **Backtracking** explores choices (choose, explore, un-choose) with **pruning**; still exponential in the worst case.
+- When recursive calls repeat the same **subproblems**, **dynamic programming** stores answers: **memoisation** (top-down) or **tabulation** (bottom-up), often reducing exponential time to polynomial.
+- Design DP by defining the subproblem in words, writing the recurrence from the last choice, setting base cases, and choosing a fill order. Examples: fewest coins, **edit distance**, **knapsack** (pseudo-polynomial).
+- **Greedy** algorithms take the best-looking choice and never look back; correct only with a proof (such as for activity selection, Dijkstra, Kruskal) or strong tests.
+
+## Go deeper
+
+- [Algorithms](https://jeffe.cs.illinois.edu/teaching/algorithms/), Jeff Erickson. Free chapters on recursion, backtracking, dynamic programming and greedy algorithms, with unusually clear explanations.
+- [Introduction to Algorithms (6.006, Spring 2020)](https://ocw.mit.edu/courses/6-006-introduction-to-algorithms-spring-2020/), MIT OpenCourseWare. Lectures and notes on dynamic programming.
+- [CP-Algorithms: dynamic programming](https://cp-algorithms.com/), community-maintained. Many classic DP problems explained.

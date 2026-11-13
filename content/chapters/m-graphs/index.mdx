@@ -1,0 +1,464 @@
+---
+title: "Graphs"
+summary: "Representations, BFS, DFS, Dijkstra and A*, minimum spanning trees, topological sort and union-find."
+prerequisites: [m-trees-heaps]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will be able to model a problem as a graph and solve it with the right classic algorithm: shortest routes, build orders, dependency cycles, connected groups, and the cheapest way to connect everything. Graphs are everywhere in software (services calling services, packages depending on packages, users following users, roads, workflows) and a surprising number of "hard" problems become easy once you see the graph inside them.
+
+## What a graph is
+
+A **graph** is a set of **vertices** (or nodes) connected by **edges**. Edges can be:
+
+- **directed** (one way: "A follows B", "A depends on B") or **undirected** (both ways: "A is friends with B", a two-way road);
+- **weighted** (with a number: distance, cost, time) or **unweighted**.
+
+A **path** is a sequence of edges from one vertex to another; a **cycle** is a path that returns to its start. A directed graph with no cycles is a **DAG** (directed acyclic graph): task dependencies, build steps and version histories are DAGs. A tree is a connected graph with no cycles.
+
+### Storing a graph
+
+Two common representations:
+
+- An **adjacency list**: for each vertex, a list of its neighbours. Space O(*V* + *E*) for *V* vertices and *E* edges. The default choice, because most real graphs are **sparse** (each vertex has few neighbours compared with the total).
+- An **adjacency matrix**: a *V* × *V* table where entry [*a*][*b*] says whether (or how heavily) *a* connects to *b*. Space O(*V*²), but checking one edge is O(1). Good for small or very dense graphs.
+
+```ts
+type Graph = Map<string, string[]>;
+
+function addEdge(g: Graph, from: string, to: string, directed = false) {
+  if (!g.has(from)) g.set(from, []);
+  if (!g.has(to)) g.set(to, []);
+  g.get(from)!.push(to);
+  if (!directed) g.get(to)!.push(from);
+}
+
+const stations: Graph = new Map();
+for (const [a, b] of [["Leeds", "York"], ["Leeds", "Manchester"], ["York", "Hull"], ["Manchester", "Liverpool"], ["Hull", "Grimsby"]]) {
+  addEdge(stations, a, b);
+}
+console.log([...stations]);
+```
+
+This prints each station with its neighbours, starting `["Leeds", ["York", "Manchester"]]`.
+
+## Breadth-first search
+
+**Breadth-first search** (BFS) explores outwards in rings: first the start's neighbours, then their neighbours, and so on, using a **queue** (<Ref to="m-lists-stacks-queues" />). Because it reaches vertices in order of how many edges away they are, BFS finds the **shortest path in an unweighted graph**: fewest hops, fewest connections, fewest degrees of separation.
+
+```ts
+type Graph = Map<string, string[]>;
+
+function shortestPath(g: Graph, start: string, goal: string): string[] | null {
+  const previous = new Map<string, string | null>([[start, null]]);
+  const queue = [start];
+  for (let head = 0; head < queue.length; head++) {
+    const current = queue[head];
+    if (current === goal) {
+      const path: string[] = [];
+      for (let v: string | null = goal; v !== null; v = previous.get(v)!) path.unshift(v);
+      return path;
+    }
+    for (const next of g.get(current) ?? []) {
+      if (!previous.has(next)) {
+        previous.set(next, current);
+        queue.push(next);
+      }
+    }
+  }
+  return null;
+}
+
+const g: Graph = new Map([
+  ["Leeds", ["York", "Manchester"]],
+  ["York", ["Leeds", "Hull"]],
+  ["Manchester", ["Leeds", "Liverpool"]],
+  ["Hull", ["York", "Grimsby"]],
+  ["Liverpool", ["Manchester"]],
+  ["Grimsby", ["Hull"]],
+]);
+console.log(shortestPath(g, "Liverpool", "Grimsby"));
+console.log(shortestPath(g, "Leeds", "Cardiff"));
+```
+
+It prints `["Liverpool", "Manchester", "Leeds", "York", "Hull", "Grimsby"]` and `null` (Cardiff is not in the graph). The `previous` map does two jobs: it records which vertices have been seen, so none is visited twice, and it remembers how each was reached, so the path can be rebuilt backwards from the goal. Using an index into the array as the queue's head avoids the O(*n*) cost of `shift()`.
+
+BFS visits each vertex and edge once: **O(*V* + *E*)**.
+
+## Depth-first search
+
+**Depth-first search** (DFS) goes as deep as possible along one path before backing up to try another, using a **stack**, or recursion, which uses the call stack. It does not find shortest paths, but it is the natural tool for questions about structure:
+
+- **Reachability**: can I get from A to B at all? What depends on this package?
+- **Connected components**: which groups of vertices are linked to each other?
+- **Cycle detection** in directed graphs: does this dependency graph have a loop?
+- **Exploring every possibility**, such as solving a maze or a puzzle (<Ref to="m-recursion-dp" />).
+
+Cycle detection in a directed graph uses three colours: unvisited, *in progress* (on the current path), and done. Meeting an in-progress vertex again means the current path loops back on itself.
+
+```ts
+function findCycle(deps: Record<string, string[]>): string[] | null {
+  const state = new Map<string, "visiting" | "done">();
+  const path: string[] = [];
+
+  function visit(node: string): string[] | null {
+    if (state.get(node) === "done") return null;
+    if (state.get(node) === "visiting") return [...path.slice(path.indexOf(node)), node];
+    state.set(node, "visiting");
+    path.push(node);
+    for (const dep of deps[node] ?? []) {
+      const cycle = visit(dep);
+      if (cycle) return cycle;
+    }
+    path.pop();
+    state.set(node, "done");
+    return null;
+  }
+
+  for (const node of Object.keys(deps)) {
+    const cycle = visit(node);
+    if (cycle) return cycle;
+  }
+  return null;
+}
+
+console.log(findCycle({ app: ["auth", "db"], auth: ["db"], db: [] }));
+console.log(findCycle({ app: ["auth"], auth: ["billing"], billing: ["app"] }));
+```
+
+It prints `null` (no cycle) and then `["app", "auth", "billing", "app"]`: a circular dependency, reported as the actual loop, which is what a build tool should tell you. DFS is also **O(*V* + *E*)**. For very deep graphs, write it with an explicit stack to avoid a stack overflow.
+
+## Topological sort: an order that respects dependencies
+
+Given a DAG of tasks and dependencies ("compile before test, test before deploy"), a **topological sort** lists the vertices so that every vertex comes after everything it depends on. Build systems, package managers, spreadsheet recalculation, database migrations and CI pipelines all do this.
+
+**Kahn's algorithm** repeatedly takes a task with no remaining unmet dependencies:
+
+```ts
+function buildOrder(deps: Record<string, string[]>): string[] {
+  const waitingOn = new Map<string, number>();
+  const unlocks = new Map<string, string[]>();
+  for (const [task, needs] of Object.entries(deps)) {
+    waitingOn.set(task, needs.length);
+    for (const n of needs) {
+      if (!unlocks.has(n)) unlocks.set(n, []);
+      unlocks.get(n)!.push(task);
+    }
+  }
+  const ready = [...waitingOn].filter(([, n]) => n === 0).map(([t]) => t);
+  const order: string[] = [];
+  while (ready.length > 0) {
+    const task = ready.shift()!;
+    order.push(task);
+    for (const next of unlocks.get(task) ?? []) {
+      waitingOn.set(next, waitingOn.get(next)! - 1);
+      if (waitingOn.get(next) === 0) ready.push(next);
+    }
+  }
+  if (order.length !== waitingOn.size) throw new Error("There is a cycle: no valid order exists");
+  return order;
+}
+
+console.log(buildOrder({
+  deploy: ["test", "build"],
+  test: ["build"],
+  build: ["install"],
+  install: [],
+  lint: ["install"],
+}));
+```
+
+It prints `["install", "build", "lint", "test", "deploy"]`. Each task's count of unmet dependencies goes down as they finish; tasks reaching zero become ready. If some tasks never become ready, they are in a cycle, and the function says so instead of returning a wrong order. Tasks that are ready at the same time (`build` and `lint` here) could run in parallel, which is exactly how CI systems schedule jobs. O(*V* + *E*). (The `shift()` is fine for a small example; use a head index for large graphs.)
+
+## Weighted shortest paths: Dijkstra and A*
+
+When edges have weights (distances, times, costs), fewest hops is not shortest. **Dijkstra's algorithm** finds the cheapest path from a start to every other vertex, as long as **no weight is negative**. Its idea: repeatedly take the closest vertex not yet settled, settle it (its distance is now final), and see whether going through it improves its neighbours' distances.
+
+```ts
+function dijkstra(edges: [string, string, number][], start: string) {
+  const graph = new Map<string, [string, number][]>();
+  for (const [a, b, w] of edges) {
+    if (!graph.has(a)) graph.set(a, []);
+    if (!graph.has(b)) graph.set(b, []);
+    graph.get(a)!.push([b, w]);
+    graph.get(b)!.push([a, w]);
+  }
+  const dist = new Map<string, number>([...graph.keys()].map((v) => [v, Infinity]));
+  const previous = new Map<string, string>();
+  const settled = new Set<string>();
+  dist.set(start, 0);
+  while (settled.size < graph.size) {
+    let current: string | null = null;
+    for (const [v, d] of dist) {
+      if (!settled.has(v) && (current === null || d < dist.get(current)!)) current = v;
+    }
+    if (current === null || dist.get(current) === Infinity) break;
+    settled.add(current);
+    for (const [next, w] of graph.get(current)!) {
+      const through = dist.get(current)! + w;
+      if (through < dist.get(next)!) {
+        dist.set(next, through);
+        previous.set(next, current);
+      }
+    }
+  }
+  return { dist, previous };
+}
+
+const roads: [string, string, number][] = [
+  ["Leeds", "York", 40], ["Leeds", "Manchester", 70], ["York", "Hull", 60],
+  ["Manchester", "Hull", 150], ["Leeds", "Hull", 110], ["Hull", "Grimsby", 50],
+];
+const { dist, previous } = dijkstra(roads, "Leeds");
+const path = ["Grimsby"];
+while (previous.has(path[0])) path.unshift(previous.get(path[0])!);
+console.log(Object.fromEntries(dist));
+console.log(path, dist.get("Grimsby"));
+```
+
+It prints the distances from Leeds, `{ Leeds: 0, York: 40, Manchester: 70, Hull: 100, Grimsby: 150 }`, and the route `["Leeds", "York", "Hull", "Grimsby"]` with total **150**. Note that Leeds to Hull is cheaper via York (40 + 60 = 100) than by the direct road (110): Dijkstra found that because York was settled before Hull and offered a better distance.
+
+This simple version scans for the closest vertex each time: O(*V*²), fine for small graphs. Real implementations keep the candidates in a **priority queue** (<Ref to="m-trees-heaps" />), giving **O((*V* + *E*) log *V*)**.
+
+**A\*** (said "A star") is Dijkstra with a sense of direction: it adds to each candidate's distance an estimate of the remaining distance to the goal (such as the straight-line distance on a map), so it explores towards the goal first and usually settles far fewer vertices. As long as the estimate never overestimates, it still finds the shortest path. Route planners and games use it.
+
+With negative weights, Dijkstra can give wrong answers; the slower **Bellman–Ford** algorithm handles them and detects negative cycles.
+
+## Union-find: who is connected to whom
+
+**Union-find** (or disjoint-set) keeps track of which items are in the same group as connections are added: "are these two accounts linked?", "are these two computers on the same network?". It supports two operations, **union** (merge the groups of two items) and **find** (which group is this item in?), in almost constant time each, with two tricks: attach the smaller group under the larger, and shorten paths as you follow them (**path compression**).
+
+```ts
+class UnionFind {
+  private parent = new Map<string, string>();
+  private size = new Map<string, number>();
+
+  find(x: string): string {
+    if (!this.parent.has(x)) {
+      this.parent.set(x, x);
+      this.size.set(x, 1);
+    }
+    let root = x;
+    while (this.parent.get(root) !== root) root = this.parent.get(root)!;
+    while (x !== root) {            // path compression: point everything on the way at the root
+      const next = this.parent.get(x)!;
+      this.parent.set(x, root);
+      x = next;
+    }
+    return root;
+  }
+
+  union(a: string, b: string): boolean {
+    let ra = this.find(a), rb = this.find(b);
+    if (ra === rb) return false;
+    if (this.size.get(ra)! < this.size.get(rb)!) [ra, rb] = [rb, ra];
+    this.parent.set(rb, ra);
+    this.size.set(ra, this.size.get(ra)! + this.size.get(rb)!);
+    return true;
+  }
+}
+
+const accounts = new UnionFind();
+accounts.union("ama@example.com", "ama.b@example.com");
+accounts.union("ama.b@example.com", "ama_bakes");
+accounts.union("kofi@example.com", "kofi.o@example.com");
+console.log(accounts.find("ama_bakes") === accounts.find("ama@example.com"));
+console.log(accounts.find("kofi@example.com") === accounts.find("ama@example.com"));
+```
+
+It prints `true` and `false`: the username is linked to Ama's first email through the second, while Kofi's accounts form a separate group.
+
+## Minimum spanning trees
+
+Given weighted connections (cables, roads, pipes), a **minimum spanning tree** (MST) connects every vertex using the smallest total weight, with no redundant edges. **Kruskal's algorithm** is short with union-find: sort the edges by weight, and take each edge unless it joins two vertices already connected.
+
+```ts
+class UnionFind {
+  private parent = new Map<string, string>();
+  find(x: string): string {
+    if (!this.parent.has(x)) this.parent.set(x, x);
+    while (this.parent.get(x) !== x) x = this.parent.get(x)!;
+    return x;
+  }
+  union(a: string, b: string): boolean {
+    const ra = this.find(a), rb = this.find(b);
+    if (ra === rb) return false;
+    this.parent.set(rb, ra);
+    return true;
+  }
+}
+
+const cables: [string, string, number][] = [
+  ["A", "B", 4], ["A", "C", 1], ["B", "C", 2], ["B", "D", 5], ["C", "D", 8], ["D", "E", 3],
+];
+const sets = new UnionFind();
+const chosen = [...cables].sort((x, y) => x[2] - y[2]).filter(([a, b]) => sets.union(a, b));
+console.log(chosen, chosen.reduce((sum, [, , w]) => sum + w, 0));
+```
+
+It chooses A–C (1), B–C (2), D–E (3) and B–D (5), skips A–B (4) because A and B are already connected through C, and prints a total of **11**. O(*E* log *E*) for the sort.
+
+## Recognising graph problems
+
+Many problems do not mention graphs but are graph problems:
+
+| Problem | Graph | Algorithm |
+|---|---|---|
+| fewest transfers between two stations; "degrees of separation" | stations or people, unweighted | BFS |
+| fastest or cheapest route | weighted | Dijkstra or A* |
+| order to build, migrate, install or run tasks | dependencies, a DAG | topological sort |
+| "is there a circular dependency?" | directed | DFS cycle detection |
+| which accounts or records belong together | items linked by shared attributes | union-find or BFS/DFS components |
+| cheapest way to connect every site | weighted, undirected | minimum spanning tree |
+| can a word ladder go from "cold" to "warm"? | words differing by one letter | BFS |
+
+## Common mistakes
+
+- **Forgetting the visited set**, so the search loops forever around a cycle.
+- **Using DFS for shortest paths** in unweighted graphs. Use BFS.
+- **Using BFS when edges have weights**, or Dijkstra with negative weights.
+- **An adjacency matrix for a large sparse graph**, using O(*V*²) memory for mostly empty entries.
+- **Deep recursion in DFS** on large graphs, overflowing the stack.
+- **Silently returning an order when there is a cycle.** Detect it and report the cycle.
+
+## Practice
+
+**1. (warm-up)** A social network has 1 million users, each following about 200 others. Should you store it as an adjacency list or matrix? Estimate the size of each.
+
+<Solution>
+
+Adjacency list: about 1,000,000 × 200 = 200 million entries. Adjacency matrix: 10¹² cells, almost all empty, which is far too large (a trillion bits is about 125 GB even at one bit each). Use the list.
+
+</Solution>
+
+**2. (warm-up)** Which search finds the fewest hops between two people in an unweighted friendship graph, and why?
+
+<Solution>
+
+Breadth-first search, because it visits vertices in order of their distance in hops from the start, so the first time it reaches the goal, it has used the fewest hops.
+
+</Solution>
+
+**3. (warm-up)** Can a graph with a cycle be topologically sorted?
+
+<Solution>
+
+No. In a cycle, each task would have to come after the one before it, all the way round, so no order works. That is why Kahn's algorithm reports a cycle when some tasks never become ready.
+
+</Solution>
+
+**4. (standard)** Count the connected groups (components) in an undirected graph given as edges, plus a list of all vertices.
+
+<Solution>
+
+```ts
+function countComponents(vertices: string[], edges: [string, string][]): number {
+  const g = new Map<string, string[]>(vertices.map((v) => [v, []]));
+  for (const [a, b] of edges) {
+    g.get(a)!.push(b);
+    g.get(b)!.push(a);
+  }
+  const seen = new Set<string>();
+  let components = 0;
+  for (const v of vertices) {
+    if (seen.has(v)) continue;
+    components++;
+    const stack = [v];
+    seen.add(v);
+    while (stack.length > 0) {
+      const current = stack.pop()!;
+      for (const next of g.get(current)!) {
+        if (!seen.has(next)) {
+          seen.add(next);
+          stack.push(next);
+        }
+      }
+    }
+  }
+  return components;
+}
+
+console.log(countComponents(["a", "b", "c", "d", "e", "f"], [["a", "b"], ["b", "c"], ["d", "e"]]));
+```
+
+Each unvisited vertex starts a new search (here an iterative DFS with a stack) that marks its whole group. It prints **3**: `{a, b, c}`, `{d, e}` and `{f}`. O(*V* + *E*).
+
+</Solution>
+
+**5. (standard)** Using the road weights in this chapter, what is the shortest distance from York to Manchester, and by which route?
+
+<Solution>
+
+York–Leeds–Manchester is 40 + 70 = **110**. The alternatives are longer: York–Hull–Manchester is 60 + 150 = 210, and York–Hull–Leeds–Manchester is 60 + 110 + 70 = 240.
+
+</Solution>
+
+**6. (standard)** A word ladder changes one letter at a time, each step being a real word. Using BFS, find the shortest ladder from "cold" to "warm" with the words: cold, cord, card, ward, warm, word, worm, wore, core.
+
+<Solution>
+
+```ts
+function ladder(start: string, goal: string, words: string[]): string[] | null {
+  const dictionary = new Set(words);
+  const oneApart = (a: string, b: string) => [...a].filter((ch, i) => ch !== b[i]).length === 1;
+  const previous = new Map<string, string | null>([[start, null]]);
+  const queue = [start];
+  for (let head = 0; head < queue.length; head++) {
+    const current = queue[head];
+    if (current === goal) {
+      const path: string[] = [];
+      for (let w: string | null = goal; w; w = previous.get(w)!) path.unshift(w);
+      return path;
+    }
+    for (const next of dictionary) {
+      if (!previous.has(next) && oneApart(current, next)) {
+        previous.set(next, current);
+        queue.push(next);
+      }
+    }
+  }
+  return null;
+}
+
+console.log(ladder("cold", "warm", ["cold", "cord", "card", "ward", "warm", "word", "worm", "wore", "core"]));
+```
+
+The words are vertices, joined when they differ by one letter. It prints **["cold", "cord", "card", "ward", "warm"]**, four steps. (cold → cord → word → worm → warm is also four steps; BFS returns whichever it reaches first, which depends on the order the words are checked.)
+
+</Solution>
+
+**7. (standard)** Why must Dijkstra's algorithm not be used with negative edge weights?
+
+<Solution>
+
+It treats a vertex's distance as final once it is the closest unsettled vertex, assuming no later path can be shorter, because adding more non-negative edges never reduces a distance. A negative edge discovered later could make a path through it shorter than one already "settled", so the answer can be wrong. Use Bellman–Ford instead.
+
+</Solution>
+
+**8. (stretch)** Explain how a package manager could use graph algorithms to install packages, and what it should do when two packages depend on each other.
+
+<Solution>
+
+Packages are vertices and "depends on" are directed edges. A DFS or BFS from the requested packages finds everything needed (reachability). A topological sort of that subgraph gives an install order in which every package comes after its dependencies; independent ones can be installed in parallel. If the dependency graph has a cycle, no order satisfies it: the manager should detect it (DFS colouring or Kahn's algorithm) and report the actual cycle, or, if the packages allow it, install the cycle's members together as one unit.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **graph** is **vertices** joined by **edges**, which may be **directed** and **weighted**. **DAGs** have no cycles.
+- Store sparse graphs as **adjacency lists**; small dense ones as **adjacency matrices**.
+- **BFS** (a queue) finds fewest-hop paths in unweighted graphs; **DFS** (a stack or recursion) answers reachability, components and **cycle detection**. Both are O(*V* + *E*); both need a visited set.
+- **Topological sort** (Kahn's algorithm) orders dependencies and reveals cycles.
+- **Dijkstra** finds weighted shortest paths with non-negative weights, O((*V* + *E*) log *V*) with a heap; **A\*** adds a goal estimate; **Bellman–Ford** handles negative weights.
+- **Union-find** merges and checks groups in almost constant time; **Kruskal** uses it for **minimum spanning trees**.
+- Many everyday problems are graph problems in disguise.
+
+## Go deeper
+
+- [Algorithms](https://jeffe.cs.illinois.edu/teaching/algorithms/), Jeff Erickson. Free chapters on graph search, shortest paths and minimum spanning trees.
+- [Algorithms, 4th edition: graphs](https://algs4.cs.princeton.edu/40graphs/), Robert Sedgewick and Kevin Wayne. Princeton's graph chapter, with Java implementations.
+- [CP-Algorithms: graphs](https://cp-algorithms.com/), community-maintained. Clear descriptions of every classic graph algorithm.
+- [VisuAlgo: graph traversal](https://visualgo.net/en/dfsbfs), VisuAlgo. Animated BFS, DFS and topological sort.

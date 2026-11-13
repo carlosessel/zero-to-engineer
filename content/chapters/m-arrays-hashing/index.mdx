@@ -1,0 +1,379 @@
+---
+title: "Arrays, strings and hash tables"
+summary: "Dynamic arrays, string building, hashing, collisions and when hash tables are slow."
+prerequisites: [m-complexity]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will know how the two data structures you use most, arrays and hash tables, actually work inside, which operations on them are cheap and which are secretly expensive, and the classic bugs each one causes: quadratic string building, keys that cannot be found, and services brought down by crafted input. Nearly every program is built from these two structures, so understanding them pays off every day.
+
+## Arrays
+
+An **array** stores its elements side by side in one block of memory. Because every element is the same size, the address of element *i* is simply the start address plus *i* times the element size, so **reading or writing any element by its index is O(1)**. Walking through an array in order is also as fast as memory gets, because neighbouring elements share cache lines (<Ref to="m-machine" />).
+
+The cost is in changing the shape:
+
+| Operation | Cost | Why |
+|---|---|---|
+| read or write `a[i]` | O(1) | address arithmetic |
+| add or remove at the end | O(1) amortised | usually just the next slot |
+| insert or remove in the middle or at the front | O(*n*) | everything after it must move one place |
+| search for a value (unsorted) | O(*n*) | look at each element |
+| search for a value (sorted) | O(log *n*) | binary search (<Ref to="m-sorting-searching" />) |
+
+**Dynamic arrays** (JavaScript's `Array`, Java's `ArrayList`, C#'s `List<T>`, Python's `list`) grow by allocating a larger block and copying when they fill, which makes appending O(1) amortised (<Ref to="m-complexity" />).
+
+The practical rules: arrays are the default sequence type; add and remove at the end; avoid inserting or removing at the front (`shift`, `unshift`, `list.remove(0)`, `Insert(0, …)`) in loops; and if you need to look things up by value often, use a hash table alongside.
+
+## Strings
+
+A string is, underneath, an array of characters (or code units, <Ref to="m-data-representation" />). In Java, C#, JavaScript and Python, strings are **immutable**: an operation that "changes" a string actually creates a new one. Immutability makes strings safe to share and use as keys, but it has one famous cost:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        String slow = "";
+        for (int i = 0; i < 5; i++) {
+            slow += i + ",";          // a new string each time, copying everything so far
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < 5; i++) {
+            sb.append(i).append(',');  // appends into one growing buffer
+        }
+        String fast = sb.toString();
+
+        System.out.println(slow);
+        System.out.println(fast);
+        System.out.println(slow.equals(fast));
+    }
+}
+```
+
+Both print `0,1,2,3,4,`, and they are equal. But building a string of *n* pieces with `+=` copies the whole string so far each time: 1 + 2 + 3 + … + *n* characters, which is O(*n*²). A **string builder** (Java's `StringBuilder`, C#'s `StringBuilder`) is a dynamic array of characters, so the same job is O(*n*). In JavaScript, collect pieces in an array and `join` them, or use a template; in Python, `"".join(pieces)`. For a handful of concatenations it makes no difference; for thousands in a loop (building a CSV file, a report, an HTML page) it is the difference between milliseconds and minutes.
+
+## Hash tables
+
+A **hash table** stores key–value pairs and finds a value from its key in O(1) time on average, whatever the size. It is behind JavaScript's `Map` and `Set`, Java's `HashMap` and `HashSet`, C#'s `Dictionary` and `HashSet`, and Python's `dict` and `set`. It is probably the most useful data structure in practice.
+
+### How it works
+
+1. A **hash function** turns a key into a number, its **hash code**: the same key always gives the same number, and different keys usually give different numbers.
+2. The table is an array of **buckets**. The hash code, reduced to the array's size (with `%`, or by keeping the low bits), picks a bucket.
+3. The key and value are stored in that bucket. To look a key up, hash it, go to the bucket, and compare the keys found there.
+
+Different keys can land in the same bucket: a **collision**. Collisions are unavoidable (the pigeonhole principle, <Ref to="m-discrete-maths" />), so tables handle them, usually in one of two ways:
+
+- **Chaining**: each bucket holds a small list of entries. Java's `HashMap` and C#'s `Dictionary` work this way.
+- **Open addressing**: a colliding entry goes into the next free slot by some rule, and lookups follow the same rule. Many high-performance tables and Python's `dict` work this way.
+
+Here is a small hash table with chaining, to make the idea concrete:
+
+```ts
+class HashTable<V> {
+  private buckets: [string, V][][];
+  size = 0;
+
+  constructor(capacity = 4) {
+    this.buckets = Array.from({ length: capacity }, () => []);
+  }
+
+  private hash(key: string): number {
+    let h = 0;
+    for (let i = 0; i < key.length; i++) h = (h * 31 + key.charCodeAt(i)) >>> 0;
+    return h;
+  }
+
+  private bucketFor(key: string) {
+    return this.buckets[this.hash(key) % this.buckets.length];
+  }
+
+  set(key: string, value: V) {
+    const bucket = this.bucketFor(key);
+    const entry = bucket.find(([k]) => k === key);
+    if (entry) entry[1] = value;
+    else {
+      bucket.push([key, value]);
+      this.size++;
+      if (this.size > this.buckets.length * 0.75) this.resize();
+    }
+  }
+
+  get(key: string): V | undefined {
+    return this.bucketFor(key).find(([k]) => k === key)?.[1];
+  }
+
+  private resize() {
+    const old = this.buckets.flat();
+    this.buckets = Array.from({ length: this.buckets.length * 2 }, () => []);
+    for (const [k, v] of old) this.bucketFor(k).push([k, v]);
+  }
+
+  get capacity() {
+    return this.buckets.length;
+  }
+}
+
+const stock = new HashTable<number>();
+for (const [name, count] of [["rye", 0], ["bun", 12], ["loaf", 6], ["cake", 3], ["tart", 8]] as const) {
+  stock.set(name, count);
+}
+console.log(stock.get("bun"), stock.get("tart"), stock.get("scone"));
+console.log(stock.size, stock.capacity);
+```
+
+It prints `12 8 undefined`, then `5 8`. The hash function is the classic "multiply by 31 and add each character", the same idea as Java's `String.hashCode`. The table started with 4 buckets and doubled to 8 when it held more than 4 × 0.75 = 3 entries.
+
+### Load factor and resizing
+
+The **load factor** is the number of entries divided by the number of buckets. As it rises, buckets get longer and lookups slower, so tables **resize** when it passes a threshold: allocate more buckets (usually double) and re-insert everything. Java's `HashMap`, for example, starts with 16 buckets and resizes when the load factor passes 0.75 (from the JDK source). Like a dynamic array, resizing is an occasional O(*n*) step that keeps operations O(1) amortised, and you can avoid it by giving the expected size up front (`new HashMap<>(expectedSize)` takes a capacity; size it a little above the number of entries you expect).
+
+### The worst case, and hash flooding
+
+If many keys land in the same bucket, a lookup must compare them all: O(*n*) in the worst case. With a decent hash function and ordinary data this does not happen. But an attacker who knows your hash function can send thousands of keys built to collide (for example as JSON field names or form parameters), turning each request into quadratic work. This is a **hash-flooding** attack, and it has been used to take real web services down.
+
+Defences used by modern platforms:
+
+- **Randomised hashing**: hash functions seeded with a random value chosen when the program starts, so collisions cannot be predicted (Python and the .NET string hash do this).
+- **Tree bins**: Java's `HashMap` converts a bucket that grows past 8 entries into a balanced tree (once the table has at least 64 buckets), so the worst case becomes O(log *n*) per lookup.
+- **Limits** on the number of parameters or fields a request may have.
+
+## Keys: the equals and hashCode contract
+
+For a hash table to find a key, two keys that are **equal** must produce the **same hash code**. Languages leave it to you to keep that promise for your own types. In Java, a class that does not define `equals` and `hashCode` uses object identity: two separate objects with the same fields are *not* equal.
+
+```java
+import java.util.HashMap;
+import java.util.Map;
+
+public class Main {
+    static class PointClass {
+        final int x, y;
+        PointClass(int x, int y) { this.x = x; this.y = y; }
+    }
+
+    record PointRecord(int x, int y) {}
+
+    public static void main(String[] args) {
+        Map<PointClass, String> a = new HashMap<>();
+        a.put(new PointClass(1, 2), "bakery");
+        System.out.println("class key found: " + a.get(new PointClass(1, 2)));
+
+        Map<PointRecord, String> b = new HashMap<>();
+        b.put(new PointRecord(1, 2), "bakery");
+        System.out.println("record key found: " + b.get(new PointRecord(1, 2)));
+    }
+}
+```
+
+It prints `class key found: null` and `record key found: bakery`. A Java `record` generates `equals` and `hashCode` from its fields; so does a C# `record`. For an ordinary class, define both together, from the same fields (your IDE can generate them), or the key will be lost.
+
+Two further rules:
+
+- **Never change a key after putting it in a hash table.** Its hash code changes, so the table looks in the wrong bucket and the entry becomes unfindable (yet still present, using memory). Use immutable keys: strings, numbers, records.
+- In JavaScript, a `Map` compares object keys by **identity** (the same object), not by contents. To key by contents, use a string such as `` `${x},${y}` ``.
+
+## Using hash tables well
+
+Most "make this faster" problems in everyday code are solved by one of a few hash-table patterns:
+
+- **Look-up instead of search**: build a map from id to item once, instead of searching a list for each item (<Ref to="m-complexity" />).
+- **Seen-before**: a set of things already processed, to remove duplicates or detect repeats.
+- **Counting**: a map from value to count.
+- **Grouping**: a map from key to a list of items.
+- **Complement**: to find two numbers that add to a target, for each number look up `target − number` among those seen so far.
+
+```ts
+const orders = [
+  { customer: "Ama", item: "rye" },
+  { customer: "Kofi", item: "bun" },
+  { customer: "Ama", item: "bun" },
+  { customer: "Priya", item: "rye" },
+];
+
+const counts = new Map<string, number>();
+const byCustomer = new Map<string, string[]>();
+for (const { customer, item } of orders) {
+  counts.set(item, (counts.get(item) ?? 0) + 1);
+  if (!byCustomer.has(customer)) byCustomer.set(customer, []);
+  byCustomer.get(customer)!.push(item);
+}
+
+console.log([...counts]);
+console.log([...byCustomer]);
+```
+
+This prints the counts `[["rye", 2], ["bun", 2]]` and the groups `[["Ama", ["rye", "bun"]], ["Kofi", ["bun"]], ["Priya", ["rye"]]]`, in one pass. (JavaScript's `Map` keeps keys in insertion order; Java's `HashMap` and C#'s `Dictionary` do not promise any order. Use `LinkedHashMap` in Java, or sort, when order matters.)
+
+## When not to use a hash table
+
+- **You need order or ranges** ("all orders between 10:00 and 11:00", "the smallest key above x"): use a sorted structure such as a balanced tree (<Ref to="m-trees-heaps" />) or a sorted array.
+- **The keys are small integers** in a known range: a plain array indexed by the key is faster and smaller.
+- **Very few items**: scanning a short array is often faster than hashing.
+- **Memory is tight**: hash tables use noticeably more memory than arrays for the same data.
+
+## Common mistakes
+
+- **`+=` on strings in a loop.** Use a builder or join.
+- **Searching a list inside a loop** instead of building a map or set.
+- **Custom keys without matching `equals` and `hashCode`.**
+- **Mutating a key** after inserting it.
+- **Relying on a hash map's iteration order.**
+- **Unbounded input as keys** in a service without hash-flooding protection or input limits.
+- **Inserting at the front of an array** repeatedly.
+
+## Practice
+
+**1. (warm-up)** Why is reading `a[500000]` from an array as fast as reading `a[0]`?
+
+<Solution>
+
+The element's address is computed directly: start address + 500,000 × element size. No other elements are visited, so it is O(1) whatever the index.
+
+</Solution>
+
+**2. (warm-up)** What are the time costs of inserting at the front of an array of *n* elements, and at the end?
+
+<Solution>
+
+Front: O(*n*), because every element must move one place. End: O(1) amortised.
+
+</Solution>
+
+**3. (warm-up)** Two distinct keys produce the same bucket. What is this called, and is it a bug?
+
+<Solution>
+
+A collision. It is not a bug: collisions are unavoidable, and hash tables handle them by chaining or open addressing. They become a problem only when very many keys collide.
+
+</Solution>
+
+**4. (standard)** Roughly how many characters are copied when building a 10,000-character string by appending one character at a time with `+=`, compared with a string builder?
+
+<Solution>
+
+With `+=`, each step copies the whole string so far: 1 + 2 + … + 10,000 = 10,000 × 10,001 ÷ 2 ≈ **50 million** characters. With a builder, about 10,000 characters are written, plus occasional buffer growth (less than another 10,000): roughly **20,000**.
+
+</Solution>
+
+**5. (standard)** A hash table has 16 buckets and resizes when the load factor passes 0.75. After how many entries does it first resize, and to how many buckets?
+
+<Solution>
+
+16 × 0.75 = 12, so on adding the **13th** entry it resizes, typically to **32** buckets.
+
+</Solution>
+
+**6. (standard)** Write a function that returns the indices of two numbers in an array that add up to a target, in O(*n*) time.
+
+<Solution>
+
+```ts
+function twoSum(values: number[], target: number): [number, number] | undefined {
+  const indexOf = new Map<number, number>();
+  for (let i = 0; i < values.length; i++) {
+    const j = indexOf.get(target - values[i]);
+    if (j !== undefined) return [j, i];
+    indexOf.set(values[i], i);
+  }
+  return undefined;
+}
+
+console.log(twoSum([4, 9, 2, 7], 11));
+```
+
+For each value it checks whether the number needed to reach the target has been seen, using the map: O(1) each, O(*n*) overall. It prints **[1, 2]**: 9 + 2 = 11.
+
+</Solution>
+
+**7. (standard)** A Java service caches results in a `HashMap<Customer, Report>`, where `Customer` is an ordinary class with `id` and `name` fields and no `equals` or `hashCode`. The cache never seems to hit, and memory grows. Explain both symptoms.
+
+<Solution>
+
+Without `equals` and `hashCode`, each new `Customer` object with the same id is a different key (identity is compared), so lookups miss. Every miss stores another entry, so the map grows with duplicates that are never found again: a leak. Fix: key by the customer id (a `long` or `String`), or make `Customer` a record or give it `equals` and `hashCode` based on `id`; and give the cache a size limit.
+
+</Solution>
+
+**8. (standard)** Group these words by their sorted letters (words that are anagrams of each other go together): "listen", "silent", "enlist", "google", "gogole", "cat", "act".
+
+<Solution>
+
+```ts
+function groupAnagrams(words: string[]): string[][] {
+  const groups = new Map<string, string[]>();
+  for (const w of words) {
+    const key = [...w].sort().join("");
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(w);
+  }
+  return [...groups.values()];
+}
+
+console.log(groupAnagrams(["listen", "silent", "enlist", "google", "gogole", "cat", "act"]));
+```
+
+Sorting each word's letters gives the same key for anagrams. It prints `[["listen", "silent", "enlist"], ["google", "gogole"], ["cat", "act"]]`.
+
+</Solution>
+
+**9. (standard)** Why should hash-table keys be immutable?
+
+<Solution>
+
+The table puts each entry in a bucket chosen by the key's hash code at insertion time. If the key changes afterwards, its hash code changes, and lookups go to a different bucket: the entry can no longer be found (or removed), though it is still there.
+
+</Solution>
+
+**10. (stretch)** Explain hash flooding and two ways platforms defend against it.
+
+<Solution>
+
+An attacker sends many keys crafted to have the same hash code (for example as request parameters), so they all land in one bucket and each insert or lookup must scan them all: quadratic work per request, exhausting the CPU. Defences: randomised hash seeds chosen at start-up, so collisions cannot be predicted; tree bins (as Java's `HashMap` does) so a crowded bucket costs O(log *n*) per lookup; and limits on the number of parameters or fields per request.
+
+</Solution>
+
+**11. (stretch)** Find the length of the longest run of distinct characters in a string (for example "abcabcbb" has "abc", length 3), in O(*n*) time.
+
+<Solution>
+
+```ts
+function longestDistinct(s: string): number {
+  const lastSeen = new Map<string, number>();
+  let start = 0;
+  let best = 0;
+  for (let i = 0; i < s.length; i++) {
+    const prev = lastSeen.get(s[i]);
+    if (prev !== undefined && prev >= start) start = prev + 1;
+    lastSeen.set(s[i], i);
+    best = Math.max(best, i - start + 1);
+  }
+  return best;
+}
+
+console.log(longestDistinct("abcabcbb"), longestDistinct("bbbb"), longestDistinct("pwwkew"));
+```
+
+A window from `start` to `i` holds distinct characters; when a repeat appears inside the window, the window's start jumps past the earlier copy. Each character is visited once: O(*n*). It prints **3 1 3**.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Arrays** store elements contiguously: O(1) indexing and fast sequential access; O(*n*) to insert or remove anywhere but the end. **Dynamic arrays** grow by copying, O(1) amortised per append.
+- **Strings** are immutable: `+=` in a loop is O(*n*²); use a **string builder** or join.
+- **Hash tables** map keys to values in O(1) on average: **hash function**, **buckets**, **collisions** handled by **chaining** or **open addressing**, and **resizing** at a **load factor** threshold.
+- The worst case is O(*n*); **hash flooding** exploits it; platforms defend with randomised hashing, tree bins and input limits.
+- Equal keys must have equal hash codes: use records or define `equals` and `hashCode` together; never mutate keys.
+- Hash-table patterns solve most everyday speed problems: look-up, seen-before, counting, grouping, complement.
+- Use sorted structures for order and ranges, plain arrays for small integer keys.
+
+## Go deeper
+
+- [Open Data Structures](https://opendatastructures.org/), Pat Morin. A free textbook covering arrays, hash tables and the rest of this part, with implementations.
+- [HashMap (Java SE 25)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/HashMap.html), Oracle. Capacity, load factor and performance notes.
+- [Dictionary (.NET)](https://learn.microsoft.com/en-us/dotnet/api/system.collections.generic.dictionary-2), Microsoft. The .NET hash table and its requirements for keys.
+- [Map (JavaScript)](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Map), MDN. How `Map` differs from plain objects.
+- [VisuAlgo: hash table](https://visualgo.net/en/hashtable), VisuAlgo. Animations of chaining and open addressing.

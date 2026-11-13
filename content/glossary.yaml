@@ -17,6 +17,12 @@
 - term: "Address"
   definition: "The number identifying a location in memory."
   courses: [mastery]
+- term: "Adjacency list"
+  definition: "Storing a graph as a list of neighbours for each vertex."
+  courses: [mastery]
+- term: "Adjacency matrix"
+  definition: "Storing a graph as a table saying whether each pair of vertices is connected."
+  courses: [mastery]
 - term: "Agent"
   definition: "A model that uses tools in a loop and decides its own next step until a task is done."
   courses: [ai, claude]
@@ -33,6 +39,10 @@
   aliases: ["alternative text"]
   definition: "The description of an image in its alt attribute, read by screen readers and shown when the image cannot load."
   courses: [web]
+- term: "Amortised"
+  aliases: ["O(1) amortised"]
+  definition: "Averaged over a sequence of operations: a few expensive steps spread across many cheap ones."
+  courses: [mastery]
 - term: "API"
   definitions:
     ai: "A way for one program to ask another for something over the internet; you call a model through its API."
@@ -57,7 +67,7 @@
   courses: [web]
 - term: "Array"
   definition: "An ordered list of values, written in square brackets, with positions counted from 0."
-  courses: [web]
+  courses: [web, mastery]
 - term: "Arrow function"
   definition: "A short way to write a function: (n) => n * 2."
   courses: [web]
@@ -89,9 +99,15 @@
 - term: "Auto mode"
   definition: "A Claude Code permission mode in which a separate classifier reviews actions and blocks risky ones, so routine actions run without prompts. It does not guarantee safety."
   courses: [claude]
+- term: "Average case"
+  definition: "The expected cost over inputs of a given size, assuming a particular distribution of inputs."
+  courses: [mastery]
 - term: "AVIF"
   definition: "A newer image format, often smaller still than WebP."
   courses: [web]
+- term: "B-tree"
+  definition: "A balanced tree with many keys and children per node, designed so each node fills a disk page; used for database indexes."
+  courses: [mastery]
 - term: "Back end"
   definition: "The code that runs on a server: rules, data access and APIs."
   courses: [se, web]
@@ -99,21 +115,37 @@
   aliases: ["back-of-the-envelope estimates"]
   definition: "A quick, rough calculation to check whether a design can possibly work before building it."
   courses: [mastery]
+- term: "Back-pressure"
+  definition: "Slowing or refusing a producer when a consumer cannot keep up, instead of buffering without limit."
+  courses: [mastery]
 - term: "Backpropagation"
   definition: "The method that works out how much each weight contributed to the error."
   courses: [ai]
+- term: "Backtracking"
+  definition: "Building a solution choice by choice and undoing choices that cannot lead to a valid answer."
+  courses: [mastery]
 - term: "Bandwidth"
   definition: "How much data a link can carry per second, as opposed to how long one trip takes."
   courses: [mastery]
 - term: "Barriers"
   definition: "Small pieces of code a concurrent collector adds to reference reads or writes, to track changes while the application runs."
   courses: [mastery]
+- term: "Base case"
+  aliases: ["base case(s)"]
+  definition: "An input small enough for a recursive function to answer directly, stopping the recursion."
+  courses: [mastery]
 - term: "Batch"
   definition: "Two meanings. In training, a small group of examples processed together in one training step. In the Claude API, a group of requests sent together and answered within hours, at half the normal price."
   courses: [ai, claude]
+- term: "Best case"
+  definition: "The input of a given size that makes an algorithm do the least work."
+  courses: [mastery]
 - term: "Big O"
   definition: "A way of describing how an algorithm’s work grows as its input grows."
-  courses: [se]
+  courses: [se, mastery]
+- term: "Big O notation"
+  definition: "A way to describe how an algorithm's cost grows with input size, keeping the dominant term and ignoring constant factors."
+  courses: [mastery]
 - term: "Big-endian"
   definition: "Storing a multi-byte value with its most significant byte first, as many network protocols do."
   courses: [mastery]
@@ -122,6 +154,18 @@
   courses: [mastery]
 - term: "Binary"
   definition: "Base-2 numbers, written with only 0 and 1."
+  courses: [mastery]
+- term: "Binary heap"
+  definition: "A tree stored in an array where each parent is no larger (min-heap) than its children, giving fast access to the smallest item."
+  courses: [mastery]
+- term: "Binary search"
+  definition: "Finding a value in sorted data by repeatedly halving the range: O(log n)."
+  courses: [mastery, se]
+- term: "Binary search tree"
+  definition: "A binary tree where each node's left subtree holds smaller keys and its right subtree larger ones."
+  courses: [mastery]
+- term: "Binary tree"
+  definition: "A tree in which each node has at most two children."
   courses: [mastery]
 - term: "Bit"
   definition: "The smallest unit of data: a 0 or a 1."
@@ -135,12 +179,18 @@
 - term: "Branch misprediction"
   definition: "When the CPU guesses the wrong way at an if or loop and must throw away work, costing a few nanoseconds."
   courses: [mastery]
+- term: "Breadth-first search"
+  definition: "Exploring a graph in rings outward from the start, using a queue; finds fewest-hop paths."
+  courses: [mastery]
 - term: "Breakpoint"
   definition: "Two meanings. In responsive design, a width at which the layout changes; choose them where your content starts to look wrong. In debugging, a marked line where the program pauses so you can inspect it."
   courses: [web, se]
 - term: "Browser"
   definition: "The program you open web pages with, such as Chrome, Firefox, Safari or Edge."
   courses: [web]
+- term: "Bucket"
+  definition: "One slot of a hash table's array, holding the entries whose keys hash to it."
+  courses: [mastery]
 - term: "Bug"
   definition: "A mistake that makes software behave wrongly."
   courses: [se]
@@ -190,6 +240,11 @@
 - term: "Certificate"
   definition: "A signed document that proves a server's identity for TLS."
   courses: [mastery]
+- term: "Chaining"
+  definitions:
+    mastery: "Handling hash collisions by keeping a small list of entries in each bucket."
+    web: "Calling one method on the result of another, such as items.filter(...).map(...)."
+  courses: [mastery, web]
 - term: "Character reference"
   definition: "A code such as &lt; or &amp; that shows a character HTML would otherwise treat specially."
   courses: [web]
@@ -197,8 +252,10 @@
   definition: "A process started by another process, its parent."
   courses: [mastery]
 - term: "Children"
-  definition: "In React, whatever is placed between a component's opening and closing tags, passed to it as a prop called children."
-  courses: [web]
+  definitions:
+    web: "In React, whatever is placed between a component's opening and closing tags, passed to it as a prop called children."
+    mastery: "In a tree, the nodes directly below a node."
+  courses: [web, mastery]
 - term: "Chunk"
   definition: "A passage of a document, cut to a size suitable for search and for the prompt."
   courses: [ai]
@@ -337,6 +394,9 @@
 - term: "CORS"
   definition: "Cross-Origin Resource Sharing: the rules by which a server says which other sites' pages may read its replies."
   courses: [web]
+- term: "Counting sort"
+  definition: "A non-comparison sort for small integer keys: count each value, then write them out in order."
+  courses: [mastery]
 - term: "CPU"
   definition: "The central processing unit, or processor: the part of a computer that runs instructions."
   courses: [mastery]
@@ -362,6 +422,9 @@
   courses: [claude]
 - term: "Cycle collector"
   definition: "A collector that finds and frees groups of objects that only refer to each other, which reference counting alone cannot."
+  courses: [mastery]
+- term: "DAG"
+  definition: "A directed acyclic graph: directed edges and no cycles, like task dependencies."
   courses: [mastery]
 - term: "Database"
   definition: "Software that stores data safely and answers questions about it."
@@ -402,6 +465,12 @@
 - term: "Deploy"
   definition: "To put software onto servers where users can reach it."
   courses: [se]
+- term: "Depth-first search"
+  definition: "Exploring a graph as deep as possible along each path before backing up, using a stack or recursion."
+  courses: [mastery]
+- term: "Deque"
+  definition: "A double-ended queue, allowing adding and removing at both ends."
+  courses: [mastery]
 - term: "Derived data"
   aliases: ["derived"]
   definition: "A value that can be calculated from state or props, so it is worked out during render instead of being stored."
@@ -416,6 +485,9 @@
   aliases: ["DevTools"]
   definition: "Panels built into every browser that show what a page is made of and what its code is doing; open them with F12."
   courses: [web]
+- term: "Dijkstra's algorithm"
+  definition: "An algorithm for shortest paths in a weighted graph with no negative weights."
+  courses: [mastery]
 - term: "Discrete mathematics"
   definition: "The mathematics of separate, countable things: logic, sets, counting, probability and graphs."
   courses: [mastery]
@@ -434,16 +506,31 @@
 - term: "Double free"
   definition: "Freeing the same memory twice, corrupting the allocator."
   courses: [mastery]
+- term: "Doubly linked list"
+  definition: "A linked list whose nodes also refer to the previous node, allowing movement in both directions."
+  courses: [mastery]
+- term: "Dynamic array"
+  definition: "An array that grows by allocating a bigger block and copying when full, such as ArrayList or List<T>."
+  courses: [mastery]
 - term: "Dynamic import"
   definition: "import(\"./file.js\") with brackets, which loads a module when that line runs and returns a promise for it."
   courses: [web]
+- term: "Dynamic programming"
+  definition: "Solving a problem by storing and reusing the answers to overlapping subproblems."
+  courses: [mastery, se]
 - term: "Dynamic workflows"
   definition: "Claude Code runs in which a script coordinates many subagents in the background for a very large job."
   courses: [claude]
+- term: "Edge"
+  definition: "A connection between two vertices of a graph, possibly directed and weighted."
+  courses: [mastery]
 - term: "Edge case"
   aliases: ["edge cases"]
   definition: "An unusual input at the boundary of what code handles, such as zero, an empty list or the largest allowed value."
   courses: [web]
+- term: "Edit distance"
+  definition: "The fewest insertions, deletions or substitutions needed to turn one string into another."
+  courses: [mastery]
 - term: "Effect"
   definition: "In React, code run after rendering to keep a component in step with something outside React, written with useEffect."
   courses: [web]
@@ -490,6 +577,9 @@
 - term: "Eviction policy"
   definition: "The rule a cache uses to decide what to remove when full, such as least recently used."
   courses: [mastery]
+- term: "Exchange argument"
+  definition: "A proof that a greedy choice is safe, by showing any optimal solution can be changed to include it without getting worse."
+  courses: [mastery]
 - term: "Exit code"
   definition: "The number a program returns when it ends: 0 means success, anything else a kind of failure."
   courses: [claude]
@@ -521,6 +611,9 @@
 - term: "Fieldset"
   definition: "An HTML element that groups related form controls, with a legend saying what the group is."
   courses: [web]
+- term: "FIFO"
+  definition: "First in, first out: the order of a queue."
+  courses: [mastery]
 - term: "File descriptor"
   definition: "A small number identifying an open file, pipe or connection in a process."
   courses: [mastery]
@@ -597,6 +690,12 @@
 - term: "Gradient descent"
   definition: "Repeatedly nudging the weights in the direction that reduces the loss."
   courses: [ai]
+- term: "Graph"
+  definition: "A set of vertices connected by edges."
+  courses: [mastery]
+- term: "Greedy"
+  definition: "Of an algorithm: always taking the choice that looks best now, never reconsidering."
+  courses: [mastery, se]
 - term: "Grid"
   definition: "The CSS layout method for arranging items in rows and columns at once."
   courses: [web, se]
@@ -615,6 +714,19 @@
 - term: "Hash"
   definition: "The output of a one-way function, used for fast lookup and for storing passwords."
   courses: [se]
+- term: "Hash code"
+  definition: "The number a hash function produces for a key."
+  courses: [mastery]
+- term: "Hash flooding"
+  aliases: ["hash-flooding"]
+  definition: "An attack that sends keys crafted to collide, making a hash table slow."
+  courses: [mastery]
+- term: "Hash function"
+  definition: "A function that turns a key into a number, the same for equal keys and usually different for different ones."
+  courses: [mastery, se]
+- term: "Hash table"
+  definition: "A structure that maps keys to values in O(1) average time by hashing each key to a bucket."
+  courses: [mastery]
 - term: "Head-of-line blocking"
   definition: "When one delayed item holds up everything queued behind it, such as a lost TCP packet stalling later data."
   courses: [mastery]
@@ -656,11 +768,17 @@
 - term: "IL"
   definition: "Intermediate language: the bytecode C# and other .NET languages compile to."
   courses: [mastery]
+- term: "Immutable"
+  definition: "Unable to be changed after creation; operations produce new values instead."
+  courses: [mastery]
 - term: "Imperative"
   definition: "Giving step-by-step instructions for how to reach a result, such as creating and removing elements by hand."
   courses: [web]
 - term: "Implication"
   definition: "\"If a then b\", false only when a is true and b is false; the same as (not a) or b."
+  courses: [mastery]
+- term: "In-order traversal"
+  definition: "Visiting a binary tree's left subtree, then the node, then the right subtree; sorted order in a binary search tree."
   courses: [mastery]
 - term: "Inclusion–exclusion"
   definition: "Counting a union by adding the sizes of the sets and subtracting what was counted twice."
@@ -686,6 +804,9 @@
 - term: "Input tokens"
   definition: "The tokens a model reads in a request: the prompt, conversation and attachments. Priced separately from output tokens."
   courses: [claude]
+- term: "Insertion sort"
+  definition: "A sort that inserts each element into place in a growing sorted section; fast for small or nearly sorted data."
+  courses: [mastery]
 - term: "Instant"
   definition: "A single point in time, the same everywhere in the world."
   courses: [mastery]
@@ -768,6 +889,10 @@
 - term: "LCP"
   definition: "Largest Contentful Paint: how long until the largest image or text block in view appears. Good is 2.5 seconds or less."
   courses: [web]
+- term: "Leaf"
+  aliases: ["leaves"]
+  definition: "A tree node with no children."
+  courses: [mastery]
 - term: "Learning rate"
   definition: "How big a step the weights take on each update."
   courses: [ai]
@@ -776,6 +901,9 @@
     ai: "Code written by others that you install and use in your own program."
     se: "Code written by others that you install and call."
   courses: [ai, se]
+- term: "LIFO"
+  definition: "Last in, first out: the order of a stack."
+  courses: [mastery]
 - term: "Lifting state up"
   aliases: ["lift state up"]
   definition: "Moving state to the closest component that contains every component needing it, and passing it down as props."
@@ -783,6 +911,9 @@
 - term: "Lighthouse"
   definition: "A tool built into Chrome's developer tools that tests a page's performance and accessibility and lists problems to fix."
   courses: [web]
+- term: "Linked list"
+  definition: "A sequence stored as nodes, each holding a value and a reference to the next node."
+  courses: [mastery]
 - term: "Literal type"
   definition: "A TypeScript type that allows only exact values, such as \"small\" | \"large\"."
   courses: [web]
@@ -798,6 +929,9 @@
 - term: "Load balancer"
   definition: "A component that spreads requests across several servers."
   courses: [se]
+- term: "Load factor"
+  definition: "The number of entries in a hash table divided by its number of buckets."
+  courses: [mastery]
 - term: "Locality"
   aliases: ["spatial locality", "temporal locality"]
   definition: "Using memory that is close together (spatial locality) or the same memory again soon (temporal locality), which makes caches effective."
@@ -820,6 +954,12 @@
 - term: "Loss"
   definition: "A number measuring how wrong a model’s predictions are; training tries to make it small."
   courses: [ai]
+- term: "Lower bound"
+  definition: "In searching, the first position whose value is at least a target."
+  courses: [mastery]
+- term: "LRU cache"
+  definition: "A cache that evicts the least recently used entry when full."
+  courses: [mastery]
 - term: "Machine code"
   definition: "Instructions a particular kind of CPU can execute directly."
   courses: [mastery]
@@ -863,6 +1003,10 @@
 - term: "Media query"
   definition: "A CSS block that applies only when a condition is true, such as the window being at least 700 pixels wide."
   courses: [web]
+- term: "Memoisation"
+  aliases: ["memoisation (top-down)"]
+  definition: "Storing the result of a function call so the same call later returns it without recomputing."
+  courses: [mastery]
 - term: "Memory"
   definition: "In the Claude apps, saved topics about you that the app adds to new conversations; you can view, edit, pause and reset them."
   courses: [claude]
@@ -871,6 +1015,9 @@
   courses: [mastery]
 - term: "Memory leak"
   definition: "Memory that is no longer needed but is never freed, so usage grows."
+  courses: [mastery]
+- term: "Merge sort"
+  definition: "A stable O(n log n) sort that splits the data, sorts each half and merges them."
   courses: [mastery]
 - term: "Message Batches API"
   definition: "A Claude API for sending many requests to be processed together within hours, at half the normal price."
@@ -891,9 +1038,15 @@
 - term: "Millisecond"
   definition: "A thousandth of a second; a thousand microseconds."
   courses: [mastery]
+- term: "Min-heap"
+  definition: "A heap where the smallest item is always at the root."
+  courses: [mastery]
 - term: "Minifying"
   definition: "Removing spaces, comments and long names from code so it is smaller but works the same."
   courses: [web]
+- term: "Minimum spanning tree"
+  definition: "The set of edges connecting all vertices of a weighted graph with the smallest total weight."
+  courses: [mastery]
 - term: "Mobile first"
   definition: "Writing CSS for small screens first and adding to it for larger ones with min-width media queries."
   courses: [web]
@@ -935,6 +1088,9 @@
 - term: "Neural network"
   definition: "A model made of layers of simple units that multiply, add and bend numbers."
   courses: [ai]
+- term: "Node"
+  definition: "One element of a linked structure such as a list, tree or graph."
+  courses: [mastery]
 - term: "Node.js"
   definition: "A program that runs JavaScript outside the browser, used for servers and for development tools."
   courses: [web, se]
@@ -958,6 +1114,9 @@
   courses: [se, web]
 - term: "Old generation"
   definition: "The part of a generational heap for objects that have survived several collections, collected rarely."
+  courses: [mastery]
+- term: "Open addressing"
+  definition: "Handling hash collisions by placing a colliding entry in another free slot found by a fixed rule."
   courses: [mastery]
 - term: "Operating system"
   definition: "The software that manages a computer's hardware and shares it between programs, such as Linux or Windows."
@@ -1020,8 +1179,12 @@
   definition: "Two meanings. In programming, a name in a function's definition that receives a value when the function is called. In machine learning, one of the numbers inside a model that training adjusts (also called a weight)."
   courses: [ai, web]
 - term: "PATH"
-  definition: "The list of folders your computer searches when you type a program's name in the terminal."
-  courses: [web, ai, se]
+  definitions:
+    web: "The list of folders your computer searches when you type a program's name in the terminal."
+    ai: "The list of folders your computer searches when you type a program's name in the terminal."
+    se: "The list of folders your computer searches when you type a program's name in the terminal."
+    mastery: "Two meanings. In the terminal, PATH is the list of folders searched for programs. In a graph, a path is a sequence of edges from one vertex to another."
+  courses: [web, ai, se, mastery]
 - term: "Permission mode"
   definition: "The Claude Code setting that decides what runs without asking: Manual, acceptEdits, plan, auto, dontAsk or bypassPermissions."
   courses: [claude]
@@ -1066,6 +1229,12 @@
 - term: "Prefilling"
   definition: "Writing the start of a model's reply for it to continue. No longer supported on current Claude models."
   courses: [claude]
+- term: "Prefix sum"
+  definition: "An array where each entry is the total of all earlier values, so any range total is one subtraction."
+  courses: [mastery]
+- term: "Priority queue"
+  definition: "A collection that always gives out the item with the highest priority (such as the smallest) next."
+  courses: [mastery]
 - term: "Probability"
   definition: "A number from 0 (impossible) to 1 (certain) measuring how likely something is."
   courses: [mastery]
@@ -1110,6 +1279,12 @@
 - term: "Props"
   definition: "The data passed into a React component, written like HTML attributes. A component must not change its props."
   courses: [web]
+- term: "Pruning"
+  definition: "Skipping branches of a search that cannot lead to a valid or better answer."
+  courses: [mastery]
+- term: "Pseudo-polynomial"
+  definition: "Polynomial in the size of the numbers in the input rather than the input's length, as in knapsack DP."
+  courses: [mastery]
 - term: "Pull request"
   definition: "A proposal to merge a branch, reviewed by teammates first."
   courses: [se]
@@ -1119,8 +1294,14 @@
 - term: "Quantisation"
   definition: "Storing a model’s numbers with fewer bits so it needs less memory."
   courses: [ai]
+- term: "Queue"
+  definition: "A collection where the first item added is the first removed (FIFO)."
+  courses: [mastery, se]
 - term: "QUIC"
   definition: "A transport protocol built on UDP that provides reliable, encrypted streams; HTTP/3 runs over it."
+  courses: [mastery]
+- term: "Quicksort"
+  definition: "A sort that partitions data around a pivot and sorts each side; fast on average, O(n²) with bad pivots."
   courses: [mastery]
 - term: "Race condition"
   definition: "A bug where the result depends on the timing of simultaneous operations."
@@ -1145,7 +1326,14 @@
   courses: [mastery]
 - term: "Recursion"
   definition: "A function solving a problem by calling itself on a smaller version of it."
-  courses: [se]
+  courses: [se, mastery]
+- term: "Recursive"
+  definition: "Defined in terms of itself: a recursive function calls itself on a smaller problem."
+  courses: [mastery]
+- term: "Red-black tree"
+  aliases: ["red-black trees"]
+  definition: "A self-balancing binary search tree, used by Java's TreeMap."
+  courses: [mastery]
 - term: "Refactoring"
   definition: "Improving the structure of code without changing what it does."
   courses: [se]
@@ -1192,9 +1380,14 @@
 - term: "Rice's theorem"
   definition: "The result that every non-trivial question about what a program does is undecidable in general."
   courses: [mastery]
+- term: "Ring buffer"
+  definition: "A fixed-size array used as a queue whose positions wrap round to the start."
+  courses: [mastery]
 - term: "Root"
-  definition: "In React, the place on the page where React shows your app, made with createRoot."
-  courses: [web]
+  definitions:
+    web: "In React, the place on the page where React shows your app, made with createRoot."
+    mastery: "The top node of a tree, with no parent."
+  courses: [web, mastery]
 - term: "Roots"
   definition: "The starting points of a tracing collector: stack variables, static fields and runtime references."
   courses: [mastery]
@@ -1270,6 +1463,9 @@
 - term: "Skip link"
   definition: "A link at the top of a page that lets keyboard users jump past the navigation to the main content."
   courses: [web]
+- term: "Sliding window"
+  definition: "A technique that moves a range along data, adding what enters and removing what leaves."
+  courses: [mastery]
 - term: "Slow start"
   definition: "TCP's practice of sending slowly on a new connection and speeding up as data is acknowledged."
   courses: [mastery]
@@ -1288,6 +1484,12 @@
   courses: [se]
 - term: "SSD"
   definition: "A solid-state drive: storage built from flash memory, much faster than a spinning disk but far slower than RAM."
+  courses: [mastery]
+- term: "Stable"
+  definition: "Of a sort: keeping items that compare equal in their original order."
+  courses: [mastery]
+- term: "Stack"
+  definition: "A collection where the last item added is the first removed (LIFO)."
   courses: [mastery]
 - term: "Stack frame"
   definition: "The block of stack memory for one function call's local variables and bookkeeping."
@@ -1335,13 +1537,19 @@
   courses: [web]
 - term: "String"
   definition: "A value made of text, written inside quotes."
-  courses: [web]
+  courses: [web, mastery]
+- term: "String builder"
+  definition: "A growable buffer of characters for building a string in pieces efficiently."
+  courses: [mastery]
 - term: "Structured outputs"
   definition: "An API feature that makes a model's reply follow a schema you define, so programs can read it reliably."
   courses: [claude]
 - term: "Subagent"
   definition: "A helper agent Claude Code starts for a specific job, with its own context and instructions, which returns a summary."
   courses: [claude]
+- term: "Subproblem"
+  definition: "A smaller instance of a problem whose answer helps build the answer to the whole."
+  courses: [mastery]
 - term: "Subset sum"
   definition: "Deciding whether some of a set of numbers add up exactly to a target."
   courses: [mastery]
@@ -1363,6 +1571,10 @@
 - term: "System prompt"
   definition: "Standing instructions that set a model’s role and rules for a conversation."
   courses: [ai, claude]
+- term: "Tabulation"
+  aliases: ["tabulation (bottom-up)"]
+  definition: "Dynamic programming that fills a table from the smallest subproblems up."
+  courses: [mastery]
 - term: "Tag"
   aliases: ["opening tag", "closing tag"]
   definition: "The markers that start and end an HTML element, such as <p> and </p>."
@@ -1407,6 +1619,9 @@
 - term: "Time zone"
   definition: "A region's rules for local time, including its offset from UTC and daylight-saving changes."
   courses: [mastery]
+- term: "TimSort"
+  definition: "A stable sort that merges runs already in order; used by JavaScript engines and Java for objects."
+  courses: [mastery]
 - term: "TLS"
   definition: "Transport Layer Security: encrypts and authenticates connections; HTTPS is HTTP over TLS."
   courses: [mastery]
@@ -1419,6 +1634,9 @@
 - term: "Tools"
   definition: "Functions a model can ask to have run, such as searching the web, reading a file or running a command, whose results are added to its context."
   courses: [claude]
+- term: "Topological sort"
+  definition: "Ordering a DAG's vertices so that each comes after everything it depends on."
+  courses: [mastery]
 - term: "Tracing garbage collector"
   definition: "A garbage collector that finds live objects by following references from the roots and frees the rest."
   courses: [mastery]
@@ -1437,6 +1655,12 @@
 - term: "Travelling salesman problem"
   definition: "Finding the shortest route that visits every one of a set of places once."
   courses: [mastery]
+- term: "Tree"
+  definition: "A structure of nodes where each node has one parent except the root, and no cycles."
+  courses: [mastery]
+- term: "Trie"
+  definition: "A tree that stores strings character by character, so all words with a prefix share a path."
+  courses: [mastery]
 - term: "Truth table"
   definition: "A table checking a logical statement for every combination of true and false inputs."
   courses: [mastery]
@@ -1445,6 +1669,9 @@
   courses: [web]
 - term: "TTL"
   definition: "Time to live: how long a DNS answer (or other cached value) may be kept."
+  courses: [mastery]
+- term: "Two pointers"
+  definition: "A technique moving two positions through data, often from both ends, to avoid checking all pairs."
   courses: [mastery]
 - term: "Two's complement"
   definition: "The usual way to store negative integers, in which the top bit counts as a large negative value."
@@ -1480,6 +1707,9 @@
 - term: "Union type"
   definition: "A TypeScript type that allows one of several types, written with |, such as string | number."
   courses: [web]
+- term: "Union-find"
+  definition: "A structure that tracks which items are in the same group as groups are merged, in almost constant time."
+  courses: [mastery]
 - term: "Unit test"
   aliases: ["unit tests"]
   definition: "A test of one function or component on its own."
@@ -1491,6 +1721,9 @@
   aliases: ["updater functions"]
   definition: "A function passed to a state setter, such as (c) => c + 1, which React calls with the latest value."
   courses: [web]
+- term: "Upper bound"
+  definition: "A limit a quantity never exceeds; Big O formally gives an upper bound on growth."
+  courses: [mastery]
 - term: "URL parameter"
   definition: "A part of a route's path that starts with a colon, such as :id, which matches any value; read with useParams."
   courses: [web]
@@ -1533,6 +1766,10 @@
 - term: "Version control"
   definition: "Keeping a recorded history of every change to a set of files, so you can compare and go back; Git does this."
   courses: [web]
+- term: "Vertex"
+  aliases: ["vertices"]
+  definition: "One point of a graph; also called a node."
+  courses: [mastery]
 - term: "Virtual environment"
   definition: "A private folder of Python packages for one project."
   courses: [ai]
@@ -1597,6 +1834,9 @@
 - term: "Worktrees"
   definition: "Extra working copies of one Git repository, each in its own folder on its own branch, so parallel sessions cannot overwrite each other."
   courses: [claude]
+- term: "Worst case"
+  definition: "The input of a given size that makes an algorithm do the most work."
+  courses: [mastery]
 - term: "XML tags"
   definition: "Labels in angle brackets, such as <document> and </document>, used in prompts to mark where each kind of content starts and ends."
   courses: [claude]
