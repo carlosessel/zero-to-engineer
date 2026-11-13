@@ -1,0 +1,257 @@
+---
+title: "Authentication and authorisation in depth"
+summary: "Sessions, tokens, OAuth 2.0, OpenID Connect, JWTs, and role- and attribute-based access control."
+prerequisites: [m-appsec]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will understand how users and services prove who they are and how systems decide what they may do: server-side sessions and the cookie settings that protect them, signed tokens and JSON Web Tokens with their pitfalls, OAuth 2.0 and OpenID Connect (the protocols behind "Sign in with…" and most API access), multi-factor authentication and passkeys, and the main models for authorisation. Identity is where small mistakes become breaches (<Ref to="m-appsec" />'s A01 and A07), so the lesson running through the chapter is to use proven protocols and libraries rather than inventing your own.
+
+## Two questions
+
+- **Authentication** (authn): *who are you?* Proving an identity: a password, a passkey, a one-time code, a certificate, a signed token from a trusted provider.
+- **Authorisation** (authz): *what may you do?* Deciding whether this identity may perform this action on this resource.
+
+They are separate steps, and mixing them up causes bugs: being logged in does not mean being allowed (<Ref to="m-appsec" />).
+
+## Sessions
+
+The classic web approach is a **server-side session**: after login, the server creates a session record (in memory, Redis or a database) and gives the browser a long, random **session id** in a cookie. Each request sends the cookie; the server looks the session up. Logging out, or an administrator revoking access, simply deletes the record, which takes effect immediately.
+
+The cookie must be protected:
+
+- `HttpOnly`: JavaScript cannot read it, so cross-site scripting cannot steal it.
+- `Secure`: sent only over HTTPS.
+- `SameSite=Lax` (or `Strict`): not sent on most cross-site requests, which blocks cross-site request forgery (<Ref to="m-appsec" />).
+- A sensible lifetime, with idle and absolute timeouts, and a **new session id after login** (to prevent session fixation).
+
+```text
+Set-Cookie: session=Vq3m8f0rXK2pL9sYw4tH7cN1bE6uJ5aD; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=28800
+```
+
+Sessions suit server-rendered web applications and first-party single-page apps on the same site. Their cost is a lookup per request in a shared store (<Ref to="m-caching" />), which is rarely a problem in practice.
+
+## Tokens and JWTs
+
+A token is a string the client presents to prove something. An **opaque** token (a random string) works like a session id: the server looks it up. A **self-contained** token carries its claims inside, signed, so any service with the key can verify it without a lookup. The common format is the **JSON Web Token** (JWT): three base64url parts separated by dots, a header, a payload of **claims**, and a **signature**.
+
+```python
+import base64
+import hashlib
+import hmac
+import json
+
+SECRET = b"example-signing-key-not-for-production-use"
+
+
+def b64(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
+
+def unb64(text):
+    return base64.urlsafe_b64decode(text + "=" * (-len(text) % 4))
+
+
+def sign(claims):
+    header = b64(json.dumps({"alg": "HS256", "typ": "JWT"}, separators=(",", ":")).encode())
+    payload = b64(json.dumps(claims, separators=(",", ":")).encode())
+    signature = b64(hmac.new(SECRET, f"{header}.{payload}".encode(), hashlib.sha256).digest())
+    return f"{header}.{payload}.{signature}"
+
+
+def verify(token, now, audience):
+    try:
+        header, payload, signature = token.split(".")
+    except ValueError:
+        return "rejected: malformed"
+    if json.loads(unb64(header)).get("alg") != "HS256":
+        return "rejected: unexpected algorithm"
+    expected = b64(hmac.new(SECRET, f"{header}.{payload}".encode(), hashlib.sha256).digest())
+    if not hmac.compare_digest(signature, expected):
+        return "rejected: bad signature"
+    claims = json.loads(unb64(payload))
+    if claims["exp"] <= now:
+        return "rejected: expired"
+    if claims["aud"] != audience:
+        return "rejected: wrong audience"
+    return f"accepted: {claims['sub']} with roles {claims['roles']}"
+
+
+now = 1_794_600_000
+token = sign({"sub": "c-17", "roles": ["customer"], "aud": "orders-api", "iat": now, "exp": now + 900})
+print(token.count("."), "dots;", "payload:", json.loads(unb64(token.split(".")[1])))
+print(verify(token, now + 60, "orders-api"))
+
+h, p, s = token.split(".")
+forged = b64(json.dumps({"sub": "c-17", "roles": ["admin"], "aud": "orders-api", "iat": now, "exp": now + 900}, separators=(",", ":")).encode())
+print(verify(f"{h}.{forged}.{s}", now + 60, "orders-api"))
+none_header = b64(json.dumps({"alg": "none"}).encode())
+print(verify(f"{none_header}.{p}.", now + 60, "orders-api"))
+print(verify(token, now + 901, "orders-api"))
+print(verify(token, now + 60, "payments-api"))
+```
+
+It prints `2 dots;` and the decoded payload, showing that **anyone can read a JWT's claims** (it is signed, not encrypted: never put secrets in it), then `accepted: c-17 with roles ['customer']`, and four rejections: a forged payload granting `admin` (`bad signature`), the classic `alg: none` attack (`unexpected algorithm`), an `expired` token, and a token meant for another service (`wrong audience`).
+
+Rules for JWTs:
+
+- **Verify everything**: the signature with an algorithm you choose (never the one the token claims), the expiry (`exp`), the issuer (`iss`) and the audience (`aud`). Use a maintained library (jose, java-jwt or Nimbus, `Microsoft.IdentityModel`), configured strictly.
+- Prefer **asymmetric** signatures (RS256, ES256, EdDSA) when many services verify tokens: the identity provider signs with a private key, and services verify with the public key (published as a **JWKS** document), so no service can mint tokens.
+- **Keep access tokens short-lived** (minutes), because a signed token cannot easily be revoked before it expires. Use **refresh tokens** (long-lived, stored securely, rotated on each use, revocable on the server) to get new access tokens.
+- **Where to keep tokens in a browser**: `localStorage` is readable by any script, so cross-site scripting can steal tokens there. For web apps, the safer pattern is a **backend for frontend** (<Ref to="m-cloud-patterns" />) that keeps tokens on the server and gives the browser only an `HttpOnly` session cookie.
+
+JWTs suit service-to-service calls and APIs consumed by many clients; for a single web application, plain sessions are often simpler and easier to revoke.
+
+## OAuth 2.0
+
+**OAuth 2.0** is a framework for **delegated authorisation**: letting an application access a resource on a user's behalf without seeing the user's password. The roles: the **resource owner** (the user), the **client** (the application), the **authorisation server** (which authenticates the user and issues tokens) and the **resource server** (the API). The client receives an **access token** limited by scopes (`orders:read`, `profile`) and a lifetime.
+
+The flow to use for user-facing applications, web and mobile alike, is the **authorisation code flow with PKCE** (Proof Key for Code Exchange; OAuth 2.1 makes it mandatory):
+
+1. The client creates a random **code verifier** and sends the user's browser to the authorisation server with its SHA-256 hash, the **code challenge**, plus its client id, redirect URI, scopes and a random `state` value.
+2. The user logs in there (the client never sees the password) and consents.
+3. The authorisation server redirects back with a short-lived, single-use **authorisation code** (and the `state`, which the client checks to block CSRF).
+4. The client exchanges the code, together with the original **code verifier**, for tokens. The server checks the verifier hashes to the challenge, so an attacker who intercepted the code cannot use it.
+
+```python
+import base64
+import hashlib
+import secrets
+
+verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
+challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+print("verifier length:", len(verifier), "challenge length:", len(challenge))
+
+known_verifier = "dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"
+known_challenge = base64.urlsafe_b64encode(hashlib.sha256(known_verifier.encode()).digest()).rstrip(b"=").decode()
+print("RFC 7636 example challenge:", known_challenge)
+print("matches the RFC:", known_challenge == "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM")
+```
+
+It prints `verifier length: 43 challenge length: 43`, then the example challenge from the PKCE specification (RFC 7636) and `matches the RFC: True`. In practice a library or your framework's OAuth support does all of this.
+
+Other flows: **client credentials** for service-to-service calls with no user (a background job calling an API with its own identity), and the **device authorisation** flow for TVs and command-line tools. The old **implicit** and **password** grants are deprecated: do not use them.
+
+## OpenID Connect
+
+OAuth 2.0 is about *access*, not *identity*: an access token says what a client may do, not who the user is. **OpenID Connect** (OIDC) adds an identity layer on top: with the `openid` scope, the authorisation server also returns an **ID token**, a JWT about the user (`sub` for a stable user id, `email`, `name`, when they authenticated), meant for the client to read. OIDC is what "Sign in with Google, Microsoft or Apple" uses, and what enterprise **single sign-on** (Microsoft Entra ID, Okta, Auth0, Keycloak) speaks. **SAML** is an older XML-based single sign-on standard still common in enterprises.
+
+Use the **ID token** to know who logged in, and the **access token** only to call APIs; an API should never accept an ID token as proof of access. Identify users by the issuer and `sub` pair, not by email, which can change or be reassigned.
+
+**Use a managed identity provider or a proven server** (Keycloak, Entra ID, Auth0, Cognito, Okta) rather than building login, password reset, MFA and token issuing yourself.
+
+## Stronger authentication
+
+- **Passwords**, if used, are stored with a slow, salted password hash (<Ref to="m-crypto" />), checked against lists of breached passwords, and protected by rate limits and lockout delays against **credential stuffing** (attackers trying leaked passwords from other sites).
+- **Multi-factor authentication** (MFA) combines something you know, have or are. Codes from authenticator apps (TOTP) are good; SMS codes are weak (SIM swapping); push approvals need number matching to resist fatigue attacks.
+- **Passkeys** (WebAuthn and FIDO2) replace passwords with a key pair kept on the user's device or password manager: the private key never leaves it, the login is bound to the real site so phishing pages cannot use it, and there is no shared secret to leak from your database. They are the best option available and widely supported.
+- **Service identities**: services authenticate with short-lived credentials from the platform (<Ref to="m-cloud-iac" />) or with **mutual TLS** (both sides present certificates, often handled by a service mesh, <Ref to="m-cloud-patterns" />), not with shared passwords in configuration.
+
+## Authorisation models
+
+Once you know who someone is, how do you decide what they may do?
+
+- **Role-based access control** (RBAC): permissions are grouped into roles (`customer`, `support`, `manager`), and users get roles. Simple and auditable; becomes awkward when rules depend on the resource ("managers may refund orders *in their own region*") and leads to "role explosion".
+- **Attribute-based access control** (ABAC): decisions use attributes of the user, the resource, the action and the context (region, amount, time, ownership). Flexible and fine-grained, but policies are harder to understand and test.
+- **Relationship-based access control** (ReBAC): permissions follow relationships ("editors of this document", "members of the team that owns this project"), as in Google's Zanzibar paper and open-source systems built on it (OpenFGA, SpiceDB). Suits collaboration products.
+
+```python
+def can_refund(user, order, amount_pence):
+    if "manager" not in user["roles"]:
+        return False, "only managers refund"
+    if user["region"] != order["region"]:
+        return False, "order is outside the manager's region"
+    if amount_pence > order["paid_pence"]:
+        return False, "refund exceeds amount paid"
+    if amount_pence > 50_000 and not user.get("mfa_recent"):
+        return False, "large refunds need a recent MFA check"
+    return True, "allowed"
+
+
+order = {"id": "o-7", "region": "north", "paid_pence": 80_000}
+cases = [
+    ({"roles": ["support"], "region": "north"}, 5_400),
+    ({"roles": ["manager"], "region": "south"}, 5_400),
+    ({"roles": ["manager"], "region": "north"}, 90_000),
+    ({"roles": ["manager"], "region": "north"}, 60_000),
+    ({"roles": ["manager"], "region": "north", "mfa_recent": True}, 60_000),
+]
+for user, amount in cases:
+    print(amount, can_refund(user, order, amount))
+```
+
+It prints, in order: `(False, 'only managers refund')`, `(False, "order is outside the manager's region")`, `(False, 'refund exceeds amount paid')`, `(False, 'large refunds need a recent MFA check')` and `(True, 'allowed')`. The role is checked first (RBAC), then attributes of the resource, the request and the session (ABAC). Whatever the model: keep decisions in **one place** (a policy module or a policy engine such as Open Policy Agent or Cedar) rather than scattered `if` statements, **deny by default**, return the reason for audit logs, and test the policy like any other logic (<Ref to="m-testing" />).
+
+## Common mistakes
+
+- **Authentication without authorisation**: any logged-in user can reach any object.
+- **Building your own login, password storage or token format.**
+- **Trusting JWT claims without verifying** signature, algorithm, expiry, issuer and audience; accepting `alg: none`.
+- **Long-lived access tokens** with no way to revoke them.
+- **Tokens in `localStorage`**, and cookies without `HttpOnly`, `Secure` and `SameSite`.
+- **Implicit or password grants**, or authorisation code flow without PKCE.
+- **Using ID tokens to call APIs**, or identifying users by email.
+- **SMS as the only second factor** for high-value accounts.
+
+## Practice
+
+**1. (warm-up)** Is each authentication or authorisation? (a) Checking a passkey signature. (b) Checking that a user may edit this document. (c) Verifying a JWT's signature. (d) Checking a token's scope includes `orders:write`.
+
+<Solution>
+
+(a) and (c) are authentication (proving identity; (c) proves who issued the token and for whom). (b) and (d) are authorisation (deciding whether this identity may perform this action).
+
+</Solution>
+
+**2. (warm-up)** Why does a JWT's payload not need decrypting to read, and what follows from that?
+
+<Solution>
+
+The payload is only base64url-encoded and signed, not encrypted, so anyone holding the token can decode and read it. So never put secrets or sensitive personal data in it; the signature only proves it has not been changed.
+
+</Solution>
+
+**3. (warm-up)** What attack does PKCE prevent?
+
+<Solution>
+
+Authorisation code interception: an attacker who steals the authorisation code (for example, through a malicious app registered for the same redirect URI on a phone) cannot exchange it for tokens, because the exchange requires the original code verifier, which only the genuine client has.
+
+</Solution>
+
+**4. (standard)** Using the JWT example, add a check that rejects tokens issued more than 24 hours ago (`iat`), even if `exp` were set far in the future. Show it rejecting such a token.
+
+<Solution>
+
+Add, after the expiry check: `if now - claims["iat"] > 86_400: return "rejected: issued too long ago"`. Then a token signed with `iat = now - 90_000` and `exp = now + 900` is verified at `now` and prints **rejected: issued too long ago**. A maximum age protects against tokens minted with mistakenly long lifetimes, and against old tokens resurfacing.
+
+</Solution>
+
+**5. (stretch)** You are designing login for a web shop with a React front end, an API, and a support tool used by staff. Propose the approach.
+
+<Solution>
+
+Use a managed OIDC identity provider. Customers: authorisation code flow with PKCE run by a small backend for frontend, which stores tokens server-side and gives the browser an `HttpOnly`, `Secure`, `SameSite=Lax` session cookie; offer passkeys, with password plus breached-password checks and rate limiting as fallback. The API accepts short-lived access tokens (asymmetrically signed, verified for issuer, audience and expiry) from the BFF. Staff: single sign-on through the company's identity provider with mandatory MFA (passkeys or hardware keys), and RBAC roles (support, manager) plus ABAC rules (region, refund limits, recent MFA for large refunds) in one policy module, with every decision logged for audit.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Authentication** proves identity; **authorisation** decides permissions. They are separate checks.
+- **Sessions**: random ids in `HttpOnly`, `Secure`, `SameSite` cookies; regenerate on login; easy to revoke.
+- **JWTs** are signed (not encrypted) claims: verify signature with a fixed algorithm, expiry, issuer and audience; keep them short-lived; use refresh tokens; prefer asymmetric keys; keep them out of `localStorage`.
+- **OAuth 2.0** delegates access with scoped tokens: authorisation code flow with **PKCE** for users, client credentials for services.
+- **OpenID Connect** adds ID tokens for identity and powers single sign-on; use a managed provider.
+- Prefer **passkeys** and strong **MFA**; services use short-lived credentials or mutual TLS.
+- Authorise with **RBAC**, **ABAC** or **ReBAC**, centralised, deny by default, logged and tested.
+
+## Go deeper
+
+- [OAuth 2.0 for browser-based apps](https://datatracker.ietf.org/doc/draft-ietf-oauth-browser-based-apps/), the IETF. Current guidance for single-page applications, including backends for frontends.
+- [RFC 7636: Proof Key for Code Exchange](https://www.rfc-editor.org/rfc/rfc7636.html), the IETF. The PKCE specification, with the example used in this chapter.
+- [OpenID Connect Core 1.0](https://openid.net/specs/openid-connect-core-1_0.html), the OpenID Foundation. ID tokens, claims and flows.
+- [JSON Web Token cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/JSON_Web_Token_Cheat_Sheet.html), OWASP. JWT attacks and defences.
+- [Passkeys developer guide](https://passkeys.dev/), the FIDO Alliance and contributors. Implementing passkeys with WebAuthn.

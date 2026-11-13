@@ -1,6 +1,6 @@
 // Decides whether a Python example can run in the browser, and helps the editor.
 
-const NEEDS_INSTALL = /^\s*(?:from|import)\s+(torch|torchvision|anthropic|sentence_transformers|transformers|peft|fastapi|uvicorn|argon2|dotenv|pytest|cart|mcp)\b/m;
+const NEEDS_INSTALL = /^\s*(?:from|import)\s+(torch|torchvision|anthropic|sentence_transformers|transformers|peft|fastapi|uvicorn|argon2|cryptography|dotenv|pytest|cart|mcp)\b/m;
 const NEEDS_KEY = /\bclient\.messages\.|\bMODEL\b/;
 const NEEDS_FILE = /read_csv\("sales\.csv"\)|open\("docs\.json"\)/;
 

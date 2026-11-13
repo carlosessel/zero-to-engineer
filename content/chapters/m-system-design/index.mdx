@@ -211,7 +211,7 @@ It prints `posted` three times, then `already posted` (the duplicated payment di
 
 **Reliability.** Payment state changes and their events go out through a transactional outbox (<Ref to="m-messaging" />); the order service learns of payments through those events and a saga handles failures (<Ref to="m-resilience" />). The database is a strongly consistent relational store with synchronous replication; availability is traded for correctness when they conflict (<Ref to="m-consistency-consensus" />).
 
-**Reconciliation.** Every day, compare your ledger with the provider's settlement reports and your bank statements, line by line, and investigate every mismatch. Bugs, missed webhooks and provider errors are found here, which is why the ledger must be complete and immutable. Card data itself never touches your servers: the provider's hosted fields or SDK collect it, keeping you out of most PCI DSS scope (the security part of the course).
+**Reconciliation.** Every day, compare your ledger with the provider's settlement reports and your bank statements, line by line, and investigate every mismatch. Bugs, missed webhooks and provider errors are found here, which is why the ledger must be complete and immutable. Card data itself never touches your servers: the provider's hosted fields or SDK collect it, keeping you out of most PCI DSS scope (<Ref to="m-appsec" />).
 
 ## Presenting a design
 

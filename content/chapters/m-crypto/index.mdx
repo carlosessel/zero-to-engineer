@@ -1,0 +1,243 @@
+---
+title: "Cryptography for engineers"
+summary: "Hashing, password storage, encryption, signatures, TLS and managing secrets."
+prerequisites: [m-identity]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know which cryptographic tool solves which problem, and how to use each safely through well-tested libraries: hashes for fingerprints, slow password hashes for storing passwords, HMACs for proving a message came from someone with a shared key, authenticated encryption for keeping data secret, public-key signatures and key exchange, how TLS combines them, and how to manage the keys and secrets everything else depends on. The one rule above all others: **do not invent your own cryptography**, and do not implement the standard algorithms yourself; use your platform's maintained libraries with their recommended settings.
+
+## Hashes
+
+A **cryptographic hash function** turns any input into a short, fixed-size **digest** (SHA-256 gives 32 bytes) such that:
+
+- the same input always gives the same digest;
+- changing one bit of the input changes about half the bits of the output (the **avalanche effect**);
+- it is infeasible to find an input for a given digest (**preimage resistance**) or two inputs with the same digest (**collision resistance**).
+
+```python
+import hashlib
+
+a = hashlib.sha256(b"Invoice 7: total 5400 pence").hexdigest()
+b = hashlib.sha256(b"Invoice 7: total 5401 pence").hexdigest()
+differing_bits = bin(int(a, 16) ^ int(b, 16)).count("1")
+print(a)
+print(b)
+print("bits that differ:", differing_bits, "of 256")
+print("same input, same digest:", a == hashlib.sha256(b"Invoice 7: total 5400 pence").hexdigest())
+```
+
+It prints two completely different-looking 64-character digests, the number of differing bits (close to half of the 256), and `same input, same digest: True`. Hashes fingerprint files and container images (<Ref to="m-containers" />), detect changes, build content-addressed stores (Git names every object by its hash), and are a building block of everything below.
+
+Use **SHA-256** or SHA-3 (or BLAKE2/BLAKE3). **MD5** and **SHA-1** are broken for collisions: never use them for security, although they still appear as non-security checksums.
+
+## Storing passwords
+
+Never store passwords in plain text or encrypted (encryption can be reversed by whoever has the key), and never with a plain fast hash like SHA-256: modern hardware tries billions of SHA-256 guesses per second, so a stolen table of fast hashes is cracked quickly. Password storage needs a **slow, salted password hashing function**:
+
+- **Argon2id** (the current recommendation), **scrypt**, **bcrypt**, or **PBKDF2** with a high iteration count where only it is allowed.
+- A random **salt** per password (the libraries generate and store it in the output), so identical passwords have different hashes and precomputed tables are useless.
+- A **work factor** tuned so one hash takes tens to hundreds of milliseconds on your servers: unnoticeable at login, ruinous for an attacker trying billions of guesses.
+
+```python
+import hashlib
+import time
+
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError
+
+hasher = PasswordHasher()
+stored = hasher.hash("correct horse battery staple")
+print("stored:", stored.split("$")[1], stored.split("$")[3], "(algorithm and cost settings, then salt and hash)")
+print("same password hashed twice differs:", stored != hasher.hash("correct horse battery staple"))
+
+try:
+    hasher.verify(stored, "Tr0ub4dor&3")
+except VerifyMismatchError:
+    print("wrong password -> rejected")
+print("right password ->", hasher.verify(stored, "correct horse battery staple"))
+
+start = time.perf_counter()
+for _ in range(10):
+    hasher.hash("guess")
+argon_ms = (time.perf_counter() - start) / 10 * 1000
+start = time.perf_counter()
+for _ in range(100_000):
+    hashlib.sha256(b"guess").digest()
+sha_ms = (time.perf_counter() - start) / 100_000 * 1000
+print(f"one Argon2id hash takes about {round(argon_ms / sha_ms):,} times as long as one SHA-256")
+```
+
+It prints the algorithm and its settings (`argon2id`, then `m=65536,t=3,p=4`: 64 MB of memory, three passes, four lanes), shows that hashing the same password twice gives different results (the salt), rejects the wrong password, accepts the right one, and finally how many times slower Argon2id is than SHA-256 on this machine: tens of thousands of times. That ratio is exactly the cost an attacker pays per guess. Argon2's memory cost also defeats the GPUs and custom chips attackers use. In Java use Spring Security's `Argon2PasswordEncoder` or `BCryptPasswordEncoder`; in .NET, ASP.NET Core Identity's password hasher or an Argon2 library; in Node.js, the `argon2` package.
+
+## HMAC
+
+A **message authentication code** proves a message has not been changed and came from someone holding a shared secret key. **HMAC-SHA256** is the standard construction. You have already used it: for signed webhooks (<Ref to="m-api-design" />), signed storage URLs (<Ref to="m-cloud-patterns" />) and HS256 JWTs (<Ref to="m-identity" />). Always compare MACs with a constant-time function (`hmac.compare_digest`, `MessageDigest.isEqual`, `CryptographicOperations.FixedTimeEquals`), so attackers cannot learn the correct value from response timings. Do not build a MAC yourself by hashing `key + message`: that construction is vulnerable to length-extension attacks, which is why HMAC exists.
+
+## Encryption
+
+**Symmetric encryption** uses one secret key to encrypt and decrypt. The standard is **AES** (with 256-bit keys) in an **authenticated encryption** mode, **AES-GCM** (or ChaCha20-Poly1305): it keeps data secret *and* detects any tampering, through an authentication tag. Unauthenticated modes (ECB, plain CBC) leak patterns or let attackers modify ciphertexts, and should not be used.
+
+```python
+import os
+
+from cryptography.exceptions import InvalidTag
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+
+key = AESGCM.generate_key(bit_length=256)
+aead = AESGCM(key)
+nonce = os.urandom(12)
+ciphertext = aead.encrypt(nonce, b"card ending 4242, expires 09/29", b"customer:c-17")
+print("ciphertext bytes:", len(ciphertext), "(31 of data + 16 of authentication tag)")
+print("decrypted:", aead.decrypt(nonce, ciphertext, b"customer:c-17").decode())
+
+tampered = bytes([ciphertext[0] ^ 1]) + ciphertext[1:]
+for label, data, associated in [("tampered ciphertext", tampered, b"customer:c-17"), ("wrong customer", ciphertext, b"customer:c-4")]:
+    try:
+        aead.decrypt(nonce, data, associated)
+    except InvalidTag:
+        print(label, "-> rejected")
+```
+
+It prints `ciphertext bytes: 47`, the decrypted text, then `tampered ciphertext -> rejected` (one flipped bit is detected) and `wrong customer -> rejected`. The **associated data** (`customer:c-17`) is not encrypted but is authenticated, binding the ciphertext to its context so it cannot be copied into another customer's record. The critical rule for GCM: **never reuse a nonce with the same key**; doing so lets attackers recover data and forge messages. Random 12-byte nonces are safe for up to billions of messages per key; libraries such as Google's Tink manage this for you.
+
+**Asymmetric (public-key) cryptography** uses a key pair: a **public key** anyone may have and a **private key** only the owner holds. It enables two things:
+
+- **Key exchange** (Diffie–Hellman, today usually X25519): two parties agree a shared secret over an open network, which then keys fast symmetric encryption. This is how TLS works.
+- **Digital signatures** (Ed25519, ECDSA, RSA-PSS): only the private key can sign, anyone with the public key can verify. Signatures prove who produced something and that it has not changed: software releases and container images (<Ref to="m-containers" />), JWTs signed with RS256 or ES256 (<Ref to="m-identity" />), Git commits, TLS certificates.
+
+```python
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+
+signer = Ed25519PrivateKey.generate()
+public_key = signer.public_key()
+release = b"orders-api 1.4.2 sha256:9f2c41"
+signature = signer.sign(release)
+
+public_key.verify(signature, release)
+print("signature bytes:", len(signature), "- verified with the public key")
+try:
+    public_key.verify(signature, b"orders-api 1.4.3 sha256:9f2c41")
+except InvalidSignature:
+    print("changed release -> signature invalid")
+```
+
+It prints `signature bytes: 64 - verified with the public key` and `changed release -> signature invalid`. Anyone can check the release; only the holder of the private key could have produced the signature.
+
+Asymmetric operations are much slower than symmetric ones, so real systems combine them: asymmetric to agree or protect keys, symmetric to encrypt the data. **Envelope encryption**, used by every cloud key management service (AWS KMS, Azure Key Vault, Google Cloud KMS), encrypts each piece of data with its own data key, and encrypts that data key with a master key that never leaves the KMS. Rotating the master key or revoking access then does not require re-encrypting all the data.
+
+## TLS
+
+**TLS** (Transport Layer Security; HTTPS is HTTP over TLS) protects data in transit (<Ref to="m-networking" />). In a TLS 1.3 handshake, client and server agree on a shared secret with an ephemeral key exchange (so recorded traffic stays secret even if the server's long-term key later leaks: **forward secrecy**), the server proves its identity by signing the handshake with the private key matching its **certificate**, and all further traffic is encrypted with AEAD ciphers. Browsers and many servers now combine classical X25519 with the post-quantum **ML-KEM** algorithm in a hybrid key exchange, protecting today's traffic against future quantum computers.
+
+A **certificate** binds a domain name to a public key, signed by a **certificate authority** (CA) that clients trust. **Let's Encrypt** and cloud certificate services issue certificates for free and renew them automatically; automate renewal, because expired certificates cause outages. Practical rules:
+
+- **HTTPS everywhere**, including internal service-to-service traffic (mutual TLS through a service mesh makes this easy, <Ref to="m-cloud-patterns" />), with `Strict-Transport-Security` on public sites.
+- Allow only TLS 1.2 and 1.3; use your platform's or a well-known recommended configuration (Mozilla's TLS guidelines).
+- **Never disable certificate verification** in clients ("just for testing" settings reach production).
+
+## Randomness
+
+Keys, tokens, salts, nonces and session ids need **cryptographically secure random numbers**: Python's `secrets`, Java's `SecureRandom`, .NET's `RandomNumberGenerator`, JavaScript's `crypto.getRandomValues` and `crypto.randomUUID`. Ordinary random functions (`Math.random`, `random.random`, `java.util.Random`) are predictable and must never generate anything secret. Use at least 128 bits of randomness for tokens.
+
+## Managing secrets and keys
+
+Cryptography moves the problem from protecting data to protecting keys and secrets (passwords, API keys, signing keys):
+
+- Keep them in a **secrets manager** or KMS (Vault, AWS Secrets Manager and KMS, Azure Key Vault, Google Secret Manager), never in code, images, logs or chat (<Ref to="m-static-quality" />, <Ref to="m-containers" />).
+- Give each service access only to the secrets it needs (<Ref to="m-cloud-iac" />), and prefer short-lived, automatically issued credentials to long-lived ones.
+- **Rotate** keys and secrets regularly and immediately after a suspected leak; design for rotation (support two valid keys during the switch, identify keys by a key id).
+- For the highest-value keys, use **hardware security modules** (HSMs) or the KMS, where keys can be used but never extracted.
+- Encrypt sensitive data **at rest** (disks and databases, usually a provider setting) and, for the most sensitive fields, at the application level with envelope encryption, so a stolen database backup is useless.
+
+## Common mistakes
+
+- **Inventing algorithms or protocols**, or implementing standard ones yourself.
+- **Fast hashes (or encryption) for passwords**; no salt.
+- **MD5 or SHA-1** for anything security-related.
+- **Unauthenticated encryption** (ECB, CBC without a MAC), or reusing GCM nonces.
+- **Hard-coded keys**, keys in Git, or one key for everything forever.
+- **`Math.random()` for tokens.**
+- **Disabling TLS certificate verification.**
+- **Comparing MACs or tokens with ordinary equality.**
+
+## Practice
+
+**1. (warm-up)** Which tool fits? (a) Detecting whether a downloaded file is the one the publisher released. (b) Storing user passwords. (c) Proving a webhook came from your payment provider. (d) Keeping a customer's national insurance number secret in the database.
+
+<Solution>
+
+(a) A hash compared with the published digest, or better, a signature from the publisher (a hash alone only helps if you get it from a trusted source). (b) A slow, salted password hash: Argon2id (or scrypt, bcrypt). (c) An HMAC with the shared webhook secret, or a signature with the provider's public key. (d) Authenticated encryption (AES-GCM), ideally envelope encryption with keys in a KMS.
+
+</Solution>
+
+**2. (warm-up)** Why is a salted SHA-256 hash still a poor way to store passwords?
+
+<Solution>
+
+The salt stops precomputed tables and identical hashes, but SHA-256 is fast: attackers with GPUs can try billions of guesses per second per salt, so most human-chosen passwords fall quickly. Password hashes such as Argon2id are deliberately slow and memory-hard, raising the cost of each guess by many thousands of times.
+
+</Solution>
+
+**3. (warm-up)** What two properties does AES-GCM provide, and what must you never do with it?
+
+<Solution>
+
+Confidentiality (the data is secret) and integrity with authenticity (any change to the ciphertext or associated data is detected). Never reuse a nonce with the same key.
+
+</Solution>
+
+**4. (standard)** Write code that generates a 32-byte API key for a customer, stores only its SHA-256 hash, and verifies a presented key in constant time. Why is a fast hash acceptable here when it is not for passwords?
+
+<Solution>
+
+```python
+import hashlib
+import hmac
+import secrets
+
+api_key = secrets.token_urlsafe(32)
+stored_hash = hashlib.sha256(api_key.encode()).hexdigest()
+
+
+def check(presented):
+    return hmac.compare_digest(hashlib.sha256(presented.encode()).hexdigest(), stored_hash)
+
+
+print(len(api_key) >= 43, check(api_key), check("guess"))
+```
+
+It prints **True True False**. A fast hash is acceptable because the key is 256 bits of random data, not a human-chosen password: there is no small set of likely values to guess, so even billions of guesses per second never find it. Storing only the hash means a database leak does not reveal usable keys.
+
+</Solution>
+
+**5. (stretch)** Your service encrypts customer documents with one AES key stored in an environment variable, unchanged for four years. Propose a better design.
+
+<Solution>
+
+Move to envelope encryption with a cloud KMS: generate a fresh data key per document (or per customer), encrypt the document with AES-GCM and that data key, store the data key encrypted by a KMS master key alongside the document, and record the key id. The master key never leaves the KMS; access to decrypt is granted only to the service's role and logged. Rotate the master key on a schedule (old data keys stay decryptable because the KMS keeps old key versions), and re-wrap or re-encrypt documents gradually. Then retire the old static key: re-encrypt everything protected by it, and treat it as compromised since it has lived in environment variables, logs and backups for years.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Do not invent or implement cryptography**; use maintained libraries with recommended settings.
+- **Hashes** (SHA-256) fingerprint data; MD5 and SHA-1 are broken.
+- **Passwords**: slow, salted, memory-hard hashes (**Argon2id**, scrypt, bcrypt) tuned to tens or hundreds of milliseconds.
+- **HMAC** authenticates messages with a shared key; compare in constant time.
+- **Authenticated encryption** (AES-GCM, ChaCha20-Poly1305) for confidentiality and integrity; never reuse nonces.
+- **Public-key** cryptography gives key exchange and **signatures**; **envelope encryption** with a KMS protects data keys.
+- **TLS 1.3** combines them with certificates and forward secrecy; automate certificates and never disable verification.
+- Use secure **randomness**; keep **secrets** in managers and KMSs, least privilege, and **rotate** them.
+
+## Go deeper
+
+- [Password storage cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html), OWASP. Algorithms and parameters for storing passwords.
+- [Cryptographic storage cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html), OWASP. Encryption at rest and key management.
+- [cryptography.io](https://cryptography.io/en/latest/), the Python Cryptographic Authority. The library used in this chapter's examples, with clear guidance.
+- [Mozilla server-side TLS guidelines](https://wiki.mozilla.org/Security/Server_Side_TLS), Mozilla. Recommended TLS configurations.
+- [Crypto 101](https://www.crypto101.io/), Laurens Van Houtven. A free introductory book on cryptography for programmers.

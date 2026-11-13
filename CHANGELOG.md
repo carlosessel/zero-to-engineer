@@ -4,6 +4,22 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 10 (Security)
+
+Added
+- Three chapters: application security and the OWASP Top 10 (2025 edition, checked against OWASP's published list), with threat modelling; authentication and authorisation (sessions, JWTs, OAuth 2.0 with PKCE, OpenID Connect, MFA and passkeys, RBAC, ABAC and ReBAC); and cryptography for engineers (hashes, password hashing, HMAC, authenticated encryption, signatures, envelope encryption, TLS, secrets). About 6,900 words, 15 practice problems, 18 quiz questions, 15 checked resources.
+- Every example runs and is checked, all in Python against tiny self-contained programs: an access-control flaw and its fix, SQL injection against a parameterised query, HTML escaping, an SSRF address filter, a path-traversal check, a JWT signer and verifier rejecting forgery, `alg: none`, expiry and the wrong audience, the PKCE challenge from RFC 7636's own example, an RBAC and ABAC refund policy, SHA-256's avalanche effect, Argon2id against SHA-256 timing, AES-GCM rejecting tampering, and Ed25519 signatures.
+- `cryptography` is added to the example harness's requirements, and the site's Run button now explains that examples importing it need a local install.
+- Earlier chapters now link to the security chapters.
+- 44 glossary terms.
+
+Fixed (found while checking)
+- One exercise line containing ": " was read by YAML as a mapping and broke the page build; it is now plain text.
+- "Token" and "Scope" are no longer glossary links in these chapters, where they mean security tokens and OAuth scopes rather than the AI and JavaScript meanings.
+
+Not verified
+- No person has reviewed these chapters. Problem counts are below the standard's 30 to 50.
+
 ### 2026-11-13: Software Engineering Mastery, part 9 (Infrastructure and operations)
 
 Added

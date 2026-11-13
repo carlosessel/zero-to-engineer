@@ -1,0 +1,36 @@
+- question: Which should store passwords?
+  options:
+  - Argon2id, scrypt or bcrypt with a salt
+  - SHA-256
+  answer: 0
+  explanation: Slow, memory-hard hashes make each guess expensive.
+- question: What does AES-GCM give besides secrecy?
+  options:
+  - Detection of any tampering
+  - Compression
+  answer: 0
+  explanation: It is authenticated encryption.
+- question: What must never happen with AES-GCM?
+  options:
+  - Reusing a nonce with the same key
+  - Using a 256-bit key
+  answer: 0
+  explanation: Nonce reuse breaks both secrecy and integrity.
+- question: What does a digital signature prove?
+  options:
+  - That the holder of the private key produced it and the data has not changed
+  - That the data is secret
+  answer: 0
+  explanation: Anyone with the public key can verify.
+- question: What is envelope encryption?
+  options:
+  - Encrypting data with a data key that is itself encrypted by a master key in a KMS
+  - Encrypting twice with the same key
+  answer: 0
+  explanation: The master key never leaves the KMS.
+- question: Which function should generate a session token?
+  options:
+  - A cryptographically secure generator such as secrets or SecureRandom
+  - Math.random
+  answer: 0
+  explanation: Ordinary random numbers are predictable.

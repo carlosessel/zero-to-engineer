@@ -1,6 +1,10 @@
 - term: "75th percentile"
   definition: "The value that 75% of measurements are at or below; Core Web Vitals are judged at it."
   courses: [web]
+- term: "ABAC"
+  aliases: ["attribute-based access control"]
+  definition: "Deciding access from attributes of the user, resource, action and context."
+  courses: [mastery]
 - term: "Absolute URL"
   definition: "A full web address including the site, such as https://example.com/menu.html."
   courses: [web]
@@ -154,12 +158,16 @@
 - term: "Attribute"
   definition: "Extra information in an HTML element's opening tag, written name=\"value\", such as href on a link."
   courses: [web, se]
+- term: "Authenticated encryption"
+  aliases: ["AES-GCM", "associated data"]
+  definition: "Encryption that also detects any tampering, such as AES-GCM."
+  courses: [mastery]
 - term: "Authentication"
   definition: "Proving who a user is."
   courses: [se, mastery]
 - term: "Authorisation"
   definition: "Deciding what a known user is allowed to do."
-  courses: [se]
+  courses: [se, mastery]
 - term: "Auto memory"
   definition: "Notes Claude Code saves for itself about a project, such as corrections and preferences, kept on your machine and loaded each session."
   courses: [claude]
@@ -391,6 +399,10 @@
 - term: "Certificate"
   definition: "A signed document that proves a server's identity for TLS."
   courses: [mastery]
+- term: "Certificate authority"
+  aliases: ["CA"]
+  definition: "An organisation that signs certificates binding domain names to public keys."
+  courses: [mastery]
 - term: "Chain of responsibility"
   definition: "Passing a request along a chain of handlers, each of which handles it or passes it on."
   courses: [mastery]
@@ -470,7 +482,10 @@
   courses: [web]
 - term: "Client"
   definition: "The program that makes a request, such as a browser or app."
-  courses: [se, web, claude]
+  courses: [se, web, claude, mastery]
+- term: "Client credentials"
+  definition: "The OAuth flow for a service calling an API with its own identity, with no user."
+  courses: [mastery]
 - term: "Cloud scheduled tasks"
   definition: "Claude Code tasks that run on Anthropic's cloud on a timer or an event, on a fresh copy of your repository."
   courses: [claude]
@@ -620,6 +635,9 @@
   aliases: ["volume", "named volume"]
   definition: "Storage that outlives a container, mounted into it."
   courses: [mastery]
+- term: "Content Security Policy"
+  definition: "A response header limiting where a page may load scripts and other resources from."
+  courses: [mastery]
 - term: "Contention"
   definition: "Threads waiting for the same lock or resource."
   courses: [mastery]
@@ -727,16 +745,27 @@
   aliases: ["CRDTs"]
   definition: "A conflict-free replicated data type, whose concurrent changes merge automatically."
   courses: [mastery]
+- term: "Credential stuffing"
+  definition: "Trying usernames and passwords leaked from other sites."
+  courses: [mastery]
 - term: "Critical section"
   definition: "Code that must not run on two threads at once."
+  courses: [mastery]
+- term: "Cross-site request forgery"
+  aliases: ["CSRF"]
+  definition: "Making a victim's browser send a request to a site with their cookies attached."
   courses: [mastery]
 - term: "Cross-site scripting"
   aliases: ["XSS"]
   definition: "An attack where someone gets their own code to run on your page, often through text inserted as HTML; prevent it with textContent."
-  courses: [web]
+  courses: [web, mastery]
 - term: "CrUX"
   definition: "The Chrome UX Report: performance measurements from real visitors using Chrome."
   courses: [web]
+- term: "Cryptographic hash function"
+  aliases: ["digest", "avalanche effect"]
+  definition: "A function turning any input into a fixed-size digest that is infeasible to reverse or collide."
+  courses: [mastery]
 - term: "CSS"
   definition: "The language that says how a web page looks: colours, spacing, fonts and layout."
   courses: [web]
@@ -813,6 +842,9 @@
 - term: "Default value"
   definition: "The value a parameter or prop takes when none is passed."
   courses: [web]
+- term: "Defence in depth"
+  definition: "Several independent security layers, so one mistake is not a breach."
+  courses: [mastery, se]
 - term: "Denormalisation"
   definition: "Deliberately storing duplicated or derived data for faster reads."
   courses: [mastery]
@@ -859,6 +891,10 @@
   aliases: ["DevTools"]
   definition: "Panels built into every browser that show what a page is made of and what its code is doing; open them with F12."
   courses: [web]
+- term: "Digital signature"
+  aliases: ["digital signatures"]
+  definition: "Proof, verifiable with a public key, that the private key's holder produced unchanged data."
+  courses: [mastery]
 - term: "Dijkstra's algorithm"
   definition: "An algorithm for shortest paths in a weighted graph with no negative weights."
   courses: [mastery]
@@ -993,6 +1029,9 @@
 - term: "Entity"
   aliases: ["entities"]
   definition: "An object with an identity that stays the same while its details change, such as a customer."
+  courses: [mastery]
+- term: "Envelope encryption"
+  definition: "Encrypting data with a data key that a master key in a KMS encrypts in turn."
   courses: [mastery]
 - term: "Environment variable"
   definition: "A setting supplied to a program from outside its code."
@@ -1191,6 +1230,9 @@
 - term: "Formatter"
   definition: "A tool that rewrites code into one consistent layout, such as Prettier."
   courses: [mastery]
+- term: "Forward secrecy"
+  definition: "Recorded traffic stays secret even if a server's long-term key later leaks."
+  courses: [mastery]
 - term: "Four golden signals"
   definition: "Latency, traffic, errors and saturation."
   courses: [mastery]
@@ -1347,6 +1389,10 @@
   aliases: ["higher-order functions"]
   definition: "A function that takes a function as an argument or returns one, such as map."
   courses: [mastery]
+- term: "HMAC"
+  aliases: ["message authentication code", "HMAC-SHA256"]
+  definition: "A keyed hash proving a message is unchanged and from someone with the key."
+  courses: [mastery]
 - term: "Hook"
   aliases: ["hooks"]
   definitions:
@@ -1447,6 +1493,9 @@
 - term: "Initial value"
   definition: "The value a piece of React state starts with, used only on the first render."
   courses: [web]
+- term: "Injection"
+  definition: "Untrusted input interpreted as code, such as SQL, shell commands or HTML."
+  courses: [mastery, claude]
 - term: "Inode"
   aliases: ["inodes"]
   definition: "The record a file system keeps for each file; running out of them fills a disk."
@@ -1457,6 +1506,10 @@
 - term: "Input tokens"
   definition: "The tokens a model reads in a request: the prompt, conversation and attachments. Priced separately from output tokens."
   courses: [claude]
+- term: "Insecure direct object reference"
+  aliases: ["IDOR"]
+  definition: "Reaching another user's data by changing an id, because access is not checked per object."
+  courses: [mastery]
 - term: "Insertion sort"
   definition: "A sort that inserts each element into place in a growing sorted section; fast for small or nearly sorted data."
   courses: [mastery]
@@ -1527,6 +1580,10 @@
     se: "A text format for exchanging structured data."
     web: "A text format for arrays and objects, used to send data between programs and to save it; JSON.stringify and JSON.parse convert to and from it."
   courses: [ai, se, web]
+- term: "JSON Web Token"
+  aliases: ["JWT", "JWTs"]
+  definition: "A signed, base64url-encoded token carrying claims; readable by anyone holding it."
+  courses: [mastery]
 - term: "JSX"
   definition: "HTML-like syntax inside JavaScript, used by React, which is turned into ordinary function calls before the code runs."
   courses: [web]
@@ -1538,6 +1595,9 @@
   courses: [claude]
 - term: "JVM"
   definition: "The Java Virtual Machine, which runs Java bytecode."
+  courses: [mastery]
+- term: "JWKS"
+  definition: "A published set of public keys that services use to verify an issuer's token signatures."
   courses: [mastery]
 - term: "Kafka"
   definition: "A distributed, durable log for event streams, with topics, partitions and consumer groups."
@@ -1551,11 +1611,18 @@
 - term: "Key"
   definition: "Two meanings. In a Python dictionary, the name a value is stored under and looked up by. In React, a unique, stable value on each item of a list, so React can tell the items apart when the list changes."
   courses: [web, ai, se]
+- term: "Key exchange"
+  definition: "Agreeing a shared secret over an open network, as TLS does."
+  courses: [mastery]
 - term: "Key-value store"
   definition: "A database that maps keys to values, such as Redis or DynamoDB."
   courses: [mastery]
 - term: "KISS"
   definition: "Keep it simple: the simplest design that works is usually best."
+  courses: [mastery]
+- term: "KMS"
+  aliases: ["key management service", "hardware security modules"]
+  definition: "A service that stores keys and performs cryptographic operations without exposing them."
   courses: [mastery]
 - term: "Knapsack"
   definition: "Choosing the most valuable set of items that fits within a weight or size limit."
@@ -1871,6 +1938,10 @@
   aliases: ["modular monolith"]
   definition: "One deployable application; a modular monolith divides it into modules with enforced boundaries."
   courses: [mastery, se]
+- term: "Multi-factor authentication"
+  aliases: ["MFA"]
+  definition: "Proving identity with two or more kinds of factor, such as a password and a device."
+  courses: [mastery]
 - term: "Multi-stage build"
   definition: "A Dockerfile with a build stage and a smaller final stage holding only what runs."
   courses: [mastery]
@@ -1880,6 +1951,10 @@
 - term: "Mutation testing"
   aliases: ["mutants"]
   definition: "Making small changes to code and checking whether any test fails; surviving mutants show what tests miss."
+  courses: [mastery]
+- term: "Mutual TLS"
+  aliases: ["mTLS"]
+  definition: "TLS where both client and server present certificates."
   courses: [mastery]
 - term: "MVCC"
   aliases: ["multi-version concurrency control"]
@@ -1940,6 +2015,9 @@
 - term: "Non-repeatable read"
   definition: "Reading a row twice in one transaction and getting different values."
   courses: [mastery]
+- term: "Nonce"
+  definition: "A number used once; reusing one with the same key breaks AES-GCM."
+  courses: [mastery]
 - term: "Normal flow"
   definition: "How boxes are laid out when nothing changes it: blocks stacked down the page, inline boxes along lines of text."
   courses: [web]
@@ -1964,6 +2042,10 @@
   courses: [mastery]
 - term: "Nullable reference types"
   definition: "C#'s compile-time tracking of which references may be null, written string? for a nullable string."
+  courses: [mastery]
+- term: "OAuth 2.0"
+  aliases: ["delegated authorisation", "scopes"]
+  definition: "A framework letting an application access resources on a user's behalf with scoped tokens."
   courses: [mastery]
 - term: "Object"
   definition: "Two meanings. In JavaScript, a value made of named properties, such as { name: \"Ama\", age: 20 }. In object-oriented programming, one thing created from a class, with its own data."
@@ -2005,6 +2087,10 @@
 - term: "OpenAPI"
   definition: "A machine-readable format for describing HTTP APIs."
   courses: [mastery]
+- term: "OpenID Connect"
+  aliases: ["OIDC", "ID token"]
+  definition: "An identity layer on OAuth 2.0 that adds ID tokens saying who the user is."
+  courses: [mastery]
 - term: "OpenTelemetry"
   aliases: ["OTLP"]
   definition: "The vendor-neutral standard and tools for producing traces, metrics and logs."
@@ -2039,6 +2125,9 @@
   courses: [ai]
 - term: "Overflow"
   definition: "A result too large for its type, which wraps round (or raises an error with checked arithmetic)."
+  courses: [mastery]
+- term: "OWASP Top 10"
+  definition: "OWASP's ranked list of the most critical web application security risks, last updated in 2025."
   courses: [mastery]
 - term: "PACELC"
   definition: "CAP plus: when there is no partition, choose between latency and consistency."
@@ -2093,6 +2182,14 @@
   aliases: ["sharding", "shard", "partition", "range partitioning", "hash partitioning"]
   definition: "Splitting data so each node stores only part of it."
   courses: [mastery, se]
+- term: "Passkey"
+  aliases: ["passkeys", "WebAuthn"]
+  definition: "A phishing-resistant login using a key pair on the user's device instead of a password."
+  courses: [mastery]
+- term: "Password hashing"
+  aliases: ["Argon2id", "bcrypt", "scrypt", "PBKDF2", "work factor"]
+  definition: "Slow, salted hashing that makes each password guess expensive."
+  courses: [mastery]
 - term: "PATH"
   definitions:
     web: "The list of folders your computer searches when you type a program's name in the terminal."
@@ -2100,6 +2197,9 @@
     se: "The list of folders your computer searches when you type a program's name in the terminal."
     mastery: "Two meanings. In the terminal, PATH is the list of folders searched for programs. In a graph, a path is a sequence of edges from one vertex to another."
   courses: [web, ai, se, mastery]
+- term: "Path traversal"
+  definition: "Using ../ or absolute paths in input to reach files outside an allowed folder."
+  courses: [mastery]
 - term: "Percentile"
   aliases: ["percentiles", "p95", "p99"]
   definition: "The value a given share of measurements is at or below; p99 latency is what the slowest 1% exceed."
@@ -2122,6 +2222,10 @@
   courses: [mastery]
 - term: "PID"
   definition: "A process id: the number identifying a running process."
+  courses: [mastery]
+- term: "PKCE"
+  aliases: ["code verifier", "code challenge"]
+  definition: "Proof Key for Code Exchange: proof that the client exchanging an authorisation code is the one that started the login."
   courses: [mastery]
 - term: "Placeholder"
   definition: "Grey hint text inside an empty form field; it disappears when you type, so it never replaces a label."
@@ -2272,6 +2376,10 @@
 - term: "Pseudo-polynomial"
   definition: "Polynomial in the size of the numbers in the input rather than the input's length, as in knapsack DP."
   courses: [mastery]
+- term: "Public-key cryptography"
+  aliases: ["private key", "public key", "asymmetric cryptography"]
+  definition: "Cryptography with a key pair: a public key to share and a private key to keep."
+  courses: [mastery]
 - term: "Pull request"
   definition: "A proposal to merge a branch, reviewed by teammates first."
   courses: [se, mastery]
@@ -2329,6 +2437,10 @@
   aliases: ["token bucket", "leaky bucket", "fixed window"]
   definition: "Capping how many requests a client may make in a period."
   courses: [mastery, se]
+- term: "RBAC"
+  aliases: ["role-based access control"]
+  definition: "Granting permissions through roles assigned to users."
+  courses: [mastery]
 - term: "Reachable"
   definition: "Able to be reached by following references from the roots, and therefore kept alive."
   courses: [mastery]
@@ -2354,6 +2466,10 @@
   courses: [mastery]
 - term: "ReadyToRun"
   definition: "A .NET option that ships precompiled machine code alongside IL for faster start-up."
+  courses: [mastery]
+- term: "ReBAC"
+  aliases: ["relationship-based access control"]
+  definition: "Deciding access from relationships, such as being an editor of a document."
   courses: [mastery]
 - term: "Rebalance"
   aliases: ["rebalances"]
@@ -2384,6 +2500,10 @@
   courses: [se, mastery]
 - term: "Reference"
   definition: "A value that refers to an object on the heap, in effect its address."
+  courses: [mastery]
+- term: "Refresh token"
+  aliases: ["refresh tokens"]
+  definition: "A long-lived, revocable token used to obtain new short-lived access tokens."
   courses: [mastery]
 - term: "Region"
   aliases: ["availability zones", "availability zone"]
@@ -2515,12 +2635,19 @@
   aliases: ["sagas"]
   definition: "A sequence of local transactions across services, with compensating actions if a step fails."
   courses: [mastery]
+- term: "Salt"
+  definition: "Random data stored with a password hash so equal passwords hash differently."
+  courses: [mastery, se]
 - term: "Sampling"
   definition: "Choosing each next token with a little randomness among the likely ones, which is why the same question can get different answers."
   courses: [claude]
 - term: "Sandbox"
   definition: "Operating-system limits on what commands Claude Code runs can write and reach on the network."
   courses: [claude]
+- term: "SBOM"
+  aliases: ["software bill of materials"]
+  definition: "A list of every component and version in a piece of software."
+  courses: [mastery]
 - term: "Scatter-gather"
   definition: "Sending a query to every partition and combining the results."
   courses: [mastery]
@@ -2551,6 +2678,9 @@
 - term: "Secret scanning"
   definition: "Detecting passwords, keys and tokens in code before or after they are committed."
   courses: [mastery]
+- term: "Secrets manager"
+  definition: "A service that stores and hands out passwords, keys and tokens securely."
+  courses: [mastery]
 - term: "Security group"
   aliases: ["security groups"]
   definition: "A stateful cloud firewall around a resource."
@@ -2580,6 +2710,14 @@
   aliases: ["SSE"]
   definition: "A one-way stream of text events from server to browser over one HTTP response."
   courses: [mastery]
+- term: "Server-side request forgery"
+  aliases: ["SSRF"]
+  definition: "Tricking a server into requesting internal addresses on an attacker's behalf."
+  courses: [mastery]
+- term: "Server-side session"
+  aliases: ["session id"]
+  definition: "Login state kept on the server and referenced by a random id in a cookie."
+  courses: [mastery]
 - term: "Serverless"
   definition: "Running code per request or event on a platform that scales automatically and bills by use."
   courses: [mastery]
@@ -2592,6 +2730,9 @@
   courses: [mastery]
 - term: "Set"
   definition: "A collection of distinct items in no particular order."
+  courses: [mastery]
+- term: "SHA-256"
+  definition: "A widely used cryptographic hash producing a 32-byte digest."
   courses: [mastery]
 - term: "Shallow copy"
   aliases: ["deep copy"]
@@ -2626,6 +2767,10 @@
 - term: "Single responsibility principle"
   aliases: ["SRP"]
   definition: "A module should have one reason to change, answering to one group of people."
+  courses: [mastery]
+- term: "Single sign-on"
+  aliases: ["SSO", "SAML"]
+  definition: "Logging in once with an identity provider to use many applications."
   courses: [mastery]
 - term: "Single-page application"
   definition: "A web app that loads one page and then swaps what is shown with JavaScript, instead of loading a new page for each link."
@@ -2781,6 +2926,9 @@
   aliases: ["strict"]
   definition: "TypeScript's setting that turns on its most useful checks, such as for missing values; on by default since TypeScript 6."
   courses: [web]
+- term: "STRIDE"
+  definition: "Spoofing, tampering, repudiation, information disclosure, denial of service, elevation of privilege: a threat checklist."
+  courses: [mastery]
 - term: "String"
   definition: "A value made of text, written inside quotes."
   courses: [web, mastery]
@@ -2819,6 +2967,10 @@
 - term: "Subset sum"
   definition: "Deciding whether some of a set of numbers add up exactly to a target."
   courses: [mastery]
+- term: "Supply chain attack"
+  aliases: ["software supply chain failures"]
+  definition: "Compromising software through its dependencies, build tools or distribution."
+  courses: [mastery]
 - term: "Surrogate key"
   aliases: ["natural key"]
   definition: "A meaningless system-generated identifier; a natural key is a real-world one such as an email."
@@ -2831,6 +2983,10 @@
   courses: [web]
 - term: "Swapping"
   definition: "Moving little-used memory pages to disk when RAM runs short."
+  courses: [mastery]
+- term: "Symmetric encryption"
+  aliases: ["AES"]
+  definition: "Encryption where one secret key both encrypts and decrypts."
   courses: [mastery]
 - term: "Sync-over-async"
   definition: "Blocking a thread to wait for async work (.Result, .Wait()), which can starve the thread pool or deadlock."
@@ -2923,6 +3079,10 @@
   courses: [mastery]
 - term: "Thread-safe"
   definition: "Behaving correctly when used from many threads at once without extra locking by callers."
+  courses: [mastery]
+- term: "Threat modelling"
+  aliases: ["trust boundaries"]
+  definition: "Finding what can go wrong with a design, at its trust boundaries, and deciding what to do about it."
   courses: [mastery]
 - term: "Three-way handshake"
   definition: "The three packets TCP exchanges to open a connection, costing one round trip."

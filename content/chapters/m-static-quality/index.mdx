@@ -119,7 +119,7 @@ The build fails with `error CS8602: Dereference of a possibly null reference.`, 
 Beyond linters are tools that follow data and control flow across functions and files:
 
 - **Bug finders**: SpotBugs and Error Prone (Java), the .NET code-quality analyzers (the `CA` rules), and typescript-eslint's type-aware rules find null dereferences, resource leaks, broken `equals`/`hashCode` pairs, thread-safety mistakes and misuse of APIs.
-- **Security analysis (SAST)**: CodeQL, Semgrep and SonarQube track untrusted input from where it enters to dangerous places (a SQL string, a shell command, an HTML page) and report injection risks. The security part of the course goes deeper.
+- **Security analysis (SAST)**: CodeQL, Semgrep and SonarQube track untrusted input from where it enters to dangerous places (a SQL string, a shell command, an HTML page) and report injection risks. <Ref to="m-appsec" /> goes deeper.
 - **Quality platforms** such as SonarQube and SonarCloud combine many analysers, track issues over time, and report on **new code** separately from old.
 
 Every analyser produces **false positives** (warnings about code that is fine) and misses some real problems (**false negatives**). Tune rules that are noisy for your codebase; a tool whose warnings everybody ignores is worse than no tool.
