@@ -1,0 +1,36 @@
+- question: What does linearizability promise?
+  options:
+  - The system behaves as if there were one copy; after a write completes, every read sees it
+  - Replicas eventually agree
+  answer: 0
+  explanation: Reading from a lagging follower breaks it.
+- question: What does CAP say a system must choose during a network partition?
+  options:
+  - Consistency or availability
+  - Any two of consistency, availability and partition tolerance at all times
+  answer: 0
+  explanation: Partitions are not optional.
+- question: What does PACELC add to CAP?
+  options:
+  - Without a partition, a choice between latency and consistency
+  - A third type of partition
+  answer: 0
+  explanation: This is the trade-off felt day to day.
+- question: How many failures can a 5-node consensus cluster tolerate?
+  options:
+  - '2'
+  - '4'
+  answer: 0
+  explanation: 2f + 1 nodes tolerate f failures.
+- question: When is a Raft log entry committed?
+  options:
+  - When a majority of nodes have stored it
+  - When the leader writes it
+  answer: 0
+  explanation: Only then is the client told it succeeded.
+- question: What makes a lease-based lock safe against a paused holder?
+  options:
+  - Fencing tokens checked by the protected resource
+  - A longer lease
+  answer: 0
+  explanation: Stale holders' writes are rejected.

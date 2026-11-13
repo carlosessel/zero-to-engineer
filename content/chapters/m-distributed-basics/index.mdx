@@ -1,0 +1,298 @@
+---
+title: "Distributed systems fundamentals"
+summary: "Partial failure, timeouts, retries, idempotency, clocks and ordering."
+prerequisites: [m-networking, m-async]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will think about systems of many machines the way experienced engineers do: expecting partial failure, never trusting a network call to succeed or fail cleanly, setting timeouts, retrying safely with idempotency, and knowing why clocks on different machines cannot be trusted to order events. Every back end that calls a database, a payment provider or another service is a distributed system, so these ideas apply far beyond giant platforms.
+
+## What makes distributed systems different
+
+A **distributed system** is a set of programs on different machines that cooperate over a network. On one machine, a function call either returns or throws, quickly. Over a network, a call can also:
+
+- **succeed but the reply is lost**, so you think it failed;
+- **fail silently**, so you wait forever;
+- **be slow**, sometimes for seconds, for reasons you cannot see (a garbage-collection pause, a congested link, an overloaded server);
+- **arrive twice**, or out of order.
+
+And crucially, **you cannot tell these apart**. If a request to the payment service gets no answer, the payment may have happened or not. This is **partial failure**: some parts of the system work while others do not, and no part has a complete view. Handling it is the central problem of distributed systems.
+
+Peter Deutsch and colleagues at Sun listed the **fallacies of distributed computing**, assumptions that newcomers make and that eventually fail: the network is reliable; latency is zero; bandwidth is infinite; the network is secure; topology does not change; there is one administrator; transport cost is zero; the network is homogeneous. Every pattern in this part exists because one of them is false.
+
+## Timeouts
+
+Without a **timeout**, a call to a server that has hung waits forever, holding a thread, a connection and memory. Under load, waiting requests pile up until the caller runs out of resources and fails too: one slow dependency takes down everything that calls it (a **cascading failure**, <Ref to="m-resilience" />). **Every network call needs a timeout**, including database queries and calls to "reliable" cloud services.
+
+Choosing the value: base it on the dependency's measured latency percentiles (<Ref to="m-performance" />), a little above its p99 or p99.9, and below the time your own caller will wait. If your API promises a response within 2 seconds, a 5-second timeout on a dependency breaks that promise. Remember that a timeout tells you only that you *stopped waiting*, not what happened on the other side.
+
+## Retries
+
+Many failures are **transient**: a dropped connection, a brief overload, a server restarting. Retrying often succeeds. But retries need care:
+
+- **Retry only what is safe to repeat** (idempotent operations, below) and only errors that may be transient: timeouts, connection resets, 429, 502, 503 and 504. Do not retry a 400 or a validation error; it will fail the same way.
+- **Back off exponentially with jitter**, so a struggling service gets breathing room and clients do not retry in synchronised waves (<Ref to="m-realtime" />).
+- **Cap the attempts** and the total time.
+- **Beware amplification**: if each of three layers retries three times, one user request can become 3 × 3 × 3 = 27 calls to the bottom service, exactly when it is overloaded. Retry at one layer (usually the one closest to the user or the failing call), or use a **retry budget** that limits retries to a fraction of normal traffic.
+
+```ts
+type Outcome = { ok: true; value: string } | { ok: false; transient: boolean; error: string };
+
+async function withRetries(
+  call: (attempt: number) => Promise<Outcome>,
+  maxAttempts: number,
+  baseDelayMs: number,
+  random: () => number,
+  sleep: (ms: number) => Promise<void>,
+): Promise<string> {
+  for (let attempt = 1; ; attempt++) {
+    const outcome = await call(attempt);
+    if (outcome.ok) return `${outcome.value} after ${attempt} attempt(s)`;
+    if (!outcome.transient || attempt === maxAttempts) throw new Error(`gave up after ${attempt}: ${outcome.error}`);
+    const delay = Math.round(random() * baseDelayMs * 2 ** (attempt - 1));
+    console.log(`attempt ${attempt} failed (${outcome.error}); waiting ${delay} ms`);
+    await sleep(delay);
+  }
+}
+
+let seed = 11;
+const random = () => {
+  seed = (seed * 1103515245 + 12345) % 2 ** 31;
+  return seed / 2 ** 31;
+};
+const instant = async () => {};
+
+const flaky = async (attempt: number): Promise<Outcome> =>
+  attempt < 3 ? { ok: false, transient: true, error: "503 Service Unavailable" } : { ok: true, value: "stock reserved" };
+const invalid = async (): Promise<Outcome> => ({ ok: false, transient: false, error: "400 quantity must be positive" });
+
+async function main() {
+  console.log(await withRetries(flaky, 5, 100, random, instant));
+  try {
+    await withRetries(invalid, 5, 100, random, instant);
+  } catch (e) {
+    console.log((e as Error).message);
+  }
+  const perLayer = 3;
+  console.log("calls reaching the bottom of three retrying layers:", perLayer ** 3);
+}
+
+main();
+```
+
+It prints two waiting messages (`waiting 65 ms`, then `waiting 76 ms`: random delays below 100 and 200 ms), then `stock reserved after 3 attempt(s)`, then `gave up after 1: 400 quantity must be positive` (no retry for a permanent error), then `calls reaching the bottom of three retrying layers: 27`. The sleep and random functions are passed in, so the logic can be tested instantly and deterministically. Libraries do this for you: Polly and `Microsoft.Extensions.Http.Resilience` in .NET, Resilience4j in Java, and the retry options of most HTTP and cloud clients.
+
+## Idempotency
+
+An operation is **idempotent** if doing it several times has the same effect as doing it once (<Ref to="m-api-design" />). Idempotency is what makes retries safe, and because networks can duplicate and you must retry, **every operation that changes state should be idempotent** or made so:
+
+- **Naturally idempotent** operations: "set the status to shipped", "delete order 7", "put this document at this key".
+- **Not idempotent**: "add £10", "append a line", "send an email", "create an order".
+
+To make the second kind safe, give each request a unique **idempotency key** chosen by the caller (a UUID, or a natural one such as "order 7's confirmation email"), and have the receiver record which keys it has processed, in the same transaction as the work, ignoring or replaying the stored result for repeats:
+
+```ts
+type Payment = { id: string; orderId: string; pence: number };
+
+class PaymentHandler {
+  private processed = new Map<string, Payment>();
+  charged = 0;
+
+  handle(messageId: string, orderId: string, pence: number): Payment {
+    const previous = this.processed.get(messageId);
+    if (previous) return previous;
+    this.charged += pence;
+    const payment = { id: `pay-${this.processed.size + 1}`, orderId, pence };
+    this.processed.set(messageId, payment);
+    return payment;
+  }
+}
+
+const handler = new PaymentHandler();
+const deliveries = [
+  ["msg-1", "o-7", 5400],
+  ["msg-2", "o-8", 900],
+  ["msg-1", "o-7", 5400],
+  ["msg-1", "o-7", 5400],
+] as const;
+const results = deliveries.map(([id, order, pence]) => handler.handle(id, order, pence).id);
+console.log(results, "charged:", handler.charged);
+```
+
+It prints `["pay-1", "pay-2", "pay-1", "pay-1"] charged: 6300`: four deliveries, two real payments, and the duplicates of `msg-1` return the original result instead of charging again. In a real system, the processed-keys table and the payment row are written in one database transaction, and keys are kept long enough to cover any realistic redelivery.
+
+This leads to a fundamental result: over an unreliable network, you can have **at-most-once** delivery (never retry: messages may be lost) or **at-least-once** delivery (retry until acknowledged: messages may be duplicated), but not exactly-once delivery by the network alone. What systems call **exactly-once** is really at-least-once delivery plus idempotent processing, so the *effect* happens once (<Ref to="m-messaging" />).
+
+## Clocks
+
+Every machine has a clock, and they disagree. Quartz clocks drift (a few milliseconds to seconds per day); **NTP** (the Network Time Protocol) corrects them, typically to within milliseconds on a good network, but corrections can make the clock jump forwards or **backwards**. Leap seconds, virtual machine pauses and misconfigured servers add more error.
+
+Two kinds of clock exist on every machine, for different jobs:
+
+- The **wall clock** (time of day: `Date.now()`, `System.currentTimeMillis()`, `DateTime.UtcNow`) says what time it is, roughly, and can jump. Use it for timestamps people read.
+- The **monotonic clock** (`performance.now()`, `System.nanoTime()`, `Stopwatch`) only ever moves forward at a steady rate, but its value means nothing across machines or restarts. Use it to **measure durations** and timeouts. Measuring a duration with the wall clock can give a negative time if NTP steps the clock back.
+
+The dangerous mistake is **ordering events across machines by wall-clock timestamps**. With **last write wins** conflict resolution, a server whose clock runs slow loses writes that really happened later:
+
+```ts
+type Write = { server: string; value: string; trueTimeMs: number; clockSkewMs: number };
+
+const writes: Write[] = [
+  { server: "eu-1", value: "address: 4 Park Row", trueTimeMs: 1_000, clockSkewMs: 0 },
+  { server: "us-1", value: "address: 9 Mill Lane", trueTimeMs: 1_050, clockSkewMs: -200 },
+];
+
+const stamped = writes.map((w) => ({ ...w, timestamp: w.trueTimeMs + w.clockSkewMs }));
+const lastWriteWins = stamped.reduce((winner, w) => (w.timestamp > winner.timestamp ? w : winner));
+const reallyLast = writes.reduce((winner, w) => (w.trueTimeMs > winner.trueTimeMs ? w : winner));
+
+console.log("kept by timestamp:", lastWriteWins.value);
+console.log("actually written last:", reallyLast.value);
+```
+
+It prints `kept by timestamp: address: 4 Park Row` and `actually written last: address: 9 Mill Lane`. The customer changed their address 50 ms after the first write, but the US server's clock was 200 ms slow, so its timestamp looked older and the real latest change was silently discarded.
+
+## Ordering without clocks
+
+If timestamps cannot order events, what can? Leslie Lamport's 1978 insight was that what matters is **causality**: if event A could have influenced event B (A happened earlier on the same machine, or A sent a message that B received), A must come first. Events with no causal link are **concurrent**, and no order between them is "true".
+
+A **Lamport clock** captures this with a counter per node: increment it for each local event; attach it to every message; on receiving, set your counter to the larger of yours and the message's, plus one. If A caused B, A's number is smaller.
+
+```ts
+class ClockNode {
+  clock = 0;
+  log: string[] = [];
+  constructor(readonly name: string) {}
+
+  event(what: string) {
+    this.clock++;
+    this.log.push(`${this.clock} ${this.name}: ${what}`);
+  }
+
+  send(what: string): number {
+    this.event(`send ${what}`);
+    return this.clock;
+  }
+
+  receive(what: string, messageClock: number) {
+    this.clock = Math.max(this.clock, messageClock);
+    this.event(`receive ${what}`);
+  }
+}
+
+const orders = new ClockNode("orders");
+const payments = new ClockNode("payments");
+const email = new ClockNode("email");
+
+orders.event("order o-7 created");
+const placed = orders.send("OrderPlaced");
+payments.event("daily report generated");
+payments.receive("OrderPlaced", placed);
+const paid = payments.send("PaymentTaken");
+email.receive("PaymentTaken", paid);
+email.event("receipt sent");
+
+console.log([...orders.log, ...payments.log, ...email.log].sort((a, b) => parseInt(a) - parseInt(b)));
+```
+
+It prints the events in an order consistent with causality: `1 orders: order o-7 created`, then `1 payments: daily report generated` (concurrent with it, so it may sort either way), `2 orders: send OrderPlaced`, `3 payments: receive OrderPlaced`, `4 payments: send PaymentTaken`, `5 email: receive PaymentTaken` and `6 email: receipt sent`: the receipt always comes after the payment, whatever the machines' clocks said. **Vector clocks** extend the idea to detect when two events are concurrent (useful for spotting conflicting writes), and **hybrid logical clocks** combine a physical timestamp with a logical counter, as CockroachDB and others do. Google's Spanner goes the other way, using GPS and atomic clocks to bound clock uncertainty and waiting out that uncertainty before committing.
+
+In everyday systems, the practical lessons are: use a **single source of ordering** where order matters (one database sequence, one partition of a log, <Ref to="m-kafka" />), carry **version numbers** rather than timestamps for conflict detection (<Ref to="m-enterprise-patterns" />), and never assume two machines agree on the time.
+
+## Other things that go wrong
+
+- **Process pauses**: a stop-the-world garbage collection, a virtual machine migration or swapping can freeze a process for seconds. It then continues, unaware time has passed, perhaps still believing it holds a lock or is the leader. Systems protect against this with **fencing tokens**: every lock grant carries an increasing number, and storage rejects writes with an older number.
+- **Network partitions**: the network splits, and each side can see only some nodes. Each side may believe the others are dead (<Ref to="m-consistency-consensus" />).
+- **Byzantine faults**: nodes that lie or misbehave. Ordinary business systems assume nodes are honest but may fail; blockchains and aircraft systems do not.
+
+## Common mistakes
+
+- **No timeout** on a network or database call.
+- **Retrying non-idempotent operations**, or retrying permanent errors.
+- **Retries at every layer**, multiplying load on a struggling service.
+- **Treating a timeout as a failure** when the operation may have succeeded.
+- **Measuring durations with the wall clock.**
+- **Ordering or resolving conflicts by timestamps from different machines.**
+- **Assuming exactly-once delivery** from a network or message broker.
+
+## Practice
+
+**1. (warm-up)** A request to a payment service times out. List the possible states of the payment.
+
+<Solution>
+
+It may never have arrived; it may have arrived and failed; it may have succeeded but the reply was lost or slow; or it may still be in progress. The caller cannot tell which, so it must either retry idempotently (with the same idempotency key) or ask the service for the payment's status.
+
+</Solution>
+
+**2. (warm-up)** Which are idempotent? (a) `PUT /orders/7/status` with "shipped"; (b) `POST /accounts/3/deposit` of £10; (c) `DELETE /carts/5`; (d) sending a "your order shipped" email.
+
+<Solution>
+
+(a) and (c) are idempotent. (b) and (d) are not: repeating them deposits twice or sends two emails. They can be made safe with an idempotency key or by recording that the action was done (for example, "shipping email sent for order 7").
+
+</Solution>
+
+**3. (warm-up)** Which clock should measure how long a database query took, and why?
+
+<Solution>
+
+The monotonic clock (`performance.now()`, `System.nanoTime()`, `Stopwatch`): it only moves forward at a steady rate. The wall clock can be stepped forwards or backwards by NTP during the measurement, giving wrong or even negative durations.
+
+</Solution>
+
+**4. (standard)** Modify the retry function so it also stops when a total deadline (say 1 second) would be exceeded by the next wait, and show it giving up early on a service that always returns 503.
+
+<Solution>
+
+```ts
+type Outcome = { ok: true; value: string } | { ok: false; transient: boolean; error: string };
+
+async function withRetries(call: () => Promise<Outcome>, maxAttempts: number, baseDelayMs: number, deadlineMs: number): Promise<string> {
+  let elapsed = 0;
+  for (let attempt = 1; ; attempt++) {
+    const outcome = await call();
+    if (outcome.ok) return outcome.value;
+    const delay = baseDelayMs * 2 ** (attempt - 1);
+    if (!outcome.transient || attempt === maxAttempts || elapsed + delay > deadlineMs) {
+      throw new Error(`gave up after ${attempt} attempts and ${elapsed} ms: ${outcome.error}`);
+    }
+    elapsed += delay;
+  }
+}
+
+const down = async (): Promise<Outcome> => ({ ok: false, transient: true, error: "503" });
+withRetries(down, 10, 100, 1000).catch((e) => console.log((e as Error).message));
+```
+
+It prints **gave up after 4 attempts and 700 ms: 503**: waits of 100, 200 and 400 ms used 700 ms, and the next wait (800 ms) would pass the 1-second deadline. (Jitter is left out here to keep the numbers exact.) A deadline matters more than an attempt count, because callers wait in time, not attempts.
+
+</Solution>
+
+**5. (stretch)** Two data centres both accept updates to customer records and resolve conflicts by "latest timestamp wins". Explain the risk and propose two alternatives.
+
+<Solution>
+
+Clocks in the two data centres differ, so the write with the larger timestamp is not necessarily the later one; real updates can be silently lost (as in the chapter's example), and a server with a fast clock wins every conflict. Alternatives: give each record a home region that accepts its writes (single leader per record), so there are no conflicts; use version numbers or vector clocks to detect concurrent writes and resolve them explicitly (merge fields, or ask the user); or use a database with a consensus-based or bounded-uncertainty ordering (Spanner, CockroachDB) at the cost of cross-region latency on writes.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Distributed systems suffer **partial failure**, and a caller cannot tell a lost request, a lost reply and a slow server apart. Remember the **fallacies of distributed computing**.
+- **Every network call needs a timeout**, set from measured latency and the caller's own deadline.
+- **Retry** only transient errors on idempotent operations, with **exponential backoff and jitter**, capped, at one layer, within a deadline.
+- Make state changes **idempotent** with idempotency keys stored in the same transaction; "exactly-once" means at-least-once plus idempotence.
+- **Wall clocks** disagree and jump; use **monotonic clocks** for durations, and never order cross-machine events by timestamp.
+- Order by **causality**: Lamport clocks, vector clocks, version numbers, or a single source of ordering. Guard against pauses with **fencing tokens**.
+
+## Go deeper
+
+- [Fallacies of distributed computing](https://en.wikipedia.org/wiki/Fallacies_of_distributed_computing), Wikipedia. The eight fallacies and their history.
+- [Timeouts, retries and backoff with jitter](https://aws.amazon.com/builders-library/timeouts-retries-and-backoff-with-jitter/), Marc Brooker (Amazon Builders' Library). How Amazon sets timeouts and avoids retry storms.
+- [Making retries safe with idempotent APIs](https://aws.amazon.com/builders-library/making-retries-safe-with-idempotent-APIs/), Malcolm Featonby (Amazon Builders' Library). Idempotency keys in practice.
+- [Time, Clocks, and the Ordering of Events in a Distributed System](https://lamport.azurewebsites.net/pubs/time-clocks.pdf), Leslie Lamport. The 1978 paper that introduced logical clocks.
+- [Notes on Distributed Systems for Young Bloods](https://www.somethingsimilar.com/2013/01/14/notes-on-distributed-systems-for-young-bloods/), Jeff Hodges. Practical lessons from running distributed systems.

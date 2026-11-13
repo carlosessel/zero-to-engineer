@@ -1,0 +1,283 @@
+---
+title: "Messaging and queues"
+summary: "Queues versus logs, RabbitMQ, delivery guarantees, dead letters and the outbox pattern."
+prerequisites: [m-distributed-basics, m-concurrency-patterns]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will know when services should talk through messages instead of direct calls, the difference between a message queue and a log, how brokers such as RabbitMQ route and deliver messages, what at-most-once, at-least-once and "exactly-once" really mean, how to handle messages that keep failing, and how the transactional outbox makes "save to the database and publish an event" reliable. Kafka, the most important log-based broker, gets its own chapter next.
+
+## Why messaging
+
+When service A calls service B directly over HTTP, both must be up at the same moment, A waits for B, and a surge of traffic to A hits B at full force. A **message broker** sits between them: A **publishes** a message and moves on; B **consumes** it when it can. This gives:
+
+- **Decoupling in time**: B can be down or slow; messages wait for it.
+- **Load levelling**: a spike of 10,000 orders becomes a queue that workers drain at a steady rate (producer-consumer between services, <Ref to="m-concurrency-patterns" />).
+- **Decoupling in space**: A does not need to know who consumes, so new consumers (analytics, fraud checks) can be added without changing A.
+- **Reliability**: brokers store messages durably and redeliver until they are processed.
+
+The cost: the flow becomes asynchronous and harder to follow, results arrive later, and you must handle duplicates, ordering and failures explicitly. Use messages for work that does not need an immediate answer (sending emails, generating invoices, updating search indexes, notifying other services that something happened) and keep direct calls for queries that need a reply now.
+
+### Commands and events
+
+Messages come in two kinds, and naming them clearly helps:
+
+- A **command** asks one specific receiver to do something: `SendReceiptEmail`, `ChargeCard`. Named as an imperative; exactly one handler.
+- An **event** announces something that happened: `OrderPlaced`, `PaymentFailed` (domain events, <Ref to="m-ddd" />). Named in the past tense; any number of subscribers, which the publisher does not know.
+
+## Queues and logs
+
+Brokers come in two designs.
+
+A **message queue** (RabbitMQ, ActiveMQ, Amazon SQS, Azure Service Bus) holds messages until a consumer takes and **acknowledges** them, then deletes them. Several consumers on one queue are **competing consumers**: each message goes to exactly one of them, which spreads the work. Queues are ideal for **work distribution**: jobs to be done once.
+
+A **log** (Apache Kafka, Amazon Kinesis, Azure Event Hubs, Redis Streams) is an append-only, ordered sequence of messages that is **kept** for a retention period whether or not anyone has read it. Each consumer group tracks its own position (**offset**) in the log, so many independent groups can read the same messages at their own pace, and a consumer can **replay** history by moving its offset back. Logs are ideal for **event streams** that several systems react to, and for rebuilding state (<Ref to="m-kafka" />).
+
+| | Queue | Log |
+|---|---|---|
+| After consumption | deleted | kept until retention expires |
+| Several consumer groups | need a queue each (fan-out) | each reads independently |
+| Replay | no | yes |
+| Ordering | per queue, weakened by competing consumers and redelivery | per partition |
+| Typical use | tasks, jobs, commands | events, streams, integration between many systems |
+
+## RabbitMQ in brief
+
+**RabbitMQ** implements the AMQP 0-9-1 protocol. Producers do not publish to queues directly but to an **exchange**, which routes each message to zero or more queues by **binding** rules:
+
+- a **direct** exchange routes by exact routing key (`invoice.create` to the invoicing queue);
+- a **topic** exchange routes by pattern (`order.*.uk` matches `order.placed.uk`);
+- a **fanout** exchange copies every message to every bound queue (publish-subscribe);
+- a headers exchange routes by message headers.
+
+Consumers **acknowledge** each message after processing it; an unacknowledged message is redelivered if the consumer dies. **Prefetch** limits how many unacknowledged messages a consumer holds at once, which is how back-pressure and fair distribution work. Durable queues, persistent messages and **publisher confirms** (the broker tells the producer when a message is safely stored) are needed for messages to survive broker restarts. RabbitMQ's **quorum queues** replicate messages using Raft (<Ref to="m-consistency-consensus" />). Recent versions also offer **streams**, a log-like queue type for replay.
+
+## Delivery guarantees
+
+Because networks lose and duplicate messages (<Ref to="m-distributed-basics" />), each step can fail between "done" and "acknowledged":
+
+- **At-most-once**: the consumer acknowledges *before* processing. If it crashes mid-way, the message is lost. Acceptable only for data that does not matter much (some metrics).
+- **At-least-once**: the consumer acknowledges *after* processing. If it crashes after processing but before acknowledging, the message is redelivered and processed **again**. The standard choice.
+- **Exactly-once processing**: at-least-once delivery plus **idempotent** consumers, so a repeated message has no further effect. Kafka offers exactly-once semantics for reading from and writing to Kafka itself within a transaction; the moment a consumer touches anything outside (a database, an email, a payment API), idempotency is back in your hands.
+
+An idempotent consumer records which message ids it has processed, in the same database transaction as its work:
+
+```python
+import sqlite3
+
+db = sqlite3.connect(":memory:", isolation_level=None)
+
+
+def handle_payment_received(message):
+    try:
+        db.execute("BEGIN")
+        db.execute("INSERT INTO processed_messages (id) VALUES (?)", (message["id"],))
+        db.execute("UPDATE invoices SET status = 'paid', paid_pence = paid_pence + ? WHERE id = ?", (message["pence"], message["invoice"]))
+        db.execute("COMMIT")
+        return "processed"
+    except sqlite3.IntegrityError:
+        db.execute("ROLLBACK")
+        return "duplicate ignored"
+
+
+def main():
+    db.execute("CREATE TABLE processed_messages (id TEXT PRIMARY KEY)")
+    db.execute("CREATE TABLE invoices (id TEXT PRIMARY KEY, status TEXT, paid_pence INTEGER)")
+    db.execute("INSERT INTO invoices VALUES ('inv-7', 'open', 0)")
+    deliveries = [{"id": "m-1", "invoice": "inv-7", "pence": 5400}] * 3
+    print([handle_payment_received(m) for m in deliveries])
+    print(db.execute("SELECT status, paid_pence FROM invoices").fetchone())
+
+
+main()
+```
+
+It prints `['processed', 'duplicate ignored', 'duplicate ignored']` and `('paid', 5400)`. The broker delivered the same message three times; the primary key on `processed_messages` made the second and third attempts fail inside their transactions, so the invoice was credited once.
+
+### Ordering
+
+Do not assume messages arrive in the order they were sent. Competing consumers process in parallel, and redelivered messages arrive after newer ones. If order matters, either route all messages for one entity to a single ordered channel (a Kafka partition keyed by order id, a RabbitMQ single-active-consumer queue, an SQS FIFO message group), or make consumers tolerate disorder: include a version number and ignore messages older than what you have already applied.
+
+## When messages fail
+
+Some messages fail every time: malformed data, a bug, a reference to something that does not exist. Retrying them forever blocks the queue (a **poison message**) and burns resources. The standard handling:
+
+1. **Retry a few times with backoff**, for transient failures (a database timeout).
+2. Then move the message to a **dead-letter queue** (DLQ), where it no longer blocks others.
+3. **Alert** on the DLQ, investigate, fix the cause, and **replay** the messages.
+
+```ts
+type Message = { id: string; body: string; attempts: number };
+
+function consume(queue: Message[], handle: (m: Message) => void, maxAttempts: number) {
+  const deadLetters: Message[] = [];
+  const done: string[] = [];
+  while (queue.length > 0) {
+    const message = queue.shift()!;
+    message.attempts++;
+    try {
+      handle(message);
+      done.push(message.id);
+    } catch (e) {
+      if (message.attempts >= maxAttempts) deadLetters.push(message);
+      else queue.push(message);
+    }
+  }
+  return { done, deadLetters: deadLetters.map((m) => `${m.id} after ${m.attempts} attempts`) };
+}
+
+let flakyCalls = 0;
+const handle = (m: Message) => {
+  if (m.body === "not json") throw new Error("cannot parse");
+  if (m.id === "m-2" && ++flakyCalls < 3) throw new Error("database timeout");
+};
+
+const queue: Message[] = [
+  { id: "m-1", body: '{"order":"o-7"}', attempts: 0 },
+  { id: "m-2", body: '{"order":"o-8"}', attempts: 0 },
+  { id: "m-3", body: "not json", attempts: 0 },
+  { id: "m-4", body: '{"order":"o-9"}', attempts: 0 },
+];
+console.log(consume(queue, handle, 5));
+```
+
+It prints `{ done: ["m-1", "m-4", "m-2"], deadLetters: ["m-3 after 5 attempts"] }`. The message with a transient database problem succeeded on its third try (and finished after `m-4`, an example of retries reordering messages); the unparseable one went to the dead-letter queue after five attempts instead of blocking everything. RabbitMQ, SQS and Service Bus all support dead-lettering natively. A DLQ that nobody watches is just a place where data goes to die; monitor its size.
+
+## The transactional outbox
+
+A very common need: save a change to the database **and** publish an event about it. Doing them one after the other is unreliable:
+
+- save, then publish: if the process crashes or the broker is down after the save, the event is never sent;
+- publish, then save: if the save fails, consumers act on something that never happened.
+
+There is no transaction spanning a database and a broker (two-phase commit across them is rarely available or wise, <Ref to="m-consistency-consensus" />). The **transactional outbox** solves it: write the event into an `outbox` table **in the same database transaction** as the change; a separate **relay** process reads unpublished rows, publishes them to the broker, and marks them sent.
+
+```python
+import json
+import sqlite3
+
+db = sqlite3.connect(":memory:", isolation_level=None)
+broker = []
+
+
+def place_order(order_id, customer, pence, fail_after_save=False):
+    db.execute("BEGIN")
+    db.execute("INSERT INTO orders VALUES (?, ?, ?)", (order_id, customer, pence))
+    db.execute(
+        "INSERT INTO outbox (topic, payload) VALUES ('order-placed', ?)",
+        (json.dumps({"order": order_id, "customer": customer, "pence": pence}),),
+    )
+    if fail_after_save:
+        db.execute("ROLLBACK")
+        return "crashed before commit: nothing saved, nothing published"
+    db.execute("COMMIT")
+    return "saved with its event"
+
+
+def relay(publish_fails=False):
+    rows = db.execute("SELECT id, topic, payload FROM outbox WHERE sent_at IS NULL ORDER BY id").fetchall()
+    for row_id, topic, payload in rows:
+        if publish_fails:
+            return "broker down; will retry"
+        broker.append((topic, json.loads(payload)["order"]))
+        db.execute("UPDATE outbox SET sent_at = CURRENT_TIMESTAMP WHERE id = ?", (row_id,))
+    return f"published {len(rows)}"
+
+
+def main():
+    db.execute("CREATE TABLE orders (id TEXT PRIMARY KEY, customer TEXT, pence INTEGER)")
+    db.execute("CREATE TABLE outbox (id INTEGER PRIMARY KEY, topic TEXT, payload TEXT, sent_at TEXT)")
+    print(place_order("o-7", "c-17", 5400))
+    print(place_order("o-8", "c-4", 900, fail_after_save=True))
+    print(relay(publish_fails=True))
+    print(place_order("o-9", "c-17", 1250))
+    print(relay())
+    print("broker received:", broker)
+    print("orders saved:", [r[0] for r in db.execute("SELECT id FROM orders")])
+
+
+main()
+```
+
+It prints `saved with its event`, then `crashed before commit: nothing saved, nothing published`, `broker down; will retry`, `saved with its event`, `published 2` and finally `broker received: [('order-placed', 'o-7'), ('order-placed', 'o-9')]` and `orders saved: ['o-7', 'o-9']`. Every saved order produced exactly its event, even with a crash and a broker outage in between; the failed order produced neither. The relay can publish an event twice (if it crashes between publishing and marking the row sent), so consumers must still be idempotent. Relays either poll the table or, better at scale, read the database's change log (**change data capture**, with tools such as Debezium). On the consuming side, the mirror pattern is the **inbox**: record received message ids with the work, as the idempotent consumer above does.
+
+## Choosing a broker
+
+- **RabbitMQ**: flexible routing, task queues, request-reply, moderate throughput; easy to run.
+- **Kafka**: high-throughput event streams, replay, many independent consumers, stream processing (<Ref to="m-kafka" />).
+- **Managed cloud queues** (Amazon SQS and SNS, Azure Service Bus, Google Pub/Sub): no servers to operate; check their ordering and delivery guarantees and limits.
+- **Redis Streams** or a database table used as a queue: fine for small volumes inside one system, especially when you already run them.
+
+## Common mistakes
+
+- **Messages where a direct query is needed**, turning simple requests into hard-to-follow asynchronous flows.
+- **Assuming exactly-once delivery** and writing non-idempotent consumers.
+- **Acknowledging before processing**, losing messages on crashes.
+- **Assuming order** across competing consumers or retries.
+- **Infinite retries** of poison messages, or a dead-letter queue nobody monitors.
+- **Saving and publishing separately** instead of using an outbox.
+- **Huge messages**: put large payloads in storage and send a reference.
+- **No schema or versioning** for message formats that many services read (<Ref to="m-kafka" />).
+
+## Practice
+
+**1. (warm-up)** Command or event? `SendInvoice`, `InvoiceSent`, `ReserveStock`, `StockReserved`. Who receives each kind?
+
+<Solution>
+
+`SendInvoice` and `ReserveStock` are commands (imperative, one specific handler). `InvoiceSent` and `StockReserved` are events (past tense, any number of subscribers that the publisher does not know).
+
+</Solution>
+
+**2. (warm-up)** A consumer acknowledges a message, then crashes before writing to the database. Which delivery guarantee did it implement, and what happened to the message?
+
+<Solution>
+
+At-most-once: acknowledging before processing means the broker deleted the message, so it is lost. Acknowledge after the work is committed (at-least-once) and make the consumer idempotent.
+
+</Solution>
+
+**3. (standard)** Why does the outbox relay need idempotent consumers, even though the outbox itself is transactional?
+
+<Solution>
+
+The relay publishes a row and then marks it sent; if it crashes between the two (or the broker's acknowledgement is lost), it publishes the same event again after restarting. The outbox guarantees the event is never lost and never sent for a change that did not commit, but not that it is sent only once, so consumers must ignore duplicates (for example, by event id).
+
+</Solution>
+
+**4. (standard)** Customers sometimes see "order shipped" before "order paid" in their notification history. Messages are published in the right order. Explain two possible causes and fixes.
+
+<Solution>
+
+Competing consumers processed the two messages in parallel and the "shipped" one finished first; or the "paid" message failed once and was retried after "shipped" was processed. Fixes: route all messages for one order to one ordered channel (a Kafka partition keyed by order id, or an SQS FIFO group per order) with a single consumer per channel; or carry a sequence number per order and have the notifier hold or reorder messages, or simply display them sorted by the event's own sequence rather than arrival time.
+
+</Solution>
+
+**5. (stretch)** Design how a "place order" request should trigger stock reservation, payment and a confirmation email, using messages, so that nothing is lost and nothing happens twice.
+
+<Solution>
+
+The order service saves the order (status "pending") and an `OrderPlaced` event in one transaction (outbox), and replies to the user immediately. A relay publishes the event. The stock service consumes it idempotently (recording the event id), reserves stock and publishes `StockReserved` (or `StockUnavailable`) through its own outbox. The payment service charges with an idempotency key derived from the order id and publishes `PaymentTaken` or `PaymentFailed`. The order service updates the order's status on each event and, once paid, publishes `OrderConfirmed`; the email service sends the confirmation, recording that it has done so for that order. Failures trigger compensating events (release stock if payment fails): a saga (<Ref to="m-resilience" />). Every handler has retries with backoff and a dead-letter queue with alerts.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Messaging decouples services in **time** and **space** and **levels load**, at the cost of asynchronous, harder-to-follow flows.
+- **Commands** ask one receiver to act; **events** announce what happened to any subscribers.
+- **Queues** distribute work and delete messages once acknowledged; **logs** keep ordered streams for many consumer groups and replay.
+- RabbitMQ routes through **exchanges** and **bindings**; acknowledgements, prefetch, durable queues and publisher confirms make it reliable.
+- Choose **at-least-once** delivery with **idempotent consumers**; do not rely on ordering unless the channel guarantees it per key.
+- Handle poison messages with limited retries and a monitored **dead-letter queue**.
+- Use the **transactional outbox** (and an inbox on the consumer side) to save and publish reliably.
+
+## Go deeper
+
+- [RabbitMQ tutorials](https://www.rabbitmq.com/tutorials), the RabbitMQ team. Work queues, publish-subscribe, routing and topics, in many languages.
+- [Reliability guide (RabbitMQ)](https://www.rabbitmq.com/docs/reliability), the RabbitMQ team. Acknowledgements, confirms and what survives failures.
+- [Pattern: transactional outbox](https://microservices.io/patterns/data/transactional-outbox.html), Chris Richardson. The outbox pattern and its variants.
+- [Enterprise Integration Patterns](https://www.enterpriseintegrationpatterns.com/patterns/messaging/), Gregor Hohpe and Bobby Woolf. The classic catalogue of messaging patterns.
+- [Amazon SQS dead-letter queues](https://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSDeveloperGuide/sqs-dead-letter-queues.html), Amazon Web Services. Configuring and using DLQs.

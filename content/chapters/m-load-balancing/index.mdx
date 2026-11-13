@@ -1,0 +1,233 @@
+---
+title: "Load balancers, proxies and CDNs"
+summary: "Layer 4 and layer 7 load balancing, reverse proxies such as Nginx, API gateways and CDNs."
+prerequisites: [m-distributed-basics]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will understand the machinery that sits between users and your servers: load balancers that spread traffic and route around failures, reverse proxies such as Nginx, API gateways, and content delivery networks. You will know the difference between layer 4 and layer 7 balancing, how balancing algorithms behave under uneven load, how health checks and connection draining make deployments safe, and what each of these layers should and should not do.
+
+## Why load balance
+
+Running one server is a single point of failure and a hard limit on capacity. Running several needs something in front of them that:
+
+- **spreads requests** across healthy servers (**horizontal scaling**: add servers rather than buy a bigger one);
+- **routes around failures**, so a crashed or overloaded server stops receiving traffic;
+- gives clients **one stable address** while servers come and go during deployments and autoscaling.
+
+That something is a **load balancer**. It can be a managed cloud service (AWS Application and Network Load Balancers, Azure Load Balancer and Application Gateway, Google Cloud Load Balancing), software you run (Nginx, HAProxy, Envoy, Traefik), or built into a platform (Kubernetes Services and Ingress, in the infrastructure part of this course).
+
+## Layer 4 and layer 7
+
+Load balancers work at one of two levels of the network stack (<Ref to="m-networking" />):
+
+- A **layer 4** (transport) balancer forwards **TCP or UDP connections** without understanding their contents. It picks a server when a connection opens and passes bytes through. It is very fast, handles any protocol (databases, game traffic, MQTT), and cannot make decisions based on URLs, headers or cookies.
+- A **layer 7** (application) balancer understands **HTTP** (and gRPC, WebSockets). It terminates the client's connection, reads each request, and can route by path or host (`/api` to one group of servers, `/images` to another), add headers, retry failed requests on another server, compress responses, and terminate TLS. It costs more CPU per request and sees everything, so it is also where security features live.
+
+Most web traffic goes through a layer 7 balancer; layer 4 is used for non-HTTP protocols and at the very front of large systems, where raw throughput matters.
+
+## Balancing algorithms
+
+How should the balancer choose a server for each request?
+
+- **Round robin**: each server in turn. Simple and fair when requests are similar.
+- **Weighted round robin**: bigger servers get proportionally more.
+- **Random**: surprisingly decent, with no shared state between balancer instances.
+- **Least connections** (or least outstanding requests): send to the server with the fewest requests in progress. Adapts to uneven request costs and slow servers.
+- **Power of two choices**: pick two servers at random and send to the less busy. Nearly as good as least connections, but needs no global view, which matters when many balancer instances work independently.
+- **Hash-based** (by client IP, user id or URL): the same key always reaches the same server, useful for caches and sticky routing. Use consistent hashing (<Ref to="m-replication-partitioning" />) so adding a server does not reshuffle everyone.
+
+The difference shows when request costs vary. In this simulation, 10% of requests take 40 times longer than the rest:
+
+```ts
+type Picker = (active: number[], random: () => number) => number;
+
+function simulate(pick: Picker, servers: number, requests: number, seed: number) {
+  let s = seed;
+  const random = () => {
+    s = (s * 1103515245 + 12345) % 2 ** 31;
+    return s / 2 ** 31;
+  };
+  const active = new Array(servers).fill(0);
+  const finishing: { at: number; server: number }[] = [];
+  let peak = 0;
+  for (let t = 0; t < requests; t++) {
+    for (let i = finishing.length - 1; i >= 0; i--) {
+      if (finishing[i].at <= t) {
+        active[finishing[i].server]--;
+        finishing.splice(i, 1);
+      }
+    }
+    const server = pick(active, random);
+    active[server]++;
+    peak = Math.max(peak, ...active);
+    const duration = random() < 0.1 ? 200 : 5;
+    finishing.push({ at: t + duration, server });
+  }
+  return peak;
+}
+
+let next = 0;
+const roundRobin: Picker = (active) => next++ % active.length;
+const randomPick: Picker = (active, random) => Math.floor(random() * active.length);
+const leastConnections: Picker = (active) => active.indexOf(Math.min(...active));
+const twoChoices: Picker = (active, random) => {
+  const a = Math.floor(random() * active.length);
+  const b = Math.floor(random() * active.length);
+  return active[a] <= active[b] ? a : b;
+};
+
+for (const [name, pick] of [["round robin", roundRobin], ["random", randomPick], ["least connections", leastConnections], ["power of two choices", twoChoices]] as const) {
+  console.log(`${name}: busiest server peaked at ${simulate(pick, 10, 20_000, 7)} requests in progress`);
+}
+```
+
+It prints peaks of `9` for round robin, `11` for random, `4` for least connections and `7` for power of two choices, against an average of about 2.5 requests per server. Round robin and random keep sending new requests to a server that is stuck with several slow ones; least connections notices, and two random choices get much of the benefit with no shared state. In real systems the busiest server sets the tail latency (<Ref to="m-performance" />), so this matters.
+
+## Health checks and draining
+
+A balancer must know which servers can take traffic:
+
+- **Active health checks**: the balancer calls a health endpoint on each server every few seconds and removes it after several failures, adding it back after several successes.
+- **Passive health checks** (outlier detection): the balancer watches real traffic and ejects servers that return errors or time out.
+
+Design health endpoints carefully. A **liveness** check answers "is this process alive?" and should be trivial (failing it restarts the process). A **readiness** check answers "can this instance serve traffic right now?" (warmed up, connected to its database) and removes it from the balancer without restarting it. A readiness check that fails whenever a shared dependency is slow can remove *every* server at once and turn a slowdown into a total outage, so check only what this instance needs, and prefer degrading over going unready.
+
+When a server is being removed (a deployment, scaling in), **connection draining** stops sending it new requests but lets in-flight requests finish, up to a timeout. Your application should handle the shutdown signal gracefully: stop accepting new work, finish what is in progress, then exit. Together these make **rolling deployments** invisible to users.
+
+## Sticky sessions
+
+**Sticky sessions** (session affinity) send each user to the same server, usually via a cookie, so session data kept in that server's memory is available. They make scaling uneven, deployments disruptive and failures lose sessions. Prefer **stateless** servers: keep session state in a shared store (Redis, the database) or in signed tokens, so any server can handle any request. Stickiness is sometimes needed for WebSockets or in-memory caches (<Ref to="m-realtime" />).
+
+## Reverse proxies
+
+A **reverse proxy** sits in front of servers and handles requests on their behalf (a forward proxy, by contrast, acts for clients). Nginx, HAProxy, Envoy, Caddy and Traefik are common. Besides load balancing, a reverse proxy typically does **TLS termination** (decrypting HTTPS once, at the edge), compression, serving static files, buffering slow clients (so application threads are not held by a slow mobile connection), request size limits, timeouts, and caching. An Nginx configuration for an API with three servers:
+
+```text
+upstream orders_api {
+    least_conn;
+    server 10.0.1.11:8080 max_fails=3 fail_timeout=10s;
+    server 10.0.1.12:8080 max_fails=3 fail_timeout=10s;
+    server 10.0.1.13:8080 max_fails=3 fail_timeout=10s;
+    keepalive 32;
+}
+
+server {
+    listen 443 ssl;
+    http2 on;
+    server_name api.example.com;
+    ssl_certificate     /etc/ssl/api.example.com.crt;
+    ssl_certificate_key /etc/ssl/api.example.com.key;
+
+    client_max_body_size 1m;
+
+    location /orders/ {
+        proxy_pass http://orders_api;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_connect_timeout 2s;
+        proxy_read_timeout 10s;
+    }
+}
+```
+
+It terminates TLS, uses least connections across three servers, marks a server failed after three errors in ten seconds (passive health checking), keeps connections to the servers open for reuse, limits request bodies to 1 MB, and sets timeouts. Because the application now sees the proxy's address rather than the client's, the proxy passes the original client address in `X-Forwarded-For` (or the standard `Forwarded` header). Applications must trust that header **only from their own proxies**, or attackers can claim any IP address.
+
+## API gateways
+
+An **API gateway** is a layer 7 proxy specialised for APIs, the single entry point for many back-end services. Common responsibilities:
+
+- routing requests to the right service by path, host or version;
+- **authentication** (validating tokens) and coarse authorisation;
+- **rate limiting** and quotas per client (<Ref to="m-resilience" />);
+- request and response transformation, and aggregation of several service calls;
+- TLS, CORS, logging and metrics in one place.
+
+Examples: Kong, Apigee, AWS API Gateway, Azure API Management, and gateways built on Envoy, or in code with YARP (.NET) or Spring Cloud Gateway. Keep business logic out of the gateway: once it holds rules, it becomes a bottleneck every team must change. A **backend for frontend** (<Ref to="m-cloud-patterns" />) is a variation with one gateway per client type.
+
+Inside a system of many services, a **service mesh** (Istio, Linkerd) puts a small proxy beside every service (a **sidecar**) to handle service-to-service load balancing, retries, timeouts, mutual TLS and telemetry, without changing application code (<Ref to="m-cloud-patterns" />).
+
+## DNS and global load balancing
+
+Before a request reaches any load balancer, DNS turns a name into an address (<Ref to="m-networking" />). DNS can balance too: returning several addresses, or (with **GeoDNS** and latency-based routing) the address of the nearest region. Its limits are caching (clients and resolvers keep old answers for the record's time to live, so failover is slow) and coarse control. **Anycast** advertises the same IP address from many locations, so the network routes each user to the nearest one; CDNs and public DNS resolvers use it.
+
+## CDNs
+
+A **content delivery network** has servers (**edge locations** or points of presence) in hundreds of cities. Users connect to a nearby edge, which serves cached content directly and forwards the rest to your **origin** over fast, already-open connections. Benefits: far lower latency for users who are far from your servers (TLS handshakes alone take several round trips), much less load on the origin, and absorption of traffic spikes and many denial-of-service attacks.
+
+CDNs cache according to your `Cache-Control` headers (<Ref to="m-caching" />). Static, fingerprinted files can be cached for a year; HTML and API responses can be cached briefly, or not at all. When content changes, you either wait for expiry, use versioned URLs, or **purge** it through the CDN's API. Most CDNs now also run code at the edge (Cloudflare Workers, Fastly Compute, Lambda@Edge) for redirects, authentication checks, A/B tests and personalisation close to users.
+
+## Common mistakes
+
+- **No health checks**, or readiness checks that fail on a shared dependency and take every server out at once.
+- **Sticky sessions** used to avoid making servers stateless.
+- **Trusting `X-Forwarded-For` from anyone.**
+- **No connection draining**, so deployments cut off requests mid-flight.
+- **Business logic in the API gateway.**
+- **Round robin with very uneven request costs.**
+- **Caching personal responses at the CDN.**
+- **Forgetting the balancer's own timeouts**, so its idle timeout silently cuts long requests or WebSockets.
+
+## Practice
+
+**1. (warm-up)** You need to route `/api/orders` and `/api/payments` to different services and terminate TLS. Layer 4 or layer 7?
+
+<Solution>
+
+Layer 7: routing by URL path requires reading the HTTP request, and TLS termination happens at the application layer too. A layer 4 balancer sees only connections and bytes.
+
+</Solution>
+
+**2. (warm-up)** What is the difference between liveness and readiness checks?
+
+<Solution>
+
+Liveness: is the process alive and not stuck? Failing it gets the process restarted. Readiness: can this instance serve traffic right now? Failing it removes the instance from the load balancer until it recovers, without restarting it.
+
+</Solution>
+
+**3. (standard)** Run the simulation with a weighted version of round robin where server 0 is twice as powerful and gets every other request. What problems would you still expect, and why?
+
+<Solution>
+
+Weighting helps when capacities differ but it still ignores what each server is doing right now. If server 0 happens to receive several slow requests, it keeps receiving its share regardless, so its queue and latency grow while others sit idle. Least connections or power of two choices adapt to the current load and handle both different capacities and uneven request costs better. (Weighted least connections combines both.)
+
+</Solution>
+
+**4. (standard)** A deployment of a new version causes a few hundred failed requests every time. List the likely causes in the load balancing layer and their fixes.
+
+<Solution>
+
+Instances removed without connection draining (enable draining with a timeout longer than typical requests); the application exiting immediately on SIGTERM instead of finishing in-flight requests (handle the signal gracefully); new instances receiving traffic before they are ready (a proper readiness check, including warm-up); and health-check intervals so long that a crashed instance keeps receiving traffic (shorter intervals plus passive outlier detection).
+
+</Solution>
+
+**5. (stretch)** Your API is used worldwide but runs in one European region. Users in Australia report slow responses. Which changes in this chapter's layers would help, in what order, and what would they not fix?
+
+<Solution>
+
+First, a CDN in front of the API: TLS and TCP connections end at a nearby edge, which reuses warm connections to the origin, cutting several intercontinental round trips per new connection; cache any public, cacheable responses at the edge. Second, cache static assets aggressively. These do not remove the round trip to Europe for uncached, personalised API calls; for that you need servers (and probably read replicas of the data, <Ref to="m-replication-partitioning" />) in an Asia-Pacific region, with geo-routing (GeoDNS or anycast) sending Australian users there, which brings the data consistency questions of multi-region systems.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Load balancers** spread traffic, route around failures and give clients a stable address; scale **horizontally** with stateless servers.
+- **Layer 4** balances connections (fast, any protocol); **layer 7** understands HTTP (routing, TLS, retries).
+- Algorithms: round robin, weighted, random, **least connections**, **power of two choices**, consistent hashing. Adaptive ones handle uneven request costs.
+- **Health checks** (active and passive), **liveness** versus **readiness**, and **connection draining** make deployments safe.
+- **Reverse proxies** (Nginx, HAProxy, Envoy) terminate TLS, buffer, limit and cache; pass and trust `X-Forwarded-For` only from your own proxies.
+- **API gateways** centralise routing, authentication and rate limiting, without business logic; a **service mesh** does this between services.
+- **DNS**, **anycast** and **CDNs** bring traffic to the nearest place and cache at the edge.
+
+## Go deeper
+
+- [Nginx: HTTP load balancing](https://docs.nginx.com/nginx/admin-guide/load-balancer/http-load-balancer/), F5 NGINX. Methods, health checks and session persistence.
+- [Using load shedding to avoid overload](https://aws.amazon.com/builders-library/using-load-shedding-to-avoid-overload/), David Yanacek (Amazon Builders' Library). How servers and load balancers protect each other under overload.
+- [The power of two random choices](https://www.eecs.harvard.edu/~michaelm/postscripts/handbook2001.pdf), Michael Mitzenmacher and others. The survey behind the two-choices algorithm.
+- [Envoy proxy: what is Envoy](https://www.envoyproxy.io/docs/envoy/latest/intro/what_is_envoy), the Envoy authors. A modern layer 7 proxy used by service meshes and gateways.
+- [CDN (MDN glossary)](https://developer.mozilla.org/en-US/docs/Glossary/CDN), MDN. A short explanation of content delivery networks, with further links.

@@ -1,0 +1,261 @@
+---
+title: "Patterns for services in the cloud"
+summary: "Sidecars, strangler fig, anti-corruption layers, backends for frontends, queue-based load levelling and the twelve-factor app."
+prerequisites: [m-resilience]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know the patterns that recur in cloud-hosted services: how to build services that are easy to deploy, scale and replace (the twelve-factor app), how to add capabilities beside a service without changing it (sidecars and ambassadors), how to shape APIs for each kind of client (backends for frontends), how to absorb bursts (queue-based load levelling), how to hand out access to stored files safely (valet keys and claim checks), and how to modernise old systems piece by piece (strangler fig and anti-corruption layers). Microsoft's and Amazon's architecture centres catalogue dozens of these; this chapter covers the ones you will meet most.
+
+## The twelve-factor app
+
+The **twelve-factor app** (written by Adam Wiggins and colleagues at Heroku in 2011) describes how to build services that run well on cloud platforms. The most important factors:
+
+- **Codebase**: one codebase in version control, many deployments (staging, production) of the same build.
+- **Dependencies**: declare them all explicitly (package files, lock files); never rely on something happening to be installed on the server.
+- **Config in the environment**: anything that differs between deployments (database URLs, credentials, feature switches) comes from the environment, not from the code. The same build artefact runs everywhere.
+- **Backing services as attached resources**: a database, a queue or an email provider is a URL and credentials; swapping a local database for a managed one is a configuration change.
+- **Build, release, run**: build an immutable artefact once, combine it with configuration to make a release, run releases. Never edit code on a running server.
+- **Stateless processes**: keep no state in memory or on local disk that must survive the process; sessions and uploads go to backing services. Any instance can serve any request, and instances can be added or killed freely (<Ref to="m-load-balancing" />).
+- **Port binding** and **concurrency**: the service is self-contained and scales by running more processes.
+- **Disposability**: start fast and **shut down gracefully** on a termination signal (finish in-flight work, release resources), so scaling and deployments are safe.
+- **Dev/prod parity**: keep development, staging and production as similar as possible (same database engine, same versions; containers help, as the infrastructure part of this course shows).
+- **Logs as event streams**: write logs to standard output; the platform collects and routes them (the observability chapter covers what to log).
+- **Admin processes** (migrations, one-off scripts) run as one-off processes from the same release.
+
+Reading configuration well means **validating it at startup** and failing fast with a clear message, rather than discovering a missing setting at 3 a.m. on the first request that needs it (<Ref to="m-errors" />):
+
+```ts
+type Config = { port: number; databaseUrl: string; paymentTimeoutMs: number; newCheckout: boolean };
+
+function loadConfig(env: Record<string, string | undefined>): Config {
+  const problems: string[] = [];
+  const required = (name: string) => {
+    const value = env[name];
+    if (!value) problems.push(`${name} is required`);
+    return value ?? "";
+  };
+  const port = Number(env.PORT ?? "8080");
+  if (!Number.isInteger(port) || port <= 0) problems.push("PORT must be a positive whole number");
+  const databaseUrl = required("DATABASE_URL");
+  const paymentTimeoutMs = Number(env.PAYMENT_TIMEOUT_MS ?? "2000");
+  if (!(paymentTimeoutMs > 0 && paymentTimeoutMs <= 10_000)) problems.push("PAYMENT_TIMEOUT_MS must be between 1 and 10000");
+  if (problems.length) throw new Error(`Invalid configuration:\n- ${problems.join("\n- ")}`);
+  return { port, databaseUrl, paymentTimeoutMs, newCheckout: env.FEATURE_NEW_CHECKOUT === "true" };
+}
+
+console.log(loadConfig({ DATABASE_URL: "postgres://orders-db/orders", FEATURE_NEW_CHECKOUT: "true" }));
+try {
+  loadConfig({ PORT: "eighty", PAYMENT_TIMEOUT_MS: "60000" });
+} catch (e) {
+  console.log((e as Error).message);
+}
+```
+
+It prints the parsed configuration with its defaults (`port: 8080`, `paymentTimeoutMs: 2000`, `newCheckout: true`), then all three problems with the second environment at once: the port, the missing database URL and the out-of-range timeout. In production, real code passes `process.env` (or uses the framework's options system: Spring's `@ConfigurationProperties` with validation, .NET's options pattern with `ValidateOnStart`). **Secrets** (passwords, API keys) belong in a secrets manager (AWS Secrets Manager, Azure Key Vault, HashiCorp Vault), injected at runtime and never committed (<Ref to="m-static-quality" />).
+
+## Sidecars and ambassadors
+
+A **sidecar** is a helper process deployed **beside** each instance of a service, sharing its lifecycle and network (in Kubernetes, a second container in the same pod). It adds capabilities without changing the service's code, in any language: collecting logs, renewing certificates, syncing configuration, or, most commonly, proxying network traffic.
+
+A **service mesh** (Istio, Linkerd) runs a proxy sidecar (often Envoy) next to every service; all traffic between services flows through these proxies, which provide mutual TLS, retries, timeouts, circuit breaking, load balancing and telemetry (<Ref to="m-resilience" />, <Ref to="m-load-balancing" />), configured centrally. The cost is operational complexity and a little latency per hop; for a handful of services, libraries are simpler.
+
+An **ambassador** is a sidecar specialised for outgoing calls: the service talks to `localhost`, and the ambassador handles discovery, retries, authentication or protocol translation to a remote dependency, which is useful for legacy applications that cannot be changed.
+
+## Backends for frontends
+
+A web app, an iOS app and a partner API need different data, shaped differently, with different authentication and performance needs. One general-purpose API serving them all either becomes bloated or forces clients into many calls. A **backend for frontend** (BFF, named by Sam Newman) is a small server-side layer **per client type**, owned by the team that builds that client, which calls the underlying services, aggregates and reshapes data, and exposes exactly what that client needs:
+
+```ts
+const catalogue = async (sku: string) => ({ sku, name: "Rye loaf", description: "Dark, dense, 400g", allergens: ["rye", "gluten"], images: ["rye-1.jpg", "rye-2.jpg", "rye-3.jpg"] });
+const pricing = async (sku: string) => ({ sku, pence: 450, currency: "GBP", vatRate: 0 });
+const stock = async (sku: string) => ({ sku, onHand: 3, warehouse: "LS1" });
+const reviews = async (sku: string) => ({ sku, average: 4.6, count: 128, latest: ["Lovely crust", "Best rye in Leeds"] });
+
+async function mobileProductCard(sku: string) {
+  const [c, p, s] = await Promise.all([catalogue(sku), pricing(sku), stock(sku)]);
+  return { title: c.name, price: `£${(p.pence / 100).toFixed(2)}`, image: c.images[0], lowStock: s.onHand < 5 };
+}
+
+async function webProductPage(sku: string) {
+  const [c, p, s, r] = await Promise.all([catalogue(sku), pricing(sku), stock(sku), reviews(sku)]);
+  return { ...c, price: p, inStock: s.onHand > 0, rating: `${r.average} from ${r.count} reviews`, latestReviews: r.latest };
+}
+
+async function main() {
+  console.log(await mobileProductCard("RYE-400"));
+  const page = await webProductPage("RYE-400");
+  console.log(Object.keys(page).length, "fields for the web page;", page.rating);
+}
+
+main();
+```
+
+It prints the compact mobile card `{ title: "Rye loaf", price: "£4.50", image: "rye-1.jpg", lowStock: true }` and `9 fields for the web page; 4.6 from 128 reviews`. The phone downloads a small, ready-to-render object in one request over a slow network; the web page gets everything it needs. Each BFF can change at the pace of its client without negotiating with the others. Keep business rules in the underlying services, not in BFFs, or they will be duplicated and drift. GraphQL is an alternative that lets each client ask for its own shape from one API (<Ref to="m-api-design" />).
+
+## Queue-based load levelling
+
+Traffic is bursty (a promotion email, a TV advert, the end of the month), but a service sized for peak load wastes money the rest of the time, and one sized for average load falls over at peak. **Queue-based load levelling** puts a queue between the requests and the work, so the work is processed at a steady rate the service can sustain, while the queue absorbs the burst (<Ref to="m-messaging" />):
+
+```ts
+function simulate(arrivals: number[], perTick: number) {
+  let queued = 0;
+  let maxQueue = 0;
+  let maxWait = 0;
+  const waits: number[] = [];
+  for (const arriving of arrivals) {
+    queued += arriving;
+    maxQueue = Math.max(maxQueue, queued);
+    queued = Math.max(0, queued - perTick);
+    waits.push(Math.ceil(queued / perTick));
+    maxWait = Math.max(maxWait, waits.at(-1)!);
+  }
+  return { totalArrived: arrivals.reduce((a, b) => a + b, 0), maxQueue, maxWaitTicks: maxWait, leftAtEnd: queued };
+}
+
+const burst = [10, 10, 400, 350, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+console.log(simulate(burst, 60));
+```
+
+It prints `{ totalArrived: 930, maxQueue: 690, maxWaitTicks: 11, leftAtEnd: 0 }`. A burst of 750 jobs in two ticks, against workers that handle 60 per tick, built a queue of 690 that was fully drained by the end, with nothing rejected and no extra servers; the price is that some work waited 11 ticks. That fits work the user does not wait on (sending emails, generating reports, processing uploads); for interactive requests, the wait must stay within what users accept, or the workers must **autoscale** on queue length (KEDA in Kubernetes, scaling policies on SQS queue depth).
+
+## Valet key and claim check
+
+**Valet key**: instead of streaming large uploads and downloads through your servers, give the client a short-lived, narrowly scoped token to access the storage directly, like a valet key that only starts the car. Cloud storage calls these **pre-signed URLs** (Amazon S3) or **shared access signatures** (Azure Blob Storage). The server signs a URL that allows exactly one operation on one object until a time:
+
+```python
+import hashlib
+import hmac
+from urllib.parse import parse_qs, urlparse
+
+SECRET = b"storage-signing-key-example-only"
+
+
+def sign_url(path, method, expires):
+    signature = hmac.new(SECRET, f"{method}\n{path}\n{expires}".encode(), hashlib.sha256).hexdigest()
+    return f"https://files.example.com{path}?expires={expires}&sig={signature}"
+
+
+def storage_allows(url, method, now):
+    parts = urlparse(url)
+    query = {k: v[0] for k, v in parse_qs(parts.query).items()}
+    expected = hmac.new(SECRET, f"{method}\n{parts.path}\n{query['expires']}".encode(), hashlib.sha256).hexdigest()
+    if not hmac.compare_digest(expected, query["sig"]):
+        return "denied: bad signature"
+    if now > int(query["expires"]):
+        return "denied: expired"
+    return "allowed"
+
+
+url = sign_url("/uploads/invoice-7.pdf", "PUT", expires=1_794_600_900)
+print(storage_allows(url, "PUT", now=1_794_600_000))
+print(storage_allows(url, "GET", now=1_794_600_000))
+print(storage_allows(url.replace("invoice-7", "invoice-8"), "PUT", now=1_794_600_000))
+print(storage_allows(url, "PUT", now=1_794_601_000))
+```
+
+It prints `allowed`, then `denied: bad signature` twice (a different method or a different file does not match what was signed) and `denied: expired`. The client uploads straight to storage, so your servers never handle the file's bytes. Real services sign more fields (content type, size limits) and use the cloud provider's SDK to create the URLs.
+
+**Claim check**: when a message would be too large for the broker (most limit messages to around 1 MB), store the payload in object storage and send only a reference (the claim check) in the message; the consumer fetches the payload with it (<Ref to="m-messaging" />).
+
+## Modernising: strangler fig and anti-corruption layer
+
+Two patterns from earlier chapters are central to moving old systems to the cloud:
+
+- The **strangler fig** (<Ref to="m-refactoring" />): put a routing layer (a gateway or reverse proxy) in front of the legacy system, move one capability at a time to new services, route its traffic to them, and remove the old code when nothing uses it. Each step is small and reversible.
+- The **anti-corruption layer** (<Ref to="m-ddd" />): a translation layer between new services and the legacy system, so the old model's quirks (cryptic codes, overloaded fields) do not leak into the new design. It is an adapter at system scale (<Ref to="m-patterns-structural" />).
+
+Used together, the new system grows around the old one through a clean boundary, until the old one can be switched off.
+
+## Other patterns worth knowing
+
+- **Gateway aggregation** and **gateway offloading**: the gateway combines calls or handles cross-cutting concerns (TLS, authentication) for many services (<Ref to="m-load-balancing" />).
+- **Competing consumers** and **priority queues**: several workers share a queue; urgent work gets its own queue and workers (<Ref to="m-messaging" />).
+- **Cache-aside** (<Ref to="m-caching" />), **circuit breaker**, **bulkhead**, **retry** and **rate limiting** (<Ref to="m-resilience" />), **event sourcing** and **CQRS** (<Ref to="m-architecture" />): all appear in the cloud pattern catalogues.
+- **Leader election** for work only one instance should do (<Ref to="m-consistency-consensus" />).
+- **Health endpoint monitoring**: liveness and readiness endpoints for platforms and load balancers (<Ref to="m-load-balancing" />).
+
+## Common mistakes
+
+- **Configuration baked into the build**, so each environment needs a different artefact.
+- **Secrets in code or in environment files committed to Git.**
+- **State on the local disk or in memory** of instances that the platform may replace at any moment.
+- **Ignoring termination signals**, losing in-flight work on every deployment.
+- **A service mesh for three services**, adding more complexity than it removes.
+- **BFFs full of business logic**, duplicated across clients.
+- **Large files streamed through application servers** instead of pre-signed URLs.
+- **Queues with no plan** for how long work may wait or when to add workers.
+
+## Practice
+
+**1. (warm-up)** Which twelve-factor principle does each break? (a) A `config.production.json` compiled into the image. (b) Uploaded images saved to `/var/app/uploads` on the server. (c) Logs written to `/var/log/app.log` inside the container. (d) The process exits immediately on SIGTERM.
+
+<Solution>
+
+(a) Config in the environment (and build, release, run). (b) Stateless processes (and backing services: use object storage). (c) Logs as event streams (write to standard output). (d) Disposability (shut down gracefully).
+
+</Solution>
+
+**2. (warm-up)** What does a sidecar give you that a library does not, and what does it cost?
+
+<Solution>
+
+It works for any language and is upgraded, configured and operated independently of the application, so a platform team can add mutual TLS, retries or telemetry to every service without code changes. It costs an extra process per instance (memory, CPU, a network hop with some latency) and more moving parts to operate and debug.
+
+</Solution>
+
+**3. (standard)** Change the load-levelling simulation so workers scale up when the queue exceeds 200 (handling 120 per tick) and back down below 50. How do the maximum queue and wait change?
+
+<Solution>
+
+```ts
+function simulate(arrivals: number[]) {
+  let queued = 0;
+  let maxQueue = 0;
+  let maxWait = 0;
+  let perTick = 60;
+  for (const arriving of arrivals) {
+    queued += arriving;
+    maxQueue = Math.max(maxQueue, queued);
+    if (queued > 200) perTick = 120;
+    else if (queued < 50) perTick = 60;
+    queued = Math.max(0, queued - perTick);
+    maxWait = Math.max(maxWait, Math.ceil(queued / perTick));
+  }
+  return { maxQueue, maxWaitTicks: maxWait };
+}
+
+console.log(simulate([10, 10, 400, 350, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10]));
+```
+
+It prints **`{ maxQueue: 630, maxWaitTicks: 5 }`**: doubling the workers while the queue is long cuts the worst wait from 11 ticks to 5. Real autoscaling also has a delay before new workers start, which a fuller simulation would include.
+
+</Solution>
+
+**4. (stretch)** A legacy monolith handles orders, invoicing and customer accounts. You must move invoicing to a new service without a big-bang switch. Describe the steps.
+
+<Solution>
+
+Put a routing layer (gateway or reverse proxy) in front of the monolith so all traffic passes through it. Build the new invoicing service with its own model, and an anti-corruption layer that translates the monolith's order and customer data (through events, change data capture or an API) into that model. Run the new service in parallel, comparing its invoices with the monolith's ("shadow" mode). Then route invoice traffic to the new service, behind a feature flag that can switch back. Once stable, stop the monolith's invoicing code from running, migrate any remaining data, and delete the old code. Repeat for the next capability.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The **twelve-factor app**: config in the environment, stateless and disposable processes, backing services as resources, build-release-run, logs to standard output. Validate configuration at startup and keep secrets in a secrets manager.
+- **Sidecars** and **ambassadors** add capabilities beside a service; a **service mesh** does it for every service.
+- **Backends for frontends** shape APIs per client type, without owning business rules.
+- **Queue-based load levelling** absorbs bursts at a steady processing rate, with autoscaling on queue length when waits must stay short.
+- **Valet keys** (pre-signed URLs) give clients direct, limited access to storage; **claim checks** keep large payloads out of messages.
+- Modernise with the **strangler fig** behind a routing layer and an **anti-corruption layer** at the boundary.
+
+## Go deeper
+
+- [The Twelve-Factor App](https://12factor.net/), Adam Wiggins and contributors. The original twelve factors.
+- [Cloud design patterns](https://learn.microsoft.com/en-us/azure/architecture/patterns/), Microsoft. A catalogue of cloud patterns, each with problems, solutions and trade-offs.
+- [Backends for frontends](https://samnewman.io/patterns/architectural/bff/), Sam Newman. The pattern from the person who named it.
+- [Sharing objects with presigned URLs](https://docs.aws.amazon.com/AmazonS3/latest/userguide/ShareObjectPreSignedURL.html), Amazon Web Services. Valet keys in Amazon S3.
+- [What is a service mesh? (Linkerd)](https://linkerd.io/what-is-a-service-mesh/), the Linkerd authors. Sidecar proxies and what a mesh provides.

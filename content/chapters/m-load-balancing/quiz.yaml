@@ -1,0 +1,36 @@
+- question: Which load balancer can route by URL path?
+  options:
+  - Layer 7
+  - Layer 4
+  answer: 0
+  explanation: Layer 4 sees only connections and bytes.
+- question: Which algorithm adapts best when some requests take much longer than others?
+  options:
+  - Least connections
+  - Round robin
+  answer: 0
+  explanation: Power of two choices gets close without global state.
+- question: What does a failing readiness check do?
+  options:
+  - Removes the instance from the balancer without restarting it
+  - Restarts the process
+  answer: 0
+  explanation: Liveness failures trigger restarts.
+- question: What does connection draining do?
+  options:
+  - Stops new requests to a server but lets in-flight ones finish
+  - Clears the server's memory
+  answer: 0
+  explanation: It makes deployments invisible to users.
+- question: When should an application trust X-Forwarded-For?
+  options:
+  - Only when it comes from its own proxies
+  - Always
+  answer: 0
+  explanation: Otherwise clients can fake their address.
+- question: What belongs in an API gateway?
+  options:
+  - Routing, authentication and rate limiting
+  - Business rules
+  answer: 0
+  explanation: Business logic in the gateway becomes a bottleneck.

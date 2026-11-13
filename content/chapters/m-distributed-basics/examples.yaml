@@ -1,0 +1,31 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    attempt 1 failed (503 Service Unavailable); waiting 65 ms
+    attempt 2 failed (503 Service Unavailable); waiting 76 ms
+    stock reserved after 3 attempt(s)
+    gave up after 1: 400 quantity must be positive
+    calls reaching the bottom of three retrying layers: 27
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    ["pay-1", "pay-2", "pay-1", "pay-1"] charged: 6300
+- block: 3
+  lang: ts
+  check: ts
+  output: |
+    kept by timestamp: address: 4 Park Row
+    actually written last: address: 9 Mill Lane
+- block: 4
+  lang: ts
+  check: ts
+  output: |
+    ["1 orders: order o-7 created", "1 payments: daily report generated", "2 orders: send OrderPlaced", "3 payments: receive OrderPlaced", "4 payments: send PaymentTaken", "5 email: receive PaymentTaken", "6 email: receipt sent"]
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    gave up after 4 attempts and 700 ms: 503

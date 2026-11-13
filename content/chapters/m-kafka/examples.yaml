@@ -1,0 +1,37 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    partition 0: ["o-9:OrderPlaced"]
+    partition 1: ["o-7:OrderPlaced", "o-7:PaymentTaken", "o-7:OrderShipped"]
+    partition 2: ["o-8:OrderPlaced", "o-8:OrderCancelled"]
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    2 consumers: { c1: [0, 2, 4], c2: [1, 3, 5] }
+    3 consumers: { c1: [0, 3], c2: [1, 4], c3: [2, 5] }
+    8 consumers: { c1: [0], c2: [1], c3: [2], c4: [3], c5: [4], c6: [5], c7: [], c8: [] }
+- block: 3
+  lang: ts
+  check: ts
+  output: |
+    { processed: ["0:placed o-7", "1:paid o-7"], committed: 2 }
+    { processed: ["2:placed o-8", "3:shipped o-7"], committed: 2 }
+    { processed: ["2:placed o-8", "3:shipped o-7"], committed: 4 }
+    after resetting to the beginning: 5 records replayed
+- block: 4
+  lang: ts
+  check: ts
+  output: |
+    ["1 c-4=M1 1AE", "2 c-17=LS6 2QT"]
+- block: 5
+  lang: java
+  check: not-run
+  reason: Needs the kafka-clients library and a running Kafka broker, which this course does not install; the commit-after-processing behaviour it relies on is simulated and checked in block 3.
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    5 ["placed o-7", "paid o-7", "placed o-8", "shipped o-7", "paid o-8"]

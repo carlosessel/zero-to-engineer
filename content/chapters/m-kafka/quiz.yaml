@@ -1,0 +1,36 @@
+- question: Where does Kafka guarantee ordering?
+  options:
+  - Within a partition
+  - Across a whole topic
+  answer: 0
+  explanation: Use a key so related records share a partition.
+- question: What decides which partition a keyed record goes to?
+  options:
+  - A hash of its key
+  - The consumer
+  answer: 0
+  explanation: Same key, same partition.
+- question: A group has more consumers than the topic has partitions. What happens?
+  options:
+  - The extra consumers sit idle
+  - Throughput rises
+  answer: 0
+  explanation: Partitions cap a group's parallelism.
+- question: When should offsets be committed for at-least-once processing?
+  options:
+  - After processing
+  - Before processing
+  answer: 0
+  explanation: Then a crash means reprocessing, not loss.
+- question: Which settings make an acknowledged write survive one broker failure?
+  options:
+  - Replication factor 3, min.insync.replicas=2 and acks=all
+  - acks=1
+  answer: 0
+  explanation: Two brokers must have it.
+- question: What does log compaction keep?
+  options:
+  - At least the latest record for each key
+  - Only records from the last 7 days
+  answer: 0
+  explanation: Tombstones delete keys.

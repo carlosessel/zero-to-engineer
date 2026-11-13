@@ -1,0 +1,245 @@
+---
+title: "Consistency and consensus"
+summary: "CAP and PACELC, consistency models, quorums, Raft and leader election."
+prerequisites: [m-distributed-basics, m-replication-partitioning]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will understand what "consistent" means when data lives on several machines, why the CAP theorem forces a choice during network partitions (and what PACELC adds), the main consistency models from linearizable to eventual, and how consensus algorithms such as Raft let a group of machines agree on a leader and on an ordered log despite failures. These ideas explain the guarantees (and the fine print) of every distributed database, coordination service and message broker you will use.
+
+## What consistency means here
+
+"Consistency" means different things in different places: the C in ACID (<Ref to="m-relational" />) means "the data obeys its constraints". In distributed systems, it means something else: **how up to date and how ordered the data looks to readers when it is copied across machines**. A **consistency model** is a contract saying which results a read may return given the writes that have happened.
+
+### Linearizability
+
+The strongest common model is **linearizability** (also called strong or atomic consistency): the system behaves as if there were **one copy** of the data, and every operation takes effect at a single instant between its start and its end. Once a write has completed, every later read, by anyone, sees it (or something newer). A replicated system that reads from a lagging follower is not linearizable:
+
+```ts
+type Replica = { name: string; value: number; version: number };
+
+const leader: Replica = { name: "leader", value: 10, version: 1 };
+const follower: Replica = { name: "follower", value: 10, version: 1 };
+
+function write(value: number) {
+  leader.value = value;
+  leader.version++;
+}
+
+function replicate() {
+  follower.value = leader.value;
+  follower.version = leader.version;
+}
+
+write(7);
+console.log("Ama's write of 7 is acknowledged");
+console.log("Kofi reads from the follower:", follower.value);
+console.log("Esi reads from the leader:", leader.value);
+replicate();
+console.log("after replication, the follower says:", follower.value);
+```
+
+It prints that the write was acknowledged, then `Kofi reads from the follower: 10`, `Esi reads from the leader: 7`, and finally `after replication, the follower says: 7`. Kofi read *after* the write completed and still saw the old value: a stale read that linearizability forbids. Linearizability matters whenever a decision must be based on the latest value: a username being unique, a seat not being sold twice, a lock having exactly one holder, a leader being unique.
+
+### Weaker models
+
+- **Sequential consistency**: all clients see operations in the same order, consistent with each client's own order, but not necessarily in real time.
+- **Causal consistency**: operations that are causally related (<Ref to="m-distributed-basics" />) are seen in the same order by everyone; concurrent ones may be seen in different orders. A reply never appears before the message it answers. It is the strongest model that can stay available during network partitions.
+- **Session guarantees**: read-your-writes, monotonic reads and consistent prefix (<Ref to="m-replication-partitioning" />), which cover most of what users notice.
+- **Eventual consistency**: if writes stop, all replicas eventually converge to the same value. It says nothing about what you read in the meantime, which is a very weak promise; in practice systems add session guarantees on top.
+
+Weaker models allow lower latency and higher availability, because replicas can answer without coordinating. Choose per piece of data: a product's star rating can be eventually consistent; a payment's status should not be.
+
+## CAP
+
+The **CAP theorem** (conjectured by Eric Brewer in 2000, proved by Seth Gilbert and Nancy Lynch in 2002) concerns a replicated system during a **network partition**, when some replicas cannot talk to others. It says the system must then give up one of:
+
+- **Consistency** (here meaning linearizability): every read sees the latest write;
+- **Availability**: every request to a working node gets a non-error response.
+
+Partitions are not optional (networks do fail), so the real choice is what happens **during** one:
+
+- **CP** systems refuse requests on the side that cannot reach a majority (or the leader), staying consistent but partly unavailable. Examples: etcd, ZooKeeper, Consul, and databases configured for strong consistency.
+- **AP** systems keep answering on both sides, accepting that replicas diverge and must be reconciled afterwards. Examples: Cassandra and DynamoDB at lower consistency levels, DNS, many caches.
+
+CAP is often misquoted as "pick two of three". It applies only during a partition, it uses narrow definitions of C and A, and many systems let you choose per operation.
+
+### PACELC
+
+Daniel Abadi's **PACELC** adds the everyday case: if there is a **P**artition, choose **A**vailability or **C**onsistency; **E**lse, when everything is working, choose **L**atency or **C**onsistency. Even with no failures, strong consistency costs latency, because replicas must coordinate before answering (a cross-region write that must reach a majority waits for the network). DynamoDB and Cassandra default to PA/EL (available and fast, weaker consistency); Spanner and CockroachDB are PC/EC (consistent, paying latency). This trade-off, not CAP, is the one you feel day to day.
+
+## Consensus
+
+Many problems reduce to getting several machines to **agree on one value** despite failures: which node is the leader, whether a transaction commits, the order of entries in a log, who holds a lock. This is **consensus**. A correct consensus algorithm guarantees that all nodes that decide, decide the same value, that the value was proposed by someone, and that it eventually decides as long as a **majority** of nodes are up and can communicate.
+
+Majorities are the key idea: any two majorities of the same group overlap in at least one node, so two conflicting decisions cannot both win a majority. A cluster of 2*f* + 1 nodes tolerates *f* failures: 3 nodes survive 1 failure, 5 survive 2. Adding a fourth node to three does not tolerate more failures (a majority of 4 is 3), which is why clusters have odd sizes.
+
+The classic algorithm is Leslie Lamport's **Paxos** (1989, published 1998), famously hard to understand. **Raft** (Diego Ongaro and John Ousterhout, 2014) was designed to be understandable and is now the most widely implemented: etcd (which stores Kubernetes' state), Consul, CockroachDB, TiKV, and Kafka's KRaft controller all use it. ZooKeeper uses a similar protocol called Zab.
+
+### Raft in brief
+
+Raft keeps a **replicated log** of commands, identical on every node, so that every node applying the log in order reaches the same state (a **replicated state machine**).
+
+- **Terms**: time is divided into numbered terms. Each term has at most one leader. Nodes always adopt the highest term they hear of.
+- **Leader election**: a follower that hears nothing from a leader for a randomised timeout (say 150 to 300 ms; randomness avoids split votes) becomes a **candidate**, increments the term, votes for itself and asks the others for votes. Each node votes for at most one candidate per term, and only for a candidate whose log is at least as up to date as its own. A candidate with votes from a majority becomes leader.
+- **Log replication**: clients send commands to the leader, which appends them to its log and sends them to followers. An entry is **committed** once a majority have stored it; only then is it applied and the client told it succeeded. Committed entries are never lost, because any future leader must have won votes from a majority, which includes at least one node holding every committed entry.
+
+A small simulation of five nodes shows the important behaviours:
+
+```ts
+type RaftNode = { id: string; term: number; votedFor?: string; log: { term: number; cmd: string }[]; reachable: Set<string> };
+
+const ids = ["n1", "n2", "n3", "n4", "n5"];
+const nodes = new Map<string, RaftNode>(ids.map((id) => [id, { id, term: 0, log: [], reachable: new Set(ids) }]));
+const majority = Math.floor(ids.length / 2) + 1;
+
+function partition(groups: string[][]) {
+  for (const g of groups) for (const id of g) nodes.get(id)!.reachable = new Set(g);
+}
+
+function election(candidateId: string): string {
+  const c = nodes.get(candidateId)!;
+  c.term++;
+  c.votedFor = c.id;
+  let votes = 1;
+  for (const peer of nodes.values()) {
+    if (peer.id === c.id || !c.reachable.has(peer.id)) continue;
+    const upToDate = (c.log.at(-1)?.term ?? 0) >= (peer.log.at(-1)?.term ?? 0) && c.log.length >= peer.log.length;
+    if (c.term > peer.term) {
+      peer.term = c.term;
+      peer.votedFor = undefined;
+    }
+    if (peer.votedFor === undefined && upToDate) {
+      peer.votedFor = c.id;
+      votes++;
+    }
+  }
+  return `${c.id} ${votes >= majority ? "elected leader" : "not elected"} in term ${c.term} with ${votes} votes`;
+}
+
+function replicate(leaderId: string, cmd: string): string {
+  const leader = nodes.get(leaderId)!;
+  leader.log.push({ term: leader.term, cmd });
+  let copies = 1;
+  for (const peer of nodes.values()) {
+    if (peer.id === leaderId || !leader.reachable.has(peer.id) || peer.term > leader.term) continue;
+    peer.log = leader.log.map((e) => ({ ...e }));
+    peer.term = leader.term;
+    copies++;
+  }
+  return `${cmd}: on ${copies} of ${ids.length}, ${copies >= majority ? "committed" : "NOT committed"}`;
+}
+
+console.log(election("n1"));
+console.log(replicate("n1", "price = 450"));
+partition([["n1", "n2"], ["n3", "n4", "n5"]]);
+console.log(replicate("n1", "price = 480"));
+console.log(election("n3"));
+console.log(replicate("n3", "price = 500"));
+partition([ids]);
+console.log(election("n1"));
+console.log(replicate("n3", "price = 520"));
+console.log("n1's log now:", nodes.get("n1")!.log.map((e) => e.cmd));
+```
+
+It prints:
+
+```text
+n1 elected leader in term 1 with 5 votes
+price = 450: on 5 of 5, committed
+price = 480: on 2 of 5, NOT committed
+n3 elected leader in term 2 with 3 votes
+price = 500: on 3 of 5, committed
+n1 not elected in term 2 with 2 votes
+price = 520: on 5 of 5, committed
+n1's log now: ["price = 450", "price = 500", "price = 520"]
+```
+
+When the network splits two against three, the old leader n1 can still accept a write, but it reaches only 2 of 5 nodes and is never committed (its client must not be told it succeeded). The majority side elects n3 in a new term and keeps working. When the partition heals, n1 cannot win an election (its log is behind), and the leader overwrites n1's uncommitted entry: `price = 480` disappears, which is correct, because nobody was ever told it succeeded. Real Raft adds heartbeats, log matching checks, careful membership changes and snapshots, but these are its core guarantees. (The simulation simplifies: real nodes vote once per term and track exactly which log positions match.)
+
+### What consensus costs
+
+Every committed write needs a round trip to a majority, so consensus systems are slower than single nodes, and spreading the nodes across distant regions makes every write pay cross-region latency. They are also limited in throughput (everything goes through one leader). So consensus is used for **small, critical data**: configuration, membership, leader election, locks, metadata, and as the replication engine underneath databases that shard their data into many independent consensus groups (CockroachDB, TiKV, Spanner).
+
+## Leader election and locks in practice
+
+Applications rarely implement consensus themselves; they use a coordination service (etcd, ZooKeeper, Consul) or their database to elect a leader ("only one instance runs the nightly billing job") or hold a lock. Two rules:
+
+- **Leases, not permanent locks**: a leader or lock holder gets a lease that expires unless renewed, so a crashed holder does not block everyone forever.
+- **Fencing tokens**: a paused process may wake up after its lease expired, still believing it is the leader (<Ref to="m-distributed-basics" />). Every grant carries an increasing number, and the resource it protects (the database, the storage) rejects writes carrying an older number. Without fencing, a lease-based lock is only a performance optimisation, not a correctness guarantee. This is the core of Martin Kleppmann's well-known critique of using Redis-based locks (Redlock) for correctness.
+
+## Two-phase commit
+
+When one transaction must change data on several databases or services, the classic protocol is **two-phase commit** (2PC): a coordinator asks every participant to **prepare** (do everything except finally committing, and promise to commit if asked); if all vote yes, it tells them all to commit, otherwise to abort. It gives atomicity across systems, at a cost: participants hold locks while waiting, and if the coordinator crashes after participants have prepared, they are stuck, unable to commit or abort on their own, until it recovers (2PC is a **blocking** protocol). Distributed SQL databases run 2PC on top of consensus groups to avoid that problem. Across independent services, most teams avoid 2PC and use **sagas** instead (<Ref to="m-resilience" />): a sequence of local transactions with compensating actions, accepting eventual consistency.
+
+## Common mistakes
+
+- **Reading CAP as "pick two"**, or claiming a system "beats CAP".
+- **Assuming a replicated database is linearizable** when it reads from followers by default.
+- **Using eventual consistency for decisions** that need the latest value (uniqueness, inventory, money).
+- **Even-sized consensus clusters**, or clusters spread so that one site's loss removes the majority.
+- **Building your own consensus** instead of using etcd, ZooKeeper, Consul or the database.
+- **Locks without fencing**, trusting that a lease holder is still the holder.
+- **Distributed transactions across services by default**, instead of designing around them.
+
+## Practice
+
+**1. (warm-up)** State the CAP theorem precisely, and say what CP and AP systems do during a partition.
+
+<Solution>
+
+When a replicated system is partitioned, it cannot be both linearizable and available (every request to a non-failed node gets a non-error response). CP systems refuse or delay requests that cannot be served consistently (typically on the side without a majority or leader); AP systems keep answering on all sides and reconcile divergent data afterwards.
+
+</Solution>
+
+**2. (warm-up)** How many node failures can a 5-node Raft cluster tolerate? A 6-node one?
+
+<Solution>
+
+Five nodes need a majority of 3, so they tolerate 2 failures. Six nodes need a majority of 4, so they also tolerate only 2: the sixth node adds cost and latency without adding fault tolerance, which is why consensus clusters have odd sizes.
+
+</Solution>
+
+**3. (warm-up)** In PACELC terms, what does a database that replicates every write synchronously to another region choose when there is no partition?
+
+<Solution>
+
+Consistency over latency (EC): every write waits for the cross-region round trip, so writes are slower but replicas agree.
+
+</Solution>
+
+**4. (standard)** In the simulation, why was `price = 480` safe to discard, and what must the old leader n1 have told its client?
+
+<Solution>
+
+It was stored on only 2 of 5 nodes, so it was never committed; Raft acknowledges a write to the client only once a majority store it. So n1 must not have reported success: the client either got an error or no reply (timed out) and, not knowing the outcome, should retry or check (<Ref to="m-distributed-basics" />). Because no one was told it succeeded, discarding it breaks no promise.
+
+</Solution>
+
+**5. (stretch)** Two instances of a billing service must never both run the nightly charge job. A colleague proposes a Redis key with a 60-second expiry as a lock. What can go wrong, and what would you do?
+
+<Solution>
+
+The holder can pause (a long garbage collection, a slow network) for more than 60 seconds; the lock expires, the other instance takes it, and the first resumes still believing it holds the lock, so both charge customers. Redis replication is also asynchronous, so a failover can lose the lock key. Make the job safe even if it runs twice: idempotent charges (an idempotency key per customer per billing period, enforced by a unique constraint in the database). If you need a lock, take it in the database the job writes to (a row lock or advisory lock in the same transaction), or use a coordination service and pass a fencing token that the database checks on each write.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Distributed **consistency models** range from **linearizable** (one-copy behaviour) through sequential and **causal** to **eventual**; session guarantees cover what users notice. Choose per kind of data.
+- **CAP**: during a partition, choose consistency or availability. **PACELC**: otherwise, choose latency or consistency.
+- **Consensus** lets nodes agree despite failures, using **majorities**; 2*f* + 1 nodes tolerate *f* failures.
+- **Raft**: terms, randomised elections, votes only for up-to-date candidates, and entries **committed** once a majority has them. Used by etcd, Consul, CockroachDB and Kafka's KRaft.
+- Consensus is slow and reserved for small, critical data; use existing services rather than building your own.
+- Use **leases** and **fencing tokens** for leaders and locks; **two-phase commit** gives cross-system atomicity but blocks; across services prefer **sagas**.
+
+## Go deeper
+
+- [In Search of an Understandable Consensus Algorithm (Raft)](https://raft.github.io/raft.pdf), Diego Ongaro and John Ousterhout. The Raft paper.
+- [The Raft website](https://raft.github.io/), the Raft authors. An interactive visualisation and a list of implementations.
+- [Jepsen: consistency models](https://jepsen.io/consistency), Kyle Kingsbury. A map of consistency models with clear definitions.
+- [How to do distributed locking](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html), Martin Kleppmann. Leases, pauses and fencing tokens.
+- [Consistency tradeoffs in modern distributed database system design](https://www.cs.umd.edu/~abadi/papers/abadi-pacelc.pdf), Daniel Abadi. The article that introduced PACELC.

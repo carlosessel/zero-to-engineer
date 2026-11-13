@@ -1,0 +1,34 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    { port: 8080, databaseUrl: "postgres://orders-db/orders", paymentTimeoutMs: 2000, newCheckout: true }
+    Invalid configuration:
+    - PORT must be a positive whole number
+    - DATABASE_URL is required
+    - PAYMENT_TIMEOUT_MS must be between 1 and 10000
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    { title: "Rye loaf", price: "£4.50", image: "rye-1.jpg", lowStock: true }
+    9 fields for the web page; 4.6 from 128 reviews
+- block: 3
+  lang: ts
+  check: ts
+  output: |
+    { totalArrived: 930, maxQueue: 690, maxWaitTicks: 11, leftAtEnd: 0 }
+- block: 4
+  lang: python
+  check: python
+  output: |
+    allowed
+    denied: bad signature
+    denied: bad signature
+    denied: expired
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    { maxQueue: 630, maxWaitTicks: 5 }

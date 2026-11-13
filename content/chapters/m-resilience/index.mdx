@@ -1,0 +1,360 @@
+---
+title: "Resilience patterns"
+summary: "Sagas, circuit breakers, bulkheads, rate limiting, backpressure and graceful degradation."
+prerequisites: [m-distributed-basics, m-messaging]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will know how to keep a system working, at least partly, when its parts fail or are overloaded: circuit breakers that stop calling a failing dependency, bulkheads that contain damage, rate limiting and load shedding that protect against overload, backpressure, graceful degradation, and sagas that keep data consistent across services without distributed transactions. Failures in distributed systems are normal (<Ref to="m-distributed-basics" />); resilience is designing so that one failure stays one failure.
+
+## How failures spread
+
+A **cascading failure** is one component's problem spreading to the rest. A typical chain: the recommendations service slows down; every product page waits for it; the web servers' threads and connections fill up with waiting requests; new requests queue, then time out; users retry, adding load; the web tier fails entirely, taking down checkout, which never used recommendations at all. The patterns in this chapter break each link of that chain:
+
+- **timeouts** stop waiting forever (<Ref to="m-distributed-basics" />);
+- **circuit breakers** stop calling something that is failing;
+- **bulkheads** stop one dependency using up all shared resources;
+- **rate limiting and load shedding** stop more work arriving than can be handled;
+- **graceful degradation** keeps the important features working without the failed part.
+
+## Circuit breakers
+
+A **circuit breaker** (named by Michael Nygard after the electrical device) wraps calls to a dependency and watches their outcomes. It has three states:
+
+- **Closed**: calls go through normally while the breaker counts failures.
+- **Open**: after too many failures (for example, more than half of the last 20 calls), the breaker **fails calls immediately** without trying, for a cool-down period. Callers get an instant error or fallback instead of waiting for a timeout, and the struggling service gets breathing room to recover.
+- **Half-open**: after the cool-down, a few trial calls are allowed through. If they succeed, the breaker closes; if not, it opens again.
+
+```ts
+type State = "closed" | "open" | "half-open";
+
+class CircuitBreaker {
+  state: State = "closed";
+  private failures = 0;
+  private openedAt = 0;
+
+  constructor(private threshold: number, private coolDownMs: number, private now: () => number) {}
+
+  async call<T>(action: () => Promise<T>, fallback: () => T): Promise<T> {
+    if (this.state === "open") {
+      if (this.now() - this.openedAt < this.coolDownMs) return fallback();
+      this.state = "half-open";
+    }
+    try {
+      const result = await action();
+      this.state = "closed";
+      this.failures = 0;
+      return result;
+    } catch {
+      this.failures++;
+      if (this.state === "half-open" || this.failures >= this.threshold) {
+        this.state = "open";
+        this.openedAt = this.now();
+      }
+      return fallback();
+    }
+  }
+}
+
+let clock = 0;
+let serviceUp = false;
+let attempts = 0;
+const recommendations = async () => {
+  attempts++;
+  if (!serviceUp) throw new Error("timeout");
+  return ["rye loaf", "jam"];
+};
+const popularItems = () => ["croissant (popular)"];
+
+async function main() {
+  const breaker = new CircuitBreaker(3, 30_000, () => clock);
+  const log: string[] = [];
+  for (let i = 0; i < 6; i++) log.push(`${breaker.state}: ${(await breaker.call(recommendations, popularItems))[0]}`);
+  console.log(log, "real attempts:", attempts);
+  clock += 31_000;
+  serviceUp = true;
+  console.log(await breaker.call(recommendations, popularItems), breaker.state);
+}
+
+main();
+```
+
+It prints six results, all the popular-items fallback: three while `closed` (each a real failed attempt), then three while `open` (no attempts at all), with `real attempts: 3`. After the cool-down, the next call goes through in the half-open state, succeeds, and prints `["rye loaf", "jam"] closed`. Six requests were served quickly, and the failing service received three calls instead of six.
+
+In practice you use a library: **Resilience4j** (Java), **Polly** (.NET; also behind `Microsoft.Extensions.Http.Resilience`), opossum or cockatiel (Node.js), or a service mesh (<Ref to="m-cloud-patterns" />). Libraries combine strategies into a pipeline. Here is Polly with a retry inside a circuit breaker:
+
+```csharp
+#:package Polly.Core@8.9.1
+#:property PublishAot=false
+using Polly;
+using Polly.CircuitBreaker;
+
+int calls = 0;
+var pipeline = new ResiliencePipelineBuilder()
+    .AddRetry(new() { MaxRetryAttempts = 2, Delay = TimeSpan.FromMilliseconds(10), ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>() })
+    .AddCircuitBreaker(new()
+    {
+        FailureRatio = 0.5,
+        MinimumThroughput = 4,
+        SamplingDuration = TimeSpan.FromSeconds(10),
+        BreakDuration = TimeSpan.FromSeconds(30),
+        ShouldHandle = new PredicateBuilder().Handle<HttpRequestException>(),
+    })
+    .Build();
+
+for (int request = 1; request <= 4; request++)
+{
+    try
+    {
+        await pipeline.ExecuteAsync(async _ =>
+        {
+            calls++;
+            await Task.Yield();
+            throw new HttpRequestException("503 from the stock service");
+        });
+    }
+    catch (BrokenCircuitException)
+    {
+        Console.WriteLine($"request {request}: rejected at once, circuit open (calls so far: {calls})");
+    }
+    catch (HttpRequestException)
+    {
+        Console.WriteLine($"request {request}: failed after retries (calls so far: {calls})");
+    }
+}
+```
+
+It prints `request 1: failed after retries (calls so far: 3)`, then `request 2: rejected at once, circuit open (calls so far: 4)`, and the same for requests 3 and 4. The first request tried three times (the first try plus two retries); the fourth failed call met the breaker's minimum of four calls at a 100% failure ratio, so it opened, and every later request was rejected without touching the stock service. The order of strategies matters: here the retry wraps the breaker, so retries are counted by it and stop as soon as it opens.
+
+## Bulkheads
+
+A ship's **bulkheads** divide the hull into watertight compartments, so one breach does not sink it. In software, a **bulkhead** gives each dependency (or each kind of work) its own limited pool of resources (threads, connections, concurrent calls), so a slow dependency can exhaust only its own share:
+
+```ts
+class Bulkhead {
+  private active = 0;
+  rejected = 0;
+  constructor(private limit: number) {}
+
+  async run<T>(work: () => Promise<T>): Promise<T | "rejected"> {
+    if (this.active >= this.limit) {
+      this.rejected++;
+      return "rejected";
+    }
+    this.active++;
+    try {
+      return await work();
+    } finally {
+      this.active--;
+    }
+  }
+}
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const slowRecommendations = async () => { await wait(200); return "recs"; };
+const fastCheckout = async () => { await wait(5); return "paid"; };
+
+async function main() {
+  const recsBulkhead = new Bulkhead(4);
+  const recs = Array.from({ length: 20 }, () => recsBulkhead.run(slowRecommendations));
+  const checkouts = await Promise.all(Array.from({ length: 5 }, () => fastCheckout()));
+  const recResults = await Promise.all(recs);
+  console.log("checkouts:", checkouts.length, "completed while recommendations were slow");
+  console.log("recommendations served:", recResults.filter((r) => r === "recs").length, "rejected:", recsBulkhead.rejected);
+}
+
+main();
+```
+
+It prints `checkouts: 5 completed while recommendations were slow` and `recommendations served: 4 rejected: 16`. The slow recommendations service could occupy at most four slots; the other requests for it were rejected at once (and the page could show a fallback), and checkout kept working. In Java and .NET servers, bulkheads are usually separate thread pools, separate connection pools, or semaphores per dependency; in Kubernetes, separate deployments for different workloads are bulkheads too.
+
+## Rate limiting
+
+**Rate limiting** caps how many requests a client (by API key, user or IP address) may make in a period, protecting the service from abuse, runaway clients and noisy neighbours, and enforcing fair use. Rejected requests get **429 Too Many Requests** with a `Retry-After` header (<Ref to="m-api-design" />). Common algorithms:
+
+- **Fixed window**: count requests per calendar minute. Simple; allows bursts of double the limit across a window boundary.
+- **Sliding window**: count over the last 60 seconds, smoothing that edge.
+- **Token bucket**: a bucket holds up to *B* tokens and refills at *r* per second; each request takes one. Allows short bursts up to *B* while enforcing an average rate *r*. The most common choice.
+- **Leaky bucket**: requests queue and leave at a steady rate, smoothing bursts completely.
+
+```ts
+class TokenBucket {
+  private tokens: number;
+  private last: number;
+  constructor(private capacity: number, private refillPerSecond: number, now: number) {
+    this.tokens = capacity;
+    this.last = now;
+  }
+  allow(now: number): boolean {
+    this.tokens = Math.min(this.capacity, this.tokens + ((now - this.last) / 1000) * this.refillPerSecond);
+    this.last = now;
+    if (this.tokens >= 1) {
+      this.tokens -= 1;
+      return true;
+    }
+    return false;
+  }
+}
+
+const bucket = new TokenBucket(5, 2, 0);
+const burst = Array.from({ length: 8 }, () => bucket.allow(0));
+const later = [bucket.allow(500), bucket.allow(1000), bucket.allow(1000)];
+console.log(burst.map((ok) => (ok ? "ok" : "429")).join(" "));
+console.log(later.map((ok) => (ok ? "ok" : "429")).join(" "));
+```
+
+It prints `ok ok ok ok ok 429 429 429` (a burst of five allowed, then refused) and `ok ok 429`: after half a second one token has refilled, after another half second one more, and the third request at that moment is refused. Across many servers, the counters must be shared (Redis is the usual store) or the limit split between instances; API gateways and CDNs provide rate limiting as a feature (<Ref to="m-load-balancing" />).
+
+## Load shedding and backpressure
+
+Rate limits are per client; **load shedding** protects the service as a whole. When it is already at capacity, it is better to reject some requests quickly (with 503) than to accept them all and serve everyone slowly, timing out work that users have already abandoned. Good shedding rejects **early** (before doing expensive work), prioritises (keep checkout, shed recommendations; serve logged-in users first), and drops requests that have waited so long their caller has surely given up.
+
+**Backpressure** is the same principle inside a pipeline: when a downstream stage is full, it pushes back on the upstream stage instead of accepting unbounded work (bounded queues, <Ref to="m-concurrency-patterns" />; Kafka consumers that simply fall behind, <Ref to="m-kafka" />). The opposite, unbounded queues, turns overload into memory exhaustion and latency that only ever grows.
+
+## Graceful degradation
+
+Decide in advance what the product does when each dependency fails, and build the **fallbacks**:
+
+- show cached or default content (popular items instead of personalised recommendations);
+- hide the failing feature (no reviews section) rather than failing the page;
+- accept the order and process payment later (queue it), for some businesses;
+- switch to read-only mode during a database failover.
+
+Rank features by importance: what must always work (checkout, login), what may degrade, and what can disappear. **Feature flags** let operators switch off expensive or failing features quickly in an incident.
+
+## Sagas
+
+Across services there are no ACID transactions (<Ref to="m-consistency-consensus" />). A **saga** keeps data consistent across services as a sequence of **local transactions**, each in one service, where every step that changes something has a **compensating action** that semantically undoes it (release the stock, refund the payment). If a step fails, the saga runs the compensations for the steps already done, in reverse order. The result is eventual consistency, and intermediate states are visible (an order is "pending" for a moment), so the domain must allow for them.
+
+Two styles:
+
+- **Choreography**: each service reacts to the previous step's events and publishes its own (<Ref to="m-messaging" />). No central coordinator, but the overall flow is spread across services and hard to see.
+- **Orchestration**: a coordinator (an orchestrator service or a workflow engine such as Temporal, AWS Step Functions or Camunda) tells each service what to do and handles failures. The flow is explicit in one place.
+
+```ts
+type Step = { name: string; run: () => Promise<void>; compensate: () => Promise<void> };
+
+async function runSaga(steps: Step[], log: string[]): Promise<string> {
+  const done: Step[] = [];
+  for (const step of steps) {
+    try {
+      await step.run();
+      log.push(`done: ${step.name}`);
+      done.push(step);
+    } catch (e) {
+      log.push(`failed: ${step.name} (${(e as Error).message})`);
+      for (const previous of done.reverse()) {
+        await previous.compensate();
+        log.push(`compensated: ${previous.name}`);
+      }
+      return "order cancelled";
+    }
+  }
+  return "order confirmed";
+}
+
+const saga = (cardDeclined: boolean): Step[] => [
+  { name: "create order (pending)", run: async () => {}, compensate: async () => {} },
+  { name: "reserve stock", run: async () => {}, compensate: async () => {} },
+  {
+    name: "charge card",
+    run: async () => { if (cardDeclined) throw new Error("card declined"); },
+    compensate: async () => {},
+  },
+  { name: "schedule delivery", run: async () => {}, compensate: async () => {} },
+];
+
+async function main() {
+  const happy: string[] = [];
+  console.log(await runSaga(saga(false), happy), happy.length, "steps");
+  const declined: string[] = [];
+  console.log(await runSaga(saga(true), declined));
+  console.log(declined);
+}
+
+main();
+```
+
+It prints `order confirmed 4 steps`, then `order cancelled` and the log: the order and stock steps done, `failed: charge card (card declined)`, then `compensated: reserve stock` and `compensated: create order (pending)`, in reverse order. A real orchestrator also persists the saga's progress so it can resume after a crash, retries steps idempotently, and makes compensations idempotent too. Compensations are not always perfect undos (you cannot unsend an email; you send a correction), which is why steps that cannot be compensated should come last.
+
+## Testing resilience
+
+Resilience that has never been tested is a hope. Practices:
+
+- **Fault injection in tests**: make dependencies slow, failing or wrong in integration tests (Testcontainers' Toxiproxy, WireMock delays).
+- **Load tests** with failing dependencies and a cold cache (<Ref to="m-performance" />).
+- **Chaos engineering** (popularised by Netflix's Chaos Monkey): deliberately cause failures in production-like environments (kill instances, add latency, cut a dependency) in controlled experiments, to find weaknesses before real incidents do.
+- **Game days**: rehearse incidents as a team.
+
+## Common mistakes
+
+- **No timeouts**, so nothing else in this chapter can work.
+- **Retries without a circuit breaker**, hammering a service that is down.
+- **One shared pool** for all dependencies, so one slow one exhausts it.
+- **Accepting all load** until everything is slow, instead of shedding early.
+- **Fallbacks that were never tested**, or that call the same failing dependency.
+- **Distributed transactions** across services instead of sagas, or sagas without compensations or idempotency.
+- **Rate limits per server** when traffic is spread across many servers.
+
+## Practice
+
+**1. (warm-up)** Describe the three states of a circuit breaker and what moves it between them.
+
+<Solution>
+
+Closed: calls pass through and failures are counted; too many failures open it. Open: calls fail immediately (or use a fallback) for a cool-down period. Half-open: after the cool-down, a few trial calls go through; success closes the breaker, failure opens it again.
+
+</Solution>
+
+**2. (warm-up)** A token bucket has capacity 10 and refills 1 token per second. A client sends 15 requests at once, then one per second. What happens?
+
+<Solution>
+
+The first 10 are allowed (the full bucket), the next 5 are rejected with 429. After that, one token refills each second, so one request per second is allowed: the client is held to the average rate after its burst.
+
+</Solution>
+
+**3. (standard)** Change the circuit breaker so that when it is half-open it allows only one trial call at a time and returns the fallback to any other caller. Why is that useful?
+
+<Solution>
+
+Add a flag: when moving to half-open, set `trialInProgress = true` before the trial call, and have other callers that find the breaker half-open with a trial in progress return the fallback immediately; clear the flag when the trial finishes. It is useful because a recovering service could be knocked over again if every waiting caller rushed in the moment the cool-down ended; one trial call tests recovery gently.
+
+</Solution>
+
+**4. (standard)** In the saga, "send confirmation email" must be added. Where in the sequence should it go, and why?
+
+<Solution>
+
+Last, after every step that might fail and need compensating. An email cannot be unsent; if it were sent before the card was charged and the charge then failed, the only "compensation" would be a second, confusing email. Steps that cannot be compensated (or are expensive to compensate) belong at the end, once the outcome is certain.
+
+</Solution>
+
+**5. (stretch)** The product page calls four services: catalogue (required), price (required), reviews and recommendations (optional). Design its resilience.
+
+<Solution>
+
+Call all four concurrently (<Ref to="m-async" />) with timeouts set from each service's latency and the page's budget. Catalogue and price are required: retry once with jitter on transient errors, behind circuit breakers; if they still fail, return an error page (or a cached copy of the product, if acceptable and clearly not for checkout pricing). Reviews and recommendations are optional: no retries, short timeouts, circuit breakers with fallbacks (hide reviews; show popular items), each in its own bulkhead so neither can exhaust the server's connections. Rate-limit and shed load at the gateway. Test it by injecting latency and failures into each dependency in a load test.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Failures cascade through waiting threads, full pools and retries; each pattern breaks a link.
+- **Circuit breakers** (closed, open, half-open) fail fast and give failing services room to recover; **Resilience4j**, **Polly** and service meshes provide them.
+- **Bulkheads** give each dependency its own limited resources.
+- **Rate limiting** (token bucket, windows) protects per client; **load shedding** protects the whole service; **backpressure** keeps pipelines bounded.
+- **Graceful degradation**: decide fallbacks in advance, rank features, use feature flags.
+- **Sagas** replace cross-service transactions with local steps and **compensating actions**, choreographed or orchestrated; put uncompensatable steps last.
+- Test resilience with fault injection, load tests and **chaos engineering**.
+
+## Go deeper
+
+- [CircuitBreaker](https://martinfowler.com/bliki/CircuitBreaker.html), Martin Fowler. The pattern explained with code.
+- [Resilience4j documentation](https://resilience4j.readme.io/docs/getting-started), the Resilience4j team. Circuit breakers, bulkheads, rate limiters and retries for Java.
+- [Polly](https://www.pollydocs.org/), the Polly team. Resilience strategies and pipelines for .NET.
+- [Pattern: saga](https://microservices.io/patterns/data/saga.html), Chris Richardson. Choreography, orchestration and compensating transactions.
+- [Principles of chaos engineering](https://principlesofchaos.org/), the chaos engineering community. Running controlled failure experiments.

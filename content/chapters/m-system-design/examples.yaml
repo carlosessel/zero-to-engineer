@@ -1,0 +1,43 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    { writesPerSecond: "3.9", readsPerSecond: 386, peakReadsPerSecond: 1929, fiveYearStorageGb: 300, sixCharacterCodes: "5.68e+10" }
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    1 -> 1 -> 1
+    61 -> z -> 61
+    62 -> 10 -> 62
+    125000000 -> 8SUD2 -> 125000000
+    56800235583 -> zzzzzz -> 56800235583
+- block: 3
+  lang: ts
+  check: ts
+  output: |
+    fan-out on read, lookups per day: 1.0e+11
+    fan-out on write, feed inserts per day: 2.0e+9
+    inserts for one celebrity post: 20,000,000
+- block: 4
+  lang: ts
+  check: ts
+  output: |
+    ["2 Kofi: Yes, I'll bring flour", "3 Esi: Rye or white?"]
+    ["1 Ama: Home late tonight"]
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    posted
+    posted
+    posted
+    already posted
+    transaction bad does not balance (off by 100)
+    { bank: 5302, clearing: 0, fees: 98, total: 0 }
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    5000 big accounts post 1000 times a day without fan-out

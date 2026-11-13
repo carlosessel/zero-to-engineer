@@ -1,0 +1,301 @@
+---
+title: "System design, step by step"
+summary: "A method for designing systems, worked through real designs: a URL shortener, a feed, chat, payments."
+prerequisites: [m-cloud-patterns, m-design-docs]
+estimated_minutes: 300
+status: resources-verified
+---
+
+By the end of this chapter you will have a repeatable method for designing a system from a vague brief, and you will have seen it applied to four classic designs: a URL shortener, a social feed, a chat service and a payment system. Each uses the building blocks of this course (databases, caches, queues, partitions, idempotency, consensus) and, more importantly, shows how to choose between them. This is what "system design" means in senior engineering work and in interviews.
+
+## The method
+
+Good designs come from a disciplined order of questions, not from drawing boxes first.
+
+1. **Clarify requirements.** **Functional**: what must it do? List the core use cases and agree what is out of scope. **Non-functional**: how many users and requests, how fast (latency percentiles), how available, how consistent, how durable, what security and privacy needs, what budget? These numbers decide the design more than the features do.
+2. **Estimate.** Back-of-the-envelope figures for requests per second (average and peak), storage growth, bandwidth and read-to-write ratio (<Ref to="m-design-docs" />). They tell you whether one database will do or whether you need partitioning, caching or a CDN.
+3. **Define the API.** The main operations, their inputs and outputs, and their idempotency (<Ref to="m-api-design" />). This pins down what the system actually promises.
+4. **Model the data.** The entities, their relationships, the access patterns, and therefore the storage choice and keys (<Ref to="m-schema-design" />, <Ref to="m-nosql" />).
+5. **Sketch the high-level design.** Clients, load balancers, services, databases, caches, queues, and how a request flows through them.
+6. **Deep-dive** into the hardest parts: the bottleneck, the consistency requirement, the failure that would hurt most.
+7. **Name the trade-offs** and what you would revisit as the system grows. A design without stated trade-offs has not been thought through.
+
+Start simple and add complexity only when a requirement or an estimate demands it. A single well-indexed PostgreSQL database with a cache handles a surprising amount of traffic (<Ref to="m-replication-partitioning" />).
+
+## Design 1: a URL shortener
+
+**Requirements.** Create a short link for a long URL (`sho.rt/Ab3dE9`); redirect anyone who visits it; optional custom aliases and expiry; basic click counts. Non-functional: redirects must be fast (p99 under 50 ms) and highly available; links never change once created.
+
+**Estimates.** Assume 10 million new links a month and 100 reads per write.
+
+```ts
+const linksPerMonth = 10_000_000;
+const readsPerWrite = 100;
+const secondsPerMonth = 30 * 86_400;
+const writesPerSecond = linksPerMonth / secondsPerMonth;
+const readsPerSecond = writesPerSecond * readsPerWrite;
+const bytesPerLink = 500;
+const fiveYearLinks = linksPerMonth * 12 * 5;
+
+console.log({
+  writesPerSecond: writesPerSecond.toFixed(1),
+  readsPerSecond: Math.round(readsPerSecond),
+  peakReadsPerSecond: Math.round(readsPerSecond * 5),
+  fiveYearStorageGb: Math.round((fiveYearLinks * bytesPerLink) / 1e9),
+  sixCharacterCodes: (62 ** 6).toExponential(2),
+});
+```
+
+It prints `{ writesPerSecond: "3.9", readsPerSecond: 386, peakReadsPerSecond: 1929, fiveYearStorageGb: 300, sixCharacterCodes: "5.68e+10" }`. A few writes per second, a couple of thousand reads per second at peak, 300 GB over five years: one primary database with a cache and a CDN is plenty. Six characters from `[0-9A-Za-z]` give 57 billion codes, far more than the 600 million links needed in five years.
+
+**API.** `POST /links` with `{ url, alias?, expiresAt? }` returns `{ code, shortUrl }` (idempotent per idempotency key); `GET /{code}` returns a redirect.
+
+**Generating codes.** Options:
+
+- **Hash the URL** and take six characters: the same URL gets the same code, but collisions must be checked and resolved.
+- **Random codes**: generate, try to insert, retry on the rare unique-constraint collision.
+- **Encode a unique number** in base 62: take an id from a database sequence (or a distributed id generator) and convert it. No collisions; codes are short; but sequential codes are guessable, so mix the number (with a reversible scramble) if that matters.
+
+```ts
+const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+
+function toBase62(n: number): string {
+  let code = "";
+  do {
+    code = ALPHABET[n % 62] + code;
+    n = Math.floor(n / 62);
+  } while (n > 0);
+  return code;
+}
+
+function fromBase62(code: string): number {
+  return [...code].reduce((n, ch) => n * 62 + ALPHABET.indexOf(ch), 0);
+}
+
+for (const id of [1, 61, 62, 125_000_000, 56_800_235_583]) {
+  const code = toBase62(id);
+  console.log(id, "->", code, "->", fromBase62(code));
+}
+```
+
+It prints `1 -> 1`, `61 -> z`, `62 -> 10`, `125000000 -> 8SUD2` and `56800235583 -> zzzzzz`, each converting back to the same number: the six-character space ends exactly at 62⁶ − 1.
+
+**High-level design.** Writes go through the API to a `links` table (`code` primary key, `url`, `created_at`, `expires_at`, `owner`). Reads hit a CDN or edge cache first, then an in-memory or Redis cache (links never change, so caching is easy and hit ratios are very high, <Ref to="m-caching" />), then a read replica.
+
+**Deep dives and trade-offs.**
+
+- **301 or 302?** A permanent redirect (301) is cached by browsers, so repeat visits never reach you: fastest, but you cannot count them or change the target. A temporary redirect (302 or 307) reaches you every time. Choose by whether analytics matter.
+- **Click counting** must not slow redirects: publish a click event to a queue or log (<Ref to="m-kafka" />) and aggregate asynchronously.
+- **Abuse**: rate-limit creation (<Ref to="m-resilience" />), check URLs against malware lists, and allow takedowns, which means cached redirects need a purge path.
+
+## Design 2: a social feed
+
+**Requirements.** Users follow others and see a feed of recent posts from people they follow, newest first. Assume 50 million daily users, each reading the feed 10 times a day and posting once every 5 days on average; most users follow around 200 accounts, but some accounts have 20 million followers.
+
+The core design choice is **when** the feed is assembled:
+
+- **Fan-out on read** (pull): when a user opens the feed, fetch recent posts from everyone they follow and merge them. Writing is cheap; reading is expensive (hundreds of lookups per feed load).
+- **Fan-out on write** (push): when someone posts, insert the post id into a precomputed feed list for **every follower** (often in Redis). Reading is a single cheap lookup; writing is expensive, and catastrophic for accounts with millions of followers.
+
+```ts
+const dailyUsers = 50_000_000;
+const feedReadsPerUser = 10;
+const postsPerUserPerDay = 0.2;
+const typicalFollowing = 200;
+const typicalFollowers = 200;
+const celebrityFollowers = 20_000_000;
+
+const reads = dailyUsers * feedReadsPerUser;
+const posts = dailyUsers * postsPerUserPerDay;
+
+console.log("fan-out on read, lookups per day:", (reads * typicalFollowing).toExponential(1));
+console.log("fan-out on write, feed inserts per day:", (posts * typicalFollowers).toExponential(1));
+console.log("inserts for one celebrity post:", celebrityFollowers.toLocaleString("en-GB"));
+```
+
+It prints `fan-out on read, lookups per day: 1.0e+11`, `fan-out on write, feed inserts per day: 2.0e+9` and `inserts for one celebrity post: 20,000,000`. Reads outnumber posts 50 to 1, so precomputing feeds (fan-out on write) does 50 times less work overall, except for celebrities, where one post triggers 20 million writes.
+
+**The usual answer is a hybrid**: fan out on write for ordinary accounts; for accounts with huge followings, do not fan out, and instead merge their recent posts into the feed at read time. Feeds store only post ids (the posts themselves live in a post store and cache), are capped at a few hundred entries, and are rebuilt on demand for inactive users rather than maintained for everyone. Ranking ("most relevant first" instead of newest) adds a scoring step on read, fed by signals computed asynchronously. Fan-out runs as background workers consuming a "post created" stream (<Ref to="m-messaging" />), so posting stays fast and fan-out can lag by a few seconds: an acceptable eventual consistency.
+
+## Design 3: a chat service
+
+**Requirements.** One-to-one and group chat, messages delivered in real time to online users, stored for history, pushed as notifications to offline users, with "delivered" and "read" receipts. Messages within a conversation must appear in the same order for everyone.
+
+**Connections.** Clients hold a **WebSocket** to a gateway tier (<Ref to="m-realtime" />). Each gateway knows which users are connected to it; a presence service (Redis with expiring keys refreshed by heartbeats) records which gateway each online user is on.
+
+**Sending a message.**
+
+1. The client sends the message with a client-generated id (for idempotent retries).
+2. The chat service assigns it the next **sequence number for that conversation**, stores it, and acknowledges.
+3. It looks up the recipients' gateways and pushes the message; offline recipients get a push notification.
+4. Clients show messages sorted by sequence number, and ask for any gaps after reconnecting.
+
+**Ordering** is per conversation, not global: a single sequence per conversation is easy to keep consistent (one partition or one database row per conversation owns the counter, <Ref to="m-replication-partitioning" />), while a global order across billions of conversations would be a needless bottleneck.
+
+```ts
+type Message = { conversation: string; seq: number; clientId: string; from: string; text: string };
+
+class ConversationStore {
+  private counters = new Map<string, number>();
+  private byClientId = new Map<string, Message>();
+  messages: Message[] = [];
+
+  send(conversation: string, clientId: string, from: string, text: string): Message {
+    const existing = this.byClientId.get(clientId);
+    if (existing) return existing;
+    const seq = (this.counters.get(conversation) ?? 0) + 1;
+    this.counters.set(conversation, seq);
+    const message = { conversation, seq, clientId, from, text };
+    this.messages.push(message);
+    this.byClientId.set(clientId, message);
+    return message;
+  }
+
+  since(conversation: string, afterSeq: number) {
+    return this.messages.filter((m) => m.conversation === conversation && m.seq > afterSeq).map((m) => `${m.seq} ${m.from}: ${m.text}`);
+  }
+}
+
+const chat = new ConversationStore();
+chat.send("bakers", "a-1", "Ama", "Ovens on at 5?");
+chat.send("bakers", "k-1", "Kofi", "Yes, I'll bring flour");
+chat.send("bakers", "k-1", "Kofi", "Yes, I'll bring flour");
+chat.send("family", "a-2", "Ama", "Home late tonight");
+chat.send("bakers", "e-1", "Esi", "Rye or white?");
+console.log(chat.since("bakers", 1));
+console.log(chat.since("family", 0));
+```
+
+It prints `["2 Kofi: Yes, I'll bring flour", "3 Esi: Rye or white?"]` and `["1 Ama: Home late tonight"]`. Kofi's retried message (same client id) was stored once, each conversation has its own gap-free sequence, and a client that had seen message 1 fetches exactly what it missed.
+
+**Storage.** Message history is append-heavy and read by conversation and time, so it suits a wide-column store or a partitioned relational table keyed by conversation id and sequence (<Ref to="m-nosql" />). Receipts are small updates per user per conversation ("read up to sequence 41"), not per message. End-to-end encryption (as in Signal's protocol) changes the design further: the server stores and forwards only ciphertext.
+
+## Design 4: payments
+
+**Requirements.** Customers pay for orders by card through an external payment provider; the business must never charge twice, never lose a payment, and always be able to explain every penny. Here correctness dominates: latency and scale matter far less than consistency and auditability.
+
+**Idempotency everywhere.** Every request to create a payment carries an idempotency key (the order id plus attempt), stored with a unique constraint; retries return the original result (<Ref to="m-distributed-basics" />). Calls to the provider pass the same key, so the provider does not charge twice either.
+
+**A state machine.** A payment moves through explicit states (`created`, `authorised`, `captured`, `failed`, `refunded`), with allowed transitions enforced in one place (<Ref to="m-patterns-behavioural" />). Provider responses and webhooks (<Ref to="m-api-design" />) drive transitions; a webhook that arrives twice, or after a later state, must be harmless.
+
+**A double-entry ledger.** Money is recorded as **entries** in an append-only ledger, where every transaction moves an amount from one account to another and the entries always sum to zero. Balances are derived from entries, never stored as a single editable number (<Ref to="m-architecture" />'s event sourcing, applied to accounting):
+
+```ts
+type Entry = { tx: string; account: string; pence: number };
+
+const ledger: Entry[] = [];
+
+function post(tx: string, lines: [string, number][]) {
+  const sum = lines.reduce((s, [, p]) => s + p, 0);
+  if (sum !== 0) throw new Error(`transaction ${tx} does not balance (off by ${sum})`);
+  if (ledger.some((e) => e.tx === tx)) return "already posted";
+  for (const [account, pence] of lines) ledger.push({ tx, account, pence });
+  return "posted";
+}
+
+const balance = (account: string) => ledger.filter((e) => e.account === account).reduce((s, e) => s + e.pence, 0);
+
+console.log(post("pay-o7", [["customer:c-17", -5400], ["provider:clearing", 5400]]));
+console.log(post("fee-o7", [["provider:clearing", -98], ["expense:card-fees", 98]]));
+console.log(post("settle-o7", [["provider:clearing", -5302], ["bank:current", 5302]]));
+console.log(post("pay-o7", [["customer:c-17", -5400], ["provider:clearing", 5400]]));
+try {
+  post("bad", [["bank:current", 100]]);
+} catch (e) {
+  console.log((e as Error).message);
+}
+console.log({ bank: balance("bank:current"), clearing: balance("provider:clearing"), fees: balance("expense:card-fees"), total: ledger.reduce((s, e) => s + e.pence, 0) });
+```
+
+It prints `posted` three times, then `already posted` (the duplicated payment did nothing), then `transaction bad does not balance (off by 100)`, then `{ bank: 5302, clearing: 0, fees: 98, total: 0 }`. The customer paid £54.00, the provider kept a £0.98 fee, £53.02 reached the bank, the clearing account returned to zero, and the whole ledger sums to zero, so every penny is accounted for.
+
+**Reliability.** Payment state changes and their events go out through a transactional outbox (<Ref to="m-messaging" />); the order service learns of payments through those events and a saga handles failures (<Ref to="m-resilience" />). The database is a strongly consistent relational store with synchronous replication; availability is traded for correctness when they conflict (<Ref to="m-consistency-consensus" />).
+
+**Reconciliation.** Every day, compare your ledger with the provider's settlement reports and your bank statements, line by line, and investigate every mismatch. Bugs, missed webhooks and provider errors are found here, which is why the ledger must be complete and immutable. Card data itself never touches your servers: the provider's hosted fields or SDK collect it, keeping you out of most PCI DSS scope (the security part of the course).
+
+## Presenting a design
+
+Whether in a design review or an interview:
+
+- **Drive the conversation** with the method: requirements and numbers first, then the API, data, high-level design and deep dives.
+- **Think aloud** and state assumptions explicitly ("I'll assume 100 reads per write; if it's lower, caching matters less").
+- **Draw** the request flow, labelling every box and arrow (<Ref to="m-design-docs" />).
+- **Prioritise** the parts that are hard for *this* system (fan-out for the feed, ordering for chat, correctness for payments) rather than reciting every component.
+- **Name trade-offs and alternatives**, and say what you would monitor and what would change at ten or a hundred times the load.
+
+## Common mistakes
+
+- **Drawing boxes before clarifying requirements and numbers.**
+- **Designing for imaginary scale** (sharding and Kafka for a few writes per second).
+- **One technique for everything**, such as global ordering or strong consistency where per-key ordering or eventual consistency would do.
+- **Ignoring failure**: no idempotency, no retries plan, no thought about a dependency being down.
+- **Storing derived numbers** (balances, counts) as the only truth, with no history to audit.
+- **Never stating trade-offs.**
+
+## Practice
+
+**1. (warm-up)** List the seven steps of the method in order.
+
+<Solution>
+
+Clarify functional and non-functional requirements; estimate load and storage; define the API; model the data; sketch the high-level design; deep-dive into the hardest parts; state the trade-offs and what changes with growth.
+
+</Solution>
+
+**2. (warm-up)** For the URL shortener, why is caching so effective, and when would you choose a 302 over a 301 redirect?
+
+<Solution>
+
+Links never change after creation and reads outnumber writes about 100 to 1, with popular links read very often, so caches (CDN, Redis) achieve very high hit ratios and never need invalidating except for takedowns or expiry. Choose 302 (or 307) when you need to count clicks or might change or disable the target, because browsers do not cache them; 301 is faster for repeat visitors but makes those visits invisible to you.
+
+</Solution>
+
+**3. (standard)** Estimate the fan-out-on-write cost for a hybrid feed where accounts with more than 100,000 followers are not fanned out. If 0.01% of the 50 million users are such accounts, how many posts per day skip fan-out?
+
+<Solution>
+
+```ts
+const users = 50_000_000;
+const bigAccounts = users * 0.0001;
+const postsPerDay = 0.2;
+console.log(bigAccounts, "big accounts post", bigAccounts * postsPerDay, "times a day without fan-out");
+```
+
+It prints **5000 big accounts post 1000 times a day without fan-out**. Those 1,000 posts would otherwise each trigger at least 100,000 (and up to 20 million) feed inserts, so leaving them for read-time merging removes the worst write spikes while affecting only a tiny share of posts.
+
+</Solution>
+
+**4. (standard)** In the chat design, why use a per-conversation sequence number rather than server timestamps to order messages?
+
+<Solution>
+
+Timestamps from different servers disagree and can even go backwards, so two messages sent close together could be ordered wrongly (<Ref to="m-distributed-basics" />). A sequence number assigned by the single owner of each conversation gives a gap-free, agreed order, and also lets clients detect and fetch missing messages after reconnecting. Per conversation is enough, because no one needs an order across unrelated conversations.
+
+</Solution>
+
+**5. (stretch)** A customer reports being charged twice for one order. Using the payment design, list where duplicates could arise and which mechanism prevents each.
+
+<Solution>
+
+The client retried the "pay" request after a timeout: the idempotency key with a unique constraint returns the first result. The service retried its call to the provider: the same idempotency key is sent to the provider, which deduplicates. The provider's webhook arrived twice: the state machine ignores a transition to a state already reached, and the ledger refuses a transaction id already posted. Two different payment attempts were genuinely made (a second attempt key): the order's state should allow only one successful payment, and daily reconciliation against the provider's settlement report finds any double charge so it can be refunded. Investigating means reading the ledger and the provider's records for that order.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Method**: requirements (functional and non-functional), estimates, API, data model, high-level design, deep dives, trade-offs. Start simple.
+- **URL shortener**: read-heavy and immutable, so cache everywhere; base62 codes from unique ids; 301 versus 302; count clicks asynchronously.
+- **Feed**: fan-out on write for ordinary accounts, on read for celebrities (a hybrid); store ids, cap feeds, fan out asynchronously.
+- **Chat**: WebSockets through gateways, presence, per-conversation sequence numbers, idempotent sends, gap filling, push for offline users.
+- **Payments**: idempotency keys everywhere, an explicit state machine, a double-entry ledger that always balances, outbox and sagas, and daily reconciliation.
+- Present designs by driving the method, stating assumptions and trade-offs, and focusing on what is hard for the system at hand.
+
+## Go deeper
+
+- [The System Design Primer](https://github.com/donnemartin/system-design-primer), Donne Martin. A large free collection of system design topics and worked examples.
+- [Amazon Builders' Library](https://aws.amazon.com/builders-library/), Amazon. How Amazon builds and operates large systems.
+- [Designing Data-Intensive Applications](https://dataintensive.net/), Martin Kleppmann. The book behind most of this part of the course.
+- [Designing robust and predictable APIs with idempotency](https://stripe.com/blog/idempotency), Brandur Leach (Stripe). Idempotency and retries in Stripe's API design.
+- [How Discord stores trillions of messages](https://discord.com/blog/how-discord-stores-trillions-of-messages), Discord. A real chat system's storage design and its evolution.

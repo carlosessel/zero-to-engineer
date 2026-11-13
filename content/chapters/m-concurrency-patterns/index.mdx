@@ -12,7 +12,7 @@ The previous two chapters showed the hazards: races, deadlocks, blocked threads,
 
 ## Producer-consumer
 
-In **producer-consumer**, some threads (producers) put work items on a **queue** and others (consumers) take them off and process them. The queue decouples the two sides: they run at their own pace, the producers do not need to know who consumes, and you can add consumers to go faster. It is the same idea, inside one process, as a message broker between services (the messaging chapter later in the course).
+In **producer-consumer**, some threads (producers) put work items on a **queue** and others (consumers) take them off and process them. The queue decouples the two sides: they run at their own pace, the producers do not need to know who consumes, and you can add consumers to go faster. It is the same idea, inside one process, as a message broker between services (<Ref to="m-messaging" />).
 
 The queue should be **bounded**. If producers are faster than consumers, an unbounded queue grows until memory runs out; a bounded one makes producers **wait** when it is full. That waiting is **back-pressure**: the slow part of the system pushes back on the fast part, instead of being overwhelmed.
 

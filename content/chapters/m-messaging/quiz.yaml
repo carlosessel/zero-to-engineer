@@ -1,0 +1,36 @@
+- question: What is the main difference between a queue and a log?
+  options:
+  - A queue deletes acknowledged messages; a log keeps them for replay by many consumer groups
+  - Logs are slower
+  answer: 0
+  explanation: Queues distribute work; logs carry event streams.
+- question: Which delivery guarantee is the standard choice?
+  options:
+  - At-least-once, with idempotent consumers
+  - At-most-once
+  answer: 0
+  explanation: Exactly-once processing is at-least-once plus idempotence.
+- question: What should happen to a message that fails every time?
+  options:
+  - After a few retries, move it to a dead-letter queue and alert
+  - Retry forever
+  answer: 0
+  explanation: Otherwise it blocks the queue.
+- question: Why is 'save, then publish' unreliable?
+  options:
+  - A crash between the two leaves a saved change with no event
+  - Publishing is slow
+  answer: 0
+  explanation: Use the transactional outbox.
+- question: In RabbitMQ, what routes messages to queues?
+  options:
+  - Exchanges and their bindings
+  - Consumers
+  answer: 0
+  explanation: Direct, topic, fanout and headers exchanges.
+- question: Why might messages be processed out of order?
+  options:
+  - Competing consumers and retries
+  - Brokers shuffle them on purpose
+  answer: 0
+  explanation: Order per key needs a single ordered channel per key.

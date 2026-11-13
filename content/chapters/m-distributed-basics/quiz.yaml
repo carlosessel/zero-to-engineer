@@ -1,0 +1,36 @@
+- question: A call to another service times out. What do you know?
+  options:
+  - Only that you stopped waiting; it may or may not have happened
+  - That it failed
+  answer: 0
+  explanation: Retry idempotently or ask for the status.
+- question: Which errors should be retried?
+  options:
+  - Transient ones such as timeouts, 503 and 429
+  - 400 validation errors
+  answer: 0
+  explanation: Permanent errors fail the same way again.
+- question: Three layers each retry three times. How many calls can one request cause at the bottom?
+  options:
+  - '27'
+  - '9'
+  answer: 0
+  explanation: Retry at one layer or use a retry budget.
+- question: What makes 'exactly-once' processing possible?
+  options:
+  - At-least-once delivery plus idempotent processing
+  - A reliable network
+  answer: 0
+  explanation: The effect happens once even if the message arrives twice.
+- question: Which clock should measure durations?
+  options:
+  - The monotonic clock
+  - The wall clock
+  answer: 0
+  explanation: The wall clock can jump.
+- question: What does a Lamport clock guarantee?
+  options:
+  - If A caused B, A's number is smaller
+  - Numbers match real time
+  answer: 0
+  explanation: It captures causality, not wall time.

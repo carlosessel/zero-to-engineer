@@ -165,7 +165,7 @@ for (const attempt of [() => order.addLine("HAMPER", 1, 2500), () => order.place
 console.log(order.total(), order.pullEvents().map((e) => e.type));
 ```
 
-It prints `Over the customer's credit limit`, then `A placed order cannot be changed`, then `1350 ["LineAdded", "LineAdded", "OrderPlaced"]`. Every rule is enforced inside the aggregate, and the recorded events are what the rest of the system will hear. To publish events reliably together with the database change (not lose them if the process crashes between the two), store them in the same transaction in an **outbox** table and publish from there; the messaging chapter later in this course covers the **transactional outbox**.
+It prints `Over the customer's credit limit`, then `A placed order cannot be changed`, then `1350 ["LineAdded", "LineAdded", "OrderPlaced"]`. Every rule is enforced inside the aggregate, and the recorded events are what the rest of the system will hear. To publish events reliably together with the database change (not lose them if the process crashes between the two), store them in the same transaction in an **outbox** table and publish from there; <Ref to="m-messaging" /> covers the **transactional outbox**.
 
 Domain events between bounded contexts become **integration events**: messages on a broker such as Kafka, with a stable published format.
 

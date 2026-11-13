@@ -4,6 +4,21 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 8 (Distributed systems and messaging)
+
+Added
+- Eight chapters: distributed systems fundamentals (partial failure, timeouts, retries, idempotency, clocks, Lamport clocks); load balancers, proxies and CDNs; consistency and consensus (linearizability, CAP and PACELC, Raft, fencing, two-phase commit); messaging and queues (queues versus logs, RabbitMQ, delivery guarantees, dead letters, the transactional outbox); Kafka in depth; resilience patterns (circuit breakers, bulkheads, rate limiting, load shedding, sagas); patterns for services in the cloud (twelve-factor, sidecars, backends for frontends, load levelling, valet keys); and system design, worked through a URL shortener, a feed, chat and payments. About 18,200 words, 39 practice problems, 48 quiz questions, 40 checked resources.
+- Simulations that run and are checked: retries with jitter and amplification, idempotent payment handling, last-write-wins losing data to clock skew, Lamport clocks, four load-balancing algorithms under uneven load, a five-node Raft-style election and commit across a network partition, Kafka partitioning, consumer groups, offsets and compaction, a circuit breaker, bulkhead, token bucket and saga, queue-based load levelling, and a double-entry ledger. Python examples run an idempotent consumer and a transactional outbox on SQLite, and verify signed storage URLs. A C# example runs a real Polly retry and circuit breaker pipeline (network checks only).
+- Earlier chapters now link to the messaging, Kafka, resilience and consensus chapters.
+- 63 glossary terms.
+
+Fixed (found by running the examples)
+- My drafts' base62 code for 125,000,000 (`8SUD2`), the field count of the web product page (9), and the wording of the Lamport clock output were wrong until the code ran. Example names that clash with browser and TypeScript built-ins (`Node`, `Pick`) were renamed.
+- Two resource links had moved or blocked automated checks (LinkedIn's "The Log" essay, Cloudflare's CDN explainer); the chapters now link to the Kafka introduction and MDN's CDN entry instead.
+
+Not verified
+- No person has reviewed these chapters. Kafka, RabbitMQ and Raft behaviour is simulated or described from documentation, not run against real brokers. Problem counts are below the standard's 30 to 50.
+
 ### 2026-11-13: Software Engineering Mastery, part 7 (Data)
 
 Added

@@ -1,0 +1,304 @@
+---
+title: "Kafka in depth"
+summary: "Topics, partitions, consumer groups, offsets, ordering, retention, exactly-once and schemas."
+prerequisites: [m-messaging]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will understand Apache Kafka well enough to design with it and debug it: how topics are split into partitions, how keys decide ordering, how consumer groups share work and rebalance, how offsets give at-least-once processing and replay, how replication and acknowledgements make data durable, what Kafka's exactly-once really covers, how retention and compaction work, and why schemas matter. Kafka is the backbone of event-driven systems in a large share of companies, and most of its surprises come from a few concepts.
+
+## What Kafka is
+
+**Kafka** is a distributed, durable, append-only **log** (<Ref to="m-messaging" />). Producers append **records** (key, value, headers, timestamp); records are stored on disk, replicated, and kept for a configured time whether or not anyone has read them; consumers read them in order, each tracking its own position. Created at LinkedIn and open-sourced in 2011, it is now an Apache project, offered as a managed service by Confluent, AWS (MSK), Azure (Event Hubs speaks the Kafka protocol) and others, with compatible alternatives such as Redpanda.
+
+Its design choices explain its strengths: appending to and reading sequentially from files is extremely fast on any disk, records are batched and compressed, and the broker does almost no per-consumer work (consumers keep their own position), so one cluster handles millions of records a second and many independent readers.
+
+## Topics, partitions and offsets
+
+Records are organised into **topics** (`orders`, `payments`, `page-views`). Each topic is split into **partitions**, each an independent, ordered log stored on one broker (and replicated to others). Within a partition, every record has a sequential **offset**: 0, 1, 2, and so on.
+
+Partitions are Kafka's unit of everything:
+
+- **Parallelism**: different partitions are read by different consumers at once.
+- **Ordering**: records are ordered **within a partition only**. There is no order across partitions.
+- **Scale**: partitions spread a topic's data and load across brokers.
+
+### Keys choose partitions
+
+A producer that sends a record with a key gets it placed by hashing the key (Kafka's default partitioner uses the murmur2 hash, modulo the number of partitions). The same key always goes to the same partition, so **all records for one key stay in order**. Choose the key as the entity whose events must be ordered: the order id, the account id, the customer id. Records without a key are spread across partitions (in batches), with no ordering between them.
+
+```ts
+function fnv1a(text: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+const partitions: string[][] = [[], [], []];
+const events = [
+  ["o-7", "OrderPlaced"], ["o-8", "OrderPlaced"], ["o-7", "PaymentTaken"],
+  ["o-9", "OrderPlaced"], ["o-8", "OrderCancelled"], ["o-7", "OrderShipped"],
+];
+for (const [key, type] of events) partitions[fnv1a(key) % partitions.length].push(`${key}:${type}`);
+partitions.forEach((p, i) => console.log(`partition ${i}:`, p));
+```
+
+It prints `partition 0: ["o-9:OrderPlaced"]`, `partition 1: ["o-7:OrderPlaced", "o-7:PaymentTaken", "o-7:OrderShipped"]` and `partition 2: ["o-8:OrderPlaced", "o-8:OrderCancelled"]`: every order's events are together and in order. (This uses a simple hash for illustration; Kafka's real partitioner uses murmur2, so the exact partitions differ.) Two consequences:
+
+- **Adding partitions** to an existing topic changes `hash mod N`, so keys move to new partitions and per-key ordering breaks around the change. Choose partition counts with growth in mind.
+- **Skewed keys** create hot partitions: one huge customer's events all land on one partition (<Ref to="m-replication-partitioning" />).
+
+## Consumer groups
+
+Consumers that share work join a **consumer group** (identified by a `group.id`). Kafka assigns each partition to **exactly one** consumer in the group, so each record is processed by one member, in order per partition. Different groups (the email service, the analytics service, the search indexer) each get every record independently.
+
+```ts
+function assign(partitions: number, consumers: string[]): Record<string, number[]> {
+  const result: Record<string, number[]> = Object.fromEntries(consumers.map((c) => [c, []]));
+  for (let p = 0; p < partitions; p++) result[consumers[p % consumers.length]].push(p);
+  return result;
+}
+
+console.log("2 consumers:", assign(6, ["c1", "c2"]));
+console.log("3 consumers:", assign(6, ["c1", "c2", "c3"]));
+console.log("8 consumers:", assign(6, ["c1", "c2", "c3", "c4", "c5", "c6", "c7", "c8"]));
+```
+
+It prints `{ c1: [0, 2, 4], c2: [1, 3, 5] }` for two consumers, two partitions each for three consumers, and for eight consumers `c7: []` and `c8: []`: they get **nothing**. The number of partitions is the maximum parallelism of a consumer group: more consumers than partitions sit idle.
+
+When consumers join, leave or crash, the group **rebalances**: partitions are reassigned. Older "eager" rebalancing stopped every consumer during the reassignment; **cooperative** (incremental) rebalancing, and the newer consumer group protocol in recent Kafka versions, move only the partitions that need to move. Frequent rebalances (from consumers that take too long between polls and are presumed dead, controlled by `max.poll.interval.ms`) are a classic cause of stalled processing.
+
+## Offsets and delivery semantics
+
+Each consumer group records, per partition, the offset of the next record it will read, by **committing** offsets to an internal Kafka topic. After a restart or rebalance, consumption resumes from the committed offset. When you commit decides the guarantee (<Ref to="m-messaging" />):
+
+- **Commit after processing**: at-least-once. A crash after processing but before committing means those records are read again, so processing must be idempotent.
+- **Commit before processing** (or auto-commit on a timer, which can commit records not yet processed): at-most-once, risking loss.
+
+The default `enable.auto.commit=true` commits periodically in the background, which can commit records your code has not finished; for anything important, commit manually after processing.
+
+Because records stay in the log, a group can **replay** by resetting its offsets (to the beginning, or to a timestamp), which is how a new service backfills from history or a fixed bug is reprocessed.
+
+```ts
+type Record_ = { offset: number; value: string };
+const partition: Record_[] = ["placed o-7", "paid o-7", "placed o-8", "shipped o-7", "paid o-8"].map((value, offset) => ({ offset, value }));
+
+let committed = 0;
+function poll(max: number, crashBeforeCommit = false) {
+  const batch = partition.slice(committed, committed + max);
+  const processed = batch.map((r) => `${r.offset}:${r.value}`);
+  if (!crashBeforeCommit) committed += batch.length;
+  return { processed, committed };
+}
+
+console.log(poll(2));
+console.log(poll(2, true));
+console.log(poll(2));
+committed = 0;
+console.log("after resetting to the beginning:", poll(5).processed.length, "records replayed");
+```
+
+It prints `{ processed: ["0:placed o-7", "1:paid o-7"], committed: 2 }`, then the next two records processed with the crash leaving `committed: 2`, then the **same** two records again with `committed: 4`: at-least-once redelivery. Finally, resetting the offset replays all 5 records.
+
+**Consumer lag** (the latest offset minus the committed offset) is the key health metric for a consumer group: lag that keeps growing means consumers cannot keep up.
+
+## Replication and durability
+
+Each partition has a **replication factor** (typically 3): one **leader** replica handles reads and writes, and **followers** copy it (<Ref to="m-replication-partitioning" />). The followers that are fully caught up form the **in-sync replicas** (ISR). If the leader's broker fails, an in-sync follower becomes leader.
+
+Producers choose how much confirmation to wait for with `acks`:
+
+- `acks=0`: do not wait. Fast; records can be lost silently.
+- `acks=1`: the leader has written it. Lost if the leader dies before followers copy it.
+- `acks=all`: every in-sync replica has it. Combined with the topic setting **`min.insync.replicas=2`** (with replication factor 3), a write succeeds only when at least two brokers have it, so one broker failure loses nothing.
+
+`acks=all` and idempotence are the defaults for producers since Kafka 3.0. **Idempotent producers** attach sequence numbers so that the broker discards duplicates when the producer retries after a timeout, preventing duplicate records inside Kafka.
+
+Kafka's cluster metadata (which broker leads which partition, topic configuration) was historically kept in ZooKeeper; Kafka now uses its own Raft-based controller quorum, **KRaft** (<Ref to="m-consistency-consensus" />), and Kafka 4.0 (2025) removed ZooKeeper entirely.
+
+## Exactly-once in Kafka
+
+Kafka offers **exactly-once semantics** (EOS) for a specific pattern: **read from Kafka, process, write to Kafka**. A **transactional producer** writes its output records *and* the consumer's offset commits in one atomic transaction; consumers reading the output with `isolation.level=read_committed` see only committed transactions. Kafka Streams enables this with one setting. It does **not** extend to side effects outside Kafka: if your consumer writes to a database or calls an API, use idempotent processing or store the offsets in that database within the same transaction as the work.
+
+## Retention and compaction
+
+Topics keep data according to their **cleanup policy**:
+
+- **`delete`** (the default): records older than `retention.ms` (7 days by default) or beyond `retention.bytes` are deleted, a whole segment file at a time. Many event streams keep days or weeks; some keep data forever.
+- **`compact`**: Kafka keeps at least the **latest record for each key**, removing older ones in the background. A record with a key and a null value (a **tombstone**) eventually removes the key. A compacted topic is a durable table of current values, ideal for "current state of every customer" or for rebuilding a cache or read model (<Ref to="m-architecture" />).
+
+```ts
+type Rec = { offset: number; key: string; value: string | null };
+
+const log: Rec[] = [
+  { offset: 0, key: "c-17", value: "LS1 4AP" },
+  { offset: 1, key: "c-4", value: "M1 1AE" },
+  { offset: 2, key: "c-17", value: "LS6 2QT" },
+  { offset: 3, key: "c-9", value: "B1 1AA" },
+  { offset: 4, key: "c-9", value: null },
+];
+
+function compact(records: Rec[]): Rec[] {
+  const latest = new Map<string, Rec>();
+  for (const r of records) latest.set(r.key, r);
+  return [...latest.values()].filter((r) => r.value !== null).sort((a, b) => a.offset - b.offset);
+}
+
+console.log(compact(log).map((r) => `${r.offset} ${r.key}=${r.value}`));
+```
+
+It prints `["1 c-4=M1 1AE", "2 c-17=LS6 2QT"]`: only each key's latest value survives (Ama's old postcode is gone), offsets are preserved, and the tombstone removed `c-9` altogether. (Real compaction keeps tombstones for a while so consumers notice the deletion, and never compacts the newest, still-active segment.)
+
+## Schemas
+
+Kafka stores bytes; it does not know or check what is inside. When dozens of services produce and consume a topic for years, the **format** of its records is a contract (<Ref to="m-api-design" />), and a careless change breaks consumers in production. Teams therefore use a **schema**, typically in **Avro**, **Protobuf** or JSON Schema, stored in a **schema registry** (Confluent Schema Registry, Apicurio, AWS Glue Schema Registry). Producers register the schema they write and put its id in each record; the registry rejects incompatible changes according to a **compatibility mode**:
+
+- **Backward compatible** (the usual default): consumers using the new schema can read data written with the old one. You may add fields with defaults and remove fields.
+- **Forward compatible**: consumers using the old schema can read data written with the new one.
+- **Full**: both.
+
+The rules mirror API evolution: add optional fields, never change a field's meaning or type, never reuse a removed field's name or number.
+
+## The wider ecosystem
+
+- **Kafka Connect** moves data between Kafka and other systems with ready-made connectors: databases (with change data capture through Debezium, <Ref to="m-messaging" />), search indexes, object storage, warehouses.
+- **Stream processing** transforms and aggregates streams continuously: Kafka Streams (a Java library), Apache Flink, ksqlDB, Spark Structured Streaming. Joins, windows ("orders per minute") and stateful aggregations run as records arrive.
+
+A Java consumer that commits offsets only after processing looks like this:
+
+```java
+import java.time.Duration;
+import java.util.List;
+import java.util.Properties;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+
+public class OrderEmailer {
+    public static void main(String[] args) {
+        Properties props = new Properties();
+        props.put("bootstrap.servers", "localhost:9092");
+        props.put("group.id", "order-emailer");
+        props.put("enable.auto.commit", "false");
+        props.put("auto.offset.reset", "earliest");
+        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+            consumer.subscribe(List.of("orders"));
+            while (true) {
+                for (ConsumerRecord<String, String> record : consumer.poll(Duration.ofMillis(500))) {
+                    sendEmailIdempotently(record.key(), record.value());
+                }
+                consumer.commitSync();
+            }
+        }
+    }
+
+    static void sendEmailIdempotently(String orderId, String event) {
+        System.out.printf("email for %s: %s%n", orderId, event);
+    }
+}
+```
+
+Auto-commit is off; the consumer processes a batch and only then commits, giving at-least-once processing, and the email sender must tolerate repeats. The .NET client (Confluent.Kafka) and the Node.js client (KafkaJS, or Confluent's client) follow the same model.
+
+## Common mistakes
+
+- **Expecting global ordering** across partitions, or ordering for records without keys.
+- **A poor key**: too few distinct values (hot partitions) or the wrong entity (ordering where it is not needed, none where it is).
+- **More consumers than partitions**, expecting more throughput.
+- **Auto-commit for important processing**, losing records on crashes.
+- **Non-idempotent consumers**, assuming exactly-once delivery to a database.
+- **`acks=1` or `min.insync.replicas=1`** for data that must not be lost.
+- **Slow processing inside the poll loop**, triggering constant rebalances.
+- **No schemas or compatibility checks**, so a producer change breaks consumers.
+- **Ignoring consumer lag.**
+
+## Practice
+
+**1. (warm-up)** A topic has 12 partitions. What is the maximum number of consumers in one group that can usefully read it, and what happens to extra ones?
+
+<Solution>
+
+12, one per partition. Extra consumers in the same group get no partitions and sit idle (useful only as standby replacements). Another group can read the same topic independently with its own 12.
+
+</Solution>
+
+**2. (warm-up)** All events for an account must be processed in order. What should the record key be, and why?
+
+<Solution>
+
+The account id. Records with the same key go to the same partition, and each partition is consumed in order by one consumer in the group, so the account's events are processed in the order they were written.
+
+</Solution>
+
+**3. (warm-up)** Which producer and topic settings make a write survive the loss of one broker?
+
+<Solution>
+
+Replication factor 3, `min.insync.replicas=2` on the topic, and `acks=all` on the producer (with idempotence enabled). A write is acknowledged only when at least two brokers have it, so losing one does not lose acknowledged data.
+
+</Solution>
+
+**4. (standard)** Extend the offsets example so that processing is idempotent: keep a set of processed record offsets and skip any already processed. Show that the redelivered records are skipped.
+
+<Solution>
+
+```ts
+const partition = ["placed o-7", "paid o-7", "placed o-8", "shipped o-7", "paid o-8"].map((value, offset) => ({ offset, value }));
+let committed = 0;
+const done = new Set<number>();
+const effects: string[] = [];
+
+function poll(max: number, crashBeforeCommit = false) {
+  for (const r of partition.slice(committed, committed + max)) {
+    if (done.has(r.offset)) continue;
+    effects.push(r.value);
+    done.add(r.offset);
+  }
+  if (!crashBeforeCommit) committed = Math.min(committed + max, partition.length);
+}
+
+poll(2);
+poll(2, true);
+poll(2);
+poll(2);
+console.log(effects.length, effects);
+```
+
+It prints **5** and the five events once each, although records 2 and 3 were delivered twice. In production, the processed set (or a natural idempotency check) lives in the same database as the effects, updated in the same transaction.
+
+</Solution>
+
+**5. (stretch)** You need a service that always knows every customer's current loyalty tier, can be rebuilt from scratch at any time, and must start serving within minutes. How could Kafka help?
+
+<Solution>
+
+Publish tier changes to a compacted topic keyed by customer id. Compaction keeps the latest tier for every customer indefinitely (no time-based deletion), so the topic is a complete, current table of a manageable size. The service consumes the topic from the beginning on startup to build its local store (in memory or an embedded database), then keeps consuming new changes; a crashed or new instance rebuilds the same way. Kafka Streams' KTables do exactly this. Tombstones handle deleted customers. Use a schema with backward-compatible evolution for the tier records.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Kafka is a replicated, durable **log**; producers append **records**, consumers read in order and keep their own **offsets**.
+- **Topics** split into **partitions**: the unit of parallelism, ordering and scale. **Keys** choose partitions; order holds per partition only.
+- **Consumer groups** share partitions, one consumer per partition; more consumers than partitions sit idle; membership changes cause **rebalances**.
+- **Commit offsets after processing** for at-least-once; make consumers idempotent; monitor **consumer lag**; reset offsets to **replay**.
+- Durability: replication factor 3, `min.insync.replicas=2`, `acks=all`, idempotent producers. KRaft replaced ZooKeeper.
+- **Exactly-once** covers Kafka-to-Kafka processing with transactions, not external side effects.
+- **Retention** deletes by age or size; compaction keeps the latest value per key.
+- Use **schemas** with a **registry** and compatibility rules; Connect and stream processors extend Kafka.
+
+## Go deeper
+
+- [Apache Kafka documentation](https://kafka.apache.org/documentation/), the Apache Software Foundation. Design, configuration and operations.
+- [Kafka: a distributed messaging system for log processing](https://notes.stephenholiday.com/Kafka.pdf), Jay Kreps, Neha Narkhede and Jun Rao. The original 2011 LinkedIn paper.
+- [Introduction to Kafka](https://kafka.apache.org/intro), the Apache Software Foundation. Events, topics, partitions and the main APIs, in one page.
+- [Schema evolution and compatibility](https://docs.confluent.io/platform/current/schema-registry/fundamentals/schema-evolution.html), Confluent. Backward, forward and full compatibility.
+- [Exactly-once semantics are possible: here's how Kafka does it](https://www.confluent.io/blog/exactly-once-semantics-are-possible-heres-how-apache-kafka-does-it/), Neha Narkhede. Idempotent producers and transactions.

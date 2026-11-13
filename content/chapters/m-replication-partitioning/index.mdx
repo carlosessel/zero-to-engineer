@@ -91,7 +91,7 @@ And some reads must always go to the leader: anything that decides what to write
 When the leader fails, a follower must be **promoted**: detect the failure (usually by a missed heartbeat and a timeout), choose the most up-to-date follower, and redirect writes to it. Managed databases (Amazon RDS, Azure SQL, Cloud SQL) and tools such as Patroni for PostgreSQL automate this. Failover is where things go wrong:
 
 - Writes the old leader acknowledged but had not replicated are **lost** with asynchronous replication.
-- If the old leader was only slow, not dead, and comes back still believing it is the leader, two nodes accept writes: **split brain**, which corrupts data. Systems prevent it with a **quorum** (a majority must agree on who leads, using a consensus algorithm such as Raft, covered in the distributed systems part) and by **fencing** the old leader off.
+- If the old leader was only slow, not dead, and comes back still believing it is the leader, two nodes accept writes: **split brain**, which corrupts data. Systems prevent it with a **quorum** (a majority must agree on who leads, using a consensus algorithm such as Raft, <Ref to="m-consistency-consensus" />) and by **fencing** the old leader off.
 - Timeouts are a trade-off: too short causes needless failovers during brief slowdowns; too long means longer outages.
 
 ## Multi-leader and leaderless replication

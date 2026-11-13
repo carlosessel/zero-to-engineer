@@ -1,0 +1,36 @@
+- question: What does an open circuit breaker do?
+  options:
+  - Fails calls immediately without trying the dependency
+  - Retries harder
+  answer: 0
+  explanation: It gives the failing service room to recover.
+- question: What problem does a bulkhead solve?
+  options:
+  - One slow dependency using up resources shared by everything
+  - Slow databases
+  answer: 0
+  explanation: Each dependency gets its own limited pool.
+- question: Which rate-limiting algorithm allows short bursts while enforcing an average rate?
+  options:
+  - Token bucket
+  - Fixed window
+  answer: 0
+  explanation: Bucket size sets the burst; refill rate sets the average.
+- question: Why shed load instead of accepting everything?
+  options:
+  - Serving some requests quickly beats serving all of them too slowly
+  - It saves disk space
+  answer: 0
+  explanation: Reject early and by priority.
+- question: How does a saga undo earlier steps when a later one fails?
+  options:
+  - Compensating actions, in reverse order
+  - A distributed rollback
+  answer: 0
+  explanation: There is no ACID transaction across services.
+- question: Where should a step that cannot be compensated go in a saga?
+  options:
+  - Last
+  - First
+  answer: 0
+  explanation: Once the outcome is certain.
