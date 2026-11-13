@@ -1,0 +1,42 @@
+- question: A signed-in customer can read another customer's order by changing the id in the URL. What is missing?
+  options:
+  - An ownership check on the order
+  - Authentication
+  answer: 0
+  explanation: This is an insecure direct object reference (IDOR).
+- question: Which is suitable for storing passwords?
+  options:
+  - Argon2id, scrypt, bcrypt or PBKDF2, salted
+  - SHA-256
+  answer: 0
+  explanation: Password hashes must be slow and salted.
+- question: Who can read the payload of a JWT?
+  options:
+  - Anyone who has the token
+  - Only the server with the signing key
+  answer: 0
+  explanation: The signature prevents changes, not reading.
+- question: What must an API check on every JWT?
+  options:
+  - Signature, issuer, audience, expiry and the allowed algorithm
+  - Only that it is well-formed JSON
+  answer: 0
+  explanation: A token for another API or issuer must be refused.
+- question: A signed-in customer calls a staff-only endpoint. Which status?
+  options:
+  - 403 Forbidden
+  - 401 Unauthorized
+  answer: 0
+  explanation: 401 means the caller is not authenticated.
+- question: Why make authorisation the default, with explicit exceptions?
+  options:
+  - A forgotten line then fails safe instead of opening an endpoint
+  - It is faster
+  answer: 0
+  explanation: Deny by default.
+- question: When are session cookies a better fit than bearer tokens?
+  options:
+  - For a web app whose pages and API share a site
+  - For calls between back-end services
+  answer: 0
+  explanation: Cookies with HttpOnly, Secure and SameSite are simple and easy to revoke.

@@ -4,6 +4,16 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 7 (Security)
+
+Added
+- A chapter on authentication and authorisation in each stack: password hashing, sessions versus JWT bearer tokens, identity providers, and the same small API (a token endpoint, an orders endpoint with an ownership check, and a staff-only report) built three times, with ASP.NET Core's JWT bearer handler and policies, Spring Security's resource server and `@PreAuthorize`, and Express with `jose` and Node's scrypt. The part also reuses the Mastery chapters on application security and identity.
+- All three implementations run in the checks and must produce the same table of results: 401 with no or a tampered token, 404 for another customer's order, 403 for a customer on the staff report.
+- 4 glossary terms, and the course added to the existing terms the chapters use.
+
+Not verified
+- No person has reviewed this chapter. The checks download packages, so they run only where network checks are switched on; tokens from a real identity provider were not tested.
+
 ### 2026-11-13: Zero to Backend Engineer, part 6 (Data)
 
 Added

@@ -1,0 +1,624 @@
+---
+title: "Authentication in your stack"
+summary: "Password sign-in, sessions and JWTs, and permission checks with ASP.NET Core Identity, Spring Security and Node."
+prerequisites: [m-identity, be-dependency-injection]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will protect an API in your stack: verify passwords stored as slow, salted hashes; issue and validate signed **JWT** access tokens; require sign-in by default; check **roles** for staff-only endpoints; and check **ownership**, so a signed-in customer can never read someone else's order. You will also know when to use cookie sessions instead of tokens, and why most production services hand sign-in to an identity provider. <Ref to="m-identity" /> explains the concepts (OAuth 2.0, OpenID Connect, sessions, tokens) and <Ref to="m-appsec" /> the attacks; this chapter is the code. All three stacks implement the same small API, so read your own and compare.
+
+## The plan
+
+The bakery API has three kinds of request:
+
+| Endpoint | Who may call it |
+|---|---|
+| `POST /token` | Anyone: exchanges an email and password for an access token |
+| `GET /orders/{id}` | A signed-in customer, for their own orders only; staff for any order |
+| `GET /reports/sales` | Staff only |
+
+Each implementation answers these calls the same way:
+
+| Call | Expected |
+|---|---|
+| Sign in with a wrong password | 401 |
+| No token | 401 Unauthorized: sign in first |
+| Ama reads her order `o-1` | 200 |
+| Ama reads Kofi's order `o-2` | 404: as if it did not exist, so she cannot even learn it exists |
+| Kofi, who is staff, reads `o-2` | 200 |
+| Ama reads the sales report | 403 Forbidden: signed in, but not allowed |
+| Kofi reads the sales report | 200 |
+| A tampered token | 401: the signature no longer matches |
+
+The ownership rule is the one most often forgotten. Requiring sign-in is not enough: an API that checks only "is someone signed in?" lets any customer read any order by changing the id in the URL, an **insecure direct object reference** (IDOR), the most common serious API flaw in OWASP's list (<Ref to="m-appsec" />).
+
+## Passwords
+
+Never store passwords, or anything you can turn back into one. Store a **password hash** from a deliberately slow, salted algorithm designed for passwords: **Argon2id**, **scrypt**, **bcrypt** or **PBKDF2** with many iterations. A random **salt** per password means identical passwords get different hashes, and slowness makes guessing billions of candidates after a breach impractical. General-purpose hashes such as SHA-256 are far too fast for this (<Ref to="m-crypto" />).
+
+Each stack has this built in, and each implementation below uses it: .NET's `PasswordHasher` (PBKDF2), Spring Security's `DelegatingPasswordEncoder` (bcrypt by default, with the algorithm recorded in the stored value so it can be upgraded later), and Node's built-in `crypto.scrypt`. Compare hashes with a **constant-time** comparison so the response time leaks nothing, and give the same answer whether the email or the password was wrong, so attackers cannot discover which emails have accounts.
+
+## Sessions or tokens?
+
+After checking the password, the server must remember who you are on later requests. There are two common ways:
+
+- A **session cookie**: the server stores the session and sends the browser a random id in an `HttpOnly`, `Secure`, `SameSite` cookie (<Ref to="be-http" />). Simple, easy to revoke (delete the session), and the right choice for a web app whose pages and API share a site.
+- A **bearer token**, usually a **JWT** (JSON Web Token): a signed statement such as "this is ama@example.com, a customer, until 09:15", sent in the `Authorization: Bearer ...` header. The API checks the signature and the expiry without looking anything up, which suits mobile apps, single-page apps on other domains, and calls between services.
+
+A JWT is three base64url parts, `header.payload.signature`. The payload is **readable by anyone**, so never put secrets in it; the signature only proves it was not changed. Keep access tokens short-lived (minutes), because a stolen one works until it expires; issue longer-lived **refresh tokens** separately to get new ones.
+
+In production, most teams do not issue tokens themselves. An **identity provider** (Microsoft Entra ID, Auth0, Okta, Amazon Cognito, Keycloak) handles sign-in, passwords, multi-factor authentication and account recovery, and issues tokens with **OpenID Connect**; your API only validates them, using the provider's published public keys (<Ref to="m-identity" />). The examples below include a small `/token` endpoint so you can see the whole flow in one program; the validation half is exactly what you would keep when you switch to a provider. They sign tokens with a shared secret (HS256) to stay self-contained; providers sign with private keys (RS256 or ES256), so APIs never hold a signing secret.
+
+## ASP.NET Core
+
+ASP.NET Core separates **authentication** (`AddAuthentication`, here the JWT bearer handler, which turns a valid token into a `ClaimsPrincipal`) from **authorisation** (`AddAuthorization`, policies such as "requires the staff role", and `RequireAuthorization` on endpoints). In a full application, **ASP.NET Core Identity** adds user storage, sign-in, lockout and two-factor authentication on top of the same pieces.
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:package Microsoft.AspNetCore.Authentication.JwtBearer@10.0.15
+#:property PublishAot=false
+
+using System.Net.Http.Headers;
+using System.Net.Http.Json;
+using System.Security.Claims;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.IdentityModel.JsonWebTokens;
+using Microsoft.IdentityModel.Tokens;
+
+// Demo only: a real service reads the key from a secret store, or validates tokens from an identity provider.
+var signingKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes("demo-signing-key-at-least-32-bytes-long!!"));
+const string Issuer = "https://auth.bakery.example";
+const string Audience = "bakery-api";
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.None);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o => o.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidIssuer = Issuer,
+        ValidAudience = Audience,
+        IssuerSigningKey = signingKey,
+        ClockSkew = TimeSpan.FromSeconds(30),
+    });
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("staff", p => p.RequireRole("staff"));
+var app = builder.Build();
+app.UseAuthentication();
+app.UseAuthorization();
+
+var hasher = new PasswordHasher<string>();
+var users = new Dictionary<string, (string Hash, string Role)>
+{
+    ["ama@example.com"] = (hasher.HashPassword("ama@example.com", "correct horse battery staple"), "customer"),
+    ["kofi@example.com"] = (hasher.HashPassword("kofi@example.com", "rye bread every morning"), "staff"),
+};
+var orders = new Dictionary<string, string> { ["o-1"] = "ama@example.com", ["o-2"] = "kofi@example.com" };
+
+app.MapPost("/token", (Login login) =>
+{
+    if (!users.TryGetValue(login.Email, out var user) ||
+        hasher.VerifyHashedPassword(login.Email, user.Hash, login.Password) == PasswordVerificationResult.Failed)
+        return Results.Problem(statusCode: 401, title: "Wrong email or password");
+    var token = new JsonWebTokenHandler().CreateToken(new SecurityTokenDescriptor
+    {
+        Issuer = Issuer,
+        Audience = Audience,
+        Subject = new ClaimsIdentity([new Claim("sub", login.Email), new Claim("role", user.Role)]),
+        Expires = DateTime.UtcNow.AddMinutes(15),
+        SigningCredentials = new SigningCredentials(signingKey, SecurityAlgorithms.HmacSha256),
+    });
+    return Results.Ok(new { access_token = token, expires_in = 900 });
+});
+
+app.MapGet("/orders/{id}", (string id, ClaimsPrincipal user) =>
+{
+    if (!orders.TryGetValue(id, out var owner)) return Results.NotFound();
+    var isStaff = user.IsInRole("staff");
+    return owner == user.FindFirstValue(ClaimTypes.NameIdentifier) || isStaff ? Results.Ok(new { id, owner }) : Results.NotFound();
+}).RequireAuthorization();
+
+app.MapGet("/reports/sales", () => "today: 42 orders").RequireAuthorization("staff");
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+async Task<string?> SignIn(string email, string password)
+{
+    var r = await http.PostAsJsonAsync("/token", new Login(email, password));
+    Console.WriteLine($"sign in {email}: {(int)r.StatusCode}");
+    return r.IsSuccessStatusCode ? (await r.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>()).GetProperty("access_token").GetString() : null;
+}
+async Task Call(string path, string? token)
+{
+    var req = new HttpRequestMessage(HttpMethod.Get, path);
+    if (token is not null) req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+    Console.WriteLine($"  GET {path} -> {(int)(await http.SendAsync(req)).StatusCode}");
+}
+await SignIn("ama@example.com", "wrong password");
+var ama = await SignIn("ama@example.com", "correct horse battery staple");
+var kofi = await SignIn("kofi@example.com", "rye bread every morning");
+await Call("/orders/o-1", null);
+await Call("/orders/o-1", ama);
+await Call("/orders/o-2", ama);
+await Call("/orders/o-2", kofi);
+await Call("/reports/sales", ama);
+await Call("/reports/sales", kofi);
+await Call("/reports/sales", ama![..^4] + "AAAA");
+await app.StopAsync();
+
+record Login(string Email, string Password);
+```
+
+It prints:
+
+```text
+sign in ama@example.com: 401
+sign in ama@example.com: 200
+sign in kofi@example.com: 200
+  GET /orders/o-1 -> 401
+  GET /orders/o-1 -> 200
+  GET /orders/o-2 -> 404
+  GET /orders/o-2 -> 200
+  GET /reports/sales -> 403
+  GET /reports/sales -> 200
+  GET /reports/sales -> 401
+```
+
+- `TokenValidationParameters` checks the **issuer**, **audience**, **signature** and **expiry** of every token; a token for another API, or from another issuer, is refused. With a provider you set `Authority` instead, and the handler downloads the signing keys.
+- **`RequireAuthorization()`** demands a signed-in user; **`RequireAuthorization("staff")`** demands the policy. Better still, make authorisation the default with a **fallback policy** (`AddAuthorizationBuilder().SetFallbackPolicy(...)`) and mark the few public endpoints with `AllowAnonymous()`, so a forgotten line fails safe.
+- The **ownership check** is ordinary code in the handler, using the user's id from the token (`sub`, mapped to `ClaimTypes.NameIdentifier`). For larger apps, **resource-based authorisation** (`IAuthorizationService.AuthorizeAsync(user, order, "owner")`) keeps such rules in one place.
+- `UseAuthentication` must come before `UseAuthorization` in the pipeline.
+
+## Spring Security
+
+Spring Security puts a chain of filters in front of every request. A **`SecurityFilterChain`** bean says which requests need what; the **OAuth 2.0 resource server** support validates JWTs; **`@PreAuthorize`** adds method-level rules. The project needs the `spring-boot-starter-security` and `spring-boot-starter-oauth2-resource-server` dependencies on top of the web starter:
+
+```kotlin
+plugins {
+    java
+    id("org.springframework.boot") version "4.1.2"
+    id("io.spring.dependency-management") version "1.1.7"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.springframework.boot:spring-boot-starter-security")
+    implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+}
+```
+
+`application.properties` holds the demo secret:
+
+```properties
+spring.main.banner-mode=off
+logging.level.root=warn
+# Demo only: a real service reads this from a secret store, or validates tokens from an identity provider.
+bakery.jwt.secret=demo-signing-key-at-least-32-bytes-long!!
+```
+
+The security configuration, `SecurityConfig.java`:
+
+```java
+package com.bakery;
+
+import com.nimbusds.jose.jwk.source.ImmutableSecret;
+import java.nio.charset.StandardCharsets;
+import javax.crypto.SecretKey;
+import javax.crypto.spec.SecretKeySpec;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.Customizer;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+import org.springframework.security.web.SecurityFilterChain;
+
+@Configuration
+@EnableMethodSecurity
+class SecurityConfig {
+    @Bean
+    SecurityFilterChain api(HttpSecurity http) throws Exception {
+        return http
+            .authorizeHttpRequests(auth -> auth
+                .requestMatchers("/token").permitAll()
+                .anyRequest().authenticated())
+            .oauth2ResourceServer(rs -> rs.jwt(Customizer.withDefaults()))
+            .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+            .csrf(csrf -> csrf.disable())
+            .build();
+    }
+
+    @Bean
+    SecretKey jwtKey(@Value("${bakery.jwt.secret}") String secret) {
+        return new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+    }
+
+    @Bean
+    JwtDecoder jwtDecoder(SecretKey key) {
+        return NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
+    }
+
+    @Bean
+    JwtEncoder jwtEncoder(SecretKey key) {
+        return new NimbusJwtEncoder(new ImmutableSecret<>(key));
+    }
+
+    @Bean
+    JwtAuthenticationConverter jwtAuthenticationConverter() {
+        var roles = new JwtGrantedAuthoritiesConverter();
+        roles.setAuthoritiesClaimName("roles");
+        roles.setAuthorityPrefix("ROLE_");
+        var converter = new JwtAuthenticationConverter();
+        converter.setJwtGrantedAuthoritiesConverter(roles);
+        return converter;
+    }
+
+    @Bean
+    PasswordEncoder passwordEncoder() {
+        return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+    }
+}
+```
+
+The controller, `BakeryController.java`, with the application class beside it as usual:
+
+```java
+package com.bakery;
+
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwsHeader;
+import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+import org.springframework.security.oauth2.jwt.JwtEncoder;
+import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+@RestController
+class BakeryController {
+    record Login(String email, String password) {}
+    record User(String passwordHash, String role) {}
+
+    private final JwtEncoder encoder;
+    private final PasswordEncoder passwords;
+    private final Map<String, User> users;
+    private final Map<String, String> orderOwners = Map.of("o-1", "ama@example.com", "o-2", "kofi@example.com");
+
+    BakeryController(JwtEncoder encoder, PasswordEncoder passwords) {
+        this.encoder = encoder;
+        this.passwords = passwords;
+        this.users = Map.of(
+            "ama@example.com", new User(passwords.encode("correct horse battery staple"), "customer"),
+            "kofi@example.com", new User(passwords.encode("rye bread every morning"), "staff"));
+    }
+
+    @PostMapping("/token")
+    ResponseEntity<Map<String, Object>> token(@RequestBody Login login) {
+        User user = users.get(login.email());
+        if (user == null || !passwords.matches(login.password(), user.passwordHash())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        Instant now = Instant.now();
+        JwtClaimsSet claims = JwtClaimsSet.builder()
+            .issuer("https://auth.bakery.example")
+            .subject(login.email())
+            .issuedAt(now)
+            .expiresAt(now.plusSeconds(900))
+            .claim("roles", List.of(user.role()))
+            .build();
+        String token = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
+        return ResponseEntity.ok(Map.of("access_token", token, "expires_in", 900));
+    }
+
+    @GetMapping("/orders/{id}")
+    ResponseEntity<Map<String, String>> order(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
+        String owner = orderOwners.get(id);
+        boolean staff = jwt.getClaimAsStringList("roles").contains("staff");
+        if (owner == null || !(owner.equals(jwt.getSubject()) || staff)) return ResponseEntity.notFound().build();
+        return ResponseEntity.ok(Map.of("id", id, "owner", owner));
+    }
+
+    @GetMapping("/reports/sales")
+    @PreAuthorize("hasRole('staff')")
+    String sales() {
+        return "today: 42 orders";
+    }
+}
+```
+
+Start it with `./gradlew bootRun` and try it with a small script of `curl` calls:
+
+```bash
+token() {
+  curl -s -X POST localhost:8080/token -H "Content-Type: application/json" \
+    -d "{\"email\":\"$1\",\"password\":\"$2\"}" | sed -E 's/.*"access_token":"([^"]+)".*/\1/'
+}
+call() {
+  echo "GET $1 -> $(curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $2" localhost:8080$1)"
+}
+echo "wrong password -> $(curl -s -o /dev/null -w '%{http_code}' -X POST localhost:8080/token -H 'Content-Type: application/json' -d '{"email":"ama@example.com","password":"nope"}')"
+AMA=$(token ama@example.com "correct horse battery staple")
+KOFI=$(token kofi@example.com "rye bread every morning")
+echo "no token: GET /orders/o-1 -> $(curl -s -o /dev/null -w '%{http_code}' localhost:8080/orders/o-1)"
+call /orders/o-1 "$AMA"
+call /orders/o-2 "$AMA"
+call /orders/o-2 "$KOFI"
+call /reports/sales "$AMA"
+call /reports/sales "$KOFI"
+call /reports/sales "${AMA%????}AAAA"
+```
+
+It prints:
+
+```text
+wrong password -> 401
+no token: GET /orders/o-1 -> 401
+GET /orders/o-1 -> 200
+GET /orders/o-2 -> 404
+GET /orders/o-2 -> 200
+GET /reports/sales -> 403
+GET /reports/sales -> 200
+GET /reports/sales -> 401
+```
+
+- **`anyRequest().authenticated()`** makes sign-in the default; `/token` is the one exception. Spring Security is secure by default: adding the starter alone locks every endpoint.
+- **`oauth2ResourceServer(rs -> rs.jwt(...))`** validates bearer tokens with the `JwtDecoder` bean. With a provider, delete the decoder bean and set `spring.security.oauth2.resourceserver.jwt.issuer-uri` instead.
+- The **`JwtAuthenticationConverter`** turns the token's `roles` claim into authorities named `ROLE_staff`, which **`hasRole('staff')`** checks. `@EnableMethodSecurity` switches on `@PreAuthorize`.
+- **Stateless** sessions and disabled **CSRF** protection are right for a token API, because browsers never attach bearer tokens automatically. For a cookie-based web app, keep CSRF protection on.
+- `@AuthenticationPrincipal Jwt jwt` gives the controller the validated token, for the ownership check.
+
+## Node.js
+
+Express has no built-in authentication. Small middleware functions do the job, with the **jose** library for JWTs and Node's built-in **scrypt** for passwords (Passport.js and identity-provider SDKs are common alternatives):
+
+```ts
+import { randomBytes, scrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
+import express, { type NextFunction, type Request, type Response } from "express";
+import { jwtVerify, SignJWT, type JWTPayload } from "jose";
+
+const scryptAsync = promisify(scrypt) as (password: string, salt: Buffer, length: number) => Promise<Buffer>;
+
+async function hashPassword(password: string): Promise<string> {
+  const salt = randomBytes(16);
+  const hash = await scryptAsync(password, salt, 32);
+  return `scrypt$${salt.toString("base64")}$${hash.toString("base64")}`;
+}
+
+async function verifyPassword(password: string, stored: string): Promise<boolean> {
+  const [, salt, hash] = stored.split("$");
+  const expected = Buffer.from(hash, "base64");
+  const actual = await scryptAsync(password, Buffer.from(salt, "base64"), expected.length);
+  return timingSafeEqual(actual, expected);
+}
+
+// Demo only: a real service reads this from a secret store, or verifies tokens from an identity provider.
+const key = new TextEncoder().encode("demo-signing-key-at-least-32-bytes-long!!");
+const issuer = "https://auth.bakery.example";
+const audience = "bakery-api";
+
+const users = new Map([
+  ["ama@example.com", { hash: await hashPassword("correct horse battery staple"), role: "customer" }],
+  ["kofi@example.com", { hash: await hashPassword("rye bread every morning"), role: "staff" }],
+]);
+const orderOwners = new Map([["o-1", "ama@example.com"], ["o-2", "kofi@example.com"]]);
+
+type Claims = JWTPayload & { sub: string; role: string };
+type AuthedRequest = Request & { user?: Claims };
+
+async function authenticate(req: AuthedRequest, res: Response, next: NextFunction) {
+  const header = req.headers.authorization ?? "";
+  if (!header.startsWith("Bearer ")) {
+    res.status(401).json({ title: "Sign in required", status: 401 });
+    return;
+  }
+  try {
+    const { payload } = await jwtVerify(header.slice(7), key, { issuer, audience, algorithms: ["HS256"] });
+    req.user = payload as Claims;
+    next();
+  } catch {
+    res.status(401).json({ title: "Invalid or expired token", status: 401 });
+  }
+}
+
+function requireRole(role: string) {
+  return (req: AuthedRequest, res: Response, next: NextFunction) => {
+    if (req.user?.role !== role) {
+      res.status(403).json({ title: "Forbidden", status: 403 });
+      return;
+    }
+    next();
+  };
+}
+
+const app = express();
+app.use(express.json());
+
+app.post("/token", async (req: Request, res: Response) => {
+  const { email, password } = req.body as { email?: string; password?: string };
+  const user = typeof email === "string" ? users.get(email) : undefined;
+  if (!user || typeof password !== "string" || !(await verifyPassword(password, user.hash))) {
+    res.status(401).json({ title: "Wrong email or password", status: 401 });
+    return;
+  }
+  const token = await new SignJWT({ role: user.role })
+    .setProtectedHeader({ alg: "HS256" })
+    .setSubject(email!)
+    .setIssuer(issuer)
+    .setAudience(audience)
+    .setIssuedAt()
+    .setExpirationTime("15m")
+    .sign(key);
+  res.json({ access_token: token, expires_in: 900 });
+});
+
+app.get("/orders/:id", authenticate, (req: AuthedRequest, res: Response) => {
+  const owner = orderOwners.get(String(req.params.id));
+  if (!owner || (owner !== req.user!.sub && req.user!.role !== "staff")) {
+    res.status(404).json({ title: "Not Found", status: 404 });
+    return;
+  }
+  res.json({ id: req.params.id, owner });
+});
+
+app.get("/reports/sales", authenticate, requireRole("staff"), (_req: Request, res: Response) => {
+  res.send("today: 42 orders");
+});
+
+const server = app.listen(0, async () => {
+  const address = server.address();
+  const base = `http://localhost:${typeof address === "object" && address ? address.port : 0}`;
+  const signIn = async (email: string, password: string) => {
+    const r = await fetch(`${base}/token`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ email, password }) });
+    console.log(`sign in ${email}: ${r.status}`);
+    return r.ok ? ((await r.json()) as { access_token: string }).access_token : "";
+  };
+  const call = async (path: string, token?: string) => {
+    const r = await fetch(base + path, { headers: token ? { authorization: `Bearer ${token}` } : {} });
+    console.log(`  GET ${path} -> ${r.status}`);
+  };
+  await signIn("ama@example.com", "wrong password");
+  const ama = await signIn("ama@example.com", "correct horse battery staple");
+  const kofi = await signIn("kofi@example.com", "rye bread every morning");
+  await call("/orders/o-1");
+  await call("/orders/o-1", ama);
+  await call("/orders/o-2", ama);
+  await call("/orders/o-2", kofi);
+  await call("/reports/sales", ama);
+  await call("/reports/sales", kofi);
+  await call("/reports/sales", ama.slice(0, -4) + "AAAA");
+  server.close();
+});
+```
+
+It prints:
+
+```text
+sign in ama@example.com: 401
+sign in ama@example.com: 200
+sign in kofi@example.com: 200
+  GET /orders/o-1 -> 401
+  GET /orders/o-1 -> 200
+  GET /orders/o-2 -> 404
+  GET /orders/o-2 -> 200
+  GET /reports/sales -> 403
+  GET /reports/sales -> 200
+  GET /reports/sales -> 401
+```
+
+- **`hashPassword`** stores the algorithm, salt and hash together, so the format can change later; **`verifyPassword`** compares with `timingSafeEqual`.
+- **`authenticate`** verifies the signature, issuer, audience, expiry and the allowed algorithm (never accept whatever algorithm the token claims, especially `none`). With a provider, use `createRemoteJWKSet(new URL(".../.well-known/jwks.json"))` instead of the shared key.
+- **`requireRole`** is a middleware factory; routes list exactly what they need: `authenticate, requireRole("staff")`.
+- Express does not deny by default, so apply `authenticate` to whole routers (`router.use(authenticate)`) rather than route by route, and keep the public routes on a separate router.
+
+## Rules for every stack
+
+- **Deny by default**; open specific endpoints deliberately.
+- **Check ownership** on every request for a specific resource, in the service layer, using the id from the validated token, never one from the request body.
+- **Never trust roles or user ids sent by the client**; only those in a validated token or a server-side session.
+- **401** for "who are you?", **403** for "not allowed", **404** to hide resources the caller must not know about.
+- **Short-lived access tokens**; refresh tokens or sessions for staying signed in; a way to revoke.
+- **Rate-limit sign-in** and lock or slow down repeated failures; log authentication failures (without passwords or tokens) and alert on spikes (<Ref to="m-observability" />).
+- **HTTPS everywhere**; tokens and cookies over plain HTTP can be stolen.
+- **Secrets** (signing keys, client secrets) come from a secret store, never the repository.
+- Prefer an **identity provider** for real users; build less of this yourself.
+
+## Common mistakes
+
+- **Only checking that the user is signed in**, not that the resource is theirs (IDOR).
+- **Storing passwords** with fast hashes (MD5, SHA-256) or, worse, reversibly.
+- **Long-lived JWTs** with no way to revoke them.
+- **Secrets or personal data in JWT payloads**, which anyone can read.
+- **Accepting any algorithm** a token claims, or not checking issuer and audience.
+- **Different errors** for "no such email" and "wrong password".
+- **Turning off CSRF protection** in a cookie-based web app.
+- **Signing keys in the repository.**
+
+## Practice
+
+**1. (warm-up)** A signed-in customer requests `GET /orders/o-77`, which belongs to another customer. The API returns the order. What is the flaw called, and what should the API return?
+
+<Solution>
+
+An insecure direct object reference (IDOR), also called broken object-level authorisation: the API checked that someone was signed in but not that the order is theirs. It should return 404 (or 403), after comparing the order's owner with the user id from the validated token.
+
+</Solution>
+
+**2. (warm-up)** Why is SHA-256 a bad choice for storing passwords, when it is a good hash function?
+
+<Solution>
+
+It is designed to be fast: a single graphics card can compute billions of SHA-256 hashes a second, so after a breach, attackers can try huge lists of likely passwords quickly. Password hashing algorithms (Argon2id, scrypt, bcrypt, PBKDF2) are deliberately slow and salted, so each guess costs real time and identical passwords do not share hashes.
+
+</Solution>
+
+**3. (standard)** Decode the payload of a JWT by hand: take the middle part of a token from the examples, base64url-decode it, and read it. What does this show about what you may put in a token?
+
+<Solution>
+
+In Node, for example: `JSON.parse(Buffer.from(token.split(".")[1], "base64url").toString())` gives something like `{ role: 'customer', sub: 'ama@example.com', iss: 'https://auth.bakery.example', aud: 'bakery-api', iat: ..., exp: ... }`. Anyone holding the token can read it without any key, so tokens must never contain secrets, and should contain as little personal data as possible. The signature only stops the contents being **changed**.
+
+</Solution>
+
+**4. (stretch)** Add a staff-only `DELETE /orders/{id}` to the implementation in your stack, then list the test cases you would write for it.
+
+<Solution>
+
+In ASP.NET Core: `app.MapDelete("/orders/{id}", (string id) => orders.Remove(id) ? Results.NoContent() : Results.NotFound()).RequireAuthorization("staff");`. In Spring: a `@DeleteMapping("/orders/{id}")` method with `@PreAuthorize("hasRole('staff')")`. In Express: `app.delete("/orders/:id", authenticate, requireRole("staff"), handler)`.
+
+Tests: no token gives 401; a tampered or expired token gives 401; a customer token gives 403, even for their own order; a staff token for an existing order gives 204 and the order is gone; a staff token for a missing order gives 404; and deleting twice gives 204 then 404. Authorisation tests like these belong in your integration tests, covered in the testing part of this course, because they are the ones that stop a refactoring from silently opening an endpoint.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Authentication** establishes who is calling; **authorisation** decides what they may do: roles for kinds of user, **ownership checks** for specific resources.
+- Store passwords as **slow, salted hashes** (Argon2id, scrypt, bcrypt, PBKDF2); compare in constant time; give the same error for any sign-in failure.
+- **Session cookies** suit same-site web apps; **JWT bearer tokens** suit APIs, mobile apps and services. Validate signature, issuer, audience, expiry and algorithm; keep tokens short-lived and free of secrets.
+- ASP.NET Core: `AddAuthentication().AddJwtBearer()`, policies, `RequireAuthorization`. Spring Security: a `SecurityFilterChain`, the OAuth 2.0 resource server, `@PreAuthorize`. Node: `jose` and middleware.
+- **Deny by default**; 401, 403 and 404 each mean something; prefer an **identity provider** in production.
+
+## Go deeper
+
+- [Configure JWT bearer authentication in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/security/authentication/configure-jwt-bearer-authentication), Microsoft. Validating tokens from a provider.
+- [Policy-based authorization in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/security/authorization/policies), Microsoft. Policies, requirements and resource-based checks.
+- [Spring Security: OAuth 2.0 resource server JWT](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html), the Spring team. Validating JWTs in Spring.
+- [jose](https://github.com/panva/jose), Filip Skokan. The JWT library used in the Node example, with its documentation.
+- [OWASP password storage cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html), OWASP. Which algorithms and settings to use.
+- [OWASP API security top 10: broken object level authorization](https://owasp.org/API-Security/editions/2023/en/0xa1-broken-object-level-authorization/), OWASP. The IDOR flaw and how to prevent it.

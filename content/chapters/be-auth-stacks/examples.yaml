@@ -1,0 +1,271 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - "sign in ama@example.com: 401\nsign in ama@example.com: 200\nsign in kofi@example.com: 200\n  GET /orders/o-1 -> 401\n  GET /orders/o-1 -> 200\n  GET /orders/o-2 -> 404\n  GET /orders/o-2 -> 200\n  GET /reports/sales -> 403\n  GET /reports/sales -> 200\n  GET /reports/sales -> 401"
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the example above, which its check compares.
+- block: 3
+  lang: kotlin
+  check: illustration
+  note: A project file; the curl script's check builds and runs the project from it.
+- block: 4
+  lang: properties
+  check: illustration
+  note: A project file; the curl script's check builds and runs the project from it.
+- block: 5
+  lang: java
+  check: illustration
+  note: A project file; the curl script's check builds and runs the project from it.
+- block: 6
+  lang: java
+  check: illustration
+  note: A project file; the curl script's check builds and runs the project from it.
+- block: 7
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    mkdir run && cd run
+    echo 'rootProject.name = "bakery-secure"' > settings.gradle.kts
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+        id("org.springframework.boot") version "4.1.2"
+        id("io.spring.dependency-management") version "1.1.7"
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-webmvc")
+        implementation("org.springframework.boot:spring-boot-starter-security")
+        implementation("org.springframework.boot:spring-boot-starter-oauth2-resource-server")
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/resources/application.properties)
+    cat > src/main/resources/application.properties <<'SRC_EOF'
+    spring.main.banner-mode=off
+    logging.level.root=warn
+    # Demo only: a real service reads this from a secret store, or validates tokens from an identity provider.
+    bakery.jwt.secret=demo-signing-key-at-least-32-bytes-long!!
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/SecurityConfig.java)
+    cat > src/main/java/com/bakery/SecurityConfig.java <<'SRC_EOF'
+    package com.bakery;
+
+    import com.nimbusds.jose.jwk.source.ImmutableSecret;
+    import java.nio.charset.StandardCharsets;
+    import javax.crypto.SecretKey;
+    import javax.crypto.spec.SecretKeySpec;
+    import org.springframework.beans.factory.annotation.Value;
+    import org.springframework.context.annotation.Bean;
+    import org.springframework.context.annotation.Configuration;
+    import org.springframework.security.config.Customizer;
+    import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
+    import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+    import org.springframework.security.config.http.SessionCreationPolicy;
+    import org.springframework.security.crypto.factory.PasswordEncoderFactories;
+    import org.springframework.security.crypto.password.PasswordEncoder;
+    import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+    import org.springframework.security.oauth2.jwt.JwtDecoder;
+    import org.springframework.security.oauth2.jwt.JwtEncoder;
+    import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
+    import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
+    import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+    import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
+    import org.springframework.security.web.SecurityFilterChain;
+
+    @Configuration
+    @EnableMethodSecurity
+    class SecurityConfig {
+        @Bean
+        SecurityFilterChain api(HttpSecurity http) throws Exception {
+            return http
+                .authorizeHttpRequests(auth -> auth
+                    .requestMatchers("/token").permitAll()
+                    .anyRequest().authenticated())
+                .oauth2ResourceServer(rs -> rs.jwt(Customizer.withDefaults()))
+                .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .csrf(csrf -> csrf.disable())
+                .build();
+        }
+
+        @Bean
+        SecretKey jwtKey(@Value("${bakery.jwt.secret}") String secret) {
+            return new SecretKeySpec(secret.getBytes(StandardCharsets.UTF_8), "HmacSHA256");
+        }
+
+        @Bean
+        JwtDecoder jwtDecoder(SecretKey key) {
+            return NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
+        }
+
+        @Bean
+        JwtEncoder jwtEncoder(SecretKey key) {
+            return new NimbusJwtEncoder(new ImmutableSecret<>(key));
+        }
+
+        @Bean
+        JwtAuthenticationConverter jwtAuthenticationConverter() {
+            var roles = new JwtGrantedAuthoritiesConverter();
+            roles.setAuthoritiesClaimName("roles");
+            roles.setAuthorityPrefix("ROLE_");
+            var converter = new JwtAuthenticationConverter();
+            converter.setJwtGrantedAuthoritiesConverter(roles);
+            return converter;
+        }
+
+        @Bean
+        PasswordEncoder passwordEncoder() {
+            return PasswordEncoderFactories.createDelegatingPasswordEncoder();
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/BakeryController.java)
+    cat > src/main/java/com/bakery/BakeryController.java <<'SRC_EOF'
+    package com.bakery;
+
+    import java.time.Instant;
+    import java.util.List;
+    import java.util.Map;
+    import org.springframework.http.HttpStatus;
+    import org.springframework.http.ResponseEntity;
+    import org.springframework.security.access.prepost.PreAuthorize;
+    import org.springframework.security.core.annotation.AuthenticationPrincipal;
+    import org.springframework.security.crypto.password.PasswordEncoder;
+    import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
+    import org.springframework.security.oauth2.jwt.Jwt;
+    import org.springframework.security.oauth2.jwt.JwsHeader;
+    import org.springframework.security.oauth2.jwt.JwtClaimsSet;
+    import org.springframework.security.oauth2.jwt.JwtEncoder;
+    import org.springframework.security.oauth2.jwt.JwtEncoderParameters;
+    import org.springframework.web.bind.annotation.GetMapping;
+    import org.springframework.web.bind.annotation.PathVariable;
+    import org.springframework.web.bind.annotation.PostMapping;
+    import org.springframework.web.bind.annotation.RequestBody;
+    import org.springframework.web.bind.annotation.RestController;
+
+    @RestController
+    class BakeryController {
+        record Login(String email, String password) {}
+        record User(String passwordHash, String role) {}
+
+        private final JwtEncoder encoder;
+        private final PasswordEncoder passwords;
+        private final Map<String, User> users;
+        private final Map<String, String> orderOwners = Map.of("o-1", "ama@example.com", "o-2", "kofi@example.com");
+
+        BakeryController(JwtEncoder encoder, PasswordEncoder passwords) {
+            this.encoder = encoder;
+            this.passwords = passwords;
+            this.users = Map.of(
+                "ama@example.com", new User(passwords.encode("correct horse battery staple"), "customer"),
+                "kofi@example.com", new User(passwords.encode("rye bread every morning"), "staff"));
+        }
+
+        @PostMapping("/token")
+        ResponseEntity<Map<String, Object>> token(@RequestBody Login login) {
+            User user = users.get(login.email());
+            if (user == null || !passwords.matches(login.password(), user.passwordHash())) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            }
+            Instant now = Instant.now();
+            JwtClaimsSet claims = JwtClaimsSet.builder()
+                .issuer("https://auth.bakery.example")
+                .subject(login.email())
+                .issuedAt(now)
+                .expiresAt(now.plusSeconds(900))
+                .claim("roles", List.of(user.role()))
+                .build();
+            String token = encoder.encode(JwtEncoderParameters.from(JwsHeader.with(MacAlgorithm.HS256).build(), claims)).getTokenValue();
+            return ResponseEntity.ok(Map.of("access_token", token, "expires_in", 900));
+        }
+
+        @GetMapping("/orders/{id}")
+        ResponseEntity<Map<String, String>> order(@PathVariable String id, @AuthenticationPrincipal Jwt jwt) {
+            String owner = orderOwners.get(id);
+            boolean staff = jwt.getClaimAsStringList("roles").contains("staff");
+            if (owner == null || !(owner.equals(jwt.getSubject()) || staff)) return ResponseEntity.notFound().build();
+            return ResponseEntity.ok(Map.of("id", id, "owner", owner));
+        }
+
+        @GetMapping("/reports/sales")
+        @PreAuthorize("hasRole('staff')")
+        String sales() {
+            return "today: 42 orders";
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/BakeryApplication.java)
+    cat > src/main/java/com/bakery/BakeryApplication.java <<'SRC_EOF'
+    package com.bakery;
+
+    import org.springframework.boot.SpringApplication;
+    import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+    @SpringBootApplication
+    public class BakeryApplication {
+        public static void main(String[] args) {
+            SpringApplication.run(BakeryApplication.class, args);
+        }
+    }
+    SRC_EOF
+    "$GRADLE" --no-daemon -q bootJar
+    SERVER_PORT=18080 java -jar build/libs/bakery-secure.jar > app.log 2>&1 &
+    PID=$!
+    trap "kill $PID 2>/dev/null || true" EXIT
+    for i in $(seq 1 90); do if grep -q "Started " app.log; then break; fi; sleep 1; done
+    sed "s/localhost:8080/localhost:18080/g" "$BLOCK" > calls.sh
+    bash calls.sh
+  output_contains:
+  - 'wrong password -> 401
+
+    no token: GET /orders/o-1 -> 401
+
+    GET /orders/o-1 -> 200
+
+    GET /orders/o-2 -> 404
+
+    GET /orders/o-2 -> 200
+
+    GET /reports/sales -> 403
+
+    GET /reports/sales -> 200
+
+    GET /reports/sales -> 401'
+- block: 8
+  lang: text
+  check: illustration
+  note: The output of the example above, which its check compares.
+- block: 9
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 jose@6.2.17
+    cp "$BLOCK" app.ts
+    node app.ts
+  output_contains:
+  - "sign in ama@example.com: 401\nsign in ama@example.com: 200\nsign in kofi@example.com: 200\n  GET /orders/o-1 -> 401\n  GET /orders/o-1 -> 200\n  GET /orders/o-2 -> 404\n  GET /orders/o-2 -> 200\n  GET /reports/sales -> 403\n  GET /reports/sales -> 200\n  GET /reports/sales -> 401"
+- block: 10
+  lang: text
+  check: illustration
+  note: The output of the example above, which its check compares.
