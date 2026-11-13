@@ -1,0 +1,431 @@
+---
+title: "Design patterns: behaviour"
+summary: "Strategy, observer, command, state, template method, iterator, chain of responsibility, mediator and visitor."
+prerequisites: [m-patterns-structural]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will know the behavioural design patterns: ways of dividing up work and communication between objects so that algorithms can be swapped, events can be broadcast, actions can be queued and undone, behaviour can change with state, and requests can pass through a chain of handlers. These are the patterns you will use most often, frequently without a class in sight, because in modern languages many of them are a function or two.
+
+## Strategy
+
+A **strategy** is a family of interchangeable algorithms behind one interface, chosen at run time. Sorting with a comparator, pricing with different discount rules, routing with different cost functions, and compressing with gzip or brotli are all strategies. <Ref to="m-solid" /> used it for the open-closed principle.
+
+In TypeScript, Java and C#, a strategy is very often just a function:
+
+```ts
+type Order = { id: number; pence: number; placedAt: string; vip: boolean };
+
+const orders: Order[] = [
+  { id: 1, pence: 900, placedAt: "2026-11-12", vip: false },
+  { id: 2, pence: 4500, placedAt: "2026-11-10", vip: true },
+  { id: 3, pence: 2500, placedAt: "2026-11-13", vip: false },
+];
+
+type Ordering = (a: Order, b: Order) => number;
+
+const strategies: Record<string, Ordering> = {
+  newest: (a, b) => b.placedAt.localeCompare(a.placedAt),
+  biggest: (a, b) => b.pence - a.pence,
+  vipFirst: (a, b) => Number(b.vip) - Number(a.vip) || a.placedAt.localeCompare(b.placedAt),
+};
+
+for (const [name, ordering] of Object.entries(strategies)) {
+  console.log(name, orders.toSorted(ordering).map((o) => o.id));
+}
+```
+
+It prints `newest [3, 1, 2]`, `biggest [2, 3, 1]` and `vipFirst [2, 1, 3]`. Use an interface with several methods (rather than a single function) when a strategy has more than one operation or carries configuration.
+
+## Observer
+
+An **observer** (also called publish-subscribe within one program) lets objects **subscribe** to events from a **subject** without the subject knowing who they are. When something happens, the subject notifies every subscriber. It decouples the thing that changes from the things that react: an order being placed should not need to know about emails, loyalty points and analytics.
+
+```ts
+type Listener<T> = (event: T) => void;
+
+class EventBus<T> {
+  private listeners = new Set<Listener<T>>();
+
+  subscribe(listener: Listener<T>): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
+  publish(event: T): void {
+    for (const listener of this.listeners) listener(event);
+  }
+}
+
+type OrderPlaced = { orderId: number; email: string; pence: number };
+
+const orderPlaced = new EventBus<OrderPlaced>();
+const log: string[] = [];
+
+orderPlaced.subscribe((e) => log.push(`email ${e.email}`));
+const stopPoints = orderPlaced.subscribe((e) => log.push(`points +${Math.floor(e.pence / 100)}`));
+
+orderPlaced.publish({ orderId: 7, email: "ama@example.com", pence: 5400 });
+stopPoints();
+orderPlaced.publish({ orderId: 8, email: "kofi@example.com", pence: 900 });
+console.log(log);
+```
+
+It prints `["email ama@example.com", "points +54", "email kofi@example.com"]`: after unsubscribing, the points listener no longer hears events. Returning an unsubscribe function is a common idiom; forgetting to unsubscribe is a classic **memory leak**, because the subject keeps every listener (and everything it references) alive.
+
+C# builds the observer pattern into the language with events:
+
+```csharp
+var shop = new Shop();
+shop.OrderPlaced += (_, e) => Console.WriteLine($"email {e.Email}");
+shop.OrderPlaced += (_, e) => Console.WriteLine($"points +{e.Pence / 100}");
+shop.Place("ama@example.com", 5400);
+
+record OrderPlacedArgs(string Email, long Pence);
+
+class Shop
+{
+    public event EventHandler<OrderPlacedArgs>? OrderPlaced;
+
+    public void Place(string email, long pence) => OrderPlaced?.Invoke(this, new OrderPlacedArgs(email, pence));
+}
+```
+
+It prints `email ama@example.com` and `points +54`. Browsers use the same idea in `addEventListener`, and reactive libraries (RxJS, Reactor, Rx.NET) extend it to streams of events. Across services, the same idea becomes messaging with a broker (the messaging and Kafka chapters later in the course).
+
+The weakness of observers: control flow becomes **implicit**. Reading `publish` does not tell you what will happen, listeners run in an order you may not control, and an exception in one can stop the others. Keep listeners small, and be explicit about whether they run synchronously.
+
+## Command
+
+A **command** turns a request into an object: "add two rye loaves to basket 7" becomes a value that can be stored, queued, logged, sent to another process, retried, or **undone**. Each command knows how to execute itself and, often, how to reverse itself.
+
+```ts
+interface Command {
+  execute(): void;
+  undo(): void;
+  describe(): string;
+}
+
+class Basket {
+  items = new Map<string, number>();
+  add(product: string, qty: number) {
+    this.items.set(product, (this.items.get(product) ?? 0) + qty);
+    if (this.items.get(product)! <= 0) this.items.delete(product);
+  }
+}
+
+const addItem = (basket: Basket, product: string, qty: number): Command => ({
+  execute: () => basket.add(product, qty),
+  undo: () => basket.add(product, -qty),
+  describe: () => `add ${qty} ${product}`,
+});
+
+class CommandHistory {
+  private done: Command[] = [];
+  run(c: Command) { c.execute(); this.done.push(c); }
+  undo() { this.done.pop()?.undo(); }
+  log() { return this.done.map((c) => c.describe()); }
+}
+
+const basket = new Basket();
+const commands = new CommandHistory();
+commands.run(addItem(basket, "rye loaf", 2));
+commands.run(addItem(basket, "croissant", 3));
+commands.run(addItem(basket, "rye loaf", 1));
+console.log([...basket.items], commands.log());
+commands.undo();
+commands.undo();
+console.log([...basket.items]);
+```
+
+It prints `[["rye loaf", 3], ["croissant", 3]]` with the three-command log, and then `[["rye loaf", 2]]` after two undos. Editors' undo stacks, job queues, database migrations (up and down), and the "commands" of CQRS (<Ref to="m-architecture" />) are all this idea.
+
+## State
+
+The **state** pattern lets an object change its behaviour when its internal state changes, by delegating to an object for the current state. It replaces sprawling `if (status === ...)` checks in every method with one object per state that knows what is allowed. The core of it is a **state machine**: a set of states and the allowed transitions between them.
+
+```ts
+type OrderStatus = "pending" | "paid" | "shipped" | "delivered" | "cancelled";
+
+const transitions: Record<OrderStatus, Partial<Record<string, OrderStatus>>> = {
+  pending: { pay: "paid", cancel: "cancelled" },
+  paid: { ship: "shipped", cancel: "cancelled" },
+  shipped: { deliver: "delivered" },
+  delivered: {},
+  cancelled: {},
+};
+
+function next(status: OrderStatus, action: string): OrderStatus {
+  const to = transitions[status][action];
+  if (!to) throw new Error(`Cannot ${action} an order that is ${status}`);
+  return to;
+}
+
+let current: OrderStatus = "pending";
+for (const action of ["pay", "ship", "cancel"]) {
+  try {
+    current = next(current, action);
+    console.log(action, "->", current);
+  } catch (e) {
+    console.log((e as Error).message);
+  }
+}
+```
+
+It prints `pay -> paid`, `ship -> shipped`, then `Cannot cancel an order that is shipped`. The whole lifecycle is visible in one table, and illegal transitions are impossible. When each state also has substantial behaviour of its own, give each state a class with the same interface (the GoF form); when it is mostly about allowed transitions, a table like this is clearer. Libraries such as XState (TypeScript) and Spring Statemachine build on the same idea.
+
+## Template method
+
+A **template method** defines the skeleton of an algorithm in a base class and lets subclasses fill in particular steps. It is the one behavioural pattern built on inheritance, so it suits a small, stable family of variations.
+
+```java
+import java.util.List;
+
+public class Main {
+    static abstract class ReportExporter {
+        final String export(List<String[]> rows) {
+            StringBuilder out = new StringBuilder(header());
+            for (String[] row : rows) out.append(formatRow(row));
+            return out.append(footer()).toString();
+        }
+        abstract String header();
+        abstract String formatRow(String[] row);
+        String footer() { return ""; }
+    }
+
+    static class CsvExporter extends ReportExporter {
+        String header() { return "product,pence\n"; }
+        String formatRow(String[] row) { return String.join(",", row) + "\n"; }
+    }
+
+    static class MarkdownExporter extends ReportExporter {
+        String header() { return "| product | pence |\n|---|---|\n"; }
+        String formatRow(String[] row) { return "| " + row[0] + " | " + row[1] + " |\n"; }
+        String footer() { return "\n(2 products)\n"; }
+    }
+
+    public static void main(String[] args) {
+        List<String[]> rows = List.of(new String[] {"rye loaf", "450"}, new String[] {"croissant", "275"});
+        System.out.print(new CsvExporter().export(rows));
+        System.out.print(new MarkdownExporter().export(rows));
+    }
+}
+```
+
+It prints the CSV version and then the Markdown table followed by `(2 products)`. `export` is `final` so subclasses cannot break the skeleton; `footer` is a hook with a default. The same result is often achieved with composition: pass the varying steps in as functions (a strategy), which avoids the coupling of inheritance (<Ref to="m-oop" />).
+
+## Iterator
+
+An **iterator** gives sequential access to the items of a collection without exposing how it is stored. It is so useful that every modern language builds it in: `for...of` and generators in JavaScript, `Iterable` and `Iterator` in Java, `IEnumerable` and `yield return` in C#. <Ref to="m-functional" /> used generators to make a lazy infinite sequence; that is the iterator pattern. Write your own when a structure (a tree, a paginated API) should be walkable with a plain loop:
+
+```ts
+async function* allOrders(fetchPage: (page: number) => Promise<{ items: number[]; last: boolean }>) {
+  for (let page = 1; ; page++) {
+    const { items, last } = await fetchPage(page);
+    yield* items;
+    if (last) return;
+  }
+}
+
+const fakeApi = async (page: number) => ({ items: [page * 10 + 1, page * 10 + 2], last: page === 3 });
+
+async function main() {
+  const ids: number[] = [];
+  for await (const id of allOrders(fakeApi)) ids.push(id);
+  console.log(ids);
+}
+
+main();
+```
+
+It prints `[11, 12, 21, 22, 31, 32]`. The caller loops over every order and never sees the pages.
+
+## Chain of responsibility
+
+A **chain of responsibility** passes a request along a chain of handlers; each handler either deals with it, passes it on, or both. Web **middleware** is the best-known example: authentication, logging, rate limiting and error handling each look at the request and call `next()`.
+
+```ts
+type Req = { path: string; user?: string; ip: string };
+type Handler = (req: Req, next: () => string) => string;
+
+const logRequest = (log: string[]): Handler => (req, next) => {
+  log.push(`-> ${req.path}`);
+  const result = next();
+  log.push(`<- ${result}`);
+  return result;
+};
+
+const requireUser: Handler = (req, next) => (req.user ? next() : "401 Unauthorized");
+
+const blockIps = (blocked: Set<string>): Handler => (req, next) => (blocked.has(req.ip) ? "403 Forbidden" : next());
+
+function chain(handlers: Handler[], endpoint: (req: Req) => string) {
+  return (req: Req): string => {
+    const run = (i: number): string => (i === handlers.length ? endpoint(req) : handlers[i](req, () => run(i + 1)));
+    return run(0);
+  };
+}
+
+const log: string[] = [];
+const app = chain([logRequest(log), blockIps(new Set(["10.0.0.9"])), requireUser], (req) => `200 orders for ${req.user}`);
+
+console.log(app({ path: "/orders", user: "ama", ip: "10.0.0.1" }));
+console.log(app({ path: "/orders", ip: "10.0.0.1" }));
+console.log(app({ path: "/orders", user: "kofi", ip: "10.0.0.9" }));
+console.log(log.length);
+```
+
+It prints `200 orders for ama`, `401 Unauthorized`, `403 Forbidden` and `6`: the logger saw every request on the way in and out, while later handlers stopped the bad ones before they reached the endpoint. Express, ASP.NET Core and Java servlet filters all work this way, and so do validation pipelines and approval workflows.
+
+## Mediator
+
+A **mediator** centralises communication between a group of objects, so they talk to the mediator instead of to each other. In a form where choosing a country changes the postcode field, the delivery options and the tax summary, letting each widget know about the others becomes a tangle; a mediator (the form controller) receives "country changed" and updates the rest.
+
+In .NET back ends you will often meet **MediatR**-style libraries, where controllers send a request object (`new PlaceOrder(...)`) to a mediator that finds its single handler. They decouple controllers from handlers and make it easy to add behaviours around every request, at the cost of making "what calls what" harder to follow with "go to definition". Use them for a consistent request pipeline, not by default.
+
+## Visitor
+
+A **visitor** adds new operations to a fixed set of types without changing those types: one visitor class per operation, with one method per type. It solves the expression problem in the "new operations are common, new types are rare" direction. Compilers use it heavily: a syntax tree has a fixed set of node types, and the type checker, optimiser and code generator are each a visitor.
+
+In modern TypeScript, Java and C#, **sum types with exhaustive pattern matching** do the same job with far less ceremony (<Ref to="m-types" />). The Java `switch` over a sealed `Payment` interface in that chapter *is* a visitor: adding an operation means writing one new function, and adding a payment type makes the compiler list every function that must handle it.
+
+## Memento, briefly
+
+A **memento** captures an object's internal state so it can be restored later (snapshots for undo) without exposing the internals. With immutable data, keeping old versions is a memento for free (<Ref to="m-functional" />).
+
+## Choosing a behavioural pattern
+
+| You want to… | Consider |
+|---|---|
+| swap an algorithm at run time | strategy (often a function) |
+| let many parts react to something happening | observer / events |
+| queue, log, retry or undo actions | command |
+| enforce a lifecycle with allowed transitions | state (a state machine) |
+| fix an algorithm's skeleton, vary some steps | template method, or strategy with functions |
+| walk a structure with a plain loop | iterator (generators) |
+| pass a request through optional processing steps | chain of responsibility (middleware) |
+| stop a group of objects all talking to each other | mediator |
+| add operations to a fixed set of types | visitor, or pattern matching on a sum type |
+
+## Common mistakes
+
+- **Classes and interfaces for a strategy that could be a function.**
+- **Observers that are never unsubscribed**, leaking memory.
+- **Event chains nobody can follow**: listeners that publish events that trigger other listeners, with no clear picture of the flow.
+- **Status checks scattered across every method** instead of one state machine.
+- **Deep template-method hierarchies** where passing functions would do.
+- **A mediator for everything**, hiding simple direct calls.
+
+## Practice
+
+**1. (warm-up)** Which pattern? (a) `array.sort(compareFn)`. (b) `button.addEventListener("click", handler)`. (c) Express `app.use(authMiddleware)`. (d) An editor's Ctrl+Z.
+
+<Solution>
+
+(a) Strategy. (b) Observer. (c) Chain of responsibility. (d) Command (with a history of commands that can be undone).
+
+</Solution>
+
+**2. (warm-up)** Why can forgetting to unsubscribe an observer cause a memory leak?
+
+<Solution>
+
+The subject keeps a reference to every listener, and each listener (a closure or object) keeps references to whatever it uses, such as a component and its data. As long as the subject lives, none of those can be garbage-collected (<Ref to="m-memory-gc" />), even after the component is gone.
+
+</Solution>
+
+**3. (standard)** Extend the order state machine with a `refund` action allowed only from `delivered`, leading to a new `refunded` state. Show that refunding a pending order fails and refunding a delivered one works.
+
+<Solution>
+
+```ts
+type OrderStatus = "pending" | "paid" | "shipped" | "delivered" | "cancelled" | "refunded";
+
+const transitions: Record<OrderStatus, Partial<Record<string, OrderStatus>>> = {
+  pending: { pay: "paid", cancel: "cancelled" },
+  paid: { ship: "shipped", cancel: "cancelled" },
+  shipped: { deliver: "delivered" },
+  delivered: { refund: "refunded" },
+  cancelled: {},
+  refunded: {},
+};
+
+function next(status: OrderStatus, action: string): OrderStatus {
+  const to = transitions[status][action];
+  if (!to) throw new Error(`Cannot ${action} an order that is ${status}`);
+  return to;
+}
+
+try {
+  next("pending", "refund");
+} catch (e) {
+  console.log((e as Error).message);
+}
+console.log(next("delivered", "refund"));
+```
+
+It prints **Cannot refund an order that is pending** and **refunded**. Because `transitions` is typed as a `Record` over every status, the compiler also forces you to add a row for `refunded`.
+
+</Solution>
+
+**4. (standard)** Add a rate-limiting handler to the middleware chain that allows at most two requests per user and returns `429 Too Many Requests` after that. Show three requests from the same user.
+
+<Solution>
+
+```ts
+type Req = { path: string; user?: string };
+type Handler = (req: Req, next: () => string) => string;
+
+const rateLimit = (max: number): Handler => {
+  const counts = new Map<string, number>();
+  return (req, next) => {
+    const key = req.user ?? "anonymous";
+    const count = (counts.get(key) ?? 0) + 1;
+    counts.set(key, count);
+    return count > max ? "429 Too Many Requests" : next();
+  };
+};
+
+function chain(handlers: Handler[], endpoint: (req: Req) => string) {
+  return (req: Req): string => {
+    const run = (i: number): string => (i === handlers.length ? endpoint(req) : handlers[i](req, () => run(i + 1)));
+    return run(0);
+  };
+}
+
+const app = chain([rateLimit(2)], (req) => `200 ${req.path}`);
+for (let i = 0; i < 3; i++) console.log(app({ path: "/orders", user: "ama" }));
+```
+
+It prints **200 /orders** twice and then **429 Too Many Requests**. A real rate limiter counts per time window and shares counts between servers (the caching chapter later in this course covers that).
+
+</Solution>
+
+**5. (stretch)** Your codebase has a `ShippingCalculator` interface with five implementations, and you need to add three new operations to all of them. Your colleague suggests a visitor. What else could you consider, and how would you decide?
+
+<Solution>
+
+Consider whether the set of shipping types or the set of operations changes more often. If new operations are common and new shipping types rare, a sum type (a discriminated union or sealed interface) with one exhaustive `switch` per operation is the modern, lighter form of a visitor, and the compiler finds every place to update when a type is added. If new shipping types are common, keep polymorphism and add the operations to the interface (each implementation gets three new methods). A classic visitor with double dispatch is rarely needed in languages with pattern matching.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Strategy**: interchangeable algorithms, often just functions.
+- **Observer**: subjects publish events to subscribers; unsubscribe to avoid leaks; C# has events built in.
+- **Command**: requests as objects that can be queued, logged, retried and undone.
+- **State**: behaviour driven by an explicit **state machine** of allowed transitions.
+- **Template method**: a fixed skeleton with steps for subclasses; often replaced by passing functions.
+- **Iterator**: walk any structure with a plain loop (generators, `IEnumerable`, `Iterable`).
+- **Chain of responsibility**: middleware that handles or passes on each request.
+- **Mediator** centralises communication; **visitor** adds operations to fixed types, largely replaced by pattern matching on sum types.
+
+## Go deeper
+
+- [Refactoring Guru: behavioural patterns](https://refactoring.guru/design-patterns/behavioral-patterns), Alexander Shvets. Each pattern with diagrams and code.
+- [Events (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/programming-guide/events/), Microsoft. Declaring, raising and subscribing to events.
+- [Using Express middleware](https://expressjs.com/en/guide/using-middleware.html), the Express team. A chain of responsibility you can run today.
+- [XState documentation](https://stately.ai/docs), Stately. State machines and statecharts in TypeScript.

@@ -4,6 +4,21 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 4 (Design patterns and software design)
+
+Added
+- Ten chapters: creational, structural and behavioural design patterns; anti-patterns and over-engineering; patterns for business applications (repository, unit of work, DTOs, optimistic concurrency); domain-driven design; architecture styles (layered, hexagonal, clean, modular monolith, microservices, event-driven, CQRS, event sourcing); designing APIs (REST, problem details, cursor pagination, idempotency keys, versioning, gRPC, GraphQL, webhooks); real-time communication (polling, server-sent events, WebSockets); and design documents and trade-offs (design docs, ADRs, C4, estimates). About 21,000 words, 54 practice problems, 60 quiz questions, 42 checked resources.
+- Every runnable example is checked: 45 TypeScript, 5 Java, 3 C# and 2 Python. The C# examples include a real Entity Framework Core unit of work on in-memory SQLite and the .NET dependency injection lifetimes; they fetch NuGet packages, so they run only with network checks on. The Python examples run a real server-sent events stream end to end and verify HMAC webhook signatures.
+- The JavaScript example runner now provides `btoa` and `atob`, as browsers and Node.js do.
+- About 95 glossary terms. "Repository", "Proxy" and "Event" now give the meaning for each course that uses them; "hook", "feature", "snapshot", "container" and "component" are no longer glossary links in part 4, where they mean something else.
+
+Fixed (found by running the examples)
+- Several printed results in my drafts were wrong until the code ran: the polling waste at one-minute intervals (93%, not 99%), the seeded jitter delays, a weighted decision matrix score (24, not 25), and a three-point estimate (11.3 days, not 10.8).
+- Example names that clash with browser globals (`History`, `history`, `status`, `Request`, `Event`) failed the strict type check and were renamed.
+
+Not verified
+- No person has reviewed these chapters. Problem counts are below the standard's 30 to 50 (5 or 6 each). The gRPC, WebSocket and browser `EventSource` snippets are not run (they need servers this course does not install). On this machine the type-check tests sometimes exceed their 5-second limit under heavy load from other software; they pass with a longer limit.
+
 ### 2026-11-13: Software Engineering Mastery, part 3 (Writing excellent code)
 
 Added

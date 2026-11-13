@@ -1,0 +1,342 @@
+---
+title: "Design patterns: creating objects"
+summary: "Factory method, abstract factory, builder, singleton (and why to avoid it), prototype, and dependency injection."
+prerequisites: [m-solid]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will know the creational design patterns (the standard ways to control how objects are made), when each one earns its place, and why modern code uses dependency injection for much of what these patterns once did. You will also know why the most famous of them, the singleton, is usually a mistake.
+
+## What design patterns are
+
+A **design pattern** is a named, reusable solution to a problem that keeps coming up in software design. The idea came from the architect Christopher Alexander, and the 1994 book *Design Patterns* by Erich Gamma, Richard Helm, Ralph Johnson and John Vlissides (the "**Gang of Four**", or GoF) catalogued 23 of them in three groups: **creational** (making objects), **structural** (combining objects) and **behavioural** (how objects share work). This chapter covers the creational group; the next two cover the others.
+
+Patterns are worth knowing for two reasons. They are proven solutions, so you need not reinvent them. And they are a **shared vocabulary**: saying "put a decorator around the client" tells a colleague a whole design in four words. They are not goals in themselves. A pattern adds structure, and structure has a cost; use one when it solves a problem you actually have (<Ref to="m-design-principles" />).
+
+Many GoF patterns were designed for languages without first-class functions. In TypeScript, Java and C#, a lambda often replaces a whole pattern's worth of classes, and this chapter shows the lighter form where it exists.
+
+## Why control creation?
+
+Calling `new SmtpEmailSender(host, port, user)` directly ties the caller to one concrete class and to the details of building it. Creational patterns move that knowledge to one place, so that:
+
+- callers depend on an interface, not a concrete class (<Ref to="m-solid" />);
+- complicated construction (many parameters, validation, choosing a variant) is written once;
+- you can swap what gets built, for a test or a different environment, without touching callers.
+
+## Factory method and simple factories
+
+A **factory** is a function or method whose job is to create objects, so callers ask for "a notifier for this channel" rather than naming a class. The simplest form, a **simple factory**, is just a function:
+
+```ts
+interface Notifier {
+  send(to: string, message: string): string;
+}
+
+class EmailNotifier implements Notifier {
+  send(to: string, message: string) { return `email to ${to}: ${message}`; }
+}
+
+class SmsNotifier implements Notifier {
+  send(to: string, message: string) { return `SMS to ${to}: ${message}`; }
+}
+
+type Channel = "email" | "sms";
+
+function createNotifier(channel: Channel): Notifier {
+  switch (channel) {
+    case "email": return new EmailNotifier();
+    case "sms": return new SmsNotifier();
+  }
+}
+
+for (const channel of ["email", "sms"] as const) {
+  console.log(createNotifier(channel).send("Ama", "Your order is ready"));
+}
+```
+
+It prints `email to Ama: Your order is ready` and `SMS to Ama: Your order is ready`. Only `createNotifier` knows the concrete classes.
+
+The GoF **factory method** pattern is the object-oriented version: a base class calls an abstract `create...` method, and each subclass decides what to create. For example, a `ReportExporter` base class whose `export()` calls `createWriter()`, with `CsvExporter` and `PdfExporter` each returning their own writer. Java's `Collection.iterator()` is a factory method: every collection returns its own kind of iterator. **Static factory methods** are another common form: `List.of(...)`, `Optional.empty()`, `LocalDate.of(2026, 11, 13)` and C#'s `TimeSpan.FromMinutes(5)` all create objects with a descriptive name instead of a constructor, and may return a cached or more specific object.
+
+## Abstract factory
+
+An **abstract factory** creates **families** of related objects that must be used together. A user interface that supports two themes needs the button, the text box and the dialog all from the same theme; a data layer that supports two databases needs the connection, the command and the transaction all from the same database. The factory is an interface with one creation method per product, and each family implements it:
+
+```ts
+interface Button { render(): string; }
+interface TextBox { render(): string; }
+
+interface UiFactory {
+  button(label: string): Button;
+  textBox(placeholder: string): TextBox;
+}
+
+const lightTheme: UiFactory = {
+  button: (label) => ({ render: () => `[ ${label} ] (dark text on white)` }),
+  textBox: (p) => ({ render: () => `|${p}| (white box)` }),
+};
+
+const highContrast: UiFactory = {
+  button: (label) => ({ render: () => `[[ ${label.toUpperCase()} ]] (yellow on black)` }),
+  textBox: (p) => ({ render: () => `||${p}|| (thick border)` }),
+};
+
+function signUpForm(ui: UiFactory): string[] {
+  return [ui.textBox("Email").render(), ui.button("Sign up").render()];
+}
+
+console.log(signUpForm(lightTheme));
+console.log(signUpForm(highContrast));
+```
+
+The form code never mixes themes, because everything comes from one factory. It prints the light pair and then `["||Email|| (thick border)", "[[ SIGN UP ]] (yellow on black)"]`. In practice, abstract factories appear inside frameworks (ADO.NET's `DbProviderFactory` creates connections and commands for one database) more often than in application code.
+
+## Builder
+
+A **builder** constructs a complex object step by step, which helps when an object has many optional parts, must be validated as a whole, or should be immutable once built. Without one, you get a **telescoping constructor**: `new HttpRequest(url, "POST", headers, body, 30, 3, true, null)`, where nobody can tell what `30`, `3` and `true` mean.
+
+Java has no named arguments, so builders are common there:
+
+```java
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class Main {
+    record HttpRequest(String url, String method, Map<String, String> headers, Duration timeout, int retries) {
+        static Builder to(String url) { return new Builder(url); }
+
+        static class Builder {
+            private final String url;
+            private String method = "GET";
+            private final Map<String, String> headers = new LinkedHashMap<>();
+            private Duration timeout = Duration.ofSeconds(10);
+            private int retries = 0;
+
+            Builder(String url) { this.url = url; }
+            Builder method(String m) { this.method = m; return this; }
+            Builder header(String name, String value) { headers.put(name, value); return this; }
+            Builder timeout(Duration t) { this.timeout = t; return this; }
+            Builder retries(int r) { this.retries = r; return this; }
+
+            HttpRequest build() {
+                if (retries > 0 && method.equals("POST") && !headers.containsKey("Idempotency-Key")) {
+                    throw new IllegalStateException("Retried POSTs need an Idempotency-Key header");
+                }
+                return new HttpRequest(url, method, Map.copyOf(headers), timeout, retries);
+            }
+        }
+    }
+
+    public static void main(String[] args) {
+        HttpRequest get = HttpRequest.to("https://api.example.com/orders").build();
+        System.out.println(get.method() + " " + get.timeout() + " retries=" + get.retries());
+
+        HttpRequest post = HttpRequest.to("https://api.example.com/orders")
+            .method("POST")
+            .header("Idempotency-Key", "order-7")
+            .timeout(Duration.ofSeconds(5))
+            .retries(3)
+            .build();
+        System.out.println(post.method() + " " + post.headers() + " " + post.timeout());
+
+        try {
+            HttpRequest.to("https://api.example.com/orders").method("POST").retries(3).build();
+        } catch (IllegalStateException e) {
+            System.out.println("Refused: " + e.getMessage());
+        }
+    }
+}
+```
+
+It prints `GET PT10S retries=0`, then `POST {Idempotency-Key=order-7} PT5S`, then `Refused: Retried POSTs need an Idempotency-Key header`. Each setting is named, defaults live in one place, `build()` checks rules that involve several fields together, and the result is an immutable record.
+
+C# and TypeScript need builders less, because the language already gives named, optional settings: C#'s **object initializers** with `init` properties (`new HttpRequest { Url = "...", Retries = 3 }`) and records with `with`; TypeScript's **options objects** (`request({ url, method: "POST", retries: 3 })`). Builders still help there when construction has steps or cross-field rules, and **fluent** builders (each method returns the builder, so calls chain) are common in libraries: ASP.NET Core's `WebApplication.CreateBuilder()`, Java's `HttpRequest.newBuilder()`, and test-data builders such as `anOrder().withLines(3).paid().build()`.
+
+## Singleton, and why to avoid it
+
+A **singleton** guarantees a class has exactly one instance and provides a global way to reach it (`Config.getInstance()`). It sounds tidy, and it is usually a mistake:
+
+- It is **global mutable state** in disguise: any code anywhere can reach it and change it, so behaviour depends on hidden history.
+- It **hides dependencies**: a class that calls `Database.getInstance()` inside a method does not show in its constructor that it needs a database.
+- It makes **testing hard**: you cannot give each test its own instance, and tests leak state into each other.
+- **Lazy creation is subtle with threads**: two threads can both see "no instance yet" and create two. Java's classic fix, double-checked locking, was broken before Java 5's memory model changes; today the safe idioms are an `enum` with one value, or a static holder class. In C#, `Lazy<T>` handles it.
+
+Needing exactly one instance is fine; reaching it globally is the problem. Let the **dependency injection container** create one shared instance (a **singleton lifetime**) and pass it to whoever needs it through their constructor. You get one instance, visible dependencies, and tests that can pass their own:
+
+```csharp
+#:package Microsoft.Extensions.DependencyInjection@10.0.0
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+services.AddSingleton<Clock>();
+services.AddTransient<ReceiptPrinter>();
+using var provider = services.BuildServiceProvider();
+
+var a = provider.GetRequiredService<ReceiptPrinter>();
+var b = provider.GetRequiredService<ReceiptPrinter>();
+Console.WriteLine(ReferenceEquals(a, b));
+Console.WriteLine(ReferenceEquals(a.Clock, b.Clock));
+
+class Clock { public DateTime Now => DateTime.UtcNow; }
+
+class ReceiptPrinter(Clock clock) { public Clock Clock => clock; }
+```
+
+It prints `False` and then `True`: each request for a `ReceiptPrinter` gets a new one (a **transient** lifetime), but they all share the one `Clock`. ASP.NET Core adds a third lifetime, **scoped**: one instance per web request, typical for a database context. Spring's default bean scope is singleton in the same container-managed sense.
+
+## Prototype
+
+A **prototype** creates new objects by **copying** an existing one, which is useful when building from scratch is expensive or when you want variations on a configured template. The hard part is copying correctly: a **shallow copy** shares nested objects with the original, so changing one changes both; a **deep copy** copies everything.
+
+```ts
+const template = { name: "Weekly bread box", items: ["rye loaf"], delivery: { day: "Friday" } };
+
+const shallow = { ...template };
+shallow.items.push("croissant");
+shallow.delivery.day = "Saturday";
+
+const deep = structuredClone(template);
+deep.items.push("baguette");
+
+console.log(template.items, template.delivery.day);
+console.log(deep.items);
+```
+
+It prints `["rye loaf", "croissant"] Saturday` and then `["rye loaf", "croissant", "baguette"]`: the shallow copy's changes leaked into the template, while the deep copy (`structuredClone`, built into modern JavaScript) is independent. With immutable data (<Ref to="m-functional" />), copying is safe and cheap, and prototypes become simply "use `with` or spread to make a variation". Java's `Cloneable` and `clone()` are widely considered broken (they are shallow by default and bypass constructors); prefer **copy constructors** or static copy factories. C# records give `with`, which is also shallow.
+
+## Dependency injection as the modern creational pattern
+
+**Dependency injection** (<Ref to="m-solid" />) handles most creation concerns in modern applications: the container knows which implementation to build for each interface, builds dependencies first, and controls lifetimes (one for the whole application, one per request, or a new one each time). Factories still have their place when the choice depends on **run-time data** (which payment provider this customer uses), and builders when construction has many steps. A common combination is to inject a factory: a class receives a `NotifierFactory` and asks it for the right notifier per message.
+
+## Common mistakes
+
+- **Singletons as global variables**, reached from anywhere with `getInstance()`.
+- **Factories for everything**, including classes with one simple implementation that `new` would serve fine.
+- **Builders for objects with two fields**, where a constructor or options object is clearer.
+- **Shallow copies** where a deep copy was needed (or mutable shared templates).
+- **Service locator** (asking a global container for dependencies inside methods), which hides dependencies just like a singleton. Pass them through constructors instead.
+- **Choosing a pattern first** and then looking for a problem it might fit.
+
+## Practice
+
+**1. (warm-up)** Name the three groups of Gang of Four patterns and say what each is about.
+
+<Solution>
+
+Creational (how objects are created), structural (how objects and classes are combined into larger structures), behavioural (how objects communicate and share responsibilities).
+
+</Solution>
+
+**2. (warm-up)** Give two problems with `Config.getInstance()` used throughout a codebase, and what to do instead.
+
+<Solution>
+
+Any two of: it hides each class's dependency on configuration; it is global state that any code can change; tests cannot easily use different configuration or run in isolation; it couples every class to the concrete `Config`. Instead, register one configuration object with the dependency injection container (singleton lifetime) and pass it, or just the values each class needs, through constructors.
+
+</Solution>
+
+**3. (warm-up)** When does a TypeScript options object do the job of a builder?
+
+<Solution>
+
+When the object has many optional settings with defaults but no step-by-step construction: `createClient({ baseUrl, timeoutMs: 5000 })` names every setting at the call site, and defaults can be merged in one place. A builder still helps if construction happens in stages or needs to validate combinations of settings before creating an immutable result.
+
+</Solution>
+
+**4. (standard)** Write a factory that returns the right `PaymentProvider` for a customer's country: `StripeLikeProvider` for "GB" and "IE", `LocalBankProvider` for "NG", and throws a clear error otherwise. Show it choosing for three countries.
+
+<Solution>
+
+```ts
+interface PaymentProvider {
+  charge(pence: number): string;
+}
+
+class StripeLikeProvider implements PaymentProvider {
+  charge(pence: number) { return `card charge of ${pence}p`; }
+}
+
+class LocalBankProvider implements PaymentProvider {
+  charge(pence: number) { return `bank transfer request for ${pence}p`; }
+}
+
+const providers: Record<string, () => PaymentProvider> = {
+  GB: () => new StripeLikeProvider(),
+  IE: () => new StripeLikeProvider(),
+  NG: () => new LocalBankProvider(),
+};
+
+function providerFor(country: string): PaymentProvider {
+  const make = providers[country];
+  if (!make) throw new Error(`No payment provider for country ${country}`);
+  return make();
+}
+
+for (const c of ["GB", "NG", "FR"]) {
+  try {
+    console.log(c, providerFor(c).charge(5400));
+  } catch (e) {
+    console.log((e as Error).message);
+  }
+}
+```
+
+It prints **GB card charge of 5400p**, **NG bank transfer request for 5400p** and **No payment provider for country FR**. The choice depends on run-time data, which is exactly when a factory is better than wiring one implementation in the container.
+
+</Solution>
+
+**5. (standard)** What does this print, and how would you fix it so each order has its own list of lines?
+
+```ts
+const blankOrder = { customer: "", lines: [] as string[] };
+
+const a = { ...blankOrder, customer: "Ama" };
+const b = { ...blankOrder, customer: "Kofi" };
+a.lines.push("rye loaf");
+console.log(b.lines);
+```
+
+<Solution>
+
+It prints **["rye loaf"]**: the spread copies are shallow, so both orders share the template's `lines` array. Fix by giving each its own array, either with `structuredClone(blankOrder)` or, better, a factory function that builds a fresh object each time:
+
+```ts
+const newOrder = (customer: string) => ({ customer, lines: [] as string[] });
+
+const a = newOrder("Ama");
+const b = newOrder("Kofi");
+a.lines.push("rye loaf");
+console.log(a.lines, b.lines);
+```
+
+It prints **["rye loaf"] []**.
+
+</Solution>
+
+**6. (stretch)** In a web application, a database context must be shared within one request but never between requests. Which dependency injection lifetime fits, and why would a singleton be dangerous?
+
+<Solution>
+
+Scoped: one instance per request. A singleton would share one context (and its tracked entities, transaction and connection) between all concurrent requests, which is not thread-safe, mixes different users' data in one change tracker, and keeps memory growing for the life of the process. A transient lifetime would give each class in the same request a different context, so they could not share one transaction.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Design patterns** are named, reusable solutions and a shared vocabulary; use one only when it solves a real problem.
+- **Factories** (simple factories, the **factory method**, static factory methods) put the choice of concrete class in one place; use them when the choice depends on run-time data.
+- An **abstract factory** creates whole families of related objects that must match.
+- A **builder** constructs complex or immutable objects step by step, with defaults and cross-field validation; options objects and initializers often suffice in TypeScript and C#.
+- Avoid **singletons** reached globally; let the dependency injection container give one shared instance (**singleton lifetime**), and know the **transient** and **scoped** lifetimes too.
+- A **prototype** copies an existing object; know **shallow** versus **deep** copies, and prefer immutable data.
+
+## Go deeper
+
+- [Refactoring Guru: creational patterns](https://refactoring.guru/design-patterns/creational-patterns), Alexander Shvets. Each pattern with diagrams and code in several languages.
+- [Service lifetimes (.NET)](https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection/service-lifetimes), Microsoft. Transient, scoped and singleton, with their pitfalls.
+- [Bean scopes (Spring)](https://docs.spring.io/spring-framework/reference/core/beans/factory-scopes.html), the Spring team. Singleton, prototype and request scopes in Spring.
+- [structuredClone()](https://developer.mozilla.org/en-US/docs/Web/API/Window/structuredClone), MDN. Deep copying in JavaScript and what it cannot copy.

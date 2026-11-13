@@ -1,0 +1,274 @@
+---
+title: "Design documents and trade-offs"
+summary: "Design docs and decision records, diagrams (C4, UML sequence and class diagrams), comparing options, and estimating."
+prerequisites: [m-architecture]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will write the documents that turn a design in your head into a decision a team can review and remember: a design document, an architecture decision record, clear diagrams at the right level of detail, an honest comparison of options, and back-of-the-envelope estimates of load and effort. Senior engineers are judged as much on these as on code, because they are how good ideas get adopted and bad ones get caught early.
+
+## Why write it down
+
+Code shows *what* a system does; it rarely shows *why*, which alternatives were rejected, or what was assumed. Writing a design down:
+
+- **finds problems while they are cheap**: a reviewer spotting a flaw in a two-page document saves weeks of building the wrong thing;
+- **makes you think clearly**: vague ideas fall apart when you try to write them precisely;
+- **lets more people contribute**, including those in other time zones and teams;
+- **records the reasoning** for the engineer who, two years later, wonders why on earth it was built this way.
+
+The goal is not paperwork. A document should be as short as the decision allows, and many changes need none at all.
+
+## The design document
+
+A **design document** (also called a design doc, technical spec or RFC, for "request for comments") proposes how to build something significant, before building it. Google, Uber, Stripe and many others make them part of normal engineering. A common structure:
+
+1. **Context and problem**: what is happening today, what is wrong or missing, and why it matters now. Link the evidence.
+2. **Goals and non-goals**: what this design must achieve, measurably where possible ("p99 checkout latency under 300 ms"), and what it deliberately will *not* do. Non-goals prevent scope creep and endless debate.
+3. **Proposed design**: the system, its parts and how they interact, with diagrams. Enough detail that a reviewer can find problems; not so much that it becomes the code.
+4. **Alternatives considered**: the other serious options and why you did not choose them. A design with no alternatives has usually not been thought through.
+5. **Cross-cutting concerns**: security and privacy, reliability and failure modes, observability, data migration, cost, accessibility, and how it will be rolled out and rolled back.
+6. **Risks and open questions**: what you are unsure about, and how you will find out.
+7. **Plan**: milestones, and how you will know it worked.
+
+Write for a busy reader: put the summary and the decision you need first, use plain language (<Ref to="m-clean-code" />'s naming advice applies to prose too), and prefer a diagram to three paragraphs. Share it early as a draft; reviewing a nearly finished document makes people reluctant to suggest big changes.
+
+## Architecture decision records
+
+An **architecture decision record** (ADR), as proposed by Michael Nygard in 2011, captures one significant decision in a short, numbered file kept in the repository beside the code. Each ADR is immutable once accepted: if the decision changes, a new ADR **supersedes** it, so the history of thinking is preserved.
+
+```text
+# ADR 0007: Use server-sent events for live order status
+
+Status: Accepted (2026-11-13)
+
+## Context
+Customers want to see order status change without refreshing. Status changes
+about five times per order. We run 6 web servers behind a load balancer and
+already use Redis. Clients only receive updates; they never send them.
+
+## Decision
+Stream order status to browsers with server-sent events, fanned out across
+servers through Redis pub/sub. Clients resume with Last-Event-ID.
+
+## Consequences
++ Plain HTTP: works with our auth cookies, proxies and load balancer.
++ Reconnection and resumption come from the browser's EventSource.
+- One open connection per watching customer; we must raise file limits
+  and monitor connection counts.
+- If we later need client-to-server messages, we will revisit (WebSockets).
+
+Alternatives: polling every 10 s (simple, but 99% wasted requests and slow
+updates); WebSockets (two-way capability we do not need, and reconnection
+we would have to build).
+```
+
+ADRs are cheap enough to write for every decision that would be expensive to reverse or that people will later question: a database, a framework, an architecture style, an API convention. A folder of ADRs is the best onboarding document a team can have.
+
+## Diagrams
+
+A diagram is worth drawing when it shows structure or sequence that prose struggles to convey. The most common failure is a diagram that mixes levels of detail and leaves readers guessing what the boxes and arrows mean. Two sets of conventions help.
+
+### The C4 model
+
+Simon Brown's **C4 model** describes a software system at four levels of zoom, like a map:
+
+1. **System context**: your system as one box, the people who use it, and the other systems it talks to. Understandable by non-technical people.
+2. Containers: the separately running or deployable parts: web app, API, database, message broker, mobile app. (Not Docker containers specifically.)
+3. Components: the major parts inside one container, such as the modules of an API.
+4. **Code**: classes and functions, usually left to the IDE.
+
+Most documents need only the first two. Every box should say what it is and which technology it uses, every arrow should say what flows along it and how ("places orders, JSON over HTTPS"), and every diagram needs a title and a key.
+
+### UML sequence and class diagrams
+
+The **Unified Modeling Language** (UML) defines many diagram types; two remain widely useful. A **sequence diagram** shows the messages between participants over time, and is the clearest way to explain a flow with several steps, retries or asynchronous parts. A **class diagram** shows types and their relationships (inheritance, composition, multiplicity). Diagrams written as text, in tools such as **Mermaid** or PlantUML, can live in the repository and be reviewed like code; GitHub and GitLab render Mermaid in Markdown:
+
+```text
+sequenceDiagram
+    actor Customer
+    participant Web as Web app
+    participant API as Orders API
+    participant Pay as Payment provider
+    participant Bus as Message broker
+    Customer->>Web: Place order
+    Web->>API: POST /orders (Idempotency-Key)
+    API->>Pay: Charge card
+    Pay-->>API: Approved
+    API->>Bus: Publish OrderPlaced
+    API-->>Web: 201 Created
+    Bus-->>API: (Kitchen and email services consume OrderPlaced)
+```
+
+Keep diagrams honest and current: a diagram that no longer matches the system is worse than none. Diagrams as text, checked in beside the code, are much easier to keep up to date than images in a wiki.
+
+## Comparing options
+
+Most design decisions are choices between options that are each good at different things. Make the comparison explicit:
+
+1. List the **criteria** that matter for *this* decision (team familiarity, operating cost, latency, how hard it is to change later), and how much each matters.
+2. Score each option against each criterion, with a sentence of evidence for each score.
+3. Look at the result, and then **use judgment**: a scoring matrix structures a discussion; it does not replace one.
+
+```ts
+type Criterion = { name: string; weight: number };
+type Option = { name: string; scores: Record<string, number> };
+
+const criteria: Criterion[] = [
+  { name: "team knows it", weight: 3 },
+  { name: "operating effort", weight: 3 },
+  { name: "replay old events", weight: 2 },
+  { name: "throughput headroom", weight: 1 },
+];
+
+const options: Option[] = [
+  { name: "PostgreSQL outbox + polling", scores: { "team knows it": 5, "operating effort": 5, "replay old events": 2, "throughput headroom": 2 } },
+  { name: "RabbitMQ", scores: { "team knows it": 3, "operating effort": 3, "replay old events": 1, "throughput headroom": 4 } },
+  { name: "Kafka", scores: { "team knows it": 2, "operating effort": 2, "replay old events": 5, "throughput headroom": 5 } },
+];
+
+const maximum = criteria.reduce((sum, c) => sum + 5 * c.weight, 0);
+for (const option of options) {
+  const total = criteria.reduce((sum, c) => sum + c.weight * option.scores[c.name], 0);
+  console.log(`${option.name}: ${total}/${maximum}`);
+}
+```
+
+It prints `PostgreSQL outbox + polling: 36/45`, `RabbitMQ: 24/45` and `Kafka: 27/45`. For this team, today, the simplest option wins clearly; if replaying history became essential, its weight would rise and the answer could change. Writing the weights down makes that dependency visible and arguable. Also consider **reversibility**: Amazon distinguishes "one-way doors" (hard to undo, so decide carefully) from "two-way doors" (easy to undo, so decide quickly and learn).
+
+## Estimating load: back of the envelope
+
+Before designing for scale, estimate how much scale there is. **Back-of-the-envelope** calculations use round numbers and simple arithmetic to find the order of magnitude, which is usually enough to rule designs in or out.
+
+```ts
+const dailyActiveUsers = 200_000;
+const ordersPerUserPerDay = 0.5;
+const peakToAverage = 5;
+const bytesPerOrder = 2_000;
+const yearsKept = 5;
+
+const ordersPerDay = dailyActiveUsers * ordersPerUserPerDay;
+const averagePerSecond = ordersPerDay / 86_400;
+const peakPerSecond = averagePerSecond * peakToAverage;
+const storageGb = (ordersPerDay * 365 * yearsKept * bytesPerOrder) / 1e9;
+
+console.log({ ordersPerDay, averagePerSecond: averagePerSecond.toFixed(2), peakPerSecond: peakPerSecond.toFixed(1), storageGb: storageGb.toFixed(0) });
+```
+
+It prints `{ ordersPerDay: 100000, averagePerSecond: "1.16", peakPerSecond: "5.8", storageGb: "365" }`. Six orders a second at peak and a few hundred gigabytes over five years: one well-indexed PostgreSQL database handles that comfortably, and a design with sharding and a distributed log would be solving a problem this business does not have. Useful facts to keep in mind: a day has about 86,400 seconds (call it 100,000 for quick sums), the latency numbers from <Ref to="m-machine" />, and that a single modern server handles thousands of simple requests per second.
+
+## Estimating effort
+
+Estimating how long software will take is notoriously hard, mainly because of what nobody has thought of yet. Habits that help:
+
+- **Break the work down** into pieces of a few days at most; large tasks hide unknowns.
+- **Give ranges, not single numbers**, and say how confident you are. Early in a project, estimates are naturally wide (the **cone of uncertainty**) and narrow as questions are answered.
+- **Three-point estimates**: for each piece, estimate optimistic (O), most likely (M) and pessimistic (P). The PERT formula gives an expected value of (O + 4M + P) / 6, and (P − O) / 6 as a rough standard deviation.
+- **Spike the riskiest unknowns first**: a short, time-boxed experiment answers "is this even possible?" before you commit.
+- **Compare with actuals**: track how long similar work really took, and calibrate.
+
+```ts
+type Task = { name: string; optimistic: number; likely: number; pessimistic: number };
+
+const tasks: Task[] = [
+  { name: "SSE endpoint", optimistic: 1, likely: 2, pessimistic: 4 },
+  { name: "Redis fan-out", optimistic: 1, likely: 3, pessimistic: 8 },
+  { name: "Client reconnection", optimistic: 1, likely: 2, pessimistic: 5 },
+  { name: "Load test and rollout", optimistic: 2, likely: 3, pessimistic: 6 },
+];
+
+let expected = 0;
+let variance = 0;
+for (const t of tasks) {
+  expected += (t.optimistic + 4 * t.likely + t.pessimistic) / 6;
+  variance += ((t.pessimistic - t.optimistic) / 6) ** 2;
+}
+const sd = Math.sqrt(variance);
+console.log(`expected ${expected.toFixed(1)} days, likely range ${(expected - sd).toFixed(1)} to ${(expected + 2 * sd).toFixed(1)}`);
+```
+
+It prints `expected 11.3 days, likely range 9.8 to 14.5`. The range is lopsided upwards on purpose: software tasks overrun far more often than they finish early. Communicate the range, the assumptions behind it, and what would change it.
+
+## Getting a design reviewed
+
+- Send the document to the people affected and to someone who will disagree; ask specific questions.
+- Separate **blocking concerns** from preferences, as in code review (<Ref to="m-code-review" />).
+- Resolve disagreements with evidence (a prototype, a measurement), not seniority.
+- Record the outcome: update the document's status, and write the ADR.
+
+## Common mistakes
+
+- **No alternatives**, or straw-man alternatives nobody would choose.
+- **Missing non-goals**, so the scope grows during review.
+- **Designing for imagined scale** without a back-of-the-envelope estimate.
+- **Diagrams with unlabelled boxes and arrows**, or several levels of detail in one picture.
+- **Single-number estimates** presented as promises.
+- **Documents written after the code**, or never updated, so they mislead.
+- **Twenty-page documents** for small decisions; a short ADR would do.
+
+## Practice
+
+**1. (warm-up)** What is the difference between a design document and an ADR?
+
+<Solution>
+
+A design document proposes how to build something significant before building it, covering context, goals, the design, alternatives, risks and a plan, and is reviewed and discussed. An ADR records one decision (context, decision, consequences) in a short, immutable, numbered file kept with the code; a design document often produces one or more ADRs.
+
+</Solution>
+
+**2. (warm-up)** Name the four levels of the C4 model, and the two most documents need.
+
+<Solution>
+
+System context, containers, components, code. Most documents need the system context and container diagrams.
+
+</Solution>
+
+**3. (standard)** A messaging feature is expected to have 2 million daily active users each sending 20 messages a day, with a peak of 4 times the average, and each message taking 500 bytes. Estimate messages per second at peak and storage per year.
+
+<Solution>
+
+```ts
+const perDay = 2_000_000 * 20;
+const peakPerSecond = (perDay / 86_400) * 4;
+const gbPerYear = (perDay * 365 * 500) / 1e9;
+console.log(perDay, Math.round(peakPerSecond), Math.round(gbPerYear));
+```
+
+It prints **40000000 1852 7300**: 40 million messages a day, about 1,900 a second at peak, and about 7.3 terabytes a year (before replication, indexes and attachments). That rate is within reach of a well-designed single database cluster for writes, but the storage growth means planning for partitioning or archiving.
+
+</Solution>
+
+**4. (standard)** Write a short ADR (context, decision, consequences) for choosing a modular monolith over microservices for a new product built by one team of five.
+
+<Solution>
+
+Context: a new product with an uncertain domain, one team of five, and a need to ship quickly; nobody on the team has run microservices in production. Decision: build one deployable application, divided into modules along the business's bounded contexts (catalogue, ordering, billing), each owning its own tables and exposing a public interface; enforce module boundaries with an architecture test. Consequences: simple deployment, debugging and transactions; fast development now. Modules can be extracted into services later if a team or scaling need appears. Risk: boundaries erode without discipline, mitigated by the architecture test and code review. Alternatives: microservices (rejected: operational cost and premature boundaries for one team); an unstructured monolith (rejected: no boundaries to extract later).
+
+</Solution>
+
+**5. (stretch)** A manager asks for "a number" for a project you estimate at 15 to 40 days. How do you respond, and what would help narrow the range?
+
+<Solution>
+
+Explain that a single number would hide real uncertainty, give the range with the most likely value and your confidence (for example "most likely about 22 days; very unlikely under 15; could reach 40 if the payment provider's API behaves differently from its documentation"), and list the assumptions. Offer to narrow it quickly: break the work down further, run a time-boxed spike on the biggest unknown (the payment integration), and re-estimate after the first milestone. If a date is required, agree on which scope is essential and which can move, so the date can be met by trimming scope rather than quality.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Write designs down to find problems early, think clearly, include others and record **why**.
+- A **design document** covers context, goals and **non-goals**, the design, **alternatives**, cross-cutting concerns, risks and a plan.
+- **ADRs** record one decision each, immutably, beside the code; new decisions supersede old ones.
+- Use the **C4 model** (context and containers, usually) and **sequence diagrams**; label every box and arrow; keep diagrams as text in the repository.
+- Compare options with explicit **criteria and weights**, then use judgment; decide one-way doors carefully and two-way doors quickly.
+- Estimate load **back of the envelope** before designing for scale; estimate effort as **ranges** with three-point estimates, and spike the biggest unknowns.
+
+## Go deeper
+
+- [Documenting architecture decisions](https://cognitect.com/blog/2011/11/15/documenting-architecture-decisions), Michael Nygard. The short post that introduced ADRs.
+- [The C4 model](https://c4model.com/), Simon Brown. The four levels, notation and examples.
+- [Design Docs at Google](https://www.industrialempathy.com/posts/design-docs-at-google/), Malte Ubl. What goes into a design document and how they are reviewed.
+- [Mermaid sequence diagrams](https://mermaid.js.org/syntax/sequenceDiagram.html), the Mermaid project. Writing diagrams as text that GitHub renders.

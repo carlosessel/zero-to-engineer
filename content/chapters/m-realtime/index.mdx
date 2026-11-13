@@ -1,0 +1,247 @@
+---
+title: "Real-time communication"
+summary: "Polling, long polling, server-sent events and WebSockets, and when to use each."
+prerequisites: [m-api-design]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will know the ways a server can get fresh information to a client quickly (polling, long polling, server-sent events and WebSockets), what each costs, how to make connections survive real networks, and how to scale them across many servers. Live order tracking, chat, dashboards, notifications, collaborative editing and multiplayer games all depend on these choices.
+
+## The problem
+
+HTTP is **request–response**: the client asks and the server answers. That fits "load my orders" but not "tell me the moment my order is out for delivery", because the server cannot start a conversation. Every real-time technique is a way round that.
+
+## Polling
+
+**Polling** asks again on a timer: `GET /orders/o-7` every five seconds. It is simple, works everywhere, passes through every proxy, and uses ordinary, cacheable, stateless requests. Its costs are **latency** (on average half the interval before you hear about a change) and **waste** (most requests return "nothing new").
+
+```ts
+function pollingCost(clients: number, intervalSeconds: number, changesPerHourPerClient: number) {
+  const requestsPerHour = clients * (3600 / intervalSeconds);
+  const useful = clients * changesPerHourPerClient;
+  return { requestsPerHour, wastedPercent: Math.round((1 - useful / requestsPerHour) * 100), averageDelaySeconds: intervalSeconds / 2 };
+}
+
+console.log(pollingCost(10_000, 5, 4));
+console.log(pollingCost(10_000, 60, 4));
+```
+
+It prints `{ requestsPerHour: 7200000, wastedPercent: 99, averageDelaySeconds: 2.5 }` and then `{ requestsPerHour: 600000, wastedPercent: 93, averageDelaySeconds: 30 }`. Ten thousand clients polling every five seconds make two thousand requests a second, 99% of them useless; polling once a minute cuts the load twelvefold but still wastes 93% and makes updates slow. Polling is still the right answer when updates are rare, a delay of seconds is fine, and simplicity matters (checking whether a report has finished, for example). Make polls cheap with ETags and `304 Not Modified` (<Ref to="m-api-design" />).
+
+## Long polling
+
+**Long polling** sends a request that the server holds open until there is something to say (or a timeout of, say, 30 seconds), then answers; the client immediately sends the next request. Updates arrive almost instantly and empty responses are rare. It works over plain HTTP everywhere, but each message costs a full request, the server must hold many open requests, and messages can be lost in the gap between one response and the next request unless the client sends the id of the last message it saw. It was the standard technique before the next two existed, and is still a fallback.
+
+## Server-sent events
+
+**Server-sent events** (SSE) keep one HTTP response open and let the server write a stream of events into it, in a simple text format, for as long as it likes. The response has the type `text/event-stream`; each event is a few `field: value` lines followed by a blank line:
+
+```text
+id: 2
+event: status
+data: {"order": "o-7", "status": "baking"}
+
+```
+
+Browsers support it with the built-in `EventSource`, which also **reconnects automatically** and sends the last id it received in a `Last-Event-ID` header, so the server can resume where it left off:
+
+```js
+const events = new EventSource("/orders/o-7/events");
+events.addEventListener("status", (e) => {
+  const { status } = JSON.parse(e.data);
+  document.querySelector("#status").textContent = status;
+});
+events.onerror = () => console.log("connection lost; the browser will retry");
+```
+
+Here is a complete SSE server and client in Python's standard library, to show there is nothing more to it than a long HTTP response:
+
+```python
+import json
+import threading
+import time
+import urllib.request
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+
+class OrderStatusStream(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.end_headers()
+        for i, status in enumerate(["paid", "baking", "out for delivery"], start=1):
+            event = f"id: {i}\nevent: status\ndata: {json.dumps({'order': 'o-7', 'status': status})}\n\n"
+            self.wfile.write(event.encode())
+            self.wfile.flush()
+            time.sleep(0.05)
+
+    def log_message(self, *args):
+        pass
+
+
+server = ThreadingHTTPServer(("127.0.0.1", 0), OrderStatusStream)
+threading.Thread(target=server.serve_forever, daemon=True).start()
+
+with urllib.request.urlopen(f"http://127.0.0.1:{server.server_port}/orders/o-7/events") as stream:
+    print(stream.headers["Content-Type"])
+    event = {}
+    for raw in stream:
+        line = raw.decode().rstrip("\n")
+        if line == "":
+            print(event["id"], event["event"], json.loads(event["data"])["status"])
+            event = {}
+        else:
+            field, _, value = line.partition(": ")
+            event[field] = value
+
+server.shutdown()
+```
+
+It prints `text/event-stream` and then `1 status paid`, `2 status baking` and `3 status out for delivery`, each arriving as the server writes it. SSE is **one-way** (server to client; the client uses normal requests to send anything back) and text-only, which is exactly right for notifications, live feeds, dashboards, progress updates and streaming AI responses (Claude's and OpenAI's streaming APIs use SSE). Because it is plain HTTP, it works with existing authentication, proxies, load balancers and HTTP/2 (which removes the old limit of six connections per browser per domain).
+
+## WebSockets
+
+A **WebSocket** is a full **two-way** connection. It starts as an HTTP request with an `Upgrade: websocket` header; if the server agrees (`101 Switching Protocols`), the same TCP connection becomes a channel where either side can send **messages** (text or binary) at any time, with very little overhead per message.
+
+```js
+const socket = new WebSocket("wss://chat.example.com/rooms/bakers");
+socket.addEventListener("open", () => socket.send(JSON.stringify({ type: "join", name: "Ama" })));
+socket.addEventListener("message", (e) => {
+  const message = JSON.parse(e.data);
+  console.log(`${message.from}: ${message.text}`);
+});
+socket.addEventListener("close", (e) => console.log("closed", e.code));
+```
+
+WebSockets suit chat, collaborative editing, multiplayer games, trading screens and anything where the client also sends frequent messages. What you give up compared with SSE:
+
+- WebSockets are a **lower-level** protocol. You design your own message format, request–response matching, and acknowledgements.
+- The browser API **does not reconnect** for you, and does not resume missed messages: you build that.
+- Some corporate proxies and firewalls interfere with them; use `wss://` (TLS), which passes through far more reliably.
+- Ordinary HTTP tooling (caching, many API gateways, request logs) does not see individual messages.
+
+Libraries fill these gaps: **Socket.IO** (Node.js) and **SignalR** (ASP.NET Core) add rooms, reconnection, acknowledgements and automatic fallback to long polling; in Java, Spring supports WebSockets with the STOMP messaging protocol on top.
+
+**WebTransport**, built on HTTP/3, is a newer option offering multiple streams and unreliable datagrams (useful for games and media); support is growing but WebSockets and SSE remain the defaults.
+
+## Choosing
+
+| Need | Choose |
+|---|---|
+| Updates are rare; seconds of delay are fine | Polling (with ETags) |
+| Server pushes updates; client rarely sends | Server-sent events |
+| Frequent messages in both directions, low latency | WebSockets (or a library such as SignalR or Socket.IO) |
+| Old environments where nothing else works | Long polling |
+| Server-to-server notifications | Webhooks or a message broker, not these |
+
+A good rule: **start with SSE** for anything that is mostly server-to-client, and reach for WebSockets when the client genuinely needs to send a stream of messages too.
+
+## Making connections survive
+
+Long-lived connections break: phones change networks, laptops sleep, load balancers time out idle connections, servers are redeployed. Design for it.
+
+- **Heartbeats**: send a small message (an SSE comment line starting with `:`, or a WebSocket ping) every 15 to 30 seconds so idle connections are not closed by proxies, and so each side can notice a dead connection.
+- **Reconnect with exponential backoff and jitter**: wait longer after each failure, up to a cap, and add randomness so thousands of clients do not all reconnect at the same instant after an outage (a **thundering herd**).
+- **Resume, don't restart**: give messages ids, have the client send the last id it saw, and replay what it missed (SSE's `Last-Event-ID` does this). Otherwise, after reconnecting, fetch the current state with a normal request.
+- **Treat pushed messages as hints**, and make the API the source of truth: if in doubt, reload.
+
+```ts
+function backoffDelays(attempts: number, baseMs: number, capMs: number, random: () => number): number[] {
+  return Array.from({ length: attempts }, (_, attempt) => {
+    const ceiling = Math.min(capMs, baseMs * 2 ** attempt);
+    return Math.round(random() * ceiling);
+  });
+}
+
+let seed = 42;
+const seededRandom = () => {
+  seed = (seed * 1103515245 + 12345) % 2 ** 31;
+  return seed / 2 ** 31;
+};
+
+console.log(backoffDelays(8, 500, 30_000, () => 1));
+console.log(backoffDelays(8, 500, 30_000, seededRandom));
+```
+
+The first line shows the ceilings, `[500, 1000, 2000, 4000, 8000, 16000, 30000, 30000]`: doubling each time, capped at 30 seconds. The second applies **full jitter** (a random delay between zero and the ceiling), so each client waits a different time; with this seeded random number generator it prints `[291, 520, 1830, 2795, 6025, 11031, 15633, 4555]`. In production, use `Math.random()`.
+
+## Scaling real-time connections
+
+Each open connection is held by one server process, which changes how you scale:
+
+- **Connection counts**: a server can hold tens or hundreds of thousands of idle connections if it uses asynchronous I/O (Node.js, ASP.NET Core, Java's virtual threads or reactive stacks), but memory and file-descriptor limits must be raised and monitored.
+- **Fan-out across servers**: when an order changes, the client watching it may be connected to any of your 20 servers. The usual solution is a **backplane**: every server subscribes to a shared publish–subscribe channel (Redis pub/sub, a message broker, or a managed service such as Azure SignalR Service), and the server holding the connection forwards the message. Alternatively, route each user to a fixed server (**sticky sessions**), which makes deployments and rebalancing harder.
+- **Deployments** close every connection on a server; drain them gradually and rely on client reconnection.
+- **Authentication**: authenticate when the connection opens (a cookie or a short-lived token), and re-check permissions per message or per subscription. Browsers cannot set custom headers on WebSocket or `EventSource` connections, so tokens often go in a cookie or a short-lived query parameter; never put long-lived secrets in URLs, which end up in logs.
+
+## Common mistakes
+
+- **Polling every second** "for real-time", multiplying load for little benefit.
+- **WebSockets for one-way updates** where SSE would be simpler and more robust.
+- **No reconnection or resumption**, so users silently stop receiving updates after a network blip.
+- **Reconnecting immediately and in sync**, causing a thundering herd after an outage.
+- **Assuming one server**, so messages only reach clients connected to the server that produced them.
+- **Trusting the push channel as the source of truth** instead of re-fetching state after reconnecting.
+- **Long-lived tokens in connection URLs.**
+
+## Practice
+
+**1. (warm-up)** Which technique fits best? (a) A "your export is ready" message that may take ten minutes. (b) A live dashboard of orders per minute. (c) A chat room. (d) A browser game with players moving at 20 updates per second.
+
+<Solution>
+
+(a) Polling every 10 to 30 seconds (or SSE if you already have it); a short delay does not matter. (b) Server-sent events: one-way pushes. (c) WebSockets (or SSE plus normal POSTs for sending, which also works well). (d) WebSockets (or WebTransport): frequent two-way messages with low latency.
+
+</Solution>
+
+**2. (warm-up)** What does an SSE client send when it reconnects, and why does it help?
+
+<Solution>
+
+The `Last-Event-ID` header with the id of the last event it received, so the server can replay the events the client missed instead of the client losing them or reloading everything.
+
+</Solution>
+
+**3. (warm-up)** Why add jitter to reconnection delays?
+
+<Solution>
+
+After an outage, every client loses its connection at the same moment. Without jitter they all retry at the same moments (1 s, 2 s, 4 s…), hitting the recovering server in synchronised waves (a thundering herd). Random delays spread the reconnections out.
+
+</Solution>
+
+**4. (standard)** You run 12 servers behind a load balancer, each holding WebSocket connections. When an order's status changes, the update is processed on server 3, but the customer is connected to server 9. Describe two ways to get the message to them.
+
+<Solution>
+
+A backplane: every server subscribes to a shared pub/sub channel (Redis pub/sub, a message broker or a managed service); server 3 publishes the update, and every server forwards it to any of its connected clients who are watching that order, so server 9 delivers it. Or sticky routing by user or order: route each user's connection to a predictable server and send the update directly to that server, which is simpler for small systems but complicates deployments and uneven load.
+
+</Solution>
+
+**5. (stretch)** A mobile app shows live order status over WebSockets. Users complain that the status sometimes freezes until they restart the app. List the likely causes and fixes.
+
+<Solution>
+
+Likely causes: the connection silently died (network change, sleep, a proxy closing idle connections) and the app never noticed or reconnected; the app reconnected but did not resume, so updates sent during the gap were lost; the update was produced on a server the client was not connected to. Fixes: heartbeats in both directions with a timeout that triggers reconnection; reconnection with exponential backoff and jitter, also triggered when the app returns to the foreground or the network changes; message ids and resume-from-last-id, or simply re-fetching the order's current status after every reconnect; a backplane so every server can deliver every update. Consider SSE, which handles reconnection and resumption in the protocol, if the app only receives.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- HTTP is request–response; real-time techniques get server updates to clients quickly.
+- **Polling** is simple but slow or wasteful; **long polling** holds requests open until there is news.
+- **Server-sent events** stream one-way text events over plain HTTP, with built-in reconnection and `Last-Event-ID` resumption: the default for server-to-client updates.
+- **WebSockets** give full two-way messaging with low overhead; you build reconnection and message formats yourself, or use SignalR, Socket.IO or STOMP.
+- Make connections survive: **heartbeats**, **exponential backoff with jitter**, resumption by id, and the API as the source of truth.
+- Scale with a **backplane** (pub/sub between servers) or sticky routing; authenticate at connect time without long-lived secrets in URLs.
+
+## Go deeper
+
+- [Using server-sent events](https://developer.mozilla.org/en-US/docs/Web/API/Server-sent_events/Using_server-sent_events), MDN. The event stream format and `EventSource`.
+- [The WebSocket API](https://developer.mozilla.org/en-US/docs/Web/API/WebSockets_API), MDN. Connecting, sending and closing from the browser.
+- [Overview of ASP.NET Core SignalR](https://learn.microsoft.com/en-us/aspnet/core/signalr/introduction), Microsoft. Hubs, transports, reconnection and scale-out.
+- [Exponential backoff and jitter](https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/), Marc Brooker (AWS). Why full jitter spreads retries best, with simulations.

@@ -8,6 +8,9 @@
   aliases: ["abstract classes"]
   definition: "A class that cannot be created directly and leaves some methods for subclasses to fill in."
   courses: [mastery]
+- term: "Abstract factory"
+  definition: "An interface for creating whole families of related objects that must be used together."
+  courses: [mastery]
 - term: "Accessibility"
   aliases: ["accessible"]
   definition: "Making pages usable by everyone, whatever their abilities or the device they use."
@@ -15,6 +18,9 @@
 - term: "Accumulator"
   definition: "A variable set before a loop that the loop keeps updating, such as a running total."
   courses: [web]
+- term: "Adapter"
+  definition: "A wrapper that converts one interface into the interface its callers expect."
+  courses: [mastery, se]
 - term: "Adaptive thinking"
   definition: "Thinking whose amount the model decides for itself, steered by effort; on by default on the Claude 5 models."
   courses: [claude]
@@ -33,6 +39,10 @@
 - term: "Agent Skills"
   definition: "The open format for skills, usable in the Claude apps, Claude Code, the API and Managed Agents."
   courses: [claude]
+- term: "Aggregate"
+  aliases: ["aggregate root"]
+  definition: "A cluster of objects changed as one unit through its root, which enforces the cluster's invariants."
+  courses: [mastery]
 - term: "Ahead-of-time compilation"
   definition: "Compiling a program to machine code before it runs."
   courses: [mastery]
@@ -47,21 +57,38 @@
   aliases: ["O(1) amortised"]
   definition: "Averaged over a sequence of operations: a few expensive steps spread across many cheap ones."
   courses: [mastery]
+- term: "Anaemic domain model"
+  definition: "Domain objects that hold data but no rules, leaving services to enforce them."
+  courses: [mastery]
+- term: "Anti-corruption layer"
+  definition: "A translation layer that stops another system's model leaking into your own."
+  courses: [mastery]
+- term: "Anti-pattern"
+  definition: "A common, reasonable-looking response to a problem that turns out badly, with a known better alternative."
+  courses: [mastery]
 - term: "API"
   definitions:
     ai: "A way for one program to ask another for something over the internet; you call a model through its API."
     se: "A set of URLs or functions one program offers for other programs to call."
     web: "A set of addresses or functions one program offers for other programs to call, such as GitHub's API for user details."
-  courses: [ai, se, web]
+  courses: [ai, se, web, mastery]
 - term: "API id"
   definition: "The exact name a program uses to request a particular model, such as claude-opus-5-5."
   courses: [claude]
 - term: "API key"
   definition: "A secret password that identifies your account when you call an API."
   courses: [ai]
+- term: "Application service"
+  aliases: ["service layer"]
+  definition: "The entry point for one use case: it loads data, asks the domain to act, saves, and triggers side effects."
+  courses: [mastery]
 - term: "Approximation algorithm"
   aliases: ["approximation algorithms"]
   definition: "An algorithm that finds a solution guaranteed to be within a known factor of the best."
+  courses: [mastery]
+- term: "Architecture decision record"
+  aliases: ["ADR"]
+  definition: "A short, numbered, immutable file recording one significant decision with its context and consequences."
   courses: [mastery]
 - term: "Argument"
   definition: "A value passed into a function when it is called."
@@ -122,6 +149,9 @@
 - term: "Back-pressure"
   definition: "Slowing or refusing a producer when a consumer cannot keep up, instead of buffering without limit."
   courses: [mastery]
+- term: "Backplane"
+  definition: "A shared publish-subscribe channel that lets every server deliver messages to its own connected clients."
+  courses: [mastery]
 - term: "Backpropagation"
   definition: "The method that works out how much each weight contributed to the error."
   courses: [ai]
@@ -143,6 +173,9 @@
   courses: [ai, claude]
 - term: "Best case"
   definition: "The input of a given size that makes an algorithm do the least work."
+  courses: [mastery]
+- term: "Big ball of mud"
+  definition: "A system with no recognisable structure, where everything depends on everything."
   courses: [mastery]
 - term: "Big O"
   definition: "A way of describing how an algorithm’s work grows as its input grows."
@@ -177,6 +210,12 @@
 - term: "Bit"
   definition: "The smallest unit of data: a 0 or a 1."
   courses: [mastery, se, web]
+- term: "Boolean blindness"
+  definition: "Calls such as create(true, false, true) whose flags hide their meaning."
+  courses: [mastery]
+- term: "Bounded context"
+  definition: "A boundary within which one model and its language apply consistently."
+  courses: [mastery]
 - term: "Box model"
   definition: "The content, padding, border and margin that make up every element's box in CSS."
   courses: [web]
@@ -196,6 +235,9 @@
 - term: "Breakpoint"
   definition: "Two meanings. In responsive design, a width at which the layout changes; choose them where your content starts to look wrong. In debugging, a marked line where the program pauses so you can inspect it."
   courses: [web, se, mastery]
+- term: "Bridge"
+  definition: "A pattern separating two independent dimensions, such as reports and output formats, so they combine without a class per pair."
+  courses: [mastery]
 - term: "Browser"
   definition: "The program you open web pages with, such as Chrome, Firefox, Safari or Edge."
   courses: [web]
@@ -208,6 +250,9 @@
 - term: "Build tool"
   definition: "A program that prepares a project for publishing, combining and shrinking its files; Vite is one."
   courses: [web, se]
+- term: "Builder"
+  definition: "An object that constructs a complex object step by step, with defaults and validation, often through chained (fluent) calls."
+  courses: [mastery]
 - term: "Bundling"
   definition: "Combining many JavaScript modules into a few files for the browser."
   courses: [web]
@@ -216,6 +261,9 @@
   courses: [mastery, se, web]
 - term: "Bytecode"
   definition: "Compact instructions for a virtual machine rather than a real CPU, such as Java bytecode."
+  courses: [mastery]
+- term: "C4 model"
+  definition: "Diagrams at four levels: system context, containers, components and code."
   courses: [mastery]
 - term: "Cache"
   definition: "A fast store of results kept so that expensive work is not repeated."
@@ -251,11 +299,17 @@
 - term: "Certificate"
   definition: "A signed document that proves a server's identity for TLS."
   courses: [mastery]
+- term: "Chain of responsibility"
+  definition: "Passing a request along a chain of handlers, each of which handles it or passes it on."
+  courses: [mastery]
 - term: "Chaining"
   definitions:
     mastery: "Handling hash collisions by keeping a small list of entries in each bucket."
     web: "Calling one method on the result of another, such as items.filter(...).map(...)."
   courses: [mastery, web]
+- term: "Change tracker"
+  definition: "The part of an ORM that records which loaded objects were added, changed or removed."
+  courses: [mastery]
 - term: "Character reference"
   definition: "A code such as &lt; or &amp; that shows a character HTML would otherwise treat specially."
   courses: [web]
@@ -302,6 +356,10 @@
 - term: "CLAUDE.md"
   definition: "A Markdown file of standing instructions that Claude Code loads into every session: check commands, conventions and traps it cannot see in the code."
   courses: [claude]
+- term: "Clean architecture"
+  aliases: ["onion architecture", "dependency rule"]
+  definition: "Concentric layers in which source-code dependencies point only inwards, towards the business rules."
+  courses: [mastery]
 - term: "Cleanup function"
   definition: "A function returned from a React effect that stops what the effect started, such as a timer."
   courses: [web]
@@ -350,6 +408,9 @@
   aliases: ["combinations"]
   definition: "A choice of items where order does not matter."
   courses: [mastery]
+- term: "Command pattern"
+  definition: "Turning a request into an object that can be queued, logged, retried or undone."
+  courses: [mastery]
 - term: "Comment"
   definition: "A note in code for people, ignored by the computer: // in JavaScript, # in Python, <!-- --> in HTML."
   courses: [web, ai, se, mastery]
@@ -375,6 +436,9 @@
 - term: "Component tree"
   definition: "The way components contain other components, with App at the top."
   courses: [web]
+- term: "Composite"
+  definition: "A pattern that lets single items and groups of items be treated the same way, for tree structures."
+  courses: [mastery]
 - term: "Composition over inheritance"
   definition: "Building objects from other objects they hold, rather than inheriting from a base class."
   courses: [mastery]
@@ -388,6 +452,9 @@
 - term: "Conditional breakpoint"
   definition: "A breakpoint that pauses the program only when a given expression is true."
   courses: [mastery, web]
+- term: "Cone of uncertainty"
+  definition: "The narrowing of estimate ranges as a project's questions are answered."
+  courses: [mastery]
 - term: "Connection pool"
   definition: "A set of open connections kept for reuse, so requests do not pay to open new ones."
   courses: [mastery]
@@ -406,6 +473,9 @@
 - term: "Context engineering"
   definition: "Choosing everything a model sees at each step of a task, aiming for the smallest set of high-signal tokens."
   courses: [claude]
+- term: "Context map"
+  definition: "A picture of how bounded contexts relate, such as customer-supplier or anti-corruption layer."
+  courses: [mastery]
 - term: "Context rot"
   definition: "The decline in a model's ability to recall and use parts of its context as the context grows."
   courses: [claude]
@@ -421,8 +491,15 @@
 - term: "Controlled input"
   definition: "A form field whose value comes from React state and is updated by its onChange handler."
   courses: [web]
+- term: "Conway's law"
+  definition: "Systems end up mirroring the communication structure of the organisation that builds them."
+  courses: [mastery]
 - term: "Core"
   definition: "One complete processor within a CPU chip; several cores run several threads truly at once."
+  courses: [mastery]
+- term: "Core domain"
+  aliases: ["supporting subdomains", "generic subdomains"]
+  definition: "The part of the business that makes it distinctive and deserves the most investment."
   courses: [mastery]
 - term: "Core Web Vitals"
   definition: "Three measurements of how a page feels: LCP (loading), INP (responding) and CLS (layout moving)."
@@ -443,6 +520,9 @@
 - term: "CPython"
   definition: "The standard implementation of Python, which compiles to bytecode and interprets it."
   courses: [mastery]
+- term: "CQRS"
+  definition: "Command Query Responsibility Segregation: separate models for writing and for reading."
+  courses: [mastery]
 - term: "Cross-site scripting"
   aliases: ["XSS"]
   definition: "An attack where someone gets their own code to run on your page, often through text inserted as HTML; prevent it with textContent."
@@ -457,6 +537,10 @@
   aliases: ["custom properties"]
   definition: "Named values defined with -- and used with var(), so a design's colours and spacing are set in one place."
   courses: [web]
+- term: "Cursor pagination"
+  aliases: ["offset pagination", "cursor"]
+  definition: "Paging with an opaque marker of the last item seen, rather than a count of rows to skip."
+  courses: [mastery]
 - term: "Custom connector"
   definition: "A connector you add yourself by pointing the Claude apps at a remote MCP server."
   courses: [claude]
@@ -465,6 +549,14 @@
   courses: [mastery]
 - term: "DAG"
   definition: "A directed acyclic graph: directed edges and no cycles, like task dependencies."
+  courses: [mastery]
+- term: "Data mapper"
+  aliases: ["active record"]
+  definition: "A layer that moves data between objects and tables, so objects know nothing of the database (unlike active record, where objects save themselves)."
+  courses: [mastery]
+- term: "Data transfer object"
+  aliases: ["DTO"]
+  definition: "A simple object that carries data across a boundary, such as an API request or response."
   courses: [mastery]
 - term: "Database"
   definition: "Software that stores data safely and answers questions about it."
@@ -490,6 +582,9 @@
 - term: "Declarative mode"
   definition: "The simplest way of using React Router, describing pages with Routes and Route components."
   courses: [web]
+- term: "Decorator"
+  definition: "A wrapper with the same interface as the object it wraps, adding behaviour such as logging or caching."
+  courses: [mastery]
 - term: "Deep learning"
   definition: "Machine learning with neural networks that have many layers."
   courses: [ai]
@@ -522,6 +617,13 @@
   aliases: ["derived"]
   definition: "A value that can be calculated from state or props, so it is worked out during render instead of being stored."
   courses: [web]
+- term: "Design document"
+  definition: "A written proposal for building something significant, with goals, design, alternatives and risks."
+  courses: [mastery]
+- term: "Design pattern"
+  aliases: ["design patterns"]
+  definition: "A named, reusable solution to a design problem that keeps coming up, and a shared vocabulary for it."
+  courses: [mastery]
 - term: "Design tokens"
   definition: "The named, reusable choices of a design, such as its colours, spacing steps and font sizes."
   courses: [web]
@@ -544,12 +646,30 @@
 - term: "Discriminated union"
   definition: "A union of object types told apart by one property with a different exact value in each, such as status."
   courses: [web, mastery]
+- term: "Distributed monolith"
+  aliases: ["distributed monoliths"]
+  definition: "Services that must still be deployed or changed together, with the costs of both styles."
+  courses: [mastery]
 - term: "DNS"
   definition: "The system that turns a domain name into a numeric address."
   courses: [se, web, mastery]
 - term: "DOM"
   definition: "The browser’s tree of objects representing a page."
   courses: [se, web]
+- term: "Domain event"
+  aliases: ["integration events"]
+  definition: "A record of something meaningful that happened in the domain, named in the past tense."
+  courses: [mastery]
+- term: "Domain model"
+  definition: "Organising business logic in objects that represent the business and enforce its rules."
+  courses: [mastery]
+- term: "Domain service"
+  definition: "Stateless domain logic that does not belong to a single entity or value object."
+  courses: [mastery]
+- term: "Domain-driven design"
+  aliases: ["DDD"]
+  definition: "Designing software around a deep model of the business domain, built with domain experts."
+  courses: [mastery]
 - term: "Double free"
   definition: "Freeing the same memory twice, corrupting the allocator."
   courses: [mastery]
@@ -616,6 +736,9 @@
 - term: "Epoch"
   definition: "One full pass through the training data."
   courses: [ai]
+- term: "ETag"
+  definition: "A version identifier for an HTTP resource, used for caching and safe updates with If-Match."
+  courses: [mastery]
 - term: "Eval"
   definition: "A test set plus a scoring method that measures how well your AI system works."
   courses: [ai]
@@ -623,8 +746,8 @@
   definition: "A pattern in which one model call produces work and another evaluates it against criteria, repeating until it passes."
   courses: [claude]
 - term: "Event"
-  definition: "Something that happens on a page, such as a click, a key press or a form being submitted."
-  courses: [web, se]
+  definition: "Two meanings. On a web page, something that happens, such as a click, a key press or a form being submitted. In system design, a record of something that happened (an order was placed) that other components react to."
+  courses: [web, se, mastery]
 - term: "Event delegation"
   definition: "Handling events for many child elements with one listener on their parent, relying on events bubbling up."
   courses: [web]
@@ -634,6 +757,19 @@
 - term: "Event object"
   definition: "The object passed to an event handler, describing what happened, such as which element was clicked."
   courses: [web]
+- term: "Event sourcing"
+  definition: "Storing the sequence of events that happened to each entity and deriving state by replaying them."
+  courses: [mastery]
+- term: "Event Storming"
+  definition: "A workshop where experts and engineers map a business process as domain events on a wall."
+  courses: [mastery]
+- term: "Event-driven architecture"
+  definition: "Components that communicate by publishing events to a broker instead of calling each other."
+  courses: [mastery]
+- term: "Eventual consistency"
+  aliases: ["eventually consistent"]
+  definition: "Data that may be briefly out of date but becomes consistent once pending updates are applied."
+  courses: [mastery]
 - term: "Eviction policy"
   definition: "The rule a cache uses to decide what to remove when full, such as least recently used."
   courses: [mastery]
@@ -657,6 +793,13 @@
   aliases: ["expressions"]
   definition: "A piece of code that produces a value, such as 2 + 3, a variable or a function call."
   courses: [web]
+- term: "Facade"
+  definition: "A simple interface in front of a complicated subsystem."
+  courses: [mastery]
+- term: "Factory"
+  aliases: ["simple factory", "factory method", "static factory methods"]
+  definition: "A function or method whose job is to create objects, so callers need not name concrete classes."
+  courses: [mastery, se]
 - term: "Fail fast"
   aliases: ["failing fast"]
   definition: "Detecting a problem as early as possible and stopping, rather than carrying on with bad data."
@@ -694,6 +837,10 @@
 - term: "Fingerprinting"
   definition: "Putting a code made from a file's contents into its name, so a changed file gets a new name."
   courses: [web]
+- term: "Fitness function"
+  aliases: ["fitness functions"]
+  definition: "An automated check that the system keeps an architectural rule, such as allowed dependencies."
+  courses: [mastery]
 - term: "Flaky"
   definition: "Said of a test that sometimes passes and sometimes fails without the code changing, usually because of timing."
   courses: [web, mastery]
@@ -702,6 +849,10 @@
   courses: [web, se]
 - term: "Floating point"
   definition: "Storing numbers as digits plus a movable point, in base 2; most decimal fractions cannot be stored exactly."
+  courses: [mastery]
+- term: "Flyweight"
+  aliases: ["intrinsic state", "extrinsic state"]
+  definition: "Sharing identical immutable objects to save memory, keeping varying (extrinsic) state outside them."
   courses: [mastery]
 - term: "Focus"
   definition: "Which element on the page the keyboard is currently on."
@@ -740,6 +891,9 @@
 - term: "G1"
   definition: "Java's default garbage collector on server-class machines, dividing the heap into regions and aiming for a pause target."
   courses: [mastery]
+- term: "Gang of Four"
+  definition: "The four authors of the 1994 book Design Patterns, which catalogued 23 patterns in creational, structural and behavioural groups."
+  courses: [mastery]
 - term: "Garbage collector"
   definition: "Part of a runtime that automatically frees memory a program can no longer reach."
   courses: [mastery]
@@ -756,6 +910,9 @@
 - term: "GitHub"
   definition: "A website that stores copies of Git repositories online, for backup, sharing and teamwork."
   courses: [web]
+- term: "God object"
+  definition: "A class that knows and does far too much."
+  courses: [mastery]
 - term: "GPU"
   definition: "A chip that does many calculations at once, which makes training and running models fast."
   courses: [ai]
@@ -768,12 +925,19 @@
 - term: "Graph"
   definition: "A set of vertices connected by edges."
   courses: [mastery]
+- term: "GraphQL"
+  definition: "An API style with one endpoint where clients query exactly the fields they need from a typed schema."
+  courses: [mastery]
 - term: "Greedy"
   definition: "Of an algorithm: always taking the choice that looks best now, never reconsidering."
   courses: [mastery, se]
 - term: "Grid"
   definition: "The CSS layout method for arranging items in rows and columns at once."
   courses: [web, se]
+- term: "gRPC"
+  aliases: ["Protocol Buffers"]
+  definition: "A remote procedure call framework using Protocol Buffers over HTTP/2."
+  courses: [mastery]
 - term: "Gzip"
   definition: "A common way of compressing text files before sending them over the network."
   courses: [web]
@@ -816,6 +980,10 @@
 - term: "Hexadecimal"
   definition: "Base-16 numbers, written 0-9 and a-f; each digit stands for four bits."
   courses: [mastery]
+- term: "Hexagonal architecture"
+  aliases: ["ports and adapters", "ports"]
+  definition: "Keeping the application core free of technology, with ports it defines and adapters that implement them."
+  courses: [mastery]
 - term: "Higher-order function"
   aliases: ["higher-order functions"]
   definition: "A function that takes a function as an argument or returns one, such as map."
@@ -835,11 +1003,20 @@
 - term: "HTTP Archive"
   definition: "A project that measures millions of websites every year and publishes the results, including the Web Almanac."
   courses: [web]
+- term: "Hyrum's law"
+  definition: "With enough users, every observable behaviour of a system will be depended on."
+  courses: [mastery]
 - term: "IANA time zone database"
   definition: "The database of time zones and their rule changes used by operating systems and languages, with names like Europe/London."
   courses: [mastery]
+- term: "Idempotency key"
+  definition: "A unique key a client sends so a retried request is not performed twice."
+  courses: [mastery]
 - term: "Idempotent"
   definition: "Safe to repeat: doing it twice has the same effect as doing it once."
+  courses: [mastery]
+- term: "Identity map"
+  definition: "Ensuring each database row is loaded as at most one object within a unit of work."
   courses: [mastery]
 - term: "IEEE 754"
   definition: "The standard for floating-point numbers that almost every language and processor follows."
@@ -925,6 +1102,10 @@
 - term: "jest-dom"
   definition: "A library of extra test matchers for web pages, such as toBeInTheDocument."
   courses: [web]
+- term: "Jitter"
+  aliases: ["full jitter"]
+  definition: "Randomness added to retry delays so clients do not all retry at once."
+  courses: [mastery]
 - term: "jsdom"
   definition: "A pretend browser page written in JavaScript, used to test components without opening a browser."
   courses: [web]
@@ -1094,6 +1275,9 @@
 - term: "Marketplaces"
   definition: "Lists of Claude Code plugins, usually kept in a Git repository, from which plugins are installed."
   courses: [claude]
+- term: "Mass assignment"
+  definition: "A client setting fields it should not because a request is bound straight onto an object."
+  courses: [mastery]
 - term: "Matcher"
   aliases: ["matchers"]
   definition: "The method in an assertion that says what kind of check to make, such as toBe or toEqual."
@@ -1110,6 +1294,12 @@
 - term: "Media query"
   definition: "A CSS block that applies only when a condition is true, such as the window being at least 700 pixels wide."
   courses: [web]
+- term: "Mediator"
+  definition: "An object that centralises communication between a group of objects so they need not know each other."
+  courses: [mastery]
+- term: "Memento"
+  definition: "A captured snapshot of an object's state that can be restored later."
+  courses: [mastery]
 - term: "Memoisation"
   aliases: ["memoisation (top-down)"]
   definition: "Storing the result of a function call so the same call later returns it without recomputing."
@@ -1135,9 +1325,15 @@
 - term: "Method"
   aliases: ["methods"]
   definition: "Two meanings. In programming, a function that belongs to a value or object, called after a dot, such as text.toUpperCase(). In HTTP, the kind of request, such as GET to read or POST to create."
-  courses: [web, se]
+  courses: [web, se, mastery]
 - term: "Microsecond"
   definition: "A millionth of a second; a thousand nanoseconds."
+  courses: [mastery]
+- term: "Microservices"
+  definition: "Small services that each own one capability and its data, deployed independently and talking over the network."
+  courses: [mastery, se]
+- term: "Middleware"
+  definition: "Handlers that each process a request and pass it on, forming a pipeline in web frameworks."
   courses: [mastery]
 - term: "Migration"
   definition: "A versioned script that changes a database’s structure."
@@ -1173,11 +1369,18 @@
   aliases: ["modules"]
   definition: "A file of code that shares chosen parts with export and uses other files' parts with import."
   courses: [web]
+- term: "Monolith"
+  aliases: ["modular monolith"]
+  definition: "One deployable application; a modular monolith divides it into modules with enforced boundaries."
+  courses: [mastery, se]
 - term: "Multiplexing"
   definition: "Carrying many independent streams over one connection at once, as HTTP/2 does."
   courses: [mastery]
 - term: "N + 1 query problem"
   definition: "Making one query for a list and then one more for each item, instead of fetching them together."
+  courses: [mastery]
+- term: "N+1 query problem"
+  definition: "Running one query for a list and then one more per item, often caused by lazy loading."
   courses: [mastery]
 - term: "NaN"
   aliases: ["Not a Number"]
@@ -1231,6 +1434,14 @@
 - term: "Object"
   definition: "Two meanings. In JavaScript, a value made of named properties, such as { name: \"Ama\", age: 20 }. In object-oriented programming, one thing created from a class, with its own data."
   courses: [se, web, mastery]
+- term: "Object-relational mapper"
+  aliases: ["ORM"]
+  definition: "A library that maps objects to database tables, such as Hibernate, Entity Framework or TypeORM."
+  courses: [mastery]
+- term: "Observer"
+  aliases: ["subject"]
+  definition: "A pattern where a subject notifies every subscribed listener when something happens."
+  courses: [mastery, se]
 - term: "Old generation"
   definition: "The part of a generational heap for objects that have survived several collections, collected rarely."
   courses: [mastery]
@@ -1241,9 +1452,16 @@
   aliases: ["OCP"]
   definition: "Code should be open for extension but closed for modification: add behaviour by adding code."
   courses: [mastery]
+- term: "OpenAPI"
+  definition: "A machine-readable format for describing HTTP APIs."
+  courses: [mastery]
 - term: "Operating system"
   definition: "The software that manages a computer's hardware and shares it between programs, such as Linux or Windows."
   courses: [mastery, se, web]
+- term: "Optimistic concurrency"
+  aliases: ["lost update"]
+  definition: "Preventing lost updates by saving only if a row's version has not changed since it was read."
+  courses: [mastery]
 - term: "Optional"
   definition: "In TypeScript, a property marked with ? that may be left out."
   courses: [web]
@@ -1339,6 +1557,10 @@
 - term: "Pointer chasing"
   definition: "Following a chain of pointers through scattered memory, which causes many cache misses."
   courses: [mastery]
+- term: "Polling"
+  aliases: ["long polling"]
+  definition: "Asking a server repeatedly whether anything has changed; long polling holds each request open until it has."
+  courses: [mastery]
 - term: "Polymorphism"
   definition: "One call running different code depending on the actual object it is made on."
   courses: [mastery, se]
@@ -1364,6 +1586,9 @@
   courses: [claude]
 - term: "Prefix sum"
   definition: "An array where each entry is the total of all earlier values, so any range total is one subtraction."
+  courses: [mastery]
+- term: "Premature abstraction"
+  definition: "Flexibility built for variations that do not exist yet."
   courses: [mastery]
 - term: "Primitive obsession"
   definition: "Using raw strings and numbers for domain ideas such as money, emails and ids instead of small types."
@@ -1418,6 +1643,13 @@
 - term: "Props"
   definition: "The data passed into a React component, written like HTML attributes. A component must not change its props."
   courses: [web]
+- term: "Prototype"
+  definition: "Creating new objects by copying an existing one."
+  courses: [mastery]
+- term: "Proxy"
+  aliases: ["virtual proxy", "protection proxy", "remote proxy", "caching proxy"]
+  definition: "Two meanings. In design patterns, a stand-in with the same interface that controls access to the real object. In networking, a server that forwards requests on behalf of clients."
+  courses: [mastery]
 - term: "Pruning"
   definition: "Skipping branches of a search that cannot lead to a valid or better answer."
   courses: [mastery]
@@ -1433,6 +1665,9 @@
 - term: "Pure function"
   aliases: ["pure functions"]
   definition: "A function whose result depends only on its arguments and which changes nothing outside itself."
+  courses: [mastery]
+- term: "Quality attributes"
+  definition: "The qualities a system must have besides features, such as performance, availability and security."
   courses: [mastery]
 - term: "Quantisation"
   definition: "Storing a model’s numbers with fewer bits so it needs less memory."
@@ -1464,6 +1699,9 @@
 - term: "React Testing Library"
   definition: "A library for showing React components in tests and finding things on the page the way people do."
   courses: [web]
+- term: "Read model"
+  definition: "Data shaped for queries and kept up to date from the write side's events."
+  courses: [mastery]
 - term: "ReadyToRun"
   definition: "A .NET option that ships precompiled machine code alongside IL for faster start-up."
   courses: [mastery]
@@ -1510,8 +1748,8 @@
   definition: "In React, calling a component to get a fresh description of what should be on screen; React then updates the page to match."
   courses: [web]
 - term: "Repository"
-  definition: "A project’s folder together with its Git history."
-  courses: [se, web]
+  definition: "Two meanings. In version control, a project’s folder together with its Git history. In application design, a collection-like interface for loading and saving domain objects, hiding the database."
+  courses: [se, web, mastery]
 - term: "Research"
   definition: "A mode in the Claude apps that searches and reads many sources and writes a report with citations."
   courses: [claude]
@@ -1526,7 +1764,7 @@
   courses: [web, se]
 - term: "REST"
   definition: "A common API style: URLs name things, HTTP methods act on them."
-  courses: [se]
+  courses: [se, mastery]
 - term: "Result type"
   aliases: ["result types"]
   definition: "A return value that is either a success with a value or a failure with an error, which the caller must check."
@@ -1566,6 +1804,10 @@
 - term: "Runtime"
   definition: "The software that runs a program's compiled code and provides services such as memory management."
   courses: [mastery]
+- term: "Saga"
+  aliases: ["sagas"]
+  definition: "A sequence of local transactions across services, with compensating actions if a step fails."
+  courses: [mastery]
 - term: "Sampling"
   definition: "Choosing each next token with a little randomness among the likely ones, which is why the same question can get different answers."
   courses: [claude]
@@ -1600,11 +1842,29 @@
 - term: "Separation of concerns"
   definition: "Dividing a program so each part deals with one concern, such as presentation, rules or data access."
   courses: [mastery]
+- term: "Sequence diagram"
+  definition: "A diagram of the messages between participants over time."
+  courses: [mastery]
 - term: "Server"
   definition: "A computer or program that answers requests."
   courses: [se, web, claude, mastery]
+- term: "Server-sent events"
+  aliases: ["SSE"]
+  definition: "A one-way stream of text events from server to browser over one HTTP response."
+  courses: [mastery]
+- term: "Serverless"
+  definition: "Running code per request or event on a platform that scales automatically and bills by use."
+  courses: [mastery]
+- term: "Service lifetime"
+  aliases: ["singleton lifetime", "scoped", "transient"]
+  definition: "How long a DI container keeps an object: singleton (one for the app), scoped (one per request) or transient (new each time)."
+  courses: [mastery]
 - term: "Set"
   definition: "A collection of distinct items in no particular order."
+  courses: [mastery]
+- term: "Shallow copy"
+  aliases: ["deep copy"]
+  definition: "A copy that shares nested objects with the original; a deep copy copies everything."
   courses: [mastery]
 - term: "Side effect"
   aliases: ["side effects"]
@@ -1629,6 +1889,9 @@
 - term: "Single-page application"
   definition: "A web app that loads one page and then swaps what is shown with JavaScript, instead of loading a new page for each link."
   courses: [web]
+- term: "Singleton"
+  definition: "A class with exactly one instance reached globally; usually better replaced by one shared instance from a DI container."
+  courses: [mastery]
 - term: "Skill"
   definition: "A folder of instructions, and optionally scripts, that teaches Claude a workflow; it is loaded only when a task needs it."
   courses: [claude]
@@ -1646,6 +1909,9 @@
   courses: [web]
 - term: "Socket"
   definition: "The operating system's interface for sending and receiving data over a network connection."
+  courses: [mastery]
+- term: "Software architecture"
+  definition: "The decisions about a system that are expensive to change later, and their trade-offs."
   courses: [mastery]
 - term: "Spread syntax"
   aliases: ["spread"]
@@ -1688,6 +1954,9 @@
 - term: "State"
   definition: "The data a program is currently holding that its behaviour depends on."
   courses: [se, web, mastery]
+- term: "State machine"
+  definition: "A set of states and the allowed transitions between them."
+  courses: [mastery]
 - term: "Stateless"
   definition: "Keeping no memory between requests, so each request must carry everything needed, such as the whole conversation."
   courses: [claude, se]
@@ -1707,6 +1976,9 @@
 - term: "Strangler fig"
   definition: "Replacing a system gradually by moving one piece of functionality at a time to new code."
   courses: [mastery]
+- term: "Strategy"
+  definition: "Interchangeable algorithms behind one interface, often just a function passed in."
+  courses: [mastery, se]
 - term: "Streaming"
   definition: "Sending a reply in pieces as it is written, so people see text appear at once instead of waiting for the whole reply."
   courses: [claude]
@@ -1719,6 +1991,9 @@
   courses: [web, mastery]
 - term: "String builder"
   definition: "A growable buffer of characters for building a string in pieces efficiently."
+  courses: [mastery]
+- term: "Stringly typed"
+  definition: "Using strings for values that have structure or a fixed set of options."
   courses: [mastery]
 - term: "Structural typing"
   definition: "Types match by shape: any value with the right properties fits, as in TypeScript."
@@ -1771,6 +2046,9 @@
 - term: "Technical debt"
   definition: "The future cost of shortcuts taken today."
   courses: [se]
+- term: "Telescoping constructor"
+  definition: "A constructor with so many positional parameters that callers cannot tell what each one means."
+  courses: [mastery]
 - term: "Tell, don't ask"
   definition: "Tell an object what to do and let it decide, rather than reading its data and deciding outside it."
   courses: [mastery]
@@ -1781,6 +2059,9 @@
   aliases: ["template literals"]
   definition: "A string written with backticks in which ${…} inserts the value of an expression."
   courses: [web]
+- term: "Template method"
+  definition: "A base-class method that fixes an algorithm's steps and lets subclasses fill some of them in."
+  courses: [mastery]
 - term: "Tensor"
   definition: "An array of numbers with any number of dimensions; the basic data type in PyTorch."
   courses: [ai]
@@ -1798,6 +2079,9 @@
   courses: [mastery, se]
 - term: "Three-way handshake"
   definition: "The three packets TCP exchanges to open a connection, costing one round trip."
+  courses: [mastery]
+- term: "Thundering herd"
+  definition: "Many clients retrying or reconnecting at the same moment and overloading a server."
   courses: [mastery]
 - term: "Tiered compilation"
   definition: "Compiling code quickly at first, then recompiling the hot parts with heavier optimisation."
@@ -1817,6 +2101,10 @@
 - term: "Token"
   definition: "A chunk of text, often a word or part of one, that a model reads and writes. How many words a token holds depends on the model's tokeniser: on Claude's current tokeniser, an English word is about 1.8 tokens."
   courses: [ai, se, claude]
+- term: "Tolerant reader"
+  aliases: ["tolerant readers"]
+  definition: "A client that ignores unknown fields and copes with unexpected values, so APIs can grow."
+  courses: [mastery]
 - term: "Tool use"
   definition: "Letting a model request that your code run a function, such as a database lookup."
   courses: [ai]
@@ -1835,6 +2123,13 @@
 - term: "Transaction"
   definition: "A group of database changes that all succeed or all fail together."
   courses: [se]
+- term: "Transaction script"
+  definition: "Organising business logic as one procedure per use case."
+  courses: [mastery]
+- term: "Transactional outbox"
+  aliases: ["outbox"]
+  definition: "Saving events in the same database transaction as the change, then publishing them from that table."
+  courses: [mastery]
 - term: "Transcript"
   definition: "A written version of audio or video content."
   courses: [web]
@@ -1894,6 +2189,9 @@
 - term: "TypeScript"
   definition: "JavaScript with types added, checked before the code runs; the types are removed to run it."
   courses: [web, se, mastery]
+- term: "Ubiquitous language"
+  definition: "One precise vocabulary shared by domain experts and engineers and used in the code."
+  courses: [mastery]
 - term: "UDP"
   definition: "User Datagram Protocol: sends individual messages with no guarantee of delivery or order."
   courses: [mastery]
@@ -1912,6 +2210,9 @@
   courses: [web]
 - term: "Union-find"
   definition: "A structure that tracks which items are in the same group as groups are merged, in almost constant time."
+  courses: [mastery]
+- term: "Unit of work"
+  definition: "Tracking every change in a business transaction and writing them all to the database together."
   courses: [mastery]
 - term: "Unit test"
   aliases: ["unit tests"]
@@ -1995,6 +2296,9 @@
 - term: "Virtual size"
   definition: "All the address space a process has reserved, much of it possibly unused."
   courses: [mastery]
+- term: "Visitor"
+  definition: "A pattern for adding operations to a fixed set of types, one method per type; largely replaced by pattern matching."
+  courses: [mastery]
 - term: "Visual hierarchy"
   definition: "The order in which the eye notices things on a page, set by size, weight, colour and space."
   courses: [web]
@@ -2024,12 +2328,18 @@
 - term: "Web worker"
   definition: "A separate thread for heavy JavaScript, which cannot touch the page directly."
   courses: [web]
+- term: "Webhook"
+  definition: "An HTTP request a provider sends to a URL you registered when an event happens."
+  courses: [mastery]
 - term: "WebP"
   definition: "A modern image format, usually smaller than JPEG and PNG for the same quality."
   courses: [web]
 - term: "Website"
   definition: "A set of web pages under one address, mainly for reading."
   courses: [web]
+- term: "WebSocket"
+  definition: "A two-way connection, upgraded from HTTP, where either side can send messages at any time."
+  courses: [mastery]
 - term: "WOFF2"
   definition: "The most compressed font file format, supported by every current browser."
   courses: [web]

@@ -48,6 +48,8 @@ export async function runExample(code: string, opts: RunOptions = {}): Promise<R
     performance,
     TextEncoder,
     TextDecoder,
+    btoa,
+    atob,
     Intl,
     fetch: fakeFetch,
     URL,

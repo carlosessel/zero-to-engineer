@@ -1,0 +1,57 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    { ok: true, reference: "ACCEPTED:GBP:54.00" }
+    { ok: false, reference: "DECLINED" }
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    2 4
+- block: 3
+  lang: java
+  check: java
+  output: |
+    1: product,pence
+    2: rye loaf,450
+    3: croissant,275
+- block: 4
+  lang: ts
+  check: ts
+  output: |
+    dark GBP dark
+    ["theme", "currency", "theme"]
+    settings are read-only
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    Order placed (pay-900)
+    Sorry, not enough rye loaf
+    ["ama@example.com: 2 x rye loaf, payment pay-900"]
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    rye loaf 450 1
+    breakfast 575 2
+    hamper 1265 4
+- block: 7
+  lang: java
+  check: java
+  output: |
+    true
+    false
+    true
+- block: 8
+  lang: ts
+  check: ts
+  output: |
+    1
+- block: 9
+  lang: ts
+  check: ts
+  output: |
+    4200000 4212000

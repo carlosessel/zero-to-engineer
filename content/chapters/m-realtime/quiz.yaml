@@ -1,0 +1,36 @@
+- question: What is the main cost of short-interval polling?
+  options:
+  - Most requests return nothing new, wasting load
+  - It cannot pass through proxies
+  answer: 0
+  explanation: Polling less often instead makes updates slow.
+- question: Which technique gives one-way server-to-client events over plain HTTP with built-in reconnection?
+  options:
+  - Server-sent events
+  - WebSockets
+  answer: 0
+  explanation: EventSource reconnects and sends Last-Event-ID.
+- question: When are WebSockets the better choice?
+  options:
+  - When both sides send frequent messages with low latency
+  - For a rare 'export ready' notice
+  answer: 0
+  explanation: Chat, collaborative editing and games are typical.
+- question: Why add jitter to reconnection delays?
+  options:
+  - So clients do not all reconnect at the same moment after an outage
+  - To make reconnection faster
+  answer: 0
+  explanation: That avoids a thundering herd.
+- question: How does an update reach a client connected to a different server?
+  options:
+  - Through a backplane such as Redis pub/sub, or sticky routing
+  - It cannot
+  answer: 0
+  explanation: Every server forwards messages to its own clients.
+- question: Why avoid long-lived tokens in WebSocket URLs?
+  options:
+  - URLs end up in logs
+  - URLs cannot contain tokens
+  answer: 0
+  explanation: Use cookies or short-lived tokens.

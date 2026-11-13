@@ -1,0 +1,376 @@
+---
+title: "Design patterns: structure"
+summary: "Adapter, decorator, facade, composite, proxy, bridge and flyweight."
+prerequisites: [m-patterns-creational]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will know the structural design patterns: ways of combining objects so that incompatible parts fit together, behaviour can be added without changing classes, complex subsystems look simple, trees can be treated like single items, and access to an object can be controlled. You will also recognise them in libraries you already use, from Java's I/O streams to JavaScript's `Proxy`.
+
+Structural patterns are mostly about **wrapping** and **composing**: one object holds another and presents an interface to the outside. What distinguishes them is the *intent* of the wrapper.
+
+| Pattern | Wrapper's interface | Intent |
+|---|---|---|
+| Adapter | different from the wrapped object's | make an incompatible interface fit |
+| Decorator | the same | add behaviour |
+| Proxy | the same | control access (lazy loading, caching, permissions, remote calls) |
+| Facade | new and simpler | hide a complicated subsystem |
+| Composite | the same for a single item and a group | treat trees uniformly |
+
+## Adapter
+
+An **adapter** converts the interface of an existing class into the interface its callers expect, like a travel plug adapter. You meet it whenever you integrate a third-party library or an old system whose interface you cannot change.
+
+```ts
+interface PaymentGateway {
+  charge(amount: { pence: number; currency: string }, cardToken: string): { ok: boolean; reference: string };
+}
+
+class LegacyBankClient {
+  makePayment(pounds: string, ccy: string, token: string): string {
+    return token.startsWith("tok_") ? `ACCEPTED:${ccy}:${pounds}` : "DECLINED";
+  }
+}
+
+class LegacyBankAdapter implements PaymentGateway {
+  constructor(private bank: LegacyBankClient) {}
+
+  charge(amount: { pence: number; currency: string }, cardToken: string) {
+    const pounds = (amount.pence / 100).toFixed(2);
+    const reply = this.bank.makePayment(pounds, amount.currency, cardToken);
+    return { ok: reply.startsWith("ACCEPTED"), reference: reply };
+  }
+}
+
+const gateway: PaymentGateway = new LegacyBankAdapter(new LegacyBankClient());
+console.log(gateway.charge({ pence: 5400, currency: "GBP" }, "tok_123"));
+console.log(gateway.charge({ pence: 5400, currency: "GBP" }, "bad"));
+```
+
+It prints `{ ok: true, reference: "ACCEPTED:GBP:54.00" }` and `{ ok: false, reference: "DECLINED" }`. The rest of the application speaks `PaymentGateway` in pence; only the adapter knows the bank wants pounds as a string and replies with text. When the bank is replaced, you write a new adapter and nothing else changes. In domain-driven design this boundary is called an **anti-corruption layer** (<Ref to="m-ddd" />).
+
+## Decorator
+
+A **decorator** wraps an object with another object of the **same interface** that adds behaviour before or after delegating: logging, caching, retries, timing, compression, authorisation. Decorators stack, and each does one thing (<Ref to="m-design-principles" /> showed this as composition over inheritance).
+
+```ts
+interface PriceService {
+  priceOf(product: string): number;
+}
+
+class DatabasePriceService implements PriceService {
+  lookups = 0;
+  priceOf(product: string) {
+    this.lookups++;
+    return ({ "rye loaf": 450, croissant: 275 } as Record<string, number>)[product] ?? 0;
+  }
+}
+
+class CachingPriceService implements PriceService {
+  private cache = new Map<string, number>();
+  constructor(private inner: PriceService) {}
+  priceOf(product: string) {
+    if (!this.cache.has(product)) this.cache.set(product, this.inner.priceOf(product));
+    return this.cache.get(product)!;
+  }
+}
+
+class LoggingPriceService implements PriceService {
+  constructor(private inner: PriceService, private log: string[]) {}
+  priceOf(product: string) {
+    const price = this.inner.priceOf(product);
+    this.log.push(`${product} = ${price}`);
+    return price;
+  }
+}
+
+const db = new DatabasePriceService();
+const log: string[] = [];
+const prices: PriceService = new LoggingPriceService(new CachingPriceService(db), log);
+
+for (const p of ["rye loaf", "croissant", "rye loaf", "rye loaf"]) prices.priceOf(p);
+console.log(db.lookups, log.length);
+```
+
+It prints `2 4`: four lookups were logged, but the cache sent only two to the database. Swap the order of the wrappers and you would log only the two cache misses instead; the order of decorators is a design decision.
+
+Java's I/O library is built from decorators. Each reader wraps another and adds one ability:
+
+```java
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.LineNumberReader;
+import java.io.StringReader;
+
+public class Main {
+    public static void main(String[] args) throws IOException {
+        String csv = "product,pence\nrye loaf,450\ncroissant,275\n";
+        try (LineNumberReader reader = new LineNumberReader(new BufferedReader(new StringReader(csv)))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                System.out.println(reader.getLineNumber() + ": " + line);
+            }
+        }
+    }
+}
+```
+
+It prints `1: product,pence`, `2: rye loaf,450` and `3: croissant,275`. `StringReader` supplies characters, `BufferedReader` adds buffering and `readLine`, and `LineNumberReader` adds line counting. .NET streams work the same way (`new GZipStream(new FileStream(...))`), and ASP.NET Core and Express **middleware** pipelines are decorators around request handling.
+
+## Proxy
+
+A **proxy** has the same interface as the real object and stands in for it to **control access**:
+
+- a **virtual proxy** delays creating an expensive object until it is used (lazy loading);
+- a **protection proxy** checks permissions before passing calls on;
+- a **remote proxy** makes a call over the network look like a local method call (gRPC and Java RMI client stubs);
+- a **caching proxy** is the caching decorator above, seen from the access side.
+
+The line between proxy and decorator is intent, not code. Object-relational mappers such as Hibernate and Entity Framework use proxies for lazy loading: `order.getCustomer()` returns a proxy that queries the database only when you first read a field, which is convenient and is also how the **N+1 query problem** sneaks in (one query for the orders, then one more per order).
+
+JavaScript has proxies built in. A `Proxy` intercepts operations on an object:
+
+```ts
+const settings = { theme: "dark", currency: "GBP" };
+const reads: string[] = [];
+
+const watched = new Proxy(settings, {
+  get(target, property, receiver) {
+    reads.push(String(property));
+    return Reflect.get(target, property, receiver);
+  },
+  set() {
+    throw new Error("settings are read-only");
+  },
+});
+
+console.log(watched.theme, watched.currency, watched.theme);
+console.log(reads);
+try {
+  watched.theme = "light";
+} catch (e) {
+  console.log((e as Error).message);
+}
+```
+
+It prints `dark GBP dark`, then `["theme", "currency", "theme"]`, then `settings are read-only`. Vue's reactivity system and MobX use `Proxy` this way to notice which values a component reads.
+
+## Facade
+
+A **facade** gives a simple interface to a complicated subsystem. Placing an order might involve stock, pricing, payment, the database and email; callers (a web controller, a command-line tool) should not have to coordinate all of them.
+
+```ts
+class Stock {
+  private levels = new Map([["rye loaf", 3]]);
+  reserve(product: string, qty: number): boolean {
+    const have = this.levels.get(product) ?? 0;
+    if (have < qty) return false;
+    this.levels.set(product, have - qty);
+    return true;
+  }
+}
+
+class Payments {
+  charge(pence: number): string { return `pay-${pence}`; }
+}
+
+class Emails {
+  sent: string[] = [];
+  confirm(to: string, text: string) { this.sent.push(`${to}: ${text}`); }
+}
+
+class CheckoutFacade {
+  constructor(private stock: Stock, private payments: Payments, private emails: Emails) {}
+
+  placeOrder(email: string, product: string, qty: number, unitPence: number): string {
+    if (!this.stock.reserve(product, qty)) return `Sorry, not enough ${product}`;
+    const ref = this.payments.charge(qty * unitPence);
+    this.emails.confirm(email, `${qty} x ${product}, payment ${ref}`);
+    return `Order placed (${ref})`;
+  }
+}
+
+const emails = new Emails();
+const checkout = new CheckoutFacade(new Stock(), new Payments(), emails);
+console.log(checkout.placeOrder("ama@example.com", "rye loaf", 2, 450));
+console.log(checkout.placeOrder("kofi@example.com", "rye loaf", 2, 450));
+console.log(emails.sent);
+```
+
+It prints `Order placed (pay-900)`, then `Sorry, not enough rye loaf` (only one loaf is left), then the one confirmation email. A facade does not forbid using the subsystem directly; it makes the common path easy. The application services in <Ref to="m-enterprise-patterns" /> are facades over the domain.
+
+## Composite
+
+A **composite** lets you treat a single object and a group of objects the same way, which suits anything shaped like a tree: files and folders, menus and submenus, a bundle of products that itself contains bundles, an organisation chart.
+
+```ts
+interface CatalogueItem {
+  name: string;
+  price(): number;
+  count(): number;
+}
+
+class Product implements CatalogueItem {
+  constructor(readonly name: string, private pence: number) {}
+  price() { return this.pence; }
+  count() { return 1; }
+}
+
+class Bundle implements CatalogueItem {
+  constructor(readonly name: string, private items: CatalogueItem[], private discountPercent = 0) {}
+  price() {
+    const sum = this.items.reduce((total, item) => total + item.price(), 0);
+    return Math.round(sum * (1 - this.discountPercent / 100));
+  }
+  count() { return this.items.reduce((n, item) => n + item.count(), 0); }
+}
+
+const breakfast = new Bundle("breakfast", [new Product("croissant", 275), new Product("coffee", 300)]);
+const hamper = new Bundle("hamper", [breakfast, new Product("rye loaf", 450), new Product("jam", 380)], 10);
+
+for (const item of [new Product("rye loaf", 450), breakfast, hamper]) {
+  console.log(item.name, item.price(), item.count());
+}
+```
+
+It prints `rye loaf 450 1`, `breakfast 575 2` and `hamper 1265 4`. Code that prices a basket calls `price()` on each item and never asks whether it is a product or a bundle of bundles. The DOM, React component trees and abstract syntax trees are all composites.
+
+## Bridge
+
+A **bridge** separates two dimensions that would otherwise multiply into a class for every combination. If you have three kinds of report (sales, stock, staff) and three outputs (PDF, CSV, HTML), inheritance gives nine classes, and a fourth output makes twelve. A bridge gives each report a reference to an output **implementation**: three report classes plus three output classes, and adding an output adds one class. It is composition over inheritance applied to two independent hierarchies, and it is how JDBC and ADO.NET work: your code talks to the same `Connection` abstraction while a separate driver implements it for each database.
+
+## Flyweight
+
+A **flyweight** saves memory by sharing objects that are identical, instead of creating many copies. The shared part (**intrinsic state**) must be immutable; anything that differs (**extrinsic state**) is passed in or kept outside. Text editors share one glyph object per character, games share one tree model for a whole forest, and string interning shares identical strings.
+
+Java's boxed integers are a flyweight you can see, and the reason `==` on `Integer` is a classic bug:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        Integer a = 127, b = 127;
+        Integer c = 128, d = 128;
+        System.out.println(a == b);
+        System.out.println(c == d);
+        System.out.println(c.equals(d));
+    }
+}
+```
+
+It prints `true`, `false`, `true`. `Integer.valueOf` (which boxing uses) returns shared cached objects for values from -128 to 127, so `a` and `b` are the same object, but 128 gets two separate objects. `==` compares references, so it "works" in tests with small numbers and fails in production with larger ones. Always compare boxed values with `equals`. C# avoids this trap because `int` is a value type and `==` compares values.
+
+## Common mistakes
+
+- **Using a pattern's name for the wrong thing**, such as calling any wrapper an adapter, which confuses the shared vocabulary.
+- **Adapters that leak**, passing the third-party library's types through so the rest of the code still depends on them.
+- **Decorators in the wrong order** (caching outside logging, retries outside a timeout).
+- **Facades that grow into god objects** containing business logic that belongs in the domain (<Ref to="m-anti-patterns" />).
+- **Lazy-loading proxies in loops**, causing N+1 database queries.
+- **Comparing boxed or interned objects with `==`.**
+
+## Practice
+
+**1. (warm-up)** Which pattern? (a) Wrapping a third-party SMS library so it implements your `Notifier` interface. (b) Adding retry behaviour to any `HttpClient`. (c) A `Folder` that contains files and other folders, with `size()` on both. (d) One simple `importCatalogue(file)` method in front of the parser, validator, database and search index.
+
+<Solution>
+
+(a) Adapter. (b) Decorator. (c) Composite. (d) Facade.
+
+</Solution>
+
+**2. (warm-up)** What is the difference between a decorator and a proxy, given they can have identical code?
+
+<Solution>
+
+Intent. A decorator adds behaviour (logging, retries, compression). A proxy controls access to the real object (delaying its creation, checking permissions, standing in for a remote object, caching). Both have the same interface as the object they wrap.
+
+</Solution>
+
+**3. (standard)** Write a `TimingPriceService` decorator that records how many calls took longer than a threshold, using an injected clock so it can be tested. Show it with a fake clock.
+
+<Solution>
+
+```ts
+interface PriceService {
+  priceOf(product: string): number;
+}
+
+class TimingPriceService implements PriceService {
+  slowCalls = 0;
+  constructor(private inner: PriceService, private now: () => number, private slowMs: number) {}
+  priceOf(product: string) {
+    const start = this.now();
+    const price = this.inner.priceOf(product);
+    if (this.now() - start > this.slowMs) this.slowCalls++;
+    return price;
+  }
+}
+
+const fakeTimes = [0, 5, 10, 250, 300, 310];
+let tick = 0;
+const fakeClock = () => fakeTimes[tick++];
+
+const timed = new TimingPriceService({ priceOf: () => 450 }, fakeClock, 100);
+timed.priceOf("rye loaf");
+timed.priceOf("rye loaf");
+timed.priceOf("rye loaf");
+console.log(timed.slowCalls);
+```
+
+It prints **1**: the calls took 5, 240 and 10 milliseconds by the fake clock, and only one is over 100. The decorator works around any `PriceService`, and the injected clock keeps the test deterministic.
+
+</Solution>
+
+**4. (standard)** Add a `Folder` composite: files have a size in bytes, folders contain files and folders, and both have `size()`. Show a folder with a subfolder.
+
+<Solution>
+
+```ts
+interface Entry {
+  name: string;
+  size(): number;
+}
+
+const file = (name: string, bytes: number): Entry => ({ name, size: () => bytes });
+
+const folder = (name: string, entries: Entry[]): Entry => ({
+  name,
+  size: () => entries.reduce((total, e) => total + e.size(), 0),
+});
+
+const photos = folder("photos", [file("loaf.jpg", 2_400_000), file("shop.jpg", 1_800_000)]);
+const site = folder("site", [file("index.html", 12_000), photos]);
+console.log(photos.size(), site.size());
+```
+
+It prints **4200000 4212000**. The same `size()` works on a file, a folder or a folder of folders.
+
+</Solution>
+
+**5. (stretch)** A team's order list page is slow. Logs show one query to load 50 orders and then 50 more queries, one per order's customer. Which pattern is involved, what is the problem called, and how would you fix it?
+
+<Solution>
+
+Lazy-loading proxies from the object-relational mapper: each `order.customer` is a proxy that runs a query when first used, so displaying the list triggers the N+1 query problem. Fix by loading the customers with the orders in one query (a join, or the ORM's eager loading: `Include` in Entity Framework, `JOIN FETCH` or an entity graph in JPA), or by loading all needed customers in a second query with `WHERE id IN (...)`.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Structural patterns combine objects by wrapping and composing; the difference between them is **intent**.
+- **Adapter**: make an incompatible interface fit (an anti-corruption layer at system boundaries).
+- **Decorator**: add behaviour behind the same interface; decorators stack, and their order matters (Java I/O, middleware).
+- **Proxy**: control access (lazy loading, permissions, remote calls, caching); beware N+1 queries.
+- **Facade**: one simple entry point to a complicated subsystem.
+- **Composite**: treat single items and groups the same way in trees.
+- **Bridge** separates two independent dimensions; **flyweight** shares immutable objects to save memory (and explains Java's `Integer` `==` trap).
+
+## Go deeper
+
+- [Refactoring Guru: structural patterns](https://refactoring.guru/design-patterns/structural-patterns), Alexander Shvets. Each pattern with diagrams and code.
+- [Proxy (JavaScript)](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Proxy), MDN. Traps, `Reflect` and examples.
+- [Integer.valueOf (Java)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/lang/Integer.html#valueOf(int)), Oracle. The documented cache of values from -128 to 127.
+- [ASP.NET Core middleware](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/), Microsoft. A request pipeline built from wrappers.

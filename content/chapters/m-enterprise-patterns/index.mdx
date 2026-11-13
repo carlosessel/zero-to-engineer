@@ -1,0 +1,341 @@
+---
+title: "Patterns for business applications"
+summary: "Repository, unit of work, data mapper, DTOs, service layers and transaction scripts."
+prerequisites: [m-anti-patterns]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know the patterns almost every business application is built from: how to organise business logic (transaction script or domain model), how an application service layer coordinates a use case, how repositories and units of work keep database code out of business rules, how object-relational mappers implement them, and why data transfer objects sit at the edges. You will recognise them immediately in Spring, ASP.NET Core and NestJS code, because those frameworks are built around them.
+
+Most of these patterns were catalogued in Martin Fowler's *Patterns of Enterprise Application Architecture* (2002). "Enterprise" just means business software: lots of data, lots of rules, many users at once.
+
+## Organising business logic
+
+There are two main ways to organise the rules of an application.
+
+A **transaction script** puts each use case in one procedure that does everything: read data, apply the rules, write the results. It is simple, direct and easy to follow, and it is the right choice when the rules are few. Its weakness shows as rules grow: logic is duplicated between scripts, and nothing protects the data's consistency except each script remembering to.
+
+A **domain model** puts the rules in objects that represent the business (an `Order` that knows it cannot be changed once paid), as in <Ref to="m-anti-patterns" />'s rich `Order` and <Ref to="m-ddd" />. It takes more design up front and pays off as rules multiply, because each rule lives in one place and objects cannot be put into invalid states.
+
+```ts
+type OrderRow = { id: number; status: string; totalPence: number };
+
+// Transaction script: one procedure per use case.
+function cancelOrderScript(db: Map<number, OrderRow>, id: number): string {
+  const row = db.get(id);
+  if (!row) return "not found";
+  if (row.status === "shipped") return "too late to cancel";
+  db.set(id, { ...row, status: "cancelled" });
+  return "cancelled";
+}
+
+const db = new Map([[7, { id: 7, status: "paid", totalPence: 5400 }], [8, { id: 8, status: "shipped", totalPence: 900 }]]);
+console.log(cancelOrderScript(db, 7), cancelOrderScript(db, 8), cancelOrderScript(db, 9));
+```
+
+It prints `cancelled too late to cancel not found`. Many successful systems start with transaction scripts and move individual areas to a domain model where the rules become complex. Choosing deliberately, per area, is better than forcing one style everywhere.
+
+## The service layer
+
+An **application service** (the **service layer**) is the entry point for each use case: "place order", "cancel order", "change address". It is a facade (<Ref to="m-patterns-structural" />) over the domain and infrastructure, and it does the coordinating work:
+
+1. load what the use case needs (through repositories);
+2. ask the domain objects to do the work (the rules live there, not here);
+3. save the changes, usually in one transaction;
+4. trigger side effects (publish events, send emails).
+
+Controllers, message handlers and command-line tools all call the same services, so the use case behaves identically however it is triggered. A good service method is short and reads like the use case's description. A service full of `if` statements about business rules is the anaemic model of <Ref to="m-anti-patterns" />.
+
+## Repository
+
+A **repository** gives the domain a collection-like interface to stored objects, hiding how they are stored: `orders.byId(7)`, `orders.add(order)`, `orders.openForCustomer("c-17")`. The business code depends on the repository interface; a database-backed class implements it; tests use an in-memory one (dependency inversion, <Ref to="m-solid" />).
+
+```ts
+type Order = { id: number; customer: string; status: "open" | "paid" | "cancelled"; totalPence: number };
+
+interface OrderRepository {
+  byId(id: number): Order | undefined;
+  openForCustomer(customer: string): Order[];
+  save(order: Order): void;
+}
+
+class InMemoryOrderRepository implements OrderRepository {
+  private rows = new Map<number, Order>();
+  byId(id: number) {
+    const row = this.rows.get(id);
+    return row && { ...row };
+  }
+  openForCustomer(customer: string) {
+    return [...this.rows.values()].filter((o) => o.customer === customer && o.status === "open").map((o) => ({ ...o }));
+  }
+  save(order: Order) {
+    this.rows.set(order.id, { ...order });
+  }
+}
+
+class OrderService {
+  constructor(private orders: OrderRepository) {}
+
+  payAll(customer: string): number {
+    const open = this.orders.openForCustomer(customer);
+    for (const order of open) this.orders.save({ ...order, status: "paid" });
+    return open.reduce((sum, o) => sum + o.totalPence, 0);
+  }
+}
+
+const repo = new InMemoryOrderRepository();
+repo.save({ id: 1, customer: "c-17", status: "open", totalPence: 900 });
+repo.save({ id: 2, customer: "c-17", status: "open", totalPence: 450 });
+repo.save({ id: 3, customer: "c-4", status: "open", totalPence: 275 });
+
+console.log(new OrderService(repo).payAll("c-17"), repo.byId(1)?.status, repo.byId(3)?.status);
+```
+
+It prints `1350 paid open`. The in-memory repository copies objects in and out, as a real database would, so a test cannot accidentally pass by sharing an object with the repository.
+
+Guidelines for repositories:
+
+- Name query methods in **business terms** (`openForCustomer`), not database terms.
+- In domain-driven design, have **one repository per aggregate root** (<Ref to="m-ddd" />), not one per table.
+- Do not let database types (query builders, `IQueryable`) leak out of the interface if you want the business code to stay independent of the database; this is a trade-off, because exposing them is convenient.
+- A **generic repository** (`Repository<T>` with `getAll`, `getById`, `add`, `delete`) on top of an ORM that already provides one usually adds a layer without adding meaning.
+
+## Unit of work
+
+A **unit of work** keeps track of everything a business transaction changes (new objects, changed objects, deleted objects) and writes them all to the database together at the end, in one transaction. Business code changes objects freely; nothing is saved until `commit` (or `SaveChanges`), and then either everything is saved or nothing is.
+
+Object-relational mappers implement this for you. In Entity Framework Core, a `DbContext` *is* a unit of work and each `DbSet` is a repository:
+
+```csharp
+#:package Microsoft.EntityFrameworkCore.Sqlite@10.0.0
+#:property PublishAot=false
+using Microsoft.Data.Sqlite;
+using Microsoft.EntityFrameworkCore;
+
+using var connection = new SqliteConnection("Data Source=:memory:");
+connection.Open();
+var options = new DbContextOptionsBuilder<ShopContext>().UseSqlite(connection).Options;
+
+using (var db = new ShopContext(options))
+{
+    db.Database.EnsureCreated();
+    db.Products.Add(new Product { Name = "rye loaf", Pence = 450, Stock = 3 });
+    db.Products.Add(new Product { Name = "croissant", Pence = 275, Stock = 10 });
+    db.SaveChanges();
+}
+
+using (var db = new ShopContext(options))
+{
+    var loaf = db.Products.Single(p => p.Name == "rye loaf");
+    loaf.Stock -= 2;
+    db.Orders.Add(new Order { Customer = "c-17", TotalPence = 2 * loaf.Pence });
+    Console.WriteLine($"Pending changes: {db.ChangeTracker.Entries().Count(e => e.State != EntityState.Unchanged)}");
+    db.SaveChanges();
+}
+
+using (var db = new ShopContext(options))
+{
+    Console.WriteLine($"Stock: {db.Products.Single(p => p.Name == "rye loaf").Stock}, orders: {db.Orders.Count()}");
+}
+
+class Product
+{
+    public int Id { get; set; }
+    public string Name { get; set; } = "";
+    public long Pence { get; set; }
+    public int Stock { get; set; }
+}
+
+class Order
+{
+    public int Id { get; set; }
+    public string Customer { get; set; } = "";
+    public long TotalPence { get; set; }
+}
+
+class ShopContext(DbContextOptions<ShopContext> options) : DbContext(options)
+{
+    public DbSet<Product> Products => Set<Product>();
+    public DbSet<Order> Orders => Set<Order>();
+}
+```
+
+It prints `Pending changes: 2` and then `Stock: 1, orders: 1`. Changing `loaf.Stock` did not touch the database; the context's **change tracker** noticed the modified product and the added order, and `SaveChanges` wrote both in one transaction. (The `#:package` and `#:property` lines let `dotnet run app.cs` fetch EF Core and the SQLite provider; the in-memory SQLite database lasts as long as the open connection.) In Java, JPA's `EntityManager` plays the same role inside a `@Transactional` method, and in TypeScript, TypeORM and MikroORM provide the same pattern.
+
+This is also why a database context should be **scoped to one request** (<Ref to="m-patterns-creational" />): it is one unit of work.
+
+## Data mapper and active record
+
+There are two ways for objects to get in and out of a database:
+
+- **Active record**: each object knows how to save itself (`order.save()`, `Order.find(7)`). Rails' ActiveRecord, Laravel's Eloquent and Django's models work this way. It is quick to build with and couples the domain object to the database.
+- **Data mapper**: a separate layer moves data between objects and tables, so domain objects know nothing about persistence. Hibernate and JPA, Entity Framework and TypeORM's data mapper mode work this way. It keeps the domain model independent and testable, at the cost of more machinery.
+
+An **object-relational mapper** (ORM) is a library implementing a data mapper (or active record), a unit of work, an **identity map** (each database row is loaded as at most one object per unit of work, so two lookups of order 7 return the same object) and lazy loading (with the N+1 query trap from <Ref to="m-patterns-structural" />). ORMs remove a great deal of repetitive code; they do not remove the need to understand the SQL they generate. The data part of this course covers SQL and query plans.
+
+## Data transfer objects
+
+A **data transfer object** (DTO) is a simple object that carries data across a boundary: the JSON body of an API request or response, a message on a queue, a row for a report. It has no behaviour, and it is shaped for its consumer, not for the domain.
+
+Keep DTOs separate from domain objects and database entities:
+
+- **Security**: returning entities directly can leak fields (a password hash, internal flags), and binding request bodies straight onto entities lets clients set fields they should not (**mass assignment** or over-posting: sending `"isAdmin": true`).
+- **Stability**: the API's shape is a contract with clients (<Ref to="m-api-design" />) and should not change every time a database column is renamed.
+- **Fit**: a list screen needs a summary, not the whole object graph.
+
+```ts
+type Customer = { id: string; email: string; passwordHash: string; isAdmin: boolean; createdAt: Date };
+
+type CustomerResponse = { id: string; email: string; memberSince: string };
+type UpdateCustomerRequest = { email?: string };
+
+function toResponse(c: Customer): CustomerResponse {
+  return { id: c.id, email: c.email, memberSince: c.createdAt.toISOString().slice(0, 10) };
+}
+
+function applyUpdate(c: Customer, body: unknown): Customer {
+  const request = body as UpdateCustomerRequest;
+  return typeof request.email === "string" ? { ...c, email: request.email.trim().toLowerCase() } : c;
+}
+
+const ama: Customer = { id: "c-17", email: "ama@example.com", passwordHash: "$argon2id$...", isAdmin: false, createdAt: new Date("2025-03-02T10:00:00Z") };
+const attack = { email: " AMA.M@example.com ", isAdmin: true };
+const updated = applyUpdate(ama, attack);
+console.log(toResponse(updated), updated.isAdmin);
+```
+
+It prints `{ id: "c-17", email: "ama.m@example.com", memberSince: "2025-03-02" }` and `false`: the response never includes the password hash, and the `isAdmin` the client tried to sneak in is ignored because only the fields of `UpdateCustomerRequest` are copied. (A real handler would validate the body at the edge rather than cast it, as in <Ref to="m-errors" />.)
+
+The cost of DTOs is **mapping code**. Write it by hand for small applications (it is simple and explicit), or use a mapping library (MapStruct in Java generates it at compile time; AutoMapper and Mapster in .NET) when there is a lot of it, accepting that mistakes then show up at run time or in configuration rather than in plain code.
+
+## Optimistic concurrency
+
+Two users edit the same order at the same time; the second save silently overwrites the first (a **lost update**). The usual fix in business applications is **optimistic concurrency**: each row has a **version** number; an update succeeds only if the version is unchanged since the row was read, and increments it.
+
+```ts
+type Row = { id: number; notes: string; version: number };
+const table = new Map<number, Row>([[7, { id: 7, notes: "", version: 1 }]]);
+
+function update(id: number, notes: string, expectedVersion: number): string {
+  const row = table.get(id)!;
+  if (row.version !== expectedVersion) return `conflict: order ${id} was changed by someone else`;
+  table.set(id, { id, notes, version: row.version + 1 });
+  return `saved version ${row.version + 1}`;
+}
+
+const readByAma = table.get(7)!.version;
+const readByKofi = table.get(7)!.version;
+console.log(update(7, "Leave with neighbour", readByAma));
+console.log(update(7, "Ring twice", readByKofi));
+```
+
+It prints `saved version 2` and then `conflict: order 7 was changed by someone else`. In SQL this is `UPDATE orders SET notes = ?, version = version + 1 WHERE id = ? AND version = ?`, followed by checking that one row was updated. JPA's `@Version` and EF Core's concurrency tokens do it automatically and raise an exception on conflict; the application then reloads and asks the user, or retries.
+
+## Common mistakes
+
+- **Business rules in services or controllers** while domain objects are bags of data (when the domain really has rules).
+- **Generic repositories** that only wrap the ORM, or repositories per table instead of per aggregate.
+- **Returning entities from APIs** or binding requests directly onto them (data leaks and mass assignment).
+- **Long-lived units of work** (a `DbContext` shared across requests or kept for minutes).
+- **Not knowing what SQL the ORM runs**, leading to N+1 queries and loading whole tables.
+- **No concurrency control** on data several people edit.
+
+## Practice
+
+**1. (warm-up)** When is a transaction script a better choice than a domain model?
+
+<Solution>
+
+When the business rules are few and simple, and most use cases are reading and writing data with little logic, as in many internal tools and simple CRUD applications. It is quicker to write and easier to follow; move to a domain model where rules become complex.
+
+</Solution>
+
+**2. (warm-up)** What does a unit of work do, and what is EF Core's version of it?
+
+<Solution>
+
+It tracks the objects a business transaction adds, changes and removes, and writes all the changes together in one database transaction at the end. In EF Core it is the `DbContext`: its change tracker records changes and `SaveChanges` commits them.
+
+</Solution>
+
+**3. (warm-up)** Give two reasons not to return database entities directly from an API.
+
+<Solution>
+
+Any two of: they can leak sensitive or internal fields (password hashes, flags); binding requests onto them allows mass assignment; the API's contract would change whenever the database schema changes; lazy-loaded relationships can trigger extra queries or circular serialisation; the shape rarely fits what the client needs.
+
+</Solution>
+
+**4. (standard)** Add a `cancel` method to `OrderService` from the repository example that cancels an open order and refuses one that is paid, returning a message. Show both cases with the in-memory repository.
+
+<Solution>
+
+```ts
+type Order = { id: number; customer: string; status: "open" | "paid" | "cancelled"; totalPence: number };
+
+interface OrderRepository {
+  byId(id: number): Order | undefined;
+  save(order: Order): void;
+}
+
+class InMemoryOrderRepository implements OrderRepository {
+  private rows = new Map<number, Order>();
+  byId(id: number) {
+    const row = this.rows.get(id);
+    return row && { ...row };
+  }
+  save(order: Order) {
+    this.rows.set(order.id, { ...order });
+  }
+}
+
+class OrderService {
+  constructor(private orders: OrderRepository) {}
+
+  cancel(id: number): string {
+    const order = this.orders.byId(id);
+    if (!order) return `order ${id} not found`;
+    if (order.status !== "open") return `order ${id} is ${order.status} and cannot be cancelled`;
+    this.orders.save({ ...order, status: "cancelled" });
+    return `order ${id} cancelled`;
+  }
+}
+
+const repo = new InMemoryOrderRepository();
+repo.save({ id: 1, customer: "c-17", status: "open", totalPence: 900 });
+repo.save({ id: 2, customer: "c-17", status: "paid", totalPence: 450 });
+const service = new OrderService(repo);
+console.log(service.cancel(1), "|", service.cancel(2), "|", repo.byId(1)?.status);
+```
+
+It prints **order 1 cancelled | order 2 is paid and cannot be cancelled | cancelled**. In a domain model, the "only open orders can be cancelled" rule would move into an `Order.cancel()` method, and the service would just load, call and save.
+
+</Solution>
+
+**5. (stretch)** A support tool and the customer app both edit delivery notes on orders. Users report their notes "disappearing". What is happening, and how do you fix it in the database and in the user interface?
+
+<Solution>
+
+Lost updates: both read the order, both edit, and the second save overwrites the first. Fix with optimistic concurrency: add a version column (JPA `@Version`, an EF Core concurrency token, or a manual `WHERE version = ?` check), so the second save fails instead of overwriting. In the interface, catch the conflict, reload the latest notes, show the user what changed, and let them merge or retry. (For a single field like notes, an alternative is to append notes as separate rows rather than overwrite one field.)
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Organise logic as **transaction scripts** where rules are few and a **domain model** where they are many; choose per area.
+- **Application services** coordinate use cases: load, ask the domain, save, trigger side effects.
+- **Repositories** give a collection-like, business-named interface to storage; use in-memory ones in tests.
+- A **unit of work** tracks changes and commits them together; EF Core's `DbContext` and JPA's `EntityManager` are units of work.
+- **Data mappers** keep domain objects ignorant of the database; **active record** puts persistence on the object. ORMs add an identity map and lazy loading.
+- **DTOs** carry data across boundaries; they prevent leaks and mass assignment and keep API contracts stable.
+- **Optimistic concurrency** with a version column prevents lost updates.
+
+## Go deeper
+
+- [Catalog of Patterns of Enterprise Application Architecture](https://martinfowler.com/eaaCatalog/), Martin Fowler. A summary of every pattern from the book.
+- [Saving data (EF Core)](https://learn.microsoft.com/en-us/ef/core/saving/), Microsoft. Change tracking, `SaveChanges` and transactions.
+- [Handling concurrency conflicts (EF Core)](https://learn.microsoft.com/en-us/ef/core/saving/concurrency), Microsoft. Optimistic concurrency with concurrency tokens.
+- [Mass assignment cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/Mass_Assignment_Cheat_Sheet.html), OWASP. Why binding requests to entities is dangerous, with fixes per framework.

@@ -1,0 +1,308 @@
+---
+title: "Designing APIs"
+summary: "REST done well, errors, pagination, versioning, idempotency, gRPC, GraphQL and webhooks."
+prerequisites: [m-architecture]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will design web APIs that other developers find predictable and that can evolve without breaking their clients: resources and HTTP methods used properly, useful status codes and error bodies, pagination that scales, safe retries with idempotency keys, versioning and compatibility rules, and a clear sense of when gRPC, GraphQL or webhooks fit better than REST.
+
+An **API** (application programming interface) is a contract: other programs depend on its exact behaviour, often programs you will never see. That makes API design different from ordinary code: a function can be renamed in an afternoon, but a published API field may have to live for years. Design APIs for the people who will call them, and assume that every observable behaviour will be relied on by someone (**Hyrum's law**: with enough users, every observable behaviour of a system will be depended on, documented or not).
+
+## REST, properly
+
+**REST** (Representational State Transfer, from Roy Fielding's 2000 dissertation) in everyday use means an HTTP API organised around **resources** (things, named by nouns in URLs) acted on with the standard **HTTP methods**. The web course covered HTTP's basics; here are the design rules.
+
+### Resources and URLs
+
+- Use nouns for collections and items: `/orders`, `/orders/o-7`, `/orders/o-7/lines`.
+- Use plural collection names and stable ids; nest only one level for things that belong to a parent.
+- Keep verbs out of URLs (`/getOrders`, `/orders/o-7/delete`). Where an action genuinely is not create, read, update or delete, model it as a resource (`POST /orders/o-7/cancellation`) or a clearly named sub-resource action (`POST /orders/o-7:cancel`, Google's style).
+- Use query parameters for filtering, sorting and paging: `/orders?status=paid&sort=-placedAt&limit=20`.
+
+### Methods, safety and idempotency
+
+| Method | Meaning | Safe | Idempotent |
+|---|---|---|---|
+| GET | read | yes | yes |
+| POST | create, or perform an action | no | no |
+| PUT | replace the whole resource at this URL | no | yes |
+| PATCH | change part of a resource | no | not necessarily |
+| DELETE | remove | no | yes |
+
+**Safe** means the request does not change anything (so crawlers, prefetchers and caches may call it freely). **Idempotent** means repeating the request has the same effect as making it once: deleting order 7 twice leaves it deleted. Idempotency matters because networks fail: if a client sends a request and the connection drops before the response arrives, it cannot tell whether the server acted, and the only safe recovery is to **retry**. Retrying GET, PUT and DELETE is safe; retrying POST could create two orders or charge a card twice. The fix is below.
+
+### Status codes
+
+Use the status code to say what happened, so clients and tools can react without parsing text:
+
+- **200 OK** (with a body), **201 Created** (with a `Location` header pointing at the new resource), **202 Accepted** (queued for later processing), **204 No Content**.
+- **400 Bad Request** (malformed or invalid input), **401 Unauthorized** (not authenticated), **403 Forbidden** (authenticated but not allowed), **404 Not Found**, **409 Conflict** (clashes with the current state, such as a duplicate or a stale version), **412 Precondition Failed** (an `If-Match` version check failed), **422 Unprocessable Content** (well-formed but breaks a rule; some APIs use 400 for this), **429 Too Many Requests** (with `Retry-After`).
+- **500 Internal Server Error** (a bug), **502**/**503**/**504** (an upstream or overload problem; usually worth retrying with backoff).
+
+Never return 200 with `"success": false` in the body: clients, proxies and monitoring will all think it worked.
+
+### Error bodies
+
+Give errors a consistent, machine-readable body. **RFC 9457 Problem Details for HTTP APIs** (which replaced RFC 7807) defines a standard JSON shape, served as `application/problem+json`:
+
+```json
+{
+  "type": "https://api.example.com/problems/insufficient-stock",
+  "title": "Not enough stock",
+  "status": 409,
+  "detail": "Only 1 rye loaf is left; 2 were requested.",
+  "instance": "/orders/o-7/lines",
+  "sku": "RYE-400",
+  "available": 1
+}
+```
+
+`type` identifies the kind of problem (clients switch on it), `title` and `detail` are for humans, and you may add extension fields such as `sku` and `available`. For validation errors, list every problem field at once, not just the first. Spring and ASP.NET Core both produce problem details out of the box. Never put stack traces or SQL in error bodies (<Ref to="m-errors" />).
+
+## Pagination
+
+Never return an unbounded list: a collection that has 50 items today has 5 million next year. Two common styles:
+
+- **Offset pagination** (`?offset=40&limit=20`, or `?page=3`): simple, allows jumping to any page, but the database must skip `offset` rows each time (slow deep into a large table), and items shift if rows are added or deleted between requests, so clients see duplicates or miss items.
+- **Cursor pagination** (also called keyset pagination): each response includes an opaque **cursor** marking where it stopped; the next request passes it back (`?after=eyJ...`). The server turns it into a `WHERE (placed_at, id) < (?, ?)` condition on an index, which is fast at any depth and stable while data changes. You cannot jump to page 400, which few clients need.
+
+```ts
+type Order = { id: number; placedAt: string };
+
+const orders: Order[] = Array.from({ length: 7 }, (_, i) => ({ id: i + 1, placedAt: `2026-11-${String(10 + i).padStart(2, "0")}` }));
+
+const encode = (o: Order) => btoa(JSON.stringify([o.placedAt, o.id]));
+const decode = (cursor: string) => JSON.parse(atob(cursor)) as [string, number];
+
+function page(limit: number, after?: string) {
+  const sorted = orders.toSorted((a, b) => b.placedAt.localeCompare(a.placedAt) || b.id - a.id);
+  const start = after
+    ? sorted.findIndex((o) => {
+        const [at, id] = decode(after);
+        return o.placedAt < at || (o.placedAt === at && o.id < id);
+      })
+    : 0;
+  const items = start === -1 ? [] : sorted.slice(start, start + limit);
+  const last = items.at(-1);
+  const hasMore = start !== -1 && start + limit < sorted.length;
+  return { items: items.map((o) => o.id), next: hasMore && last ? encode(last) : null };
+}
+
+let response = page(3);
+console.log(response.items);
+while (response.next) {
+  response = page(3, response.next);
+  console.log(response.items);
+}
+```
+
+It prints `[7, 6, 5]`, `[4, 3, 2]` and `[1]`, newest first. The cursor is a sort key (date and id, so it is unique) encoded as an opaque string, so clients cannot depend on its contents and you can change it later. A real implementation applies the condition in SQL rather than in memory, and should sign or validate the cursor it receives.
+
+Return paging information in the body (`"next": "..."`) or in a `Link` header, and make `limit` have a sensible default and a maximum.
+
+## Idempotency keys
+
+To make POST safe to retry, the client generates a unique **idempotency key** per operation (a UUID) and sends it in an `Idempotency-Key` header. The server stores the key with the result of the first request; a retry with the same key gets the stored result instead of performing the action again. Stripe popularised this, and the header is being standardised by the IETF.
+
+```ts
+type Charge = { id: string; pence: number };
+const charges: Charge[] = [];
+const seen = new Map<string, { status: number; body: Charge }>();
+
+function createCharge(idempotencyKey: string, pence: number) {
+  const previous = seen.get(idempotencyKey);
+  if (previous) return { ...previous, replayed: true };
+  const charge = { id: `ch_${charges.length + 1}`, pence };
+  charges.push(charge);
+  const response = { status: 201, body: charge };
+  seen.set(idempotencyKey, response);
+  return { ...response, replayed: false };
+}
+
+console.log(createCharge("5f0c-order-7", 5400));
+console.log(createCharge("5f0c-order-7", 5400));
+console.log(createCharge("91ab-order-8", 900));
+console.log(charges.length);
+```
+
+It prints the first charge with `replayed: false`, the same charge again with `replayed: true`, a new charge for the second key, and `2`: the retry did not charge twice. A production version stores keys in the database in the same transaction as the work, expires them after a day or so, rejects a reused key with a *different* request body, and handles two copies of the request arriving at the same moment (with a unique constraint or a lock).
+
+## Concurrency: ETags
+
+For updates, use optimistic concurrency (<Ref to="m-enterprise-patterns" />) over HTTP: the server sends an **ETag** (a version identifier) with each resource; the client sends it back in an `If-Match` header when updating; if the resource has changed meanwhile, the server responds **412 Precondition Failed** instead of overwriting someone else's change. ETags with `If-None-Match` also let clients revalidate cached responses cheaply (**304 Not Modified**).
+
+## Evolving an API
+
+APIs must change without breaking existing clients.
+
+**Backward-compatible** (safe) changes:
+
+- adding a new endpoint, an optional request field or a response field;
+- adding a new value to an enum, *if* clients were told to tolerate unknown values;
+- relaxing a validation rule.
+
+**Breaking** changes:
+
+- removing or renaming a field or endpoint;
+- changing a field's type or meaning;
+- adding a required request field, or tightening validation;
+- changing default behaviour, status codes or error types.
+
+Clients should be **tolerant readers**: ignore fields they do not know and handle unexpected enum values. When a breaking change is unavoidable, **version** the API. Common styles are a version in the path (`/v2/orders`, the most visible and easiest to route), a header (`Api-Version: 2026-11-01`, Stripe's date-based style) or a media type. Run old and new versions side by side, announce **deprecation** clearly (the `Deprecation` and `Sunset` headers exist for this), measure who still calls the old version, and remove it only when they have moved.
+
+Describe the API in a machine-readable **OpenAPI** document (formerly Swagger). It drives documentation, client generation, request validation and contract tests, and checking it in CI can catch accidental breaking changes.
+
+## Beyond REST
+
+### gRPC
+
+**gRPC** is a remote procedure call framework from Google. You define services and messages in **Protocol Buffers** (protobuf), a compact binary format, and generate client and server code for many languages:
+
+```text
+syntax = "proto3";
+
+service Orders {
+  rpc GetOrder (GetOrderRequest) returns (Order);
+  rpc WatchOrder (GetOrderRequest) returns (stream OrderStatus);
+}
+
+message GetOrderRequest { string id = 1; }
+message Order { string id = 1; int64 total_pence = 2; repeated string skus = 3; }
+message OrderStatus { string status = 1; }
+```
+
+It runs over HTTP/2, supports streaming in both directions, and is fast and strongly typed. Its field numbers make compatibility rules explicit: never reuse or change a field's number. It suits **internal service-to-service** calls; browsers cannot call it directly without a proxy (gRPC-Web), and its binary messages are harder to inspect by hand.
+
+### GraphQL
+
+**GraphQL** (from Facebook) exposes one endpoint and a typed schema; each client sends a query naming exactly the fields it wants, possibly across related objects, and gets back exactly that shape. It suits products with many different clients (web, iOS, Android) that each need different slices of a rich data graph, avoiding both over-fetching and many round trips. The costs: caching is harder (everything is a POST to one URL), a naive server makes one database query per field per object (the N+1 problem again, solved with batching **DataLoader**s), and arbitrarily deep queries need cost limits to prevent abuse.
+
+### Webhooks
+
+A **webhook** reverses the direction: instead of a client polling "has anything changed?", the provider sends an HTTP POST to a URL the client registered when an event happens (a payment succeeded, a parcel was delivered). Design them carefully:
+
+- **Sign every delivery** so receivers can verify it came from you: an HMAC of the timestamp and body with a secret shared per subscriber, sent in a header.
+- Include a **timestamp** and reject old deliveries, to stop replay attacks.
+- **Retry with backoff** when the receiver fails, and expect duplicates: give each event an id so receivers can process it **idempotently**.
+- Keep payloads small, or send just ids and let receivers fetch the details.
+
+Verifying a signature on the receiving side, in Python (the same steps work in any language):
+
+```python
+import hashlib
+import hmac
+import time
+
+SECRET = b"whsec_example_only"
+
+def sign(timestamp: int, body: bytes) -> str:
+    return hmac.new(SECRET, f"{timestamp}.".encode() + body, hashlib.sha256).hexdigest()
+
+def verify(timestamp: int, body: bytes, signature: str, now: int, tolerance: int = 300) -> str:
+    if abs(now - timestamp) > tolerance:
+        return "rejected: too old"
+    if not hmac.compare_digest(sign(timestamp, body), signature):
+        return "rejected: bad signature"
+    return "accepted"
+
+body = b'{"id":"evt_1","type":"payment.succeeded","order":"o-7"}'
+sent_at = 1_794_600_000
+signature = sign(sent_at, body)
+
+print(verify(sent_at, body, signature, now=sent_at + 2))
+print(verify(sent_at, body.replace(b"o-7", b"o-8"), signature, now=sent_at + 2))
+print(verify(sent_at, body, signature, now=sent_at + 3600))
+```
+
+It prints `accepted`, `rejected: bad signature` (the body was tampered with) and `rejected: too old` (a replay an hour later). `hmac.compare_digest` compares in constant time, so an attacker cannot learn the signature byte by byte from response timings. Real secrets come from configuration, never source code.
+
+### Which to choose
+
+| Need | Good fit |
+|---|---|
+| Public API for many unknown clients | REST with OpenAPI |
+| Fast, typed calls between internal services, streaming | gRPC |
+| Many client apps needing different slices of related data | GraphQL |
+| Telling other systems when something happens | Webhooks (or a message broker inside your own system) |
+| Pushing live updates to a browser | Server-sent events or WebSockets (<Ref to="m-realtime" />) |
+
+## Common mistakes
+
+- **Verbs in URLs** and inconsistent naming across endpoints.
+- **200 OK for errors**, or one generic error for everything.
+- **Unbounded lists**, and offset pagination on huge, fast-changing tables.
+- **Non-idempotent POSTs** that clients retry, creating duplicates.
+- **Breaking changes without a new version**, or removing fields clients still use.
+- **Exposing database entities** directly as API resources (<Ref to="m-enterprise-patterns" />).
+- **Unsigned webhooks**, or receivers that are not idempotent.
+
+## Practice
+
+**1. (warm-up)** Which HTTP methods are idempotent, and why does it matter for retries?
+
+<Solution>
+
+GET, PUT and DELETE (and HEAD and OPTIONS). Repeating them has the same effect as doing them once, so a client that does not know whether its request succeeded can safely retry. POST (and often PATCH) is not idempotent, so a blind retry can duplicate the action unless the API supports idempotency keys.
+
+</Solution>
+
+**2. (warm-up)** Pick a status code: (a) the request body is not valid JSON; (b) the user is logged in but may not see this order; (c) the order was created; (d) the client has sent too many requests; (e) the update's `If-Match` ETag is out of date.
+
+<Solution>
+
+(a) 400 Bad Request. (b) 403 Forbidden (or 404 if you do not want to reveal that the order exists). (c) 201 Created, with a `Location` header. (d) 429 Too Many Requests, with `Retry-After`. (e) 412 Precondition Failed.
+
+</Solution>
+
+**3. (warm-up)** Is each change breaking? (a) Adding an optional `giftMessage` field to the create-order request. (b) Renaming `total` to `totalPence` in the response. (c) Adding `"refunded"` to the order status values. (d) Making `phone` required.
+
+<Solution>
+
+(a) Not breaking. (b) Breaking: clients reading `total` fail. (c) Breaking for clients that cannot handle unknown values; safe only if clients were told to be tolerant readers. (d) Breaking: existing requests without a phone will now be rejected.
+
+</Solution>
+
+**4. (standard)** Why is cursor pagination stable when new orders arrive between page requests, while offset pagination is not? Use an example.
+
+<Solution>
+
+With offset pagination, page 2 is "skip 20, take 20". If two new orders arrive after page 1 is read, everything shifts down by two, so page 2 starts with the last two orders of the old page 1: the client sees duplicates (and deletions would make it miss items). A cursor records the sort key of the last item seen ("placed before 2026-11-12, id 4"), so page 2 continues exactly after that item regardless of what was added or removed elsewhere.
+
+</Solution>
+
+**5. (standard)** Design the request and response for "add a line to an order" in a REST API, including the error for a product that is out of stock.
+
+<Solution>
+
+`POST /orders/o-7/lines` with body `{"sku": "RYE-400", "quantity": 2}` and an `Idempotency-Key` header. On success: **201 Created**, `Location: /orders/o-7/lines/l-3`, and the created line (or the updated order) in the body. Out of stock: **409 Conflict** with a problem details body, `type` ending `insufficient-stock`, a human-readable `detail`, and extension fields `sku` and `available`. If the order is already paid: 409 with a different `type` (such as `order-not-editable`). Invalid quantity: 400 or 422 listing the invalid field.
+
+</Solution>
+
+**6. (stretch)** You publish webhooks for payment events. A customer reports processing some payments twice, and a security review asks how receivers know a webhook is genuine. What do you change on both sides?
+
+<Solution>
+
+Sender: give every event a unique id, include a timestamp, sign `timestamp.body` with an HMAC using a per-subscriber secret and send the signature in a header, retry failed deliveries with exponential backoff, and document that deliveries can be duplicated or arrive out of order. Receiver: verify the signature with a constant-time comparison and reject old timestamps; record processed event ids (in the same transaction as the processing) and skip events already seen; return 2xx quickly and do slow work asynchronously so the sender does not time out and retry; fetch the current state from the API if order matters.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- An API is a long-lived **contract**; with enough users, every behaviour is relied on (Hyrum's law).
+- REST: **nouns** in URLs, the right **methods**, meaningful **status codes**, and **RFC 9457 problem details** for errors.
+- Know which methods are **safe** and **idempotent**; make POST retry-safe with **idempotency keys**; use **ETags** and `If-Match` against lost updates.
+- Paginate everything; prefer **cursor pagination** for large or changing data.
+- Evolve compatibly; clients should be **tolerant readers**; **version** only for unavoidable breaking changes, with deprecation and measurement. Describe the API with **OpenAPI**.
+- **gRPC** for fast internal calls and streaming; **GraphQL** for many clients with varied data needs; **webhooks** to notify others, signed and idempotent.
+
+## Go deeper
+
+- [RFC 9457: Problem Details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457.html), the IETF. The standard error body format.
+- [RFC 9110: HTTP Semantics](https://www.rfc-editor.org/rfc/rfc9110.html), the IETF. Methods, status codes, safety and idempotency, defined precisely.
+- [Google API design guide](https://cloud.google.com/apis/design), Google. Resource-oriented design, naming, errors and compatibility.
+- [Idempotent requests](https://docs.stripe.com/api/idempotent_requests), Stripe. How a large payment API implements idempotency keys.
+- [OpenAPI Specification](https://spec.openapis.org/oas/latest.html), the OpenAPI Initiative. The format for describing HTTP APIs.

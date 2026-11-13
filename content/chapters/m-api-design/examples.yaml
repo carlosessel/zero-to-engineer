@@ -1,0 +1,31 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: json
+  check: illustration
+  note: A sample problem details body in the RFC 9457 shape, not a program.
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    [7, 6, 5]
+    [4, 3, 2]
+    [1]
+- block: 3
+  lang: ts
+  check: ts
+  output: |
+    { status: 201, body: { id: "ch_1", pence: 5400 }, replayed: false }
+    { status: 201, body: { id: "ch_1", pence: 5400 }, replayed: true }
+    { status: 201, body: { id: "ch_2", pence: 900 }, replayed: false }
+    2
+- block: 4
+  lang: text
+  check: illustration
+  note: A Protocol Buffers service definition; it needs the protobuf compiler and a gRPC server to run, which this course does not install.
+- block: 5
+  lang: python
+  check: python
+  output: |
+    accepted
+    rejected: bad signature
+    rejected: too old

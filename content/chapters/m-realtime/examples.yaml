@@ -1,0 +1,33 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    { requestsPerHour: 7200000, wastedPercent: 99, averageDelaySeconds: 2.5 }
+    { requestsPerHour: 600000, wastedPercent: 93, averageDelaySeconds: 30 }
+- block: 2
+  lang: text
+  check: illustration
+  note: One event in the text/event-stream format; block 4 sends and parses real events in this format.
+- block: 3
+  lang: js
+  check: not-run
+  reason: 'Browser code that needs an EventSource server at /orders/o-7/events and a page with a #status element; block 4 runs a real event stream end to end.'
+- block: 4
+  lang: python
+  check: python
+  output: |
+    text/event-stream
+    1 status paid
+    2 status baking
+    3 status out for delivery
+- block: 5
+  lang: js
+  check: not-run
+  reason: Browser code that needs a WebSocket chat server at chat.example.com, which does not exist.
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    [500, 1000, 2000, 4000, 8000, 16000, 30000, 30000]
+    [291, 520, 1830, 2795, 6025, 11031, 15633, 4555]

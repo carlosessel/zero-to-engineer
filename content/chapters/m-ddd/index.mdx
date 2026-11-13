@@ -1,0 +1,294 @@
+---
+title: "Domain-driven design"
+summary: "Ubiquitous language, entities, value objects, aggregates, domain events and bounded contexts."
+prerequisites: [m-enterprise-patterns]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will understand domain-driven design (DDD): how to build software whose structure follows the business it serves, with a shared language between engineers and experts, models that protect the business's rules, aggregates that keep data consistent, domain events that connect parts of the system, and bounded contexts that stop a large system turning into one tangled model. DDD's ideas shape how services are split in most modern back ends, so even teams that never say "DDD" use its vocabulary.
+
+Eric Evans introduced DDD in his 2003 book *Domain-Driven Design*; Vaughn Vernon's *Implementing Domain-Driven Design* (2013) made it practical. DDD has two halves: **strategic design** (how to divide a large domain into parts and how they relate) and **tactical design** (the building blocks inside one part). Strategic design matters more, and teams that adopt only the tactical patterns usually miss most of the benefit.
+
+## The domain and the language
+
+The **domain** is the area of business the software serves: running a bakery chain, insuring cars, scheduling hospital staff. **Domain experts** are the people who understand it (bakers, underwriters, rota managers). Most software complexity comes from the domain, not from technology, so DDD puts understanding it first.
+
+The central practice is a **ubiquitous language**: one shared, precise vocabulary for the domain, used by experts and engineers alike, in conversation, documents *and code*. If the bakers say a customer "places a standing order" that "is fulfilled every Friday", the code has `StandingOrder`, `place` and `fulfil`, not `RecurringPurchaseRecord` and `process`. When a conversation reveals a new idea ("we also have *paused* standing orders"), the code changes to match. Mismatched words between business and code are where misunderstandings, and bugs, breed.
+
+## Bounded contexts
+
+In any sizeable business, the same word means different things to different departments. To the catalogue team, a "product" has a name, description, photos and allergens. To the warehouse, a "product" is a stock-keeping unit with a weight, a shelf location and a quantity. To billing, it is a price and a tax category. Forcing one `Product` class to serve all three gives a huge model that everyone fights over and nobody fully understands.
+
+A **bounded context** is a boundary within which one model and one language apply consistently. Each context has its own model of "product", designed for its job, and **translates** at the boundary when it talks to another. Bounded contexts are usually owned by one team, and they are the natural candidates for modules in a modular monolith or for separate services (<Ref to="m-architecture" />).
+
+```ts
+// Catalogue context: what customers see.
+type CatalogueProduct = { sku: string; name: string; description: string; allergens: string[] };
+
+// Warehouse context: what pickers need.
+type StockItem = { sku: string; shelf: string; weightGrams: number; onHand: number };
+
+// Shipping context needs only weights, and asks the warehouse for them by SKU.
+function parcelWeightGrams(lines: { sku: string; qty: number }[], stock: Map<string, StockItem>): number {
+  return lines.reduce((total, line) => total + stock.get(line.sku)!.weightGrams * line.qty, 0);
+}
+
+const catalogue: CatalogueProduct = { sku: "RYE-400", name: "Rye loaf", description: "Dark, dense, 400g", allergens: ["rye", "gluten"] };
+const stock = new Map<string, StockItem>([
+  ["RYE-400", { sku: "RYE-400", shelf: "B3", weightGrams: 420, onHand: 18 }],
+  ["JAM-STR", { sku: "JAM-STR", shelf: "D1", weightGrams: 380, onHand: 40 }],
+]);
+
+console.log(catalogue.name, "|", parcelWeightGrams([{ sku: "RYE-400", qty: 2 }, { sku: "JAM-STR", qty: 1 }], stock));
+```
+
+It prints `Rye loaf | 1220`. The contexts share only an identifier (the SKU); each holds what it needs.
+
+### Subdomains
+
+DDD also asks where to invest. The **core domain** is what makes the business distinctive (for the bakery, perhaps its subscription and scheduling logic); it deserves the best engineers and the richest model. **Supporting subdomains** are necessary and specific to the business but not differentiating (staff rotas). **Generic subdomains** are the same for everyone (payments, email, authentication): buy or use a service rather than build.
+
+### Context maps
+
+A **context map** shows how bounded contexts relate. The common relationships:
+
+- **Customer–supplier**: the downstream context's needs influence the upstream one's plans.
+- **Conformist**: the downstream simply accepts the upstream's model (common with large external providers).
+- **Anti-corruption layer**: the downstream translates the upstream's model into its own at the boundary, so a messy or foreign model does not leak in. This is the adapter pattern at the scale of a system (<Ref to="m-patterns-structural" />).
+- **Open host service** and **published language**: the upstream offers a well-documented, stable API or event format for many consumers.
+- **Shared kernel**: two contexts share a small part of the model and coordinate every change to it. Use sparingly.
+
+## Entities and value objects
+
+Inside a context, the tactical building blocks start with two kinds of object you met in <Ref to="m-oop" />:
+
+- An **entity** has an identity that lasts while its attributes change: a customer, an order, a standing order. Two entities with the same data but different ids are different.
+- A **value object** is defined only by its values, is immutable and is compared by value: money, a date range, an address, a quantity, a SKU. Value objects should validate themselves on creation, so an invalid one cannot exist.
+
+Prefer value objects wherever possible; they are simpler to reason about, test and share. Java records make them compact, with validation in the **compact constructor**:
+
+```java
+public class Main {
+    record Money(long pence, String currency) {
+        Money {
+            if (pence < 0) throw new IllegalArgumentException("Money cannot be negative");
+            if (!currency.matches("[A-Z]{3}")) throw new IllegalArgumentException("Currency must be a three-letter code");
+        }
+        Money plus(Money other) {
+            if (!currency.equals(other.currency)) throw new IllegalArgumentException("Currencies differ");
+            return new Money(pence + other.pence, currency);
+        }
+    }
+
+    public static void main(String[] args) {
+        Money total = new Money(450, "GBP").plus(new Money(380, "GBP"));
+        System.out.println(total + " " + total.equals(new Money(830, "GBP")));
+        try {
+            new Money(100, "pounds");
+        } catch (IllegalArgumentException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+}
+```
+
+It prints `Money[pence=830, currency=GBP] true` and then `Currency must be a three-letter code`.
+
+## Aggregates
+
+An **aggregate** is a cluster of entities and value objects that is treated as one unit for changes, with one entity as its **aggregate root**. Outside code may hold a reference only to the root and must make every change through it, so the root can enforce the rules (the **invariants**) that span the whole cluster. An order and its lines are a typical aggregate: "an order's total never exceeds its customer's credit limit" and "a paid order cannot gain lines" involve the order and all its lines together.
+
+The rules of thumb for aggregates (from Vernon):
+
+1. **Protect true invariants** inside the boundary: the rules that must be consistent *immediately*.
+2. **Design small aggregates.** Large ones (a `Customer` containing every order they ever placed) are slow to load and cause conflicts when two people change different parts at once.
+3. **Reference other aggregates by id**, not by object: an order holds a `customerId`, not a `Customer`.
+4. **Change one aggregate per transaction.** Changes to other aggregates happen afterwards, through domain events (**eventual consistency**).
+
+An aggregate is also the unit a repository loads and saves (one repository per aggregate root, <Ref to="m-enterprise-patterns" />), and the natural unit of optimistic concurrency (one version number per aggregate).
+
+## Domain events
+
+A **domain event** records something meaningful that happened in the domain, named in the past tense in the ubiquitous language: `OrderPlaced`, `StandingOrderPaused`, `PaymentFailed`. Aggregates record events as they change; after the transaction commits, the events are published, and other parts of the system react: send the confirmation email, reserve stock, award loyalty points. This keeps aggregates small and decoupled (the observer pattern at domain level, <Ref to="m-patterns-behavioural" />).
+
+```ts
+type Line = { sku: string; qty: number; unitPence: number };
+type DomainEvent =
+  | { type: "OrderPlaced"; orderId: string; customerId: string; totalPence: number }
+  | { type: "LineAdded"; orderId: string; sku: string; qty: number };
+
+class Order {
+  private lines: Line[] = [];
+  private placed = false;
+  private events: DomainEvent[] = [];
+
+  constructor(readonly id: string, readonly customerId: string, private creditLimitPence: number) {}
+
+  addLine(sku: string, qty: number, unitPence: number) {
+    if (this.placed) throw new Error("A placed order cannot be changed");
+    if (qty < 1) throw new Error("Quantity must be at least 1");
+    if (this.total() + qty * unitPence > this.creditLimitPence) throw new Error("Over the customer's credit limit");
+    const existing = this.lines.find((l) => l.sku === sku);
+    if (existing) existing.qty += qty;
+    else this.lines.push({ sku, qty, unitPence });
+    this.events.push({ type: "LineAdded", orderId: this.id, sku, qty });
+  }
+
+  place() {
+    if (this.lines.length === 0) throw new Error("Cannot place an empty order");
+    this.placed = true;
+    this.events.push({ type: "OrderPlaced", orderId: this.id, customerId: this.customerId, totalPence: this.total() });
+  }
+
+  total() {
+    return this.lines.reduce((sum, l) => sum + l.qty * l.unitPence, 0);
+  }
+
+  pullEvents(): DomainEvent[] {
+    const out = this.events;
+    this.events = [];
+    return out;
+  }
+}
+
+const order = new Order("o-7", "c-17", 3000);
+order.addLine("RYE-400", 2, 450);
+order.addLine("RYE-400", 1, 450);
+for (const attempt of [() => order.addLine("HAMPER", 1, 2500), () => order.place(), () => order.addLine("JAM-STR", 1, 380)]) {
+  try {
+    attempt();
+  } catch (e) {
+    console.log((e as Error).message);
+  }
+}
+console.log(order.total(), order.pullEvents().map((e) => e.type));
+```
+
+It prints `Over the customer's credit limit`, then `A placed order cannot be changed`, then `1350 ["LineAdded", "LineAdded", "OrderPlaced"]`. Every rule is enforced inside the aggregate, and the recorded events are what the rest of the system will hear. To publish events reliably together with the database change (not lose them if the process crashes between the two), store them in the same transaction in an **outbox** table and publish from there; the messaging chapter later in this course covers the **transactional outbox**.
+
+Domain events between bounded contexts become **integration events**: messages on a broker such as Kafka, with a stable published format.
+
+## Other building blocks
+
+- A **domain service** holds domain logic that does not naturally belong to one entity or value object, such as transferring money between two accounts or calculating a delivery slot from several aggregates. It is stateless and named in the ubiquitous language (not to be confused with application services, which coordinate use cases).
+- **Factories** create complex aggregates in a valid state (<Ref to="m-patterns-creational" />).
+- **Repositories** load and save whole aggregates (<Ref to="m-enterprise-patterns" />).
+
+## Discovering the model
+
+DDD models come from conversation with domain experts, not from database diagrams. **Event Storming** (Alberto Brandolini) is a popular workshop: experts and engineers put the domain events of a business process on a long wall with sticky notes, in time order, then add the commands that cause them, the people and systems involved, the rules, and the questions. Clusters of events and rules suggest aggregates; places where the language changes suggest bounded context boundaries.
+
+## When DDD is worth it
+
+DDD's tactical patterns add structure, which pays off only where the domain is genuinely complex. For a simple CRUD application or a generic subdomain, a transaction script and plain data are better (<Ref to="m-enterprise-patterns" />). The strategic ideas (a ubiquitous language, bounded contexts, investing most in the core domain) are worth applying almost everywhere.
+
+## Common mistakes
+
+- **Tactical patterns without strategy**: entities, repositories and aggregates everywhere, but one giant model with no bounded contexts.
+- **One canonical model for the whole company** (an enterprise-wide `Customer` used by every team).
+- **Huge aggregates** that load too much and conflict constantly; or aggregates holding object references to other aggregates.
+- **Changing several aggregates in one transaction** to keep everything immediately consistent, when eventual consistency would do.
+- **Code words that differ from the business's words.**
+- **Anaemic entities** with the rules in application services (<Ref to="m-anti-patterns" />).
+- **Applying DDD to simple CRUD** where it only adds ceremony.
+
+## Practice
+
+**1. (warm-up)** Entity or value object? A standing order; a delivery address; a SKU; a customer; a date range for a promotion.
+
+<Solution>
+
+Entities: the standing order and the customer (identity that persists as details change). Value objects: the delivery address, the SKU and the date range (defined entirely by their values; immutable).
+
+</Solution>
+
+**2. (warm-up)** Why should an order hold a `customerId` rather than a reference to the `Customer` object?
+
+<Solution>
+
+The customer is a separate aggregate. Holding only its id keeps aggregates small and independent: loading an order does not load the customer, changing an order cannot accidentally change the customer in the same transaction, and the two can even live in different services or databases.
+
+</Solution>
+
+**3. (warm-up)** Name the three kinds of subdomain and how much effort each deserves.
+
+<Solution>
+
+Core (the business's distinctive advantage: the most effort and the best engineers), supporting (specific to the business but not differentiating: build simply), generic (the same for everyone, such as payments or email: buy or use an existing service).
+
+</Solution>
+
+**4. (standard)** Add a `pause(untilIsoDate)` behaviour to a `StandingOrder` aggregate: a standing order can be paused only if it is active, the date must be in the future, and pausing records a `StandingOrderPaused` event. Show one success and one failure.
+
+<Solution>
+
+```ts
+type PauseEvent = { type: "StandingOrderPaused"; id: string; until: string };
+
+class StandingOrder {
+  private status: "active" | "paused" | "cancelled" = "active";
+  private events: PauseEvent[] = [];
+  constructor(readonly id: string) {}
+
+  pause(until: string, today: string) {
+    if (this.status !== "active") throw new Error(`Only an active standing order can be paused (it is ${this.status})`);
+    if (until <= today) throw new Error("The pause must end in the future");
+    this.status = "paused";
+    this.events.push({ type: "StandingOrderPaused", id: this.id, until });
+  }
+
+  pullEvents() {
+    const out = this.events;
+    this.events = [];
+    return out;
+  }
+}
+
+const weekly = new StandingOrder("so-3");
+weekly.pause("2026-12-01", "2026-11-13");
+try {
+  weekly.pause("2026-12-08", "2026-11-13");
+} catch (e) {
+  console.log((e as Error).message);
+}
+console.log(weekly.pullEvents());
+```
+
+It prints **Only an active standing order can be paused (it is paused)** and then `[{ type: "StandingOrderPaused", id: "so-3", until: "2026-12-01" }]`. Today's date is passed in, keeping the aggregate pure and testable (<Ref to="m-functional" />).
+
+</Solution>
+
+**5. (standard)** The marketing team wants "customer" to include campaign history and preferences; billing wants payment methods and invoices; support wants tickets. Someone proposes one `Customer` table and class with all of it. What would you propose?
+
+<Solution>
+
+Separate bounded contexts, each with its own customer model: a marketing contact (preferences, campaign history), a billing account (payment methods, invoices), a support requester (tickets). They share only the customer's identifier. Each team can change its model without negotiating with the others, and each model stays small. Where one context needs data owned by another, it gets it through an API or events, translated at the boundary.
+
+</Solution>
+
+**6. (stretch)** When an order is placed, stock must be reserved in the warehouse context and loyalty points awarded. Someone wants to do all three in one database transaction. Explain the DDD alternative and its trade-off.
+
+<Solution>
+
+Change only the order aggregate in the transaction and record an `OrderPlaced` domain event (saved in an outbox in the same transaction). After commit, the event is published; the warehouse and loyalty contexts react and update their own aggregates in their own transactions. The trade-off is eventual consistency: for a short time the order exists without the reservation or points, and failures must be handled (retries, idempotent handlers, a compensating action such as cancelling the order if stock cannot be reserved). In return, aggregates stay small, contexts stay independent (they can even be separate services), and there is no cross-context locking.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- DDD centres software on the **domain**, with a **ubiquitous language** shared by experts and code.
+- **Strategic design**: split the domain into **bounded contexts**, each with its own model; map their relationships (anti-corruption layers, open host services); invest most in the **core domain**.
+- **Tactical design**: **entities** (identity), **value objects** (immutable values that validate themselves), **aggregates** with a root that enforces invariants.
+- Keep aggregates **small**, reference others **by id**, and change **one per transaction**.
+- **Domain events** record what happened and drive eventual consistency between aggregates and contexts (with an outbox for reliability).
+- Discover models with experts (**Event Storming**); apply the tactical patterns only where the domain is complex.
+
+## Go deeper
+
+- [Domain-Driven Design Reference](https://www.domainlanguage.com/ddd/reference/), Eric Evans. The free summary of every pattern, from the author.
+- [BoundedContext](https://martinfowler.com/bliki/BoundedContext.html), Martin Fowler. A short explanation with the "multiple meanings of customer" example.
+- [Effective Aggregate Design](https://www.dddcommunity.org/library/vernon_2011/), Vaughn Vernon. The three-part essay behind the aggregate rules in this chapter.
+- [Design a DDD-oriented microservice](https://learn.microsoft.com/en-us/dotnet/architecture/microservices/microservice-ddd-cqrs-patterns/ddd-oriented-microservice), Microsoft. DDD applied in a .NET reference architecture.

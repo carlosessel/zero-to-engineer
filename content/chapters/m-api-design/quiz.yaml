@@ -1,0 +1,37 @@
+- question: Which method is not idempotent by default?
+  options:
+  - POST
+  - PUT
+  - DELETE
+  answer: 0
+  explanation: Make POSTs retry-safe with idempotency keys.
+- question: What should an API return when the update's If-Match version is stale?
+  options:
+  - 412 Precondition Failed
+  - 200 OK
+  answer: 0
+  explanation: The client reloads and tries again.
+- question: Why is cursor pagination preferred for large, changing data?
+  options:
+  - It is fast at any depth and stable when rows are added or removed
+  - It lets clients jump to any page number
+  answer: 0
+  explanation: Offset pagination skips rows and shifts when data changes.
+- question: Which change is breaking?
+  options:
+  - Renaming a response field
+  - Adding an optional response field
+  answer: 0
+  explanation: Clients reading the old name break.
+- question: What standard defines a JSON shape for API errors?
+  options:
+  - RFC 9457 Problem Details
+  - OpenAPI
+  answer: 0
+  explanation: It replaced RFC 7807.
+- question: Why should webhook signatures be compared with a constant-time function?
+  options:
+  - So attackers cannot learn the signature from response timings
+  - Because it is faster
+  answer: 0
+  explanation: Use hmac.compare_digest or the equivalent.

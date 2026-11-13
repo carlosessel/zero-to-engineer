@@ -1,0 +1,250 @@
+---
+title: "Anti-patterns and over-engineering"
+summary: "God objects, anaemic models, premature abstraction, pattern overuse, and the dos and don'ts that come from them."
+prerequisites: [m-patterns-behavioural]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will recognise the anti-patterns that make codebases slow and painful to change, understand how sensible decisions turn into them, and know what to do instead. Many are the opposite failure to the earlier chapters: not too little design, but too much, or the wrong kind. The chapter ends with a list of dos and don'ts that gathers the lessons of this part and the last.
+
+## What an anti-pattern is
+
+An **anti-pattern** is a common response to a recurring problem that seems reasonable at the time and turns out badly. Two things make it an anti-pattern rather than just a mistake: it is **common** (many teams fall into it, for understandable reasons), and there is a **known better alternative**. Naming them helps: "this is turning into a god class" is quicker to discuss than a page of explanation.
+
+## Too little structure
+
+### God object
+
+A **god object** (or god class) knows and does too much: `OrderManager` with 4,000 lines that validates, prices, saves, emails, exports and reports. It starts innocently, as the obvious place to put "one more method", and grows because adding to it is always easier than splitting it. Every change touches it, every developer's work conflicts in it, and nobody understands all of it. The cure is splitting by responsibility (<Ref to="m-solid" />), gradually, with tests (<Ref to="m-refactoring" />).
+
+### Big ball of mud
+
+A **big ball of mud** is a system with no recognisable structure: everything calls everything, data is shared freely, and the "architecture" is whatever the last deadline produced. Brian Foote and Joseph Yoder's 1997 paper of that name points out it is the most common architecture in practice, because it is what you get by default. The remedies are boundaries: modules with clear public interfaces and enforced dependency rules (<Ref to="m-architecture" />).
+
+### Copy-and-paste programming
+
+Copying a block and tweaking it is fast today and expensive later: a bug fixed in one copy survives in the others. Tolerate a second copy; extract the shared knowledge at the third (the rule of three, <Ref to="m-design-principles" />).
+
+### Stringly typed and boolean-blind code
+
+**Stringly typed** code uses strings for things that have structure or a fixed set of values: statuses as `"Shipped"`, `"shipped"` and `"SHIPPED"` in different places, ids and dates as bare strings, JSON blobs passed around instead of types. **Boolean blindness** is the same with flags: `createUser("Ama", true, false, true)`. Both hide meaning from readers and the compiler. Use unions or enums, small value types and named options (<Ref to="m-types" />).
+
+### Magic numbers and strings
+
+Unexplained literals (`if (total > 5000)`, `sleep(86400)`) hide intent and get changed inconsistently. Name them (`FREE_DELIVERY_THRESHOLD_PENCE`, `ONE_DAY_SECONDS`) and keep them in one place.
+
+## Too much structure
+
+### Premature abstraction and speculative generality
+
+**Premature abstraction** builds flexibility for variations that do not exist yet: a plugin system for one plugin, an interface for one implementation that will never change, a configuration option nobody sets, a generic `Processor<TInput, TOutput, TContext>` for one use. It is the opposite of YAGNI. Each abstraction adds indirection that every reader must follow, and it is usually shaped wrongly, because it was designed before the real second case was known. Sandi Metz's advice is to prefer duplication over the wrong abstraction; abstract when the second or third real case shows you what actually varies.
+
+### Pattern overuse
+
+**Pattern overuse** applies design patterns because they are patterns, not because they solve a problem in front of you. The signs are names stacked with pattern words. Spring really does contain a class called `AbstractSingletonProxyFactoryBean`, which is reasonable inside a framework and alarming in an application. Compare two versions of "apply a 10% discount":
+
+```ts
+// Over-engineered
+interface DiscountStrategy { apply(pence: number): number; }
+class PercentageDiscountStrategy implements DiscountStrategy {
+  constructor(private percent: number) {}
+  apply(pence: number) { return Math.round(pence * (1 - this.percent / 100)); }
+}
+class DiscountStrategyFactory {
+  create(kind: "percentage", value: number): DiscountStrategy { return new PercentageDiscountStrategy(value); }
+}
+class DiscountService {
+  constructor(private factory: DiscountStrategyFactory) {}
+  discounted(pence: number) { return this.factory.create("percentage", 10).apply(pence); }
+}
+
+// Enough, until a second kind of discount actually exists
+const tenPercentOff = (pence: number) => Math.round(pence * 0.9);
+
+console.log(new DiscountService(new DiscountStrategyFactory()).discounted(4500), tenPercentOff(4500));
+```
+
+Both print `4050`. The first version has four types and a factory for one behaviour; the second is one line, and can become a strategy in minutes if a second discount type appears.
+
+### Too many layers
+
+Layered architectures (<Ref to="m-architecture" />) sometimes grow layers that only pass calls through: a controller calls a service that calls a manager that calls a repository that calls a DAO, and each just forwards the arguments. Every feature then means editing five files. Each layer must earn its place by doing real work (validation, transactions, translating between models).
+
+### Anaemic domain model
+
+An **anaemic domain model** (Martin Fowler's term) has domain objects that are just bags of getters and setters, with all the rules in separate "service" classes. It looks object-oriented but is procedural code with extra steps, and because the objects enforce nothing, any code can put them into an invalid state.
+
+```ts
+// Anaemic: the rules live outside the object, so callers can skip them.
+class AnaemicOrder {
+  status = "open";
+  lines: { product: string; pence: number }[] = [];
+}
+
+const anaemic = new AnaemicOrder();
+anaemic.status = "paid";
+anaemic.lines.push({ product: "rye loaf", pence: -450 });
+
+// Rich: the object protects its own rules.
+class Order {
+  private lines: { product: string; pence: number }[] = [];
+  private paid = false;
+
+  addLine(product: string, pence: number) {
+    if (this.paid) throw new Error("Cannot change a paid order");
+    if (pence <= 0) throw new Error("Price must be positive");
+    this.lines.push({ product, pence });
+  }
+
+  pay() {
+    if (this.lines.length === 0) throw new Error("Cannot pay for an empty order");
+    this.paid = true;
+  }
+
+  total() { return this.lines.reduce((sum, l) => sum + l.pence, 0); }
+}
+
+const order = new Order();
+for (const step of [() => order.pay(), () => order.addLine("rye loaf", 450), () => order.pay(), () => order.addLine("jam", 380)]) {
+  try {
+    step();
+  } catch (e) {
+    console.log((e as Error).message);
+  }
+}
+console.log(anaemic.status, anaemic.lines.length, order.total());
+```
+
+It prints `Cannot pay for an empty order`, `Cannot change a paid order`, then `paid 1 450`: the anaemic order was marked paid with a negative-priced line and no complaint, while the rich order refused both bad steps. Domain-driven design (<Ref to="m-ddd" />) is largely about building rich models. Anaemic models are fine for simple data-in, data-out applications where there are few rules, the **transaction script** style (<Ref to="m-enterprise-patterns" />).
+
+## Process and culture anti-patterns
+
+- **Golden hammer**: using the tool you know for everything ("if all you have is a hammer…"): a relational database as a message queue, microservices for a three-person team, Kafka for a dozen events a day.
+- **Cargo cult programming**: copying practices or code without understanding why they work (the retries, the `sleep(2000)`, the configuration from a blog post).
+- **Lava flow**: dead or mysterious code that nobody dares remove, which hardens into the codebase. Delete it; version control remembers.
+- **Not invented here**: rebuilding what a reliable library already does (date handling, cryptography, parsing CSV). The opposite, adding a dependency for three lines of code, is a risk too (left-pad, supply-chain attacks).
+- **Premature optimisation**: making code complex for speed before measuring. Donald Knuth called it "the root of all evil" in 1974, and the full quote matters: he said to forget small efficiencies about 97% of the time, but not to pass up the critical 3%. Measure first (the performance chapter later in this course).
+- **Resume-driven development**: choosing technology because it is exciting or good for a CV rather than right for the problem.
+- **Big-bang rewrites** (<Ref to="m-refactoring" />) and **distributed monoliths**: services split apart but still deployed together and sharing a database, with the costs of both styles and the benefits of neither (<Ref to="m-architecture" />).
+
+## Why good teams fall into them
+
+Anti-patterns are rarely the work of bad engineers. They grow from reasonable local decisions under pressure: one more method in the class everyone already edits, one more copy because the deadline is tomorrow, one more layer because "that is how we structure things", one more abstraction because a senior engineer said it might be needed. The defence is regular, small clean-up as part of normal work, code review that asks "does this earn its complexity?", and naming the anti-pattern out loud when you see it starting.
+
+## Dos and don'ts
+
+A summary of this part and the last:
+
+**Do**
+
+- Name things for what they mean in the business, and keep names consistent.
+- Keep functions small and at one level of abstraction; return early.
+- Protect invariants inside objects; expose behaviour, not setters.
+- Use types to make invalid states impossible; validate input once, at the edge.
+- Depend on abstractions at real boundaries (I/O, external services, the clock), and inject them.
+- Prefer composition, small interfaces and plain functions.
+- Write the simplest thing that works, then refactor as real needs appear.
+- Fail loudly and early; keep the cause; log once at the top.
+- Refactor in small steps behind tests, separately from behaviour changes.
+- Keep changes small and reviewable.
+
+**Don't**
+
+- Don't swallow exceptions or return null for failure.
+- Don't build for imagined futures, or add a pattern before the problem it solves.
+- Don't use inheritance for code reuse, or let hierarchies grow deep.
+- Don't let one class or module become the place everything goes.
+- Don't pass strings and booleans where a type would say what you mean.
+- Don't reach globally for shared state (singletons, service locators).
+- Don't optimise before measuring.
+- Don't rewrite from scratch when you can replace piece by piece.
+
+## Common mistakes
+
+- **Fixing one anti-pattern by creating its opposite**: splitting a god class into forty one-method classes, or replacing all duplication with a framework of abstractions.
+- **Treating every anti-pattern as urgent.** A messy module nobody changes can stay messy.
+- **Blaming people** rather than the pressures and incentives that produced the code.
+
+## Practice
+
+**1. (warm-up)** Name the anti-pattern: (a) `setStatus("Shiped")` compiles and corrupts data. (b) A 6,000-line `ApplicationService`. (c) `new ReportGenerator(true, false, true, 3)`. (d) Code commented "do not touch, nobody knows what this does".
+
+<Solution>
+
+(a) Stringly typed code (a union or enum would have caught the typo). (b) God object. (c) Boolean blindness (and magic numbers). (d) Lava flow.
+
+</Solution>
+
+**2. (warm-up)** What is an anaemic domain model, and when is it acceptable?
+
+<Solution>
+
+Domain objects with only data (getters and setters) and all the rules in separate service classes, so the objects enforce nothing. It is acceptable for simple applications that mostly move data in and out with few business rules, where a transaction script style is the simplest design.
+
+</Solution>
+
+**3. (standard)** Replace the boolean flags with something readable and type-safe, and show it working:
+
+```ts
+function createAccount(name: string, admin: boolean, newsletter: boolean, verified: boolean) {
+  return `${name}: ${admin ? "admin" : "member"}, ${newsletter ? "subscribed" : "not subscribed"}, ${verified ? "verified" : "unverified"}`;
+}
+
+console.log(createAccount("Ama", false, true, false));
+```
+
+<Solution>
+
+```ts
+type AccountOptions = {
+  role?: "admin" | "member";
+  newsletter?: boolean;
+  verified?: boolean;
+};
+
+function createAccount(name: string, { role = "member", newsletter = false, verified = false }: AccountOptions = {}) {
+  return `${name}: ${role}, ${newsletter ? "subscribed" : "not subscribed"}, ${verified ? "verified" : "unverified"}`;
+}
+
+console.log(createAccount("Ama", { newsletter: true }));
+console.log(createAccount("Kofi", { role: "admin", verified: true }));
+```
+
+It prints **Ama: member, subscribed, unverified** and **Kofi: admin, not subscribed, verified**. Each setting is named at the call site, defaults are explicit, and the role is a closed set of values rather than a boolean that could later need a third option.
+
+</Solution>
+
+**4. (standard)** A colleague adds a `NotificationStrategyFactoryProvider` so that, one day, the app could send notifications by carrier pigeon. Only email exists today. What do you say in review?
+
+<Solution>
+
+Kindly point out it is premature abstraction (YAGNI): three layers of indirection for one implementation, which every reader must now follow, and which will probably not fit whatever second channel really arrives. Suggest an `EmailNotifier` (behind a small `Notifier` interface only if tests need a fake) and introducing more structure when a second real channel is needed. Label it as a suggestion or issue depending on how much complexity it adds.
+
+</Solution>
+
+**5. (stretch)** Explain how a reasonable team ends up with a god class, and propose a way out that does not stop feature work.
+
+<Solution>
+
+It starts as a sensible home for a feature. Each new requirement is closely related, the class already has the data it needs, and adding one method is always quicker than designing a new class, especially under deadlines. Everyone edits it, so it also becomes the place where knowledge lives. The way out is gradual: add characterisation tests around the parts being changed; whenever a feature touches it, extract the relevant responsibility into its own class first (preparatory refactoring), leaving a delegating method behind; stop adding new responsibilities to it (agree this in review); and track its size over time so progress is visible.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- An **anti-pattern** is a common, reasonable-looking response that turns out badly, with a known better alternative.
+- Too little structure: **god objects**, **big balls of mud**, copy and paste, **stringly typed** and **boolean-blind** code, magic values.
+- Too much structure: **premature abstraction**, **pattern overuse**, pass-through layers.
+- **Anaemic domain models** put rules outside the objects that should protect them.
+- Process anti-patterns: golden hammer, cargo cult, lava flow, not invented here, premature optimisation, big rewrites, distributed monoliths.
+- They grow from local pressures; counter them with small, regular clean-up and reviews that ask whether complexity is earned.
+
+## Go deeper
+
+- [Big Ball of Mud](https://www.laputan.org/mud/), Brian Foote and Joseph Yoder. The 1997 paper on the most common architecture.
+- [AnemicDomainModel](https://martinfowler.com/bliki/AnemicDomainModel.html), Martin Fowler. Why rule-free domain objects are a problem.
+- [The Wrong Abstraction](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction), Sandi Metz. Why duplication can beat a premature abstraction.
+- [Refactoring Guru: code smells](https://refactoring.guru/refactoring/smells), Alexander Shvets. The smells that signal most of these anti-patterns.

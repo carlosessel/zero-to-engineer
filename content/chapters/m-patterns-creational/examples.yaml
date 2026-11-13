@@ -1,0 +1,52 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    email to Ama: Your order is ready
+    SMS to Ama: Your order is ready
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    ["|Email| (white box)", "[ Sign up ] (dark text on white)"]
+    ["||Email|| (thick border)", "[[ SIGN UP ]] (yellow on black)"]
+- block: 3
+  lang: java
+  check: java
+  output: |
+    GET PT10S retries=0
+    POST {Idempotency-Key=order-7} PT5S
+    Refused: Retried POSTs need an Idempotency-Key header
+- block: 4
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - 'False
+
+    True'
+  note: Fetches the package from NuGet, so it runs only with network access; restore warnings may come first, so the check looks for the lines the chapter shows.
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    ["rye loaf", "croissant"] Saturday
+    ["rye loaf", "croissant", "baguette"]
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    GB card charge of 5400p
+    NG bank transfer request for 5400p
+    No payment provider for country FR
+- block: 7
+  lang: ts
+  check: ts
+  output: |
+    ["rye loaf"]
+- block: 8
+  lang: ts
+  check: ts
+  output: |
+    ["rye loaf"] []

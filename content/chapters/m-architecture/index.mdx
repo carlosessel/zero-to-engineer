@@ -1,0 +1,293 @@
+---
+title: "Architecture styles"
+summary: "Layered, hexagonal and clean architecture, modular monoliths, microservices, event-driven systems, CQRS and event sourcing."
+prerequisites: [m-ddd]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will know the main ways to structure an application and a system of applications: layered, hexagonal and clean architectures inside one codebase; monoliths, modular monoliths and microservices across codebases; and event-driven designs, CQRS and event sourcing for how data flows. More importantly, you will be able to say what each costs and when it fits, which is what architecture is really about.
+
+## What architecture is
+
+**Software architecture** is the set of decisions that are expensive to change later: how the system is divided into parts, how the parts communicate, where data lives, and which qualities matter most (performance, availability, security, cost, how quickly the team can change it). Those qualities are often called **quality attributes** or "-ilities".
+
+Every architecture is a set of **trade-offs**. Microservices buy independent deployment at the cost of distributed-system complexity; event sourcing buys a perfect history at the cost of more complicated reads. "It depends" is the honest answer to most architecture questions, and the skill is knowing what it depends *on*. A good architect writes those trade-offs down (<Ref to="m-design-docs" />).
+
+## Inside one application
+
+### Layered architecture
+
+The classic structure is **layers**, each depending only on the one below:
+
+1. **Presentation**: controllers, views, API endpoints.
+2. **Application**: use cases (application services, <Ref to="m-enterprise-patterns" />).
+3. **Domain**: business rules.
+4. **Infrastructure** (or data access): databases, external services.
+
+It is simple and familiar, and most frameworks' templates start this way. Its flaw is the direction of the last dependency: if the domain depends on the data-access layer, the business rules are tied to the database, and testing them needs one. And layers sliced horizontally scatter one feature across every layer, so teams often organise by feature (vertical slices) as well, with layers inside each feature.
+
+### Hexagonal architecture (ports and adapters)
+
+Alistair Cockburn's **hexagonal architecture**, also called **ports and adapters**, fixes the dependency direction. The application core (domain and use cases) sits in the middle and depends on nothing technical. It defines **ports**: interfaces for what it needs (`OrderRepository`, `PaymentGateway`, `Clock`) and for what it offers (`PlaceOrder`). **Adapters** on the outside implement the ports for specific technologies: a PostgreSQL adapter, a Stripe adapter, an HTTP controller, a message consumer, a test fake.
+
+```ts
+// Core: domain and use case, knowing nothing about technology.
+interface OrderStore { save(order: { id: string; totalPence: number }): void; count(): number; }
+interface Payments { charge(pence: number): boolean; }
+
+class PlaceOrder {
+  constructor(private store: OrderStore, private payments: Payments) {}
+  run(id: string, totalPence: number): string {
+    if (totalPence <= 0) return "rejected: empty order";
+    if (!this.payments.charge(totalPence)) return "rejected: payment declined";
+    this.store.save({ id, totalPence });
+    return `placed ${id}`;
+  }
+}
+
+// Adapters: one implementation per technology (here, in-memory ones for tests).
+class InMemoryOrderStore implements OrderStore {
+  private orders: { id: string; totalPence: number }[] = [];
+  save(order: { id: string; totalPence: number }) { this.orders.push(order); }
+  count() { return this.orders.length; }
+}
+
+const approveUnder = (limit: number): Payments => ({ charge: (pence) => pence < limit });
+
+// Driving adapter: anything that calls the use case (an HTTP controller, a CLI, a test).
+const store = new InMemoryOrderStore();
+const placeOrder = new PlaceOrder(store, approveUnder(10_000));
+console.log(placeOrder.run("o-1", 5400), "|", placeOrder.run("o-2", 25_000), "|", placeOrder.run("o-3", 0), "|", store.count());
+```
+
+It prints `placed o-1 | rejected: payment declined | rejected: empty order | 1`. The whole use case was tested without a database, payment provider or web server; production wires in real adapters instead. Swapping PostgreSQL for another database, or adding a message-queue entry point beside the HTTP one, means writing an adapter, not changing the core.
+
+### Clean and onion architecture
+
+Robert C. Martin's **clean architecture** and Jeffrey Palermo's **onion architecture** are variations on the same idea, drawn as concentric circles: entities in the middle, then use cases, then interface adapters, then frameworks and drivers. Their shared rule, the **dependency rule**, is that source-code dependencies point only **inwards**: nothing in an inner circle knows anything about an outer one. Hexagonal, onion and clean architecture differ mostly in vocabulary and drawing.
+
+The cost is more types and mapping between layers. For a simple CRUD service, a plain layered structure is fine; the inward-pointing style pays off when the business logic is substantial and must outlive frameworks and databases.
+
+Dependency rules can be **enforced** by tools rather than code review: ArchUnit (Java), NetArchTest or ArchUnitNET (.NET), and dependency-cruiser or ESLint boundary rules (TypeScript) fail the build when, say, the domain package imports from infrastructure. Such automated checks of architectural rules are called **fitness functions**.
+
+## Across applications
+
+### The monolith
+
+A **monolith** is one deployable application containing all the functionality. It has real advantages: one codebase to understand, calls between parts are fast in-process function calls, one database transaction can cover a whole use case, and deployment, debugging and testing are simple. Many very large businesses run on monoliths. Its problems appear with size: a ball of mud (<Ref to="m-anti-patterns" />) when boundaries are not enforced, slow builds and tests, every team's changes released together, and the whole application scaled as one.
+
+### The modular monolith
+
+A **modular monolith** keeps one deployable application but divides it into modules along bounded contexts (<Ref to="m-ddd" />), each with its own public interface, its own internal code and, ideally, its own database schema or tables that other modules may not touch directly. Modules talk through their public interfaces or in-process events. It keeps most of the monolith's simplicity while giving teams clear ownership, and it is the recommended starting point for most new systems: if a module later needs to become a separate service, its boundary already exists.
+
+### Microservices
+
+**Microservices** split a system into small services, each owning one business capability and its **own data**, deployed independently, and communicating over the network (HTTP or gRPC APIs, and messages). Benefits:
+
+- teams can build, deploy and scale their services **independently**;
+- each service can use the technology that suits it;
+- a failure can be contained to one service (if designed for it).
+
+Costs, which are substantial:
+
+- every call between services can be slow or fail (the network is not reliable), so you need timeouts, retries and circuit breakers (the resilience chapter later in the course);
+- no transactions across services: consistency becomes eventual, coordinated with events and **sagas**;
+- operational overhead: many deployments, service discovery, distributed tracing, and monitoring (the observability chapter);
+- testing and debugging across services is much harder;
+- the boundaries are hard to change once set.
+
+**Conway's law** (Melvin Conway, 1968) observes that a system's structure mirrors the communication structure of the organisation that builds it. Microservices work best when each is owned by one team; splitting a system into more services than there are teams usually creates coordination pain. Martin Fowler's advice, **monolith first**, reflects experience: most successful microservice systems started as monoliths that were split once the boundaries were understood.
+
+The failure mode is the **distributed monolith**: services that must be deployed together, call each other synchronously in long chains, or share one database. It has all the costs of microservices and none of the benefits.
+
+## Event-driven architecture
+
+In an **event-driven architecture**, components communicate by publishing **events** (facts about what happened) to a broker, and other components react, rather than calling each other directly. The publisher does not know who listens, so new reactions can be added without changing it. There are several distinct styles, often confused:
+
+- **Event notification**: the event says only that something happened (`OrderPlaced { orderId: "o-7" }`); interested services call back for details. Simple, but creates follow-up calls.
+- **Event-carried state transfer**: the event carries the data consumers need (`OrderPlaced` with lines, customer and total), so they can keep their own copy and never call back. More decoupled, at the cost of bigger events and duplicated data.
+- **Event sourcing**: the events *are* the system of record (below).
+
+Events bring the costs of asynchronous systems: the flow is harder to follow, messages can arrive late, twice or out of order (so consumers must be **idempotent**), and you need good tracing. The messaging and Kafka chapters later in the course go deep on this.
+
+## CQRS
+
+**Command Query Responsibility Segregation** (CQRS, named by Greg Young from Bertrand Meyer's command-query separation) uses **different models for writing and reading**. Commands (`PlaceOrder`, `CancelOrder`) go through the domain model, which enforces the rules. Queries ("orders this week by customer, with totals") read from a separate **read model**, shaped exactly for the screen or report and often stored separately (a denormalised table, a search index, a cache), kept up to date from the write side's events.
+
+```ts
+type OrderEvent =
+  | { type: "OrderPlaced"; orderId: string; customer: string; pence: number }
+  | { type: "OrderCancelled"; orderId: string };
+
+// Read model: a summary per customer, updated from events and never written to directly.
+const summaries = new Map<string, { orders: number; spentPence: number }>();
+const orderOwners = new Map<string, { customer: string; pence: number }>();
+
+function project(e: OrderEvent) {
+  if (e.type === "OrderPlaced") {
+    orderOwners.set(e.orderId, { customer: e.customer, pence: e.pence });
+    const s = summaries.get(e.customer) ?? { orders: 0, spentPence: 0 };
+    summaries.set(e.customer, { orders: s.orders + 1, spentPence: s.spentPence + e.pence });
+  } else {
+    const owner = orderOwners.get(e.orderId)!;
+    const s = summaries.get(owner.customer)!;
+    summaries.set(owner.customer, { orders: s.orders - 1, spentPence: s.spentPence - owner.pence });
+  }
+}
+
+const events: OrderEvent[] = [
+  { type: "OrderPlaced", orderId: "o-1", customer: "c-17", pence: 5400 },
+  { type: "OrderPlaced", orderId: "o-2", customer: "c-4", pence: 900 },
+  { type: "OrderPlaced", orderId: "o-3", customer: "c-17", pence: 1200 },
+  { type: "OrderCancelled", orderId: "o-1" },
+];
+events.forEach(project);
+console.log([...summaries]);
+```
+
+It prints `[["c-17", { orders: 1, spentPence: 1200 }], ["c-4", { orders: 1, spentPence: 900 }]]`. The "customer summary" query is now a single lookup, however complex the write model. The cost: two models to maintain, and the read model is **eventually consistent** (a user may not see their change for a moment), which the interface must handle. Use CQRS where reads and writes really differ in shape or scale, not across a whole system by default.
+
+## Event sourcing
+
+**Event sourcing** stores the **sequence of events** that happened to each entity, rather than its current state. The current state is computed by replaying the events: a **fold** (reduce) over the history (<Ref to="m-functional" />). A bank account is the classic example: the ledger of deposits and withdrawals is the truth; the balance is derived.
+
+```ts
+type AccountEvent = { type: "Opened" } | { type: "Deposited"; pence: number } | { type: "Withdrawn"; pence: number } | { type: "Frozen" };
+type Account = { balancePence: number; frozen: boolean; version: number };
+
+const apply = (state: Account, e: AccountEvent): Account => {
+  switch (e.type) {
+    case "Opened": return { balancePence: 0, frozen: false, version: state.version + 1 };
+    case "Deposited": return { ...state, balancePence: state.balancePence + e.pence, version: state.version + 1 };
+    case "Withdrawn": return { ...state, balancePence: state.balancePence - e.pence, version: state.version + 1 };
+    case "Frozen": return { ...state, frozen: true, version: state.version + 1 };
+  }
+};
+
+const eventLog: AccountEvent[] = [{ type: "Opened" }, { type: "Deposited", pence: 10_000 }, { type: "Withdrawn", pence: 2_500 }, { type: "Frozen" }];
+const initial: Account = { balancePence: 0, frozen: false, version: 0 };
+
+console.log(eventLog.reduce(apply, initial));
+console.log(eventLog.slice(0, 2).reduce(apply, initial));
+```
+
+It prints `{ balancePence: 7500, frozen: true, version: 4 }` for the current state and `{ balancePence: 10000, frozen: false, version: 2 }` for the state after the second event: **time travel** comes free. Event sourcing gives a complete audit trail, the ability to rebuild state and to create new read models from old events, and a natural fit with CQRS. Its costs are real: querying current state needs projections, long histories need snapshots (saved states to replay from), events are stored forever so their formats must be versioned carefully, and deleting personal data (as privacy law can require) needs special techniques such as encrypting each person's data with a key that can be destroyed. Use it where history is the business (finance, auditing, logistics tracking), not as a default.
+
+## Serverless, briefly
+
+**Serverless** platforms (AWS Lambda, Azure Functions, Google Cloud Run functions) run your code per request or per event, scaling to zero and billing by use. They suit spiky or event-driven workloads and remove server management, at the cost of cold-start latency, execution limits and tighter coupling to one cloud provider. They are a deployment model rather than an architecture, and the same structural ideas (ports and adapters, bounded contexts) still apply inside them.
+
+## Choosing
+
+| Situation | A sensible starting point |
+|---|---|
+| New product, one team, uncertain domain | Modular monolith, layered or hexagonal inside |
+| Complex domain logic that must outlive frameworks | Hexagonal or clean architecture for that part |
+| Several teams that block each other's releases | Split along bounded contexts, possibly into services |
+| Reads far outnumber writes, or need very different shapes | CQRS for that area |
+| Complete history and audit are business requirements | Event sourcing for those aggregates |
+| Many independent reactions to business events | Event-driven integration between contexts |
+
+Architecture is not chosen once: it evolves. Keep decisions reversible where you can, record why you made them, and revisit them as the system and the organisation change.
+
+## Common mistakes
+
+- **Microservices first**, before the domain's boundaries are understood, or with fewer teams than services.
+- **Distributed monoliths**: shared databases, synchronous call chains, lock-step deployments.
+- **Pass-through layers** that add files but no value.
+- **Business rules depending on frameworks or databases**, so they cannot be tested alone.
+- **CQRS and event sourcing everywhere** instead of where they pay off.
+- **Ignoring Conway's law**: an architecture that does not match how teams are organised.
+- **Undocumented decisions**, so nobody remembers why things are the way they are.
+
+## Practice
+
+**1. (warm-up)** In hexagonal architecture, what are ports and adapters? Give one example of each.
+
+<Solution>
+
+Ports are interfaces the application core defines, for what it needs (an `OrderRepository`, a `PaymentGateway`) or offers (a `PlaceOrder` use case). Adapters implement them for specific technologies: a PostgreSQL `OrderRepository`, a Stripe `PaymentGateway`, an HTTP controller that calls `PlaceOrder`.
+
+</Solution>
+
+**2. (warm-up)** State the dependency rule of clean architecture.
+
+<Solution>
+
+Source-code dependencies point only inwards: inner layers (entities, use cases) must not know anything about outer ones (controllers, databases, frameworks).
+
+</Solution>
+
+**3. (warm-up)** What is a distributed monolith, and name two of its signs.
+
+<Solution>
+
+A system split into services that still behaves as one unit, with the costs of both styles. Signs: services that must be deployed together; a shared database; long chains of synchronous calls between services; a change to one feature requiring changes in many services.
+
+</Solution>
+
+**4. (standard)** Extend the event-sourced account so a `Withdrawn` event is only ever recorded when the account is not frozen and has enough money: write a `withdraw(history, pence)` command that returns the new event or an error, and show both outcomes.
+
+<Solution>
+
+```ts
+type AccountEvent = { type: "Opened" } | { type: "Deposited"; pence: number } | { type: "Withdrawn"; pence: number } | { type: "Frozen" };
+type Account = { balancePence: number; frozen: boolean };
+
+const apply = (s: Account, e: AccountEvent): Account =>
+  e.type === "Deposited" ? { ...s, balancePence: s.balancePence + e.pence }
+  : e.type === "Withdrawn" ? { ...s, balancePence: s.balancePence - e.pence }
+  : e.type === "Frozen" ? { ...s, frozen: true }
+  : s;
+
+function withdraw(eventLog: AccountEvent[], pence: number): AccountEvent | string {
+  const state = eventLog.reduce(apply, { balancePence: 0, frozen: false });
+  if (state.frozen) return "refused: account is frozen";
+  if (pence > state.balancePence) return `refused: balance is only ${state.balancePence}p`;
+  return { type: "Withdrawn", pence };
+}
+
+const eventLog: AccountEvent[] = [{ type: "Opened" }, { type: "Deposited", pence: 5000 }];
+console.log(withdraw(eventLog, 2000));
+console.log(withdraw(eventLog, 9000));
+console.log(withdraw([...eventLog, { type: "Frozen" }], 100));
+```
+
+It prints `{ type: "Withdrawn", pence: 2000 }`, **refused: balance is only 5000p** and **refused: account is frozen**. Commands rebuild the current state from history, check the rules, and only then produce new events to append.
+
+</Solution>
+
+**5. (standard)** A startup with six engineers plans fifteen microservices for its first product. What would you advise?
+
+<Solution>
+
+Start with a modular monolith: one deployable application with modules along the business's bounded contexts, each with clear interfaces and its own tables. Six engineers cannot sensibly own fifteen services (Conway's law), and the domain's boundaries are not yet known, so early service boundaries will probably be wrong and expensive to move. The team avoids distributed-system costs (network failures, eventual consistency, tracing, many pipelines) while the product is still finding its shape, and can extract a module into a service later if a real need appears (independent scaling, a separate team).
+
+</Solution>
+
+**6. (stretch)** A reporting screen joins eight tables and takes four seconds. Writes are rare and must enforce complex rules. How could CQRS help, and what new problem must the interface handle?
+
+<Solution>
+
+Keep the domain model for writes, and add a read model for the report: a denormalised table (or materialised view) shaped exactly like the screen, updated from the write side's events or change stream, so the report becomes a single fast query. The new problem is eventual consistency: just after a write, the report may briefly show old data, so the interface should handle it (show "updating…", read your own write from the write side, or tell the user when the change will appear).
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Architecture** is the expensive-to-change decisions and their **trade-offs**; record why you chose.
+- **Layered** is simple; **hexagonal** (ports and adapters), **onion** and **clean** architectures keep dependencies pointing **inwards** so business rules are independent and testable. Enforce the rules with **fitness functions**.
+- **Monoliths** are simple; **modular monoliths** add boundaries and are the best default; **microservices** buy independent deployment and scaling at a large operational cost. Mind **Conway's law** and avoid **distributed monoliths**.
+- **Event-driven** systems decouple publishers from consumers (event notification, event-carried state transfer) at the cost of harder-to-follow flows.
+- **CQRS** separates write and read models; **event sourcing** stores history and derives state. Use both where they pay off.
+
+## Go deeper
+
+- [Hexagonal architecture](https://alistair.cockburn.us/hexagonal-architecture), Alistair Cockburn. The original description of ports and adapters.
+- [The Clean Architecture](https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html), Robert C. Martin. The dependency rule and the concentric circles.
+- [Microservices](https://martinfowler.com/articles/microservices.html), James Lewis and Martin Fowler. The defining article, with the costs as well as the benefits.
+- [MonolithFirst](https://martinfowler.com/bliki/MonolithFirst.html), Martin Fowler. Why most successful microservice systems started as monoliths.
+- [Event Sourcing pattern](https://learn.microsoft.com/en-us/azure/architecture/patterns/event-sourcing), Microsoft. Event sourcing with its issues and when to use it.

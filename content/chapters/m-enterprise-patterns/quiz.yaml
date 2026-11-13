@@ -1,0 +1,36 @@
+- question: When does a transaction script suit best?
+  options:
+  - When business rules are few and simple
+  - When rules are many and interlocking
+  answer: 0
+  explanation: Move areas to a domain model as rules grow.
+- question: What should an application service do?
+  options:
+  - 'Coordinate a use case: load, ask the domain, save, trigger side effects'
+  - Hold all the business rules
+  answer: 0
+  explanation: Rules belong in the domain objects.
+- question: What is EF Core's DbContext an example of?
+  options:
+  - A unit of work (and its DbSets are repositories)
+  - A singleton
+  answer: 0
+  explanation: SaveChanges commits every tracked change in one transaction.
+- question: What is mass assignment?
+  options:
+  - A client setting fields it should not by sending them in a request bound straight onto an entity
+  - Saving many rows at once
+  answer: 0
+  explanation: Bind requests to DTOs with only the allowed fields.
+- question: What does a version column prevent?
+  options:
+  - Lost updates when two people edit the same row
+  - Slow queries
+  answer: 0
+  explanation: That is optimistic concurrency.
+- question: What is the difference between active record and data mapper?
+  options:
+  - Active record objects save themselves; a data mapper keeps persistence in a separate layer
+  - There is none
+  answer: 0
+  explanation: Data mappers keep domain objects independent of the database.
