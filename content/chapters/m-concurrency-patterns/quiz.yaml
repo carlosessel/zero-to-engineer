@@ -1,0 +1,36 @@
+- question: Why should the queue between producers and consumers be bounded?
+  options:
+  - So producers wait when consumers fall behind, instead of memory filling up
+  - Bounded queues are faster
+  answer: 0
+  explanation: That waiting is back-pressure.
+- question: How do consumers know there is no more work?
+  options:
+  - A poison pill or a completion signal such as Complete()
+  - They poll forever
+  answer: 0
+  explanation: Otherwise they wait forever.
+- question: Why does an actor need no locks for its state?
+  options:
+  - It handles one message at a time and nothing else can reach its state
+  - Actors run on one core
+  answer: 0
+  explanation: Other parties can only send messages.
+- question: What must a function passed to updateAndGet avoid?
+  options:
+  - Side effects, because it may run more than once
+  - Returning a new object
+  answer: 0
+  explanation: CAS loops retry when another thread wins.
+- question: How many workers suit CPU-bound work?
+  options:
+  - About the number of cores
+  - As many as possible
+  answer: 0
+  explanation: More only adds switching.
+- question: What does structured concurrency guarantee?
+  options:
+  - A group of tasks finishes (or is cancelled) before its scope exits, so none leak
+  - Tasks run in a fixed order
+  answer: 0
+  explanation: Failure of one cancels the others.

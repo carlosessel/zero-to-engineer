@@ -50,6 +50,8 @@ export async function runExample(code: string, opts: RunOptions = {}): Promise<R
     TextDecoder,
     btoa,
     atob,
+    AbortController,
+    AbortSignal,
     Intl,
     fetch: fakeFetch,
     URL,

@@ -4,6 +4,18 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 6 (Concurrency)
+
+Added
+- Three chapters: threads, races and locks (read-modify-write and check-then-act races, locks and atomics, memory visibility, deadlock and lock ordering, thread-safe design); asynchronous programming (the event loop, promises and futures, async/await, combinators, cancellation, thread pools and sync-over-async, Java virtual threads); and concurrency patterns (producer-consumer with back-pressure, worker pools and bounded concurrency, actors, immutable snapshots with atomic swaps, lock-free ideas, fan-out and structured concurrency). About 6,100 words, 16 practice problems, 18 quiz questions, 14 checked resources.
+- Real concurrency, checked: Java races with synchronized and atomic counters, a deadlock forced every run with a latch and detected with `tryLock`, lock ordering that fixes it, virtual threads against a 100-thread pool, a bounded `BlockingQueue` pipeline, `AtomicReference` with `ConcurrentHashMap.merge` across parallel streams; C# `Interlocked`, `Task.WhenAll` and bounded channels; TypeScript event-loop ordering, a race across `await`, promise combinators, `AbortSignal` cancellation, bounded concurrency and an actor. Results that depend on timing are checked by the relationship the chapter states.
+- TypeScript example checks accept `wait_ms`, so examples with timers can finish; the example runner provides `AbortController` and `AbortSignal`.
+- Earlier chapters (inside the machine, operating systems, performance) now link to the concurrency chapters.
+- 33 glossary terms.
+
+Not verified
+- No person has reviewed these chapters. Problem counts are below the standard's 30 to 50.
+
 ### 2026-11-13: Software Engineering Mastery, part 5 (Testing and quality)
 
 Added

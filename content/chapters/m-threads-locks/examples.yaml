@@ -1,0 +1,46 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: java
+  check: java
+  note: The unsafe count varies from run to run (that is the point); the check asserts the two safe counts are exact and the unsafe one is never more.
+  verify: |
+    import re
+    unsafe = int(re.search(r'unsafe:\s+(\d+)', out).group(1))
+    assert 'synchronized: 2000000' in out and 'atomic:       2000000' in out, out
+    assert unsafe <= 2000000, unsafe
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    phone withdrew 80, balance now 20
+    laptop withdrew 80, balance now 20
+    final balance 20 after paying out 160
+- block: 3
+  lang: csharp
+  check: csharp
+  note: The unsafe count varies from run to run; the check asserts the atomic count is exact and the unsafe one is never more.
+  verify: |
+    import re
+    unsafe = int(re.search(r'unsafe: (\d+)', out).group(1))
+    assert 'atomic: 2000000' in out, out
+    assert unsafe <= 2000000, unsafe
+- block: 4
+  lang: java
+  check: java
+  note: The two lines can come in either order.
+  verify: |
+    assert 'A to B: gave up waiting for the second lock (deadlock)' in out, out
+    assert 'B to A: gave up waiting for the second lock (deadlock)' in out, out
+- block: 5
+  lang: java
+  check: java
+  note: The two lines can come in either order.
+  verify: |
+    assert 'A to B: transferred' in out and 'B to A: transferred' in out, out
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    laptop refused: balance 20
+    phone withdrew 80, balance now 20
+    final balance 20

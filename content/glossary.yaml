@@ -22,6 +22,10 @@
 - term: "Accumulator"
   definition: "A variable set before a loop that the loop keeps updating, such as a running total."
   courses: [web]
+- term: "Actor"
+  aliases: ["actor model", "mailbox"]
+  definition: "An object that owns its state and handles messages from its mailbox one at a time."
+  courses: [mastery]
 - term: "Adapter"
   definition: "A wrapper that converts one interface into the interface its callers expect."
   courses: [mastery, se]
@@ -121,7 +125,11 @@
 - term: "Asynchronous"
   aliases: ["asynchronously"]
   definition: "Started now and finished later, while other code carries on, as with timers and network requests."
-  courses: [web]
+  courses: [web, mastery]
+- term: "Atomic operation"
+  aliases: ["atomic"]
+  definition: "An operation that happens as one indivisible step, so no other thread sees it half done."
+  courses: [mastery]
 - term: "Attention"
   definition: "The mechanism that lets a model weigh which earlier words matter for the current one."
   courses: [ai]
@@ -436,6 +444,10 @@
 - term: "Compaction"
   definition: "Replacing a long conversation with a summary of what matters, so work can continue in a smaller context."
   courses: [claude]
+- term: "Compare-and-swap"
+  aliases: ["CAS"]
+  definition: "A CPU instruction that sets a value only if it still holds the expected old value."
+  courses: [mastery]
 - term: "Compiler"
   definition: "A program that translates source code into machine code ahead of time."
   courses: [se, web, mastery]
@@ -462,6 +474,10 @@
   aliases: ["concatenates"]
   definition: "To join strings together end to end."
   courses: [web]
+- term: "Concurrency"
+  aliases: ["parallelism"]
+  definition: "Making progress on many things over the same period; parallelism is running several at the same instant on several cores."
+  courses: [mastery, se]
 - term: "Conditional breakpoint"
   definition: "A breakpoint that pauses the program only when a given expression is true."
   courses: [mastery, web]
@@ -477,6 +493,9 @@
 - term: "Container"
   definition: "A package of an application with everything it needs to run the same anywhere."
   courses: [se]
+- term: "Contention"
+  definition: "Threads waiting for the same lock or resource."
+  courses: [mastery]
 - term: "Context"
   definition: "Everything a model can see when it writes a reply: instructions, the conversation, attached files and tool results."
   courses: [claude]
@@ -514,6 +533,10 @@
 - term: "Coordinated omission"
   definition: "A load-test flaw where slow responses delay further requests, hiding how slow the system really is."
   courses: [mastery]
+- term: "Copy-on-write"
+  aliases: ["atomic reference"]
+  definition: "Never changing shared data in place, but building a new version and swapping the reference."
+  courses: [mastery]
 - term: "Core"
   definition: "One complete processor within a CPU chip; several cores run several threads truly at once."
   courses: [mastery]
@@ -537,11 +560,18 @@
 - term: "CPU"
   definition: "The central processing unit, or processor: the part of a computer that runs instructions."
   courses: [mastery]
+- term: "CPU-bound"
+  aliases: ["I/O-bound"]
+  definition: "Limited by computation; I/O-bound work is limited by waiting for disks and networks."
+  courses: [mastery]
 - term: "CPython"
   definition: "The standard implementation of Python, which compiles to bytecode and interprets it."
   courses: [mastery]
 - term: "CQRS"
   definition: "Command Query Responsibility Segregation: separate models for writing and for reading."
+  courses: [mastery]
+- term: "Critical section"
+  definition: "Code that must not run on two threads at once."
   courses: [mastery]
 - term: "Cross-site scripting"
   aliases: ["XSS"]
@@ -594,6 +624,10 @@
 - term: "De Morgan's laws"
   definition: "not (a and b) equals (not a) or (not b); not (a or b) equals (not a) and (not b)."
   courses: [mastery]
+- term: "Deadlock"
+  aliases: ["Coffman conditions"]
+  definition: "Threads waiting for each other forever, usually each holding a lock the other needs."
+  courses: [mastery, se]
 - term: "Debugger"
   definition: "A tool that pauses a program at chosen lines so you can inspect its values and step through it."
   courses: [web, se, mastery]
@@ -781,6 +815,10 @@
 - term: "Event handler"
   definition: "A function that runs each time a particular event happens, attached with addEventListener."
   courses: [web]
+- term: "Event loop"
+  aliases: ["macrotasks", "microtasks"]
+  definition: "A loop that runs one ready task at a time; JavaScript drains all microtasks (promise reactions) before the next task."
+  courses: [mastery]
 - term: "Event object"
   definition: "The object passed to an event handler, describing what happened, such as which element was clicked."
   courses: [web]
@@ -844,6 +882,10 @@
 - term: "Falsy"
   definition: "Treated as false in a condition: false, 0, the empty string, null, undefined and NaN."
   courses: [web]
+- term: "Fan-out"
+  aliases: ["fan-in", "map-reduce"]
+  definition: "Splitting work into parallel pieces; fan-in gathers their results."
+  courses: [mastery]
 - term: "Feature"
   definition: "One input value a model uses, such as a house’s size."
   courses: [ai]
@@ -927,6 +969,10 @@
 - term: "Functional core, imperative shell"
   aliases: ["functional core", "imperative shell"]
   definition: "Keeping decisions in pure functions and side effects in a thin outer layer."
+  courses: [mastery]
+- term: "Future"
+  aliases: ["futures"]
+  definition: "An object standing for a result not ready yet, such as a CompletableFuture or Task; JavaScript calls it a promise."
   courses: [mastery]
 - term: "G1"
   definition: "Java's default garbage collector on server-class machines, dividing the heap into regions and aiming for a pause target."
@@ -1146,7 +1192,7 @@
   courses: [mastery]
 - term: "JavaScript"
   definition: "The programming language that runs in every browser and makes pages respond; with Node.js it also runs on servers."
-  courses: [web]
+  courses: [web, mastery]
 - term: "Jest"
   definition: "An older JavaScript test runner, which Vitest closely copies."
   courses: [web]
@@ -1265,6 +1311,9 @@
 - term: "Little-endian"
   definition: "Storing a multi-byte value with its least significant byte first, as x86 and ARM processors do."
   courses: [mastery]
+- term: "Livelock"
+  definition: "Threads that keep reacting to each other without making progress."
+  courses: [mastery]
 - term: "LLM"
   definition: "Large language model: a big neural network trained to predict the next piece of text."
   courses: [ai]
@@ -1284,6 +1333,17 @@
 - term: "Locality"
   aliases: ["spatial locality", "temporal locality"]
   definition: "Using memory that is close together (spatial locality) or the same memory again soon (temporal locality), which makes caches effective."
+  courses: [mastery]
+- term: "Lock"
+  aliases: ["mutex"]
+  definition: "A mechanism that lets only one thread at a time enter a critical section."
+  courses: [mastery, se]
+- term: "Lock ordering"
+  definition: "Always acquiring locks in one global order, which makes deadlock impossible."
+  courses: [mastery]
+- term: "Lock-free"
+  aliases: ["ABA problem"]
+  definition: "Built from atomic operations with no locks, so a paused thread cannot block the others."
   courses: [mastery]
 - term: "Logarithm"
   definition: "The power a base must be raised to in order to give a number; log2 of n is how many times n can be halved to reach 1."
@@ -1373,6 +1433,10 @@
   courses: [mastery]
 - term: "Memory leak"
   definition: "Memory that is no longer needed but is never freed, so usage grows."
+  courses: [mastery]
+- term: "Memory model"
+  aliases: ["happens-before"]
+  definition: "A language's rules for when one thread's writes become visible to another."
   courses: [mastery]
 - term: "Merge sort"
   definition: "A stable O(n log n) sort that splits the data, sorts each half and merges them."
@@ -1629,6 +1693,9 @@
 - term: "Pointer chasing"
   definition: "Following a chain of pointers through scattered memory, which causes many cache misses."
   courses: [mastery]
+- term: "Poison pill"
+  definition: "A special item on a queue that tells consumers to stop."
+  courses: [mastery]
 - term: "Polling"
   aliases: ["long polling"]
   definition: "Asking a server repeatedly whether anything has changed; long polling holds each request open until it has."
@@ -1680,6 +1747,9 @@
 - term: "Process id"
   definition: "The number the operating system gives each process (PID)."
   courses: [mastery]
+- term: "Producer-consumer"
+  definition: "Producers put work on a queue and consumers take it off, decoupling the two."
+  courses: [mastery]
 - term: "Profiler"
   aliases: ["sampling profilers", "CPU profilers", "memory profilers"]
   definition: "A tool that shows where a running program spends time or memory."
@@ -1690,7 +1760,7 @@
 - term: "Promise"
   aliases: ["promises"]
   definition: "An object standing for a result that is not ready yet; it is pending, then fulfilled or rejected."
-  courses: [web, se]
+  courses: [web, se, mastery]
 - term: "Promoted"
   definition: "Moved from the young to the old generation after surviving collections."
   courses: [mastery]
@@ -1766,7 +1836,7 @@
   courses: [mastery]
 - term: "Race condition"
   definition: "A bug where the result depends on the timing of simultaneous operations."
-  courses: [se, web]
+  courses: [se, web, mastery]
 - term: "RAG"
   definition: "Retrieval-augmented generation: fetching relevant text and giving it to the model with the question."
   courses: [ai]
@@ -1782,6 +1852,10 @@
 - term: "React Testing Library"
   definition: "A library for showing React components in tests and finding things on the page the way people do."
   courses: [web]
+- term: "Reactive programming"
+  aliases: ["reactive"]
+  definition: "Programming with streams of events and operators to transform and combine them, as in Reactor or RxJS."
+  courses: [mastery]
 - term: "Read model"
   definition: "Data shaped for queries and kept up to date from the write side's events."
   courses: [mastery]
@@ -1887,6 +1961,9 @@
 - term: "Runtime"
   definition: "The software that runs a program's compiled code and provides services such as memory management."
   courses: [mastery]
+- term: "Safe publication"
+  definition: "Handing an object to other threads so they are guaranteed to see it fully built."
+  courses: [mastery]
 - term: "Saga"
   aliases: ["sagas"]
   definition: "A sequence of local transactions across services, with compensating actions if a step fails."
@@ -1925,6 +2002,9 @@
 - term: "Semantic versioning"
   definition: "Numbering versions major.minor.patch, where a new major version may break code written for the old one."
   courses: [web]
+- term: "Semaphore"
+  definition: "A counter that lets at most a set number of threads or tasks proceed at once."
+  courses: [mastery]
 - term: "Separation of concerns"
   definition: "Dividing a program so each part deals with one concern, such as presentation, rules or data access."
   courses: [mastery]
@@ -1951,6 +2031,9 @@
 - term: "Shallow copy"
   aliases: ["deep copy"]
   definition: "A copy that shares nested objects with the original; a deep copy copies everything."
+  courses: [mastery]
+- term: "Shared mutable state"
+  definition: "Data that several threads can both read and change: the source of most concurrency bugs."
   courses: [mastery]
 - term: "Side effect"
   aliases: ["side effects"]
@@ -2043,6 +2126,10 @@
 - term: "Standard output"
   definition: "A process's default output stream, file descriptor 1."
   courses: [mastery]
+- term: "Starvation"
+  aliases: ["thread-pool starvation"]
+  definition: "A thread or task that never gets the resource it needs because others always win; thread-pool starvation is a pool with no free threads."
+  courses: [mastery]
 - term: "State"
   definition: "The data a program is currently holding that its behaviour depends on."
   courses: [se, web, mastery]
@@ -2094,6 +2181,9 @@
 - term: "Structural typing"
   definition: "Types match by shape: any value with the right properties fits, as in TypeScript."
   courses: [mastery]
+- term: "Structured concurrency"
+  definition: "Treating a group of concurrent tasks as one unit that finishes or is cancelled together."
+  courses: [mastery]
 - term: "Structured outputs"
   definition: "An API feature that makes a model's reply follow a schema you define, so programs can read it reliably."
   courses: [claude]
@@ -2121,6 +2211,9 @@
   courses: [web]
 - term: "Swapping"
   definition: "Moving little-used memory pages to disk when RAM runs short."
+  courses: [mastery]
+- term: "Sync-over-async"
+  definition: "Blocking a thread to wait for async work (.Result, .Wait()), which can starve the thread pool or deadlock."
   courses: [mastery]
 - term: "Synchronous"
   definition: "Running in order, each step finishing before the next starts."
@@ -2190,6 +2283,16 @@
 - term: "Thread"
   definition: "A sequence of instructions being executed; a process's threads share its memory."
   courses: [mastery, se]
+- term: "Thread confinement"
+  definition: "Keeping state used by only one thread, so it needs no synchronisation."
+  courses: [mastery]
+- term: "Thread pool"
+  aliases: ["thread pools"]
+  definition: "A set of reusable threads that pick up queued work."
+  courses: [mastery]
+- term: "Thread-safe"
+  definition: "Behaving correctly when used from many threads at once without extra locking by callers."
+  courses: [mastery]
 - term: "Three-way handshake"
   definition: "The three packets TCP exchanges to open a connection, costing one round trip."
   courses: [mastery]
@@ -2318,6 +2421,10 @@
 - term: "Undecidable"
   definition: "Impossible for any program to solve correctly for every input."
   courses: [mastery]
+- term: "Unhandled rejection"
+  aliases: ["unhandled rejections"]
+  definition: "A failed promise that nothing awaits or handles; Node.js stops the process by default."
+  courses: [mastery]
 - term: "Unicode"
   definition: "The universal list that gives every character in every writing system a number, its code point."
   courses: [mastery]
@@ -2412,6 +2519,10 @@
 - term: "Virtual size"
   definition: "All the address space a process has reserved, much of it possibly unused."
   courses: [mastery]
+- term: "Virtual thread"
+  aliases: ["virtual threads", "carrier thread"]
+  definition: "A lightweight JVM-managed thread that is parked while it waits, so millions can exist."
+  courses: [mastery]
 - term: "Visitor"
   definition: "A pattern for adding operations to a fixed set of types, one method per type; largely replaced by pattern matching."
   courses: [mastery]
@@ -2461,6 +2572,13 @@
   courses: [web]
 - term: "Word"
   definition: "The natural unit of data a CPU works with; 64 bits on a 64-bit processor."
+  courses: [mastery]
+- term: "Worker pool"
+  definition: "A fixed number of workers taking jobs from a shared queue, capping how much runs at once."
+  courses: [mastery]
+- term: "Worker thread"
+  aliases: ["worker threads"]
+  definition: "In Node.js, an extra thread for CPU-heavy work that would otherwise block the event loop."
   courses: [mastery]
 - term: "Workflow"
   definition: "A system that runs model calls and tools along paths fixed in code, rather than letting the model choose its steps."

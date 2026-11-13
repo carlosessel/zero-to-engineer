@@ -1,0 +1,321 @@
+---
+title: "Threads, races and locks"
+summary: "Race conditions, mutexes, deadlocks, memory visibility and thread-safe design."
+prerequisites: [m-operating-systems]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will understand why code that is correct on one thread can be wrong on two, and how to fix it: you will recognise race conditions, use locks and atomic operations correctly, understand why one thread may not see another's writes, avoid and diagnose deadlocks, and, best of all, design code that needs few locks in the first place. Concurrency bugs are rare, intermittent and hard to reproduce, so the way to beat them is understanding, not testing alone.
+
+## Threads and shared memory
+
+A **thread** is an independent sequence of execution inside a process (<Ref to="m-operating-systems" />). All threads in a process share the same memory: the same objects, fields and collections. That makes communication cheap, and it is also the source of every problem in this chapter. On a multi-core machine, threads truly run at the same time; even on one core, the operating system can switch between them at any instruction.
+
+Back-end code is concurrent whether you write threads or not: a Java or C# web server handles many requests at once on a pool of threads, so any object shared between requests (a cache, a counter, a singleton service, a static field) is shared between threads.
+
+## Race conditions
+
+A **race condition** is a bug where the result depends on the timing of threads. The classic is **read-modify-write**: `count++` looks like one step but is three (read `count`, add one, write it back). If two threads both read 41, both add one and both write 42, one increment is lost.
+
+```java
+import java.util.concurrent.atomic.AtomicLong;
+
+public class Main {
+    static long unsafeCount = 0;
+    static long lockedCount = 0;
+    static final Object lock = new Object();
+    static final AtomicLong atomicCount = new AtomicLong();
+
+    public static void main(String[] args) throws InterruptedException {
+        Runnable work = () -> {
+            for (int i = 0; i < 1_000_000; i++) {
+                unsafeCount++;
+                synchronized (lock) { lockedCount++; }
+                atomicCount.incrementAndGet();
+            }
+        };
+        Thread a = new Thread(work), b = new Thread(work);
+        a.start(); b.start();
+        a.join(); b.join();
+        System.out.println("unsafe:       " + unsafeCount);
+        System.out.println("synchronized: " + lockedCount);
+        System.out.println("atomic:       " + atomicCount.get());
+    }
+}
+```
+
+On the machine this chapter was checked on it printed `unsafe: 1977694`, `synchronized: 2000000` and `atomic: 2000000`. Two threads each added one a million times; the unprotected counter lost over twenty thousand increments, and will lose a different number on every run (occasionally none, which is what makes races so dangerous: the test passes). The other two are always exactly two million.
+
+The other common race is **check-then-act**: `if (!map.containsKey(key)) map.put(key, value)`, or `if (balance >= amount) balance -= amount`. Between the check and the act, another thread can change what you checked. Two withdrawals of £80 from a £100 balance can both pass the check.
+
+Races are not only about threads. In JavaScript, a single-threaded program can race across `await`, because other code runs while one function waits:
+
+```ts
+let balance = 100;
+const pause = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+async function withdraw(amount: number, who: string) {
+  const current = balance;
+  await pause();
+  if (current >= amount) {
+    balance = current - amount;
+    console.log(`${who} withdrew ${amount}, balance now ${balance}`);
+  }
+}
+
+async function main() {
+  await Promise.all([withdraw(80, "phone"), withdraw(80, "laptop")]);
+  console.log("final balance", balance, "after paying out", 160);
+}
+
+main();
+```
+
+It prints `phone withdrew 80, balance now 20`, `laptop withdrew 80, balance now 20` and `final balance 20 after paying out 160`. Both read 100 before either wrote. The same race happens between two web servers reading and writing the same database row, which is why databases have transactions, locks and optimistic concurrency (<Ref to="m-enterprise-patterns" />).
+
+## Locks
+
+A **critical section** is code that must not be run by two threads at once. A **lock** (or **mutex**, for mutual exclusion) guards it: a thread must acquire the lock to enter, and others wait until it is released.
+
+- **Java**: `synchronized (obj) { ... }` or `synchronized` methods; `ReentrantLock` for timeouts, fairness and `tryLock`; `ReadWriteLock` when reads vastly outnumber writes.
+- **C#**: `lock (obj) { ... }` (built on `Monitor`), and from C# 13 the dedicated `System.Threading.Lock` type; `SemaphoreSlim` for async code; `ReaderWriterLockSlim`.
+
+Rules for using locks well:
+
+- **Guard every access** to the shared state, reads included, with the **same** lock. A lock protects only code that uses it.
+- **Keep critical sections short**: do the slow work (I/O, network calls, heavy computation) outside the lock.
+- **Never call unknown code while holding a lock** (callbacks, listeners, virtual methods others override): it might take other locks or take forever.
+- **Lock on a private object**, not on `this` or a public object that other code might also lock.
+- **Release in `finally`** with explicit locks (`synchronized` and `lock` do this for you).
+
+For a single variable, **atomic** operations are simpler and faster than locks: `AtomicLong`, `AtomicReference` and `LongAdder` in Java; `Interlocked.Increment` and `Interlocked.CompareExchange` in C#. They use the CPU's **compare-and-swap** (CAS) instruction: "set this to the new value only if it still holds the value I read", retrying if another thread got there first.
+
+```csharp
+long unsafeCount = 0;
+long atomicCount = 0;
+
+Parallel.For(0, 2_000_000, _ =>
+{
+    unsafeCount++;
+    Interlocked.Increment(ref atomicCount);
+});
+
+Console.WriteLine($"unsafe: {unsafeCount}");
+Console.WriteLine($"atomic: {atomicCount}");
+```
+
+`Parallel.For` spreads the two million iterations across the machine's cores. The atomic count is always `2000000`; the unsafe count is lower on most runs.
+
+## Memory visibility
+
+There is a subtler problem than lost updates: one thread may **never see** another thread's write at all. CPUs keep values in per-core caches and registers, and both the compiler and the CPU may **reorder** instructions, as long as the result looks the same *to that one thread*. Without synchronisation, a loop like `while (!stopRequested) { ... }` can run forever after another thread sets `stopRequested = true`, because the compiler hoisted the read out of the loop.
+
+Languages define a **memory model** that says when writes become visible. In Java's, the key idea is **happens-before**: everything a thread did before releasing a lock is visible to the next thread that acquires it; a write to a `volatile` field is visible to every later read of it; starting and joining a thread also create happens-before edges. C# and .NET have similar rules (`volatile`, the `Volatile` and `Interlocked` classes, and locks). JavaScript avoids most of this because ordinary code runs on one thread; `SharedArrayBuffer` with `Atomics` is the exception.
+
+The practical rules:
+
+- Shared **mutable** state must be accessed under a lock, through atomics, or via `volatile` (for a simple flag written by one thread and read by others).
+- `volatile` gives visibility, **not atomicity**: `volatileCount++` is still a race.
+- **Safe publication**: make objects shared between threads immutable (`final` fields in Java, `readonly` in C#), or hand them over through a thread-safe structure (a concurrent queue, a lock, a `volatile` reference).
+
+## Deadlock
+
+A **deadlock** happens when threads wait for each other forever. The classic case: thread 1 holds lock A and waits for lock B, while thread 2 holds lock B and waits for lock A. A money transfer that locks the source account and then the destination deadlocks when two transfers between the same accounts run in opposite directions:
+
+```java
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
+
+public class Main {
+    static final ReentrantLock accountA = new ReentrantLock();
+    static final ReentrantLock accountB = new ReentrantLock();
+    static final CountDownLatch bothHoldFirstLock = new CountDownLatch(2);
+
+    static void transfer(String name, ReentrantLock first, ReentrantLock second) {
+        first.lock();
+        try {
+            bothHoldFirstLock.countDown();
+            bothHoldFirstLock.await();
+            if (second.tryLock(200, TimeUnit.MILLISECONDS)) {
+                try { System.out.println(name + ": transferred"); } finally { second.unlock(); }
+            } else {
+                System.out.println(name + ": gave up waiting for the second lock (deadlock)");
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } finally {
+            first.unlock();
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        Thread t1 = new Thread(() -> transfer("A to B", accountA, accountB));
+        Thread t2 = new Thread(() -> transfer("B to A", accountB, accountA));
+        t1.start(); t2.start();
+        t1.join(); t2.join();
+    }
+}
+```
+
+Both threads print that they gave up waiting. The latch makes sure each holds its first lock before trying the second, so the deadlock happens every run instead of once a month in production; `tryLock` with a timeout lets the program notice instead of hanging forever.
+
+A deadlock needs four conditions at once (the **Coffman conditions**): mutual exclusion, holding one resource while waiting for another, no forced release, and a circular wait. Break any one and deadlock is impossible. In practice:
+
+- **Lock ordering**: always acquire locks in one global order (for example, by account id). Then no cycle can form. This is the standard fix.
+- **Hold one lock at a time** wherever you can.
+- **Timeouts** (`tryLock`, `Monitor.TryEnter`) to detect and recover.
+- **Thread dumps** to diagnose: `jstack <pid>` or `jcmd <pid> Thread.print` in Java lists every thread's stack and reports "Found one Java-level deadlock"; `dotnet-dump` does the same for .NET.
+
+Related problems: **livelock** (threads keep reacting to each other and make no progress, like two people stepping aside in a corridor), and **starvation** (a thread never gets the lock because others always win).
+
+## Designing for thread safety
+
+The best concurrent code has very little locking, because it avoids **shared mutable state**. In order of preference:
+
+1. **Don't share**: keep state local to one request or one thread (**thread confinement**). Most web request handling is naturally like this.
+2. **Don't mutate**: share **immutable** objects freely (<Ref to="m-functional" />). Records, `final` and `readonly` fields, and immutable collections need no locks.
+3. **Use thread-safe building blocks**: `ConcurrentHashMap` and `ConcurrentDictionary` (with their atomic `computeIfAbsent`, `merge`, `AddOrUpdate` and `GetOrAdd` methods, which fix check-then-act races), concurrent queues, atomics.
+4. **Lock**, carefully, as a last resort, keeping the locked region small and well documented.
+
+A class is **thread-safe** if it behaves correctly when used from many threads without extra synchronisation by its callers. Document whether yours are. `ArrayList`, `HashMap`, `List<T>` and `Dictionary<K,V>` are **not** thread-safe: concurrent writes can corrupt them, not just lose updates.
+
+Also think about **granularity**: one big lock around everything is simple and safe but makes threads queue (**contention**); many fine-grained locks allow more parallelism but invite deadlocks. Start coarse and measure (<Ref to="m-performance" />).
+
+## Common mistakes
+
+- **Unprotected read-modify-write** (`count++`, `total += x`) on shared fields.
+- **Check-then-act** on shared maps or balances without one atomic operation.
+- **Locking writes but not reads.**
+- **Different locks** guarding the same data in different places.
+- **`volatile` for counters**, expecting atomicity.
+- **Slow I/O inside locks.**
+- **Locks taken in different orders** in different places.
+- **Non-thread-safe collections** in singletons or static fields.
+- **Assuming tests prove absence of races**: they usually pass.
+
+## Practice
+
+**1. (warm-up)** Why is `count++` not safe on a field shared between threads?
+
+<Solution>
+
+It is three steps: read the value, add one, write it back. Two threads can both read the same value and both write the same result, losing one increment.
+
+</Solution>
+
+**2. (warm-up)** What does `volatile` guarantee in Java, and what does it not?
+
+<Solution>
+
+It guarantees visibility and ordering: a write to a volatile field is seen by every later read of it, and writes made before it are visible too. It does not make compound operations atomic: `volatileCount++` is still a race.
+
+</Solution>
+
+**3. (warm-up)** Name the four Coffman conditions for deadlock, and the one lock ordering breaks.
+
+<Solution>
+
+Mutual exclusion, hold and wait, no preemption, circular wait. Lock ordering breaks circular wait.
+
+</Solution>
+
+**4. (standard)** Fix the transfer deadlock with lock ordering: always lock the account with the smaller id first. Show both transfers succeeding.
+
+<Solution>
+
+```java
+import java.util.concurrent.locks.ReentrantLock;
+
+public class Main {
+    record Account(int id, ReentrantLock lock) {}
+
+    static void transfer(String name, Account from, Account to) {
+        Account first = from.id() < to.id() ? from : to;
+        Account second = first == from ? to : from;
+        first.lock().lock();
+        try {
+            second.lock().lock();
+            try {
+                System.out.println(name + ": transferred");
+            } finally {
+                second.lock().unlock();
+            }
+        } finally {
+            first.lock().unlock();
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        Account a = new Account(1, new ReentrantLock());
+        Account b = new Account(2, new ReentrantLock());
+        Thread t1 = new Thread(() -> transfer("A to B", a, b));
+        Thread t2 = new Thread(() -> transfer("B to A", b, a));
+        t1.start(); t2.start();
+        t1.join(); t2.join();
+    }
+}
+```
+
+Both lines (**A to B: transferred** and **B to A: transferred**) are printed, in either order. Both transfers lock account 1 first, so whichever gets it proceeds and the other waits; no cycle can form.
+
+</Solution>
+
+**5. (standard)** Fix the JavaScript double-withdrawal race so the second withdrawal is refused.
+
+<Solution>
+
+Do the check and the update together, with no `await` between them (and await the slow work after):
+
+```ts
+let balance = 100;
+const pause = () => new Promise((resolve) => setTimeout(resolve, 10));
+
+async function withdraw(amount: number, who: string) {
+  if (balance < amount) {
+    console.log(`${who} refused: balance ${balance}`);
+    return;
+  }
+  balance -= amount;
+  await pause();
+  console.log(`${who} withdrew ${amount}, balance now ${balance}`);
+}
+
+async function main() {
+  await Promise.all([withdraw(80, "phone"), withdraw(80, "laptop")]);
+  console.log("final balance", balance);
+}
+
+main();
+```
+
+It prints **laptop refused: balance 20**, then **phone withdrew 80, balance now 20**, then **final balance 20**. JavaScript runs each synchronous stretch without interruption, so a check and update with no `await` between them cannot interleave. Across several servers sharing a database, the equivalent is one atomic statement: `UPDATE accounts SET balance = balance - 80 WHERE id = 7 AND balance >= 80`.
+
+</Solution>
+
+**6. (stretch)** A singleton `PriceCache` uses a `HashMap` and is called from every request thread. Occasionally CPU usage jumps to 100% and requests hang. What might be happening, and how would you fix it?
+
+<Solution>
+
+Concurrent writes to a non-thread-safe `HashMap` can corrupt its internal structure (in older Java versions, resizing could even create a loop in a bucket's list, so `get` spins forever). Replace it with `ConcurrentHashMap`, and use `computeIfAbsent` so "load the price if missing" is one atomic operation; better still, use a bounded cache library such as Caffeine so it cannot grow without limit. Take thread dumps during an incident to confirm where threads are stuck.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Threads share memory; any shared mutable state is a risk, including singletons and static fields in web servers.
+- **Race conditions**: lost updates from read-modify-write, and check-then-act. They also happen across `await` and between servers.
+- **Locks** guard critical sections: same lock for all access, short sections, no unknown calls inside. **Atomics** (CAS) suit single variables.
+- The **memory model** decides visibility: use locks, atomics or `volatile`; `volatile` is not atomic; publish objects safely.
+- **Deadlock** needs a circular wait: prevent it with **lock ordering**, detect it with timeouts and thread dumps. Beware livelock and starvation.
+- Prefer **confinement**, **immutability** and **concurrent collections** to locks; know which classes are not thread-safe.
+
+## Go deeper
+
+- [Java tutorials: concurrency](https://docs.oracle.com/javase/tutorial/essential/concurrency/), Oracle. Threads, synchronisation, liveness and high-level concurrency objects.
+- [The Java Memory Model (JLS chapter 17)](https://docs.oracle.com/javase/specs/jls/se25/html/jls-17.html), Oracle. The precise rules for happens-before and `volatile`.
+- [Managed threading best practices](https://learn.microsoft.com/en-us/dotnet/standard/threading/managed-threading-best-practices), Microsoft. Deadlocks, races and locking in .NET.
+- [The Deadlock Empire](https://deadlockempire.github.io/), Petr Hudeček and Michal Pokorný. A game where you play the scheduler and break badly synchronised code.

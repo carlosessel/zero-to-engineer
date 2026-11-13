@@ -1,0 +1,312 @@
+---
+title: "Asynchronous programming"
+summary: "Event loops, futures and promises, async and await, thread pools, Java virtual threads and .NET tasks."
+prerequisites: [m-threads-locks]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will understand how modern back ends handle thousands of slow operations at once without thousands of busy threads: the event loop behind Node.js, futures and promises, `async` and `await` in TypeScript and C#, thread pools, Java's virtual threads, and the mistakes (blocking the event loop, sync-over-async, forgotten awaits, no cancellation) that turn asynchronous code into outages.
+
+## Why asynchronous?
+
+Most back-end work is **waiting**: for the database, another service, a file, the network. A request that takes 200 ms might use the CPU for 5 ms of it (<Ref to="m-machine" />). If each request holds an operating-system thread while it waits, a server needs a thread per concurrent request, and threads are expensive: each reserves memory for its stack (around a megabyte by default in Java and .NET), and switching between thousands of them costs CPU time (<Ref to="m-operating-systems" />).
+
+**Asynchronous** programming lets a thread start an operation, go and do other work, and come back when the result is ready. The key distinction:
+
+- **Concurrency**: dealing with many things at once (many requests in progress, mostly waiting). Async I/O is about concurrency.
+- **Parallelism**: doing many things at the same instant on several cores (computing a large report faster). Threads and parallel loops are about parallelism.
+
+Async code makes I/O-bound work scale; it does nothing for CPU-bound work, which needs more cores.
+
+## The event loop
+
+JavaScript runs your code on **one thread**, with an **event loop**: a loop that takes the next ready task from a queue and runs it to completion, then the next. Slow operations (timers, network, file I/O) are handed to the runtime (libuv in Node.js, the browser otherwise), which queues a callback when they finish. There are two queues of interest:
+
+- **Macrotasks** (often just "tasks"): timers, I/O callbacks, events.
+- **Microtasks**: promise reactions (`then`, the code after an `await`) and `queueMicrotask`. After each task, the loop drains **all** microtasks before the next task.
+
+```ts
+console.log("1: start");
+
+setTimeout(() => console.log("5: timeout (a task)"), 0);
+
+Promise.resolve().then(() => console.log("3: promise reaction (a microtask)"));
+
+queueMicrotask(() => console.log("4: queued microtask"));
+
+console.log("2: end of the script");
+```
+
+It prints the lines in the order of their numbers. The script itself runs first, to the end; then every microtask; only then the timer, even though its delay was zero. Two consequences matter in practice:
+
+- **Never block the event loop.** While your code runs, nothing else can: a 2-second CPU-heavy loop (parsing a huge JSON file, a synchronous crypto call, a catastrophic regular expression) freezes every request on the server. Move CPU-heavy work to **worker threads** or another service.
+- A long chain of microtasks can also starve timers and I/O.
+
+## Futures and promises
+
+A **future** or **promise** is an object representing a result that is not ready yet. It is **pending**, then either **fulfilled** with a value or **rejected** with an error. You attach what should happen next instead of waiting. Every platform has one: `Promise` in JavaScript, `CompletableFuture` in Java, `Task` and `Task<T>` in .NET.
+
+**`async` and `await`** make promise-based code read like ordinary sequential code. An `async` function always returns a promise; `await` pauses that function (not the thread) until the promise settles, then resumes with its value or throws its error. TypeScript and C# share this syntax almost exactly.
+
+### Sequential versus concurrent awaits
+
+The most common performance mistake with `await` is waiting for independent operations one after another:
+
+```csharp
+using System.Diagnostics;
+
+async Task<string> Fetch(string name, int ms)
+{
+    await Task.Delay(ms);
+    return $"{name} ({ms} ms)";
+}
+
+var clock = Stopwatch.StartNew();
+var a = await Fetch("customer", 300);
+var b = await Fetch("orders", 300);
+var c = await Fetch("recommendations", 300);
+Console.WriteLine($"one after another: {clock.ElapsedMilliseconds} ms");
+
+clock.Restart();
+var results = await Task.WhenAll(Fetch("customer", 300), Fetch("orders", 300), Fetch("recommendations", 300));
+Console.WriteLine($"concurrently: {clock.ElapsedMilliseconds} ms");
+Console.WriteLine(string.Join(", ", results));
+```
+
+On the machine this chapter was checked on it printed `one after another: 909 ms` and `concurrently: 301 ms`, then the three results. Starting all three before awaiting any takes as long as the slowest, not the sum. TypeScript does the same with `Promise.all`, and Java with `CompletableFuture.allOf`.
+
+### Combining promises and handling failure
+
+```ts
+const wait = <T>(ms: number, value: T, fail = false) =>
+  new Promise<T>((resolve, reject) => setTimeout(() => (fail ? reject(new Error(`${value} failed`)) : resolve(value)), ms));
+
+async function main() {
+  try {
+    await Promise.all([wait(30, "stock"), wait(10, "prices", true), wait(20, "reviews")]);
+  } catch (e) {
+    console.log("all:", (e as Error).message);
+  }
+
+  const settled = await Promise.allSettled([wait(30, "stock"), wait(10, "prices", true), wait(20, "reviews")]);
+  console.log("allSettled:", settled.map((r) => (r.status === "fulfilled" ? r.value : `error (${r.reason.message})`)));
+
+  console.log("race:", await Promise.race([wait(30, "primary"), wait(10, "replica")]));
+  console.log("any:", await Promise.any([wait(10, "mirror A", true), wait(20, "mirror B")]));
+}
+
+main();
+```
+
+It prints `all: prices failed`, then `allSettled: ["stock", "error (prices failed)", "reviews"]`, then `race: replica` and `any: mirror B`. Choose deliberately:
+
+- **`Promise.all`** (`Task.WhenAll`): every result is needed; it rejects as soon as one fails (the others keep running, their results are discarded).
+- **`Promise.allSettled`**: you want every outcome, such as a dashboard where one panel failing should not blank the page.
+- **`Promise.race`**: the first to settle wins, success or failure; used for timeouts.
+- **`Promise.any`**: the first to *succeed* wins; for redundant sources.
+
+**Unhandled rejections** are a classic bug: a promise that fails with nobody awaiting it. Node.js terminates the process on an unhandled rejection by default (since version 15), and .NET reports unobserved task exceptions. Always await (or deliberately handle) every promise you create, and turn on lint rules that catch floating promises (<Ref to="m-static-quality" />).
+
+## Cancellation and timeouts
+
+An operation nobody is waiting for any more should stop: the user navigated away, the request timed out, the client disconnected. Without cancellation, abandoned work keeps using database connections and CPU.
+
+- **JavaScript**: an `AbortController` creates an `AbortSignal` that `fetch` and many libraries accept; `AbortSignal.timeout(ms)` makes one that aborts itself.
+- **.NET**: a `CancellationToken` passed down through every async method (ASP.NET Core gives you one that fires when the client disconnects).
+- **Java**: `Future.cancel`, thread interruption, and timeouts on `CompletableFuture` (`orTimeout`).
+
+```ts
+function slowLookup(signal: AbortSignal): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => resolve("found it"), 200);
+    signal.addEventListener("abort", () => {
+      clearTimeout(timer);
+      reject(new Error(`stopped: ${signal.reason?.name ?? "aborted"}`));
+    });
+  });
+}
+
+async function main() {
+  try {
+    console.log(await slowLookup(AbortSignal.timeout(50)));
+  } catch (e) {
+    console.log((e as Error).message);
+  }
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(), 20);
+  try {
+    await slowLookup(controller.signal);
+  } catch (e) {
+    console.log((e as Error).message);
+  }
+}
+
+main();
+```
+
+It prints `stopped: TimeoutError` and `stopped: AbortError`. The lookup cleaned up its timer instead of finishing work nobody wanted. Every network call should have a timeout (the resilience chapter later in the course explains why missing timeouts take whole systems down).
+
+## Thread pools
+
+On the JVM and .NET, asynchronous work runs on **thread pools**: a fixed or growing set of reusable threads that pick up queued work, so the cost of creating threads is paid once. In .NET, `await` releases the thread back to the pool while waiting, and the continuation runs on any pool thread when the result arrives; this is how ASP.NET Core handles many thousands of concurrent requests with a few dozen threads. Java's `ExecutorService` provides pools, and `CompletableFuture` chains run on them.
+
+Two rules keep pools healthy:
+
+- **Do not block pool threads** waiting for other async work. In .NET, calling `.Result` or `.Wait()` on a task (**sync-over-async**) ties up a thread doing nothing, and under load the pool runs out of threads and requests stall (**thread-pool starvation**); in environments with a synchronisation context (old ASP.NET, desktop UI threads) it can deadlock outright. The rule is "async all the way": if you call something async, make your method async too.
+- **Size pools for the work**: CPU-bound pools around the number of cores; pools for blocking I/O larger, and bounded so they cannot exhaust memory or the database's connection limit.
+
+## Java's virtual threads
+
+Java took a different path. Since Java 21, **virtual threads** are lightweight threads managed by the JVM rather than the operating system. Millions can exist at once; when one blocks on I/O or `sleep`, the JVM parks it and runs another virtual thread on the same operating-system **carrier thread**. You write plain, blocking, sequential code, and get the scalability of asynchronous code.
+
+```java
+import java.time.Duration;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.stream.IntStream;
+
+public class Main {
+    static long run(ExecutorService executor, int tasks) {
+        long start = System.nanoTime();
+        try (executor) {
+            IntStream.range(0, tasks).forEach(i -> executor.submit(() -> {
+                Thread.sleep(Duration.ofMillis(100));
+                return i;
+            }));
+        }
+        return (System.nanoTime() - start) / 1_000_000;
+    }
+
+    public static void main(String[] args) {
+        int tasks = 2_000;
+        long pooled = run(Executors.newFixedThreadPool(100), tasks);
+        long virtual = run(Executors.newVirtualThreadPerTaskExecutor(), tasks);
+        System.out.println(tasks + " tasks that each wait 100 ms");
+        System.out.println("100 platform threads: " + pooled + " ms");
+        System.out.println("virtual threads:      " + virtual + " ms");
+    }
+}
+```
+
+On the machine this chapter was checked on: `100 platform threads: 2075 ms` (2,000 tasks in batches of 100, each batch waiting 100 ms) and `virtual threads: 130 ms` (all 2,000 waiting at once). Closing the executor (`try (executor)`) waits for every task to finish. Spring Boot can run each request on a virtual thread with one setting (`spring.threads.virtual.enabled=true`).
+
+Virtual threads help **waiting**, not computing: CPU-bound work still needs cores. Do not pool them (they are cheap to create), and use semaphores, not pool sizes, to limit how many hit a database at once. Long-running code inside `synchronized` blocks could **pin** a virtual thread to its carrier in earlier versions; Java 24 removed most of that limitation.
+
+## Choosing a model
+
+| Platform | Default for I/O-heavy servers |
+|---|---|
+| Node.js / TypeScript | async/await on the event loop; worker threads for CPU-heavy work |
+| .NET | async/await on `Task`, "async all the way", pass `CancellationToken`s |
+| Java 21+ | plain blocking code on virtual threads; or reactive libraries (Project Reactor, WebFlux) where already in use |
+
+**Reactive** programming (Reactor, RxJava, Rx.NET, RxJS) models data as streams with operators for transforming, combining and back-pressure. It is powerful for streams of events and was the main route to scalability on the JVM before virtual threads; it is harder to read and debug, so use it where streams are the natural model.
+
+## Common mistakes
+
+- **Awaiting independent operations one by one** instead of together.
+- **Blocking the event loop** with CPU-heavy or synchronous work.
+- **Sync-over-async** (`.Result`, `.Wait()`, `.get()` on futures in request threads).
+- **Floating promises**: async calls whose result or error nobody awaits.
+- **`async void`** in C# (except event handlers): exceptions crash the process and callers cannot await it.
+- **No timeouts or cancellation** on calls to other systems.
+- **Unbounded concurrency**: `Promise.all` over 10,000 items, opening 10,000 connections at once (<Ref to="m-concurrency-patterns" /> shows how to bound it).
+- **Assuming async makes CPU-bound work faster.**
+
+## Practice
+
+**1. (warm-up)** In what order does this print, and why?
+
+```ts
+setTimeout(() => console.log("C"), 0);
+Promise.resolve().then(() => console.log("B"));
+console.log("A");
+```
+
+<Solution>
+
+**A**, **B**, **C**. The script runs to the end first (A), then all microtasks (the promise reaction, B), then the next task (the timer, C).
+
+</Solution>
+
+**2. (warm-up)** What is the difference between concurrency and parallelism? Which does async I/O provide?
+
+<Solution>
+
+Concurrency is making progress on many things over the same period (often while most are waiting); parallelism is executing several things at the same instant on several cores. Async I/O provides concurrency: one thread can have thousands of operations in flight while they wait.
+
+</Solution>
+
+**3. (warm-up)** Why is calling `.Result` on a `Task` inside an ASP.NET Core request handler a problem?
+
+<Solution>
+
+It blocks a thread-pool thread until the task completes, so the thread does nothing useful. Under load, many requests doing this exhaust the pool and everything slows or stalls (thread-pool starvation); with a synchronisation context it can deadlock. Use `await` instead, and make the calling method async.
+
+</Solution>
+
+**4. (standard)** Rewrite this so the three independent lookups run concurrently, and the page still shows if reviews fail:
+
+```ts
+async function productPage(id: string) {
+  const product = await getProduct(id);
+  const stock = await getStock(id);
+  const reviews = await getReviews(id);
+  return { product, stock, reviews };
+}
+```
+
+<Solution>
+
+```ts
+const delay = <T>(ms: number, value: T, fail = false) =>
+  new Promise<T>((resolve, reject) => setTimeout(() => (fail ? reject(new Error("reviews service down")) : resolve(value)), ms));
+
+const getProduct = (id: string) => delay(30, { id, name: "Rye loaf" });
+const getStock = (id: string) => delay(20, { id, onHand: 12 });
+const getReviews = (id: string) => delay(10, [] as string[], true);
+
+async function productPage(id: string) {
+  const [product, stock, reviews] = await Promise.allSettled([getProduct(id), getStock(id), getReviews(id)]);
+  if (product.status === "rejected") throw product.reason;
+  return {
+    product: product.value,
+    stock: stock.status === "fulfilled" ? stock.value : null,
+    reviews: reviews.status === "fulfilled" ? reviews.value : "unavailable",
+  };
+}
+
+productPage("RYE-400").then((page) => console.log(page));
+```
+
+It prints **`{ product: { id: "RYE-400", name: "Rye loaf" }, stock: { id: "RYE-400", onHand: 12 }, reviews: "unavailable" }`**. All three start at once, so the page takes as long as the slowest call; the product is required (its failure fails the page), while stock and reviews degrade gracefully.
+
+</Solution>
+
+**5. (stretch)** A Java service handles each request on a platform thread from a pool of 200, and each request spends 950 ms of its 1 s waiting on other services. At most how many requests per second can it serve, and how would virtual threads change that?
+
+<Solution>
+
+Each thread handles about one request per second, so 200 threads serve about 200 requests per second (Little's law: 200 in progress ÷ 1 s each), even though the CPU is nearly idle. With virtual threads, each waiting request costs only a small parked virtual thread, so the limit moves to the real bottlenecks: CPU (5% of each request), memory, and the capacity of the services being called. Those must be protected with limits (semaphores, connection pool sizes, timeouts), or the extra concurrency simply overwhelms the downstream services.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Back-end work is mostly **waiting**; async lets a few threads keep many operations in flight. **Concurrency** is not **parallelism**.
+- JavaScript's **event loop** runs one task at a time and drains **microtasks** between tasks; never block it.
+- **Promises**, **futures** and **tasks** represent pending results; **async/await** makes them read sequentially. Start independent work together (`Promise.all`, `Task.WhenAll`) and choose `all`, `allSettled`, `race` or `any` deliberately.
+- Await everything: **unhandled rejections** and `async void` crash processes.
+- Use **cancellation** (`AbortSignal`, `CancellationToken`) and timeouts on every remote call.
+- .NET: **async all the way**; sync-over-async starves the **thread pool**. Java 21+: **virtual threads** give async scalability with blocking-style code.
+
+## Go deeper
+
+- [The Node.js event loop](https://nodejs.org/en/learn/asynchronous-work/event-loop-timers-and-nexttick), the Node.js project. Phases, timers and `process.nextTick`.
+- [Asynchronous programming with async and await (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/), Microsoft. Tasks, `WhenAll` and the async model.
+- [Virtual threads](https://docs.oracle.com/en/java/javase/25/core/virtual-threads.html), Oracle. How virtual threads work and how to adopt them.
+- [Using promises](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Guide/Using_promises), MDN. Chaining, errors and composition.
+- [Async guidance for ASP.NET Core](https://github.com/davidfowl/AspNetCoreDiagnosticScenarios/blob/master/AsyncGuidance.md), David Fowler. The do's and don'ts of async in .NET servers.

@@ -10,7 +10,7 @@ for (const chapter of process.argv.slice(2)) {
   for (let i = 0; i < blocks.length; i++) {
     if (blocks[i][2] !== 'ts') continue;
     if (/^\s*declare\s/m.test(blocks[i][3])) { console.log(`== ${chapter} ${i + 1}: has declare, not run`); continue; }
-    const r = await runExample(transform(blocks[i][3], { transforms: ['typescript'] }).code);
+    const r = await runExample(transform(blocks[i][3], { transforms: ['typescript'] }).code, { wait_ms: 1000 });
     console.log(`== ${chapter} ${i + 1}${r.error ? ' ERROR ' + r.error.message : ''}\n${r.output}`);
   }
 }

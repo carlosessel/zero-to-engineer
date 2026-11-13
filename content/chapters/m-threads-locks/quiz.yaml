@@ -1,0 +1,36 @@
+- question: Why can two threads running count++ lose updates?
+  options:
+  - It is a read, an add and a write, which can interleave
+  - Integers cannot be shared
+  answer: 0
+  explanation: Use a lock or an atomic increment.
+- question: Can single-threaded JavaScript have race conditions?
+  options:
+  - Yes, across await, when other code runs in between
+  - No, never
+  answer: 0
+  explanation: Keep check and update together without an await between them.
+- question: What does volatile not provide?
+  options:
+  - Atomicity of compound operations
+  - Visibility of writes
+  answer: 0
+  explanation: volatile count++ is still a race.
+- question: What is the standard way to prevent deadlock?
+  options:
+  - Acquire locks in one global order
+  - Use more locks
+  answer: 0
+  explanation: Lock ordering breaks the circular wait.
+- question: Which is the safest way to share data between threads?
+  options:
+  - Share immutable objects, or none at all
+  - Share a HashMap and hope
+  answer: 0
+  explanation: Confinement and immutability need no locks.
+- question: How do you see where threads are stuck in a Java process?
+  options:
+  - Take a thread dump with jstack or jcmd
+  - Read the source code
+  answer: 0
+  explanation: It also reports Java-level deadlocks.

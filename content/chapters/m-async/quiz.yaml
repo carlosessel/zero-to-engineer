@@ -1,0 +1,36 @@
+- question: 'What runs first after a script finishes: a promise reaction or a zero-delay timer?'
+  options:
+  - The promise reaction (a microtask)
+  - The timer
+  answer: 0
+  explanation: All microtasks run before the next task.
+- question: Three independent 300 ms calls are awaited one after another. How long does it take, and how to fix it?
+  options:
+  - About 900 ms; start them together and await Promise.all or Task.WhenAll
+  - 300 ms; nothing to fix
+  answer: 0
+  explanation: Concurrent awaits take as long as the slowest.
+- question: What happens if a CPU-heavy loop runs on Node.js's main thread?
+  options:
+  - Every other request waits until it finishes
+  - Node.js runs it on another core automatically
+  answer: 0
+  explanation: Move CPU-heavy work to worker threads.
+- question: Why is .Result on a Task in a request handler harmful?
+  options:
+  - It blocks a pool thread and can starve the thread pool or deadlock
+  - It is slower to type
+  answer: 0
+  explanation: Go async all the way.
+- question: What do Java's virtual threads give you?
+  options:
+  - Blocking-style code that scales like async for I/O-bound work
+  - Faster CPU-bound computation
+  answer: 0
+  explanation: They help waiting, not computing.
+- question: Which combinator should a dashboard use so one failing panel does not blank the page?
+  options:
+  - Promise.allSettled
+  - Promise.all
+  answer: 0
+  explanation: It reports every outcome.

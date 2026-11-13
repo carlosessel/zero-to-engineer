@@ -1,0 +1,45 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: java
+  check: java
+  note: 'Where the ''till waited'' lines fall depends on timing; the check asserts what the chapter promises: orders baked in order, the total, and that the till had to wait at least once.'
+  verify: |
+    import re
+    baked = [int(x) for x in re.findall(r'baked order (\d+)', out)]
+    assert baked == [1, 2, 3, 4, 5], baked
+    assert 'kitchen total: 6750' in out
+    assert 'till waited for space' in out, out
+- block: 2
+  lang: text
+  check: illustration
+  note: One run of block 1 on the machine this chapter was checked on; block 1's check confirms the parts that do not depend on timing.
+- block: 3
+  lang: csharp
+  check: csharp
+  output: |
+    workers: 3, messages: 300, total: 451500
+    every worker helped: True
+- block: 4
+  lang: ts
+  check: ts
+  wait_ms: 300
+  output: |
+    10 receipt 1 receipt 10 peak in flight: 3
+- block: 5
+  lang: ts
+  check: ts
+  wait_ms: 300
+  output: |
+    [true, false, true] 55
+- block: 6
+  lang: java
+  check: java
+  output: |
+    Stats[orders=30000, pence=3000000]
+    {baguette=10000, croissant=10000, rye loaf=10000}
+- block: 7
+  lang: ts
+  check: ts
+  wait_ms: 300
+  output: |
+    12 { sku: "SKU-12", onHand: 6 } peak: 4

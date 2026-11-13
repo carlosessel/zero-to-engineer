@@ -8,7 +8,7 @@
 //   error_contains: pieces of those errors' messages
 //   file:           the block's file name (default example.ts or example.tsx)
 //   files:          other blocks that are part of the same program: { "types.ts": 3 }
-//   output, output_contains, throws, expect: as for `check: js`, run after removing the types
+//   output, output_contains, throws, expect, wait_ms: as for `check: js`, run after removing the types
 //                   the way the site's Run button does (Sucrase).
 //                   Only for blocks without import or export.
 import fs from 'node:fs';
@@ -32,6 +32,7 @@ interface Entry {
   output?: string;
   output_contains?: string[];
   throws?: string;
+  wait_ms?: number;
   expect?: string[];
 }
 
@@ -107,7 +108,7 @@ describe('TypeScript examples', () => {
       expect(/^\s*(import|export)\s/m.test(code), 'only a block without import or export can be run on its own').toBe(false);
       // Types removed by Sucrase, as the site's Run button does.
       const js = transform(code, { transforms: ['typescript'] }).code;
-      const result = await runExample(js);
+      const result = await runExample(js, { wait_ms: entry.wait_ms });
       if (entry.throws) expect(result.error?.name).toBe(entry.throws);
       else expect(result.error, `it stopped with an error. Output so far:\n${result.output}`).toBeNull();
       const tidy = (s: string) => s.replace(/[ \t]+$/gm, '').trim();

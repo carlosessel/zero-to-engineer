@@ -1,0 +1,63 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    1: start
+    2: end of the script
+    3: promise reaction (a microtask)
+    4: queued microtask
+    5: timeout (a task)
+- block: 2
+  lang: csharp
+  check: csharp
+  note: Timings vary; the check asserts the relationship the chapter describes (concurrent is much faster than one after another) and the results line.
+  verify: |
+    import re
+    seq = int(re.search(r'one after another: (\d+) ms', out).group(1))
+    con = int(re.search(r'concurrently: (\d+) ms', out).group(1))
+    assert seq >= 850 and con < 600 and seq >= 1.5 * con, (seq, con)
+    assert 'customer (300 ms), orders (300 ms), recommendations (300 ms)' in out
+- block: 3
+  lang: ts
+  check: ts
+  wait_ms: 300
+  output: |
+    all: prices failed
+    allSettled: ["stock", "error (prices failed)", "reviews"]
+    race: replica
+    any: mirror B
+- block: 4
+  lang: ts
+  check: ts
+  wait_ms: 500
+  output: |
+    stopped: TimeoutError
+    stopped: AbortError
+- block: 5
+  lang: java
+  check: java
+  note: Timings vary; the check asserts virtual threads finish far faster than the 100-thread pool, as the chapter describes.
+  verify: |
+    import re
+    pooled = int(re.search(r'100 platform threads: (\d+) ms', out).group(1))
+    virtual = int(re.search(r'virtual threads:\s+(\d+) ms', out).group(1))
+    assert pooled >= 1900, pooled
+    assert virtual * 4 < pooled, (virtual, pooled)
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    A
+    B
+    C
+- block: 7
+  lang: ts
+  check: illustration
+  note: The code to rewrite in practice 4; getProduct, getStock and getReviews stand for any service calls, and the solution (block 8) defines and runs them.
+- block: 8
+  lang: ts
+  check: ts
+  wait_ms: 300
+  output: |
+    { product: { id: "RYE-400", name: "Rye loaf" }, stock: { id: "RYE-400", onHand: 12 }, reviews: "unavailable" }

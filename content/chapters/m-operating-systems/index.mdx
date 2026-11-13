@@ -56,7 +56,7 @@ Handling SIGTERM well (graceful shutdown) is one of the marks of a production-re
 
 ## Threads
 
-A **thread** is a sequence of instructions being executed. Every process starts with one; a program can create more, and they all **share the process's memory**. That sharing is both the point and the danger: threads can work on the same data without copying it, and they can also corrupt it by changing it at the same time (the concurrency part of this course is about doing this safely).
+A **thread** is a sequence of instructions being executed. Every process starts with one; a program can create more, and they all **share the process's memory**. That sharing is both the point and the danger: threads can work on the same data without copying it, and they can also corrupt it by changing it at the same time (<Ref to="m-threads-locks" /> is about doing this safely).
 
 ```java
 public class Main {
@@ -87,7 +87,7 @@ A machine might run hundreds of processes and thousands of threads on a handful 
 
 Most threads spend most of their time not running but **waiting** (blocked): for a disk read, a network reply, a lock, or a timer. A blocked thread uses no CPU. So:
 
-- A web server handling 1,000 requests that each wait 200 ms for a database is not "busy"; it is waiting. That is why designs that do not tie up a thread per waiting request (asynchronous I/O, event loops, virtual threads) can handle so many more connections; the concurrency part of this course covers them.
+- A web server handling 1,000 requests that each wait 200 ms for a database is not "busy"; it is waiting. That is why designs that do not tie up a thread per waiting request (asynchronous I/O, event loops, virtual threads) can handle so many more connections; <Ref to="m-async" /> covers them.
 - A process using 100% of a core is genuinely computing (or stuck in a loop). Many runnable threads competing for few cores make everything slower through switching and cache misses.
 
 The **load average** that `uptime` and `top` show is roughly the average number of threads running or waiting to run. A load of 8 on a 4-core machine means work is queuing.

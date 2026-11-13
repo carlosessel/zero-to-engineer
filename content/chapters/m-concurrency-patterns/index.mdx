@@ -1,0 +1,351 @@
+---
+title: "Concurrency patterns"
+summary: "Producer-consumer, worker pools, actors, immutability, and lock-free ideas."
+prerequisites: [m-async]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will structure concurrent code with a handful of proven patterns instead of hand-placed locks: queues between producers and consumers, worker pools and bounded concurrency, back-pressure, actors that own their state, immutable snapshots updated atomically, and the fan-out and fan-in shapes of parallel work. These patterns make concurrency boring, which is exactly what you want from it.
+
+The previous two chapters showed the hazards: races, deadlocks, blocked threads, unbounded work. The patterns here avoid them by design, mostly by following one principle from the Go community: **do not communicate by sharing memory; share memory by communicating.** Instead of many threads reaching into the same data under locks, give each piece of state one owner and pass messages to it.
+
+## Producer-consumer
+
+In **producer-consumer**, some threads (producers) put work items on a **queue** and others (consumers) take them off and process them. The queue decouples the two sides: they run at their own pace, the producers do not need to know who consumes, and you can add consumers to go faster. It is the same idea, inside one process, as a message broker between services (the messaging chapter later in the course).
+
+The queue should be **bounded**. If producers are faster than consumers, an unbounded queue grows until memory runs out; a bounded one makes producers **wait** when it is full. That waiting is **back-pressure**: the slow part of the system pushes back on the fast part, instead of being overwhelmed.
+
+```java
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+
+public class Main {
+    record Order(int id, long pence) {}
+    static final Order DONE = new Order(-1, 0);
+
+    public static void main(String[] args) throws InterruptedException {
+        BlockingQueue<Order> queue = new ArrayBlockingQueue<>(2);
+
+        Thread kitchen = Thread.ofPlatform().start(() -> {
+            long total = 0;
+            try {
+                while (true) {
+                    Order order = queue.take();
+                    if (order == DONE) break;
+                    Thread.sleep(20);
+                    total += order.pence();
+                    System.out.println("baked order " + order.id());
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+            System.out.println("kitchen total: " + total);
+        });
+
+        for (int id = 1; id <= 5; id++) {
+            long start = System.nanoTime();
+            queue.put(new Order(id, 450L * id));
+            long waitedMs = (System.nanoTime() - start) / 1_000_000;
+            if (waitedMs >= 10) System.out.println("till waited for space before order " + id);
+        }
+        queue.put(DONE);
+        kitchen.join();
+    }
+}
+```
+
+On the machine this chapter was checked on it printed:
+
+```text
+baked order 1
+till waited for space before order 4
+baked order 2
+till waited for space before order 5
+baked order 3
+baked order 4
+baked order 5
+kitchen total: 6750
+```
+
+The till (the producer) puts orders on a queue that holds only two; the kitchen (the consumer) takes 20 ms per order. Once the queue is full, `put` blocks until the kitchen takes one: back-pressure in action. The special `DONE` order (a **poison pill**) tells the consumer to stop once everything before it is processed. The exact interleaving of lines can vary between runs; the orders are always baked in order and the total is always 6,750.
+
+.NET's **channels** (`System.Threading.Channels`) are the async version, with several consumers sharing the work:
+
+```csharp
+using System.Threading.Channels;
+
+var channel = Channel.CreateBounded<int>(new BoundedChannelOptions(10) { FullMode = BoundedChannelFullMode.Wait });
+
+var workers = Enumerable.Range(1, 3).Select(async worker =>
+{
+    long sum = 0;
+    int count = 0;
+    await foreach (var pence in channel.Reader.ReadAllAsync())
+    {
+        await Task.Delay(1);
+        sum += pence;
+        count++;
+    }
+    return (worker, count, sum);
+}).ToArray();
+
+for (int i = 1; i <= 300; i++) await channel.Writer.WriteAsync(i * 10);
+channel.Writer.Complete();
+
+var results = await Task.WhenAll(workers);
+Console.WriteLine($"workers: {results.Length}, messages: {results.Sum(r => r.count)}, total: {results.Sum(r => r.sum)}");
+Console.WriteLine($"every worker helped: {results.All(r => r.count > 0)}");
+```
+
+It prints `workers: 3, messages: 300, total: 451500` and `every worker helped: True`. `Complete()` plays the role of the poison pill: each worker's loop ends once the channel is empty and closed. Go's channels, Kotlin's channels and Java's `BlockingQueue` are the same idea.
+
+## Worker pools and bounded concurrency
+
+A **worker pool** is a fixed number of workers taking jobs from a shared queue. It caps how much runs at once, which protects whatever the work touches: a database with a limit of 50 connections, an API that allows 10 requests a second, a machine with 8 cores. In Java, `ExecutorService` is a worker pool; in .NET, `Parallel.ForEachAsync` takes a `MaxDegreeOfParallelism`.
+
+In JavaScript there are no threads to pool, but the same limit matters for async work. `Promise.all(orders.map(sendEmail))` starts 10,000 sends at once. Bounding the number in flight looks like this:
+
+```ts
+async function mapWithLimit<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await work(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+let inFlight = 0;
+let peak = 0;
+const sendReceipt = async (orderId: number) => {
+  inFlight++;
+  peak = Math.max(peak, inFlight);
+  await new Promise((resolve) => setTimeout(resolve, 10 + (orderId % 3) * 5));
+  inFlight--;
+  return `receipt ${orderId}`;
+};
+
+async function main() {
+  const receipts = await mapWithLimit([1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 3, sendReceipt);
+  console.log(receipts.length, receipts[0], receipts[9], "peak in flight:", peak);
+}
+
+main();
+```
+
+It prints `10 receipt 1 receipt 10 peak in flight: 3`. Three workers share one index counter (safe, because JavaScript runs each synchronous step without interruption), so never more than three sends are in progress, and results keep their original order. Libraries such as p-limit do this in production. A **semaphore** is the general tool for "at most N at once": `Semaphore` in Java, `SemaphoreSlim` in .NET.
+
+How many workers? For **CPU-bound** work, about the number of cores (more just adds switching). For **I/O-bound** work, as many as the slowest downstream resource can handle, found by measuring (<Ref to="m-performance" />).
+
+## The actor model
+
+An **actor** is an object that owns its state privately and communicates only by messages. Each actor has a **mailbox** and processes one message at a time, so its state needs no locks: there is only ever one thread of control inside it. Actors can create other actors and send them messages. The model comes from Carl Hewitt (1973) and is the foundation of Erlang and Elixir, Akka (and its fork Apache Pekko) on the JVM, Akka.NET, and Microsoft Orleans (where actors are called grains).
+
+```ts
+type Message = { type: "deposit"; pence: number } | { type: "withdraw"; pence: number; reply: (ok: boolean) => void };
+
+function createAccountActor(initialPence: number) {
+  let balance = initialPence;
+  const mailbox: Message[] = [];
+  let processing = false;
+
+  async function drain() {
+    if (processing) return;
+    processing = true;
+    while (mailbox.length > 0) {
+      const message = mailbox.shift()!;
+      await new Promise((resolve) => setTimeout(resolve, 1));
+      if (message.type === "deposit") balance += message.pence;
+      else {
+        const ok = balance >= message.pence;
+        if (ok) balance -= message.pence;
+        message.reply(ok);
+      }
+    }
+    processing = false;
+  }
+
+  return {
+    send(message: Message) {
+      mailbox.push(message);
+      void drain();
+    },
+    balance: () => balance,
+  };
+}
+
+const account = createAccountActor(100);
+const withdraw = (pence: number) => new Promise<boolean>((reply) => account.send({ type: "withdraw", pence, reply }));
+
+async function main() {
+  const results = await Promise.all([withdraw(80), withdraw(80), withdraw(15)]);
+  account.send({ type: "deposit", pence: 50 });
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  console.log(results, account.balance());
+}
+
+main();
+```
+
+It prints `[true, false, true] 55`. Unlike the racing withdrawals in <Ref to="m-threads-locks" />, the actor handles one message at a time, so the second £80 withdrawal sees the reduced balance and is refused, even though each message involves waiting. Actors scale naturally across machines (messages can travel over the network) and isolate failures (a supervisor actor restarts a failed child). Their costs: message passing is harder to follow than method calls, request-reply needs extra plumbing, and a busy actor becomes a bottleneck because it handles messages one at a time.
+
+## Immutability and atomic swaps
+
+Shared state does not need locks if it never changes. Combine **immutable** values (<Ref to="m-functional" />) with one **atomic reference** to the current version: readers just read the reference and get a consistent snapshot; writers build a new version and swap it in with compare-and-swap, retrying if another writer got there first. `AtomicReference.updateAndGet` does the retry loop for you; the function you pass may run more than once, so it must have no side effects.
+
+```java
+import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
+
+public class Main {
+    record Stats(long orders, long pence) {
+        Stats add(long p) { return new Stats(orders + 1, pence + p); }
+    }
+
+    public static void main(String[] args) {
+        AtomicReference<Stats> stats = new AtomicReference<>(new Stats(0, 0));
+        ConcurrentHashMap<String, Integer> sold = new ConcurrentHashMap<>();
+        List<String> products = List.of("rye loaf", "croissant", "baguette");
+
+        IntStream.range(0, 30_000).parallel().forEach(i -> {
+            stats.updateAndGet(s -> s.add(100));
+            sold.merge(products.get(i % 3), 1, Integer::sum);
+        });
+
+        System.out.println(stats.get());
+        System.out.println(new java.util.TreeMap<>(sold));
+    }
+}
+```
+
+It prints `Stats[orders=30000, pence=3000000]` and `{baguette=10000, croissant=10000, rye loaf=10000}`, every time, although 30,000 updates ran in parallel across all cores. The two fields of `Stats` always change together (a reader can never see the order count updated but not the total), and `ConcurrentHashMap.merge` makes "add one to this product's count" a single atomic step. This **copy-on-write** approach is ideal for data that is read constantly and changed rarely: configuration, feature flags, routing tables, price lists. It is a poor fit for data changed thousands of times a second, where copying and retrying become expensive.
+
+## Lock-free ideas
+
+Algorithms built only from atomic compare-and-swap, with no locks, are **lock-free**: some thread always makes progress, and a thread that is paused mid-operation cannot block others. `ConcurrentHashMap`, `ConcurrentLinkedQueue`, .NET's `ConcurrentQueue` and the atomic classes are built this way. Writing your own lock-free structures is notoriously difficult (problems such as the **ABA problem**, where a value changes and changes back between your read and your compare, are easy to miss). Use the library versions; the lesson for application code is to prefer **atomic operations on immutable values** over locks where they fit.
+
+## Fan-out and fan-in
+
+**Fan-out** splits work into independent pieces processed in parallel; **fan-in** gathers the results. Fetching a product page's data from three services at once (<Ref to="m-async" />), resizing a batch of images on all cores, and the **map-reduce** pattern (map each piece in parallel, then reduce the results) are all fan-out and fan-in. Tools: `Promise.all` and `Task.WhenAll` for async I/O; parallel streams (`.parallel()`), `ForkJoinPool` and Java's **structured concurrency** for CPU-bound work and groups of related tasks; `Parallel.ForEach` and PLINQ in .NET.
+
+Parallel streams and `Parallel.For` help only for CPU-heavy work on large inputs; for small collections the coordination costs more than it saves, and blocking I/O inside them starves the shared pool. Measure.
+
+**Structured concurrency** treats a group of concurrent tasks as one unit with a clear scope: if one fails, the others are cancelled, and the scope does not exit until all are finished, so no task leaks. Kotlin coroutines, Swift's task groups, Python's `TaskGroup` and Java's `StructuredTaskScope` (a preview API in recent JDKs) follow this idea.
+
+## Choosing a pattern
+
+| Situation | Pattern |
+|---|---|
+| Work arrives faster at times than it can be processed | Bounded queue (producer-consumer) with back-pressure |
+| Many jobs that must not overwhelm a resource | Worker pool, semaphore, `mapWithLimit` |
+| State that many parties change, with rules | One owner: an actor, or a single-threaded loop, or the database |
+| Read-mostly shared data | Immutable snapshots behind an atomic reference |
+| Counters and maps updated from many threads | Atomics, `ConcurrentHashMap.merge`, `ConcurrentDictionary.AddOrUpdate` |
+| One task split into independent pieces | Fan-out and fan-in, with structured concurrency where available |
+
+## Common mistakes
+
+- **Unbounded queues**, which turn overload into an out-of-memory crash.
+- **Unbounded fan-out**: `Promise.all` over thousands of items against a database or API.
+- **Forgetting to signal the end** (no poison pill or `Complete()`), so consumers wait forever.
+- **Side effects inside `updateAndGet`** or CAS retry loops, which may run more than once.
+- **Parallel streams for I/O** or for tiny collections.
+- **Writing your own lock-free data structures.**
+- **Actors that become bottlenecks** because one actor handles everything.
+
+## Practice
+
+**1. (warm-up)** What is back-pressure, and what provides it in producer-consumer?
+
+<Solution>
+
+The slower part of a system pushing back on the faster part so it is not overwhelmed. A bounded queue provides it: when the queue is full, producers wait (or are told to slow down, or work is rejected) instead of the queue growing until memory runs out.
+
+</Solution>
+
+**2. (warm-up)** Why does an actor need no locks for its own state?
+
+<Solution>
+
+It processes one message at a time from its mailbox, so only one thread of control ever touches its state, and nothing outside can reach the state directly; others can only send messages.
+
+</Solution>
+
+**3. (standard)** Use `mapWithLimit` (or your own version) to check stock for 12 products with at most 4 lookups in flight, and print the peak.
+
+<Solution>
+
+```ts
+async function mapWithLimit<T, R>(items: T[], limit: number, work: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker() {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await work(items[index]);
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+let inFlight = 0;
+let peak = 0;
+async function stockFor(sku: string) {
+  inFlight++;
+  peak = Math.max(peak, inFlight);
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  inFlight--;
+  return { sku, onHand: sku.length };
+}
+
+const skus = Array.from({ length: 12 }, (_, i) => `SKU-${i + 1}`);
+mapWithLimit(skus, 4, stockFor).then((stock) => console.log(stock.length, stock[11], "peak:", peak));
+```
+
+It prints **`12 { sku: "SKU-12", onHand: 6 } peak: 4`**.
+
+</Solution>
+
+**4. (standard)** A service keeps a list of active promotions that is read on every request and changed a few times a day by an admin. Which pattern fits, and why not a lock?
+
+<Solution>
+
+An immutable list behind an atomic reference (copy-on-write): readers simply read the current reference and get a consistent snapshot with no locking, and the rare admin update builds a new list and swaps it in. A lock would make every request take and release it (contention on the hottest path) to protect data that almost never changes.
+
+</Solution>
+
+**5. (stretch)** A nightly job reads 2 million rows, calls a slow external API for each, and writes results back. Design its concurrency.
+
+<Solution>
+
+A pipeline of bounded stages. A producer streams rows from the database in pages (never loading all 2 million into memory) into a bounded queue or channel. A pool of workers, sized to the API's rate limit and measured capacity (perhaps 20), takes rows, calls the API with timeouts and retries, and puts results on a second bounded queue. A single writer batches results (say 500 at a time) into the database. Bounded queues give back-pressure so no stage races ahead; a poison pill or completion signal ends each stage cleanly; progress (the last processed id) is recorded so a crash can resume rather than restart.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Share memory by communicating**: give state one owner and pass messages to it.
+- **Producer-consumer** with a **bounded queue** decouples stages and gives **back-pressure**; signal the end with a poison pill or `Complete()`.
+- **Worker pools**, semaphores and `mapWithLimit` bound concurrency to what resources can take; size them by CPU or by the slowest downstream.
+- **Actors** own their state and process one message at a time: no locks, natural distribution, but watch for bottlenecks.
+- **Immutable snapshots** behind an atomic reference (copy-on-write) suit read-mostly data; CAS update functions must be side-effect free.
+- Use library **lock-free** structures rather than writing your own.
+- **Fan-out and fan-in** split and gather work; **structured concurrency** keeps groups of tasks from leaking.
+
+## Go deeper
+
+- [BlockingQueue (Java)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/concurrent/BlockingQueue.html), Oracle. The producer-consumer interface and its implementations.
+- [Channels (.NET)](https://learn.microsoft.com/en-us/dotnet/core/extensions/channels), Microsoft. Bounded and unbounded channels for async producer-consumer.
+- [Akka: the actor model](https://doc.akka.io/libraries/akka-core/current/typed/guide/actors-motivation.html), the Akka team. Why actors, explained with the problems they solve.
+- [Microsoft Orleans overview](https://learn.microsoft.com/en-us/dotnet/orleans/overview), Microsoft. Virtual actors (grains) for distributed .NET applications.
+- [Go proverbs](https://go-proverbs.github.io/), Rob Pike. Short sayings, including the one about sharing memory by communicating.
