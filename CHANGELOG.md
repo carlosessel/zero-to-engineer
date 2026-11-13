@@ -4,6 +4,12 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 10 (Design and architecture)
+
+Added
+- The design part, made of eight existing Software Engineering Mastery chapters: SOLID, behavioural patterns, domain-driven design, architecture styles, enterprise patterns, distributed systems basics, resilience, and system design.
+- The course added to the glossary terms these chapters use.
+
 ### 2026-11-13: Zero to Backend Engineer, part 9 (Background work and messaging)
 
 Added
