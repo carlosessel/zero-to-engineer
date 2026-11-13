@@ -4,6 +4,22 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 11 (The engineer)
+
+Added
+- Four new chapters: how great engineers work (problems before solutions, slicing work, RICE prioritisation, estimates, communication, writing, working with product and design); growing from junior to senior and beyond (levels and tracks, learning new technology, reading code and its history, deliberate practice, mentoring); privacy, ethics and the law (data protection principles in engineering terms, anonymisation pitfalls, accessibility duties, open-source licences, dark patterns, saying no); and the mastery projects (a key-value store, a message queue, a distributed rate limiter and a production-quality service, each in stages). The part also reuses two existing chapters: Git with other people, and working with AI coding tools. About 8,300 words of new text, 18 practice problems, 24 quiz questions, 20 checked resources.
+- Checked examples: RICE scoring, a real Git repository explored with `log`, `blame` and `log -S`, log redaction of emails, phones, cards and secrets, a k-anonymity check that re-identifies 3 of 5 people, and a log-structured key-value store that recovers after a restart and compacts its log.
+- Earlier chapters now link to the ethics chapter.
+- 15 glossary terms.
+
+Fixed (found while checking)
+- The card-number redaction pattern swallowed the following space; it now matches only the digits.
+- ACM's code of ethics blocks automated link checks (403), which would fail the outside-link workflow; the chapter links to the joint IEEE Computer Society and ACM software engineering code instead. A moved career-paths article was replaced with Dropbox's public career framework.
+- "Effort", "Scope", "Focus" and "Compaction" are no longer glossary links in these chapters, where they have their everyday meanings.
+
+Not verified
+- No person has reviewed these chapters, and the legal content describes principles, not legal advice. Problem counts are below the standard's 30 to 50.
+
 ### 2026-11-13: Software Engineering Mastery, part 10 (Security)
 
 Added

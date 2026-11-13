@@ -1,0 +1,7 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  verify: |
+    wanted = ['history of pricing.py:', 'Raise free delivery threshold to 40 pounds (finance request, ticket SHOP-212)', 'Add express delivery for 4 pounds', 'Add flat shipping with free delivery from 30 pounds', 'who last changed the threshold line, and why:', 'summary Raise free delivery threshold to 40 pounds (finance request, ticket SHOP-212)', 'when did the 3000 threshold disappear?', 'Raise free delivery threshold to 40 pounds (finance request, ticket SHOP-212)', 'Add flat shipping with free delivery from 30 pounds']
+    assert out.strip().splitlines() == wanted, out

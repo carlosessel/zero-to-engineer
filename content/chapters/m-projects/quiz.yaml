@@ -1,0 +1,36 @@
+- question: Why build systems you could just use?
+  options:
+  - Building teaches the trade-offs and failure modes that using hides
+  - To replace them in production
+  answer: 0
+  explanation: Experience with edge cases is what experts have.
+- question: Why must a key-value store sync its log before acknowledging a write?
+  options:
+  - So an acknowledged write survives a crash
+  - To make reads faster
+  answer: 0
+  explanation: Replay restores it on restart.
+- question: Why does the log need compaction?
+  options:
+  - It keeps every old version and grows without limit
+  - To encrypt it
+  answer: 0
+  explanation: Keep only the latest value per key.
+- question: How do you replace a log file safely during compaction?
+  options:
+  - Write and sync a new file, then rename it atomically
+  - Edit the old file in place
+  answer: 0
+  explanation: A crash then leaves one complete file.
+- question: What must a distributed rate limiter decide explicitly?
+  options:
+  - What happens when its shared store is slow or down
+  - Its colour scheme
+  answer: 0
+  explanation: Fail open, fail closed or fall back, and test it.
+- question: When is the production-quality service project done?
+  options:
+  - When someone else can run and understand it and you can explain every decision
+  - When the features work on your laptop
+  answer: 0
+  explanation: The standard is professional, end to end.

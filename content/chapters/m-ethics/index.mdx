@@ -1,0 +1,207 @@
+---
+title: "Privacy, ethics and the law for engineers"
+summary: "Personal data, privacy law basics, accessibility duties, licences, and saying no."
+prerequisites: [m-appsec]
+estimated_minutes: 90
+status: resources-verified
+---
+
+By the end of this chapter you will know the legal and ethical responsibilities that come with building software used by real people: the principles of data protection law and how they turn into engineering decisions, why "anonymised" data often is not, the accessibility duties many products now carry, how open-source licences work, and how to recognise and push back on work that would harm users. This chapter explains concepts, not legal advice: for real decisions, involve your organisation's legal and privacy specialists, early.
+
+## Personal data
+
+**Personal data** is any information relating to an identifiable person: names, email addresses, phone numbers, postal addresses, account ids, IP addresses, device identifiers, location history, purchase history, photos, voice recordings. **Special category** (sensitive) data, such as health, religion, sexual orientation, ethnicity, biometrics and political opinions, needs extra protection. Engineers handle personal data constantly: in databases, logs, analytics events, backups, test environments, support tools and messages to third parties.
+
+## Data protection law, in engineering terms
+
+Many countries have data protection laws; the European Union's **GDPR** (and the UK GDPR, which mirrors it) is the most influential, and laws such as California's CCPA and CPRA, Brazil's LGPD and others share many of its ideas. Their core principles translate directly into design decisions:
+
+- **Lawfulness and transparency**: process personal data only with a legal basis (a contract with the user, consent, a legal obligation, or a legitimate interest that does not override the person's rights), and tell people clearly what you do with it. Consent must be freely given, specific and as easy to withdraw as to give.
+- **Purpose limitation**: data collected for delivering orders cannot quietly be reused for something unrelated.
+- **Data minimisation**: collect and keep only what you need. The safest data is data you never stored.
+- **Accuracy**: let people correct their data.
+- **Storage limitation**: delete or anonymise data when it is no longer needed. Every table holding personal data needs a **retention period** and a job that enforces it, including backups and logs.
+- **Integrity and confidentiality**: protect it with security appropriate to the risk: access control, encryption, logging (<Ref to="m-appsec" />, <Ref to="m-crypto" />).
+- **Accountability**: be able to show what data you hold, why, where, and who can access it (a record of processing, data maps, **data protection impact assessments** for high-risk processing).
+
+People have **rights** that your systems must support: to access a copy of their data, to correct it, to have it erased, to restrict or object to processing, and to receive it in a portable format. Design for them from the start: if a customer asks for everything you hold about them, can you find it across services, logs, analytics and third parties within the legal deadline (one month under the GDPR)? If they ask to be erased, can you delete or anonymise them everywhere, including in event logs and search indexes (<Ref to="m-architecture" />'s event sourcing makes this a design question)?
+
+**Personal data breaches** generally must be reported to the regulator within 72 hours of becoming aware of them under the GDPR, and to affected people when the risk to them is high. That requires knowing what data a system holds and being able to detect breaches (<Ref to="m-observability" />).
+
+Transfers of personal data to other countries are restricted, which is why cloud **regions** and where third-party services process data matter (<Ref to="m-cloud-iac" />).
+
+### Privacy by design
+
+**Privacy by design** (and by default) means building these principles into systems rather than bolting them on:
+
+- Ask "do we need this field?" for every piece of personal data.
+- Keep personal data out of logs, analytics events, error messages and URLs; log ids instead, and redact as a safety net (<Ref to="m-observability" />).
+- Restrict access by role and log access to sensitive data (<Ref to="m-identity" />).
+- Use realistic **synthetic** or properly masked data in test environments, never copies of production.
+- Set retention periods and automate deletion.
+- Choose privacy-friendly defaults: optional data off by default, analytics without unnecessary identifiers.
+
+```python
+import re
+
+PATTERNS = [
+    (re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"), "<email>"),
+    (re.compile(r"\b(?:\d[ -]?){12,18}\d\b"), "<card>"),
+    (re.compile(r"(?<!\d)(?:\+44\s?7\d{3}|07\d{3})\s?\d{3}\s?\d{3}(?!\d)"), "<phone>"),
+    (re.compile(r"(?i)\b(password|token|secret)=\S+"), r"\1=<redacted>"),
+]
+
+
+def redact(line):
+    for pattern, replacement in PATTERNS:
+        line = pattern.sub(replacement, line)
+    return line
+
+
+logs = [
+    "signup ok email=ama.mensah@example.com phone=07700 900123 plan=weekly",
+    "payment failed card=4242 4242 4242 4242 order=o-7",
+    "login attempt user=c-17 password=hunter2 from 10.0.0.4",
+]
+for line in logs:
+    print(redact(line))
+```
+
+It prints the three lines with `<email>`, `<phone>`, `<card>` and `password=<redacted>` in place of the sensitive values, while keeping the ids (`plan=weekly`, `order=o-7`, `user=c-17`) that make logs useful. Redaction like this is a **safety net**, not the main defence: patterns miss things, so the first rule remains not to put personal data into logs at all.
+
+### Anonymisation is hard
+
+Data is **anonymous** only if no one can reasonably identify the people in it, by any means, including by combining it with other data. Removing names is not enough: famous studies have re-identified most people from just postcode, date of birth and sex. **Pseudonymised** data (identifiers replaced by tokens) is still personal data under the GDPR, because it can be linked back.
+
+```python
+from collections import Counter
+
+rows = [
+    {"postcode": "LS1", "birth_year": 1990, "sex": "F", "condition": "asthma"},
+    {"postcode": "LS1", "birth_year": 1990, "sex": "F", "condition": "diabetes"},
+    {"postcode": "LS1", "birth_year": 1985, "sex": "M", "condition": "asthma"},
+    {"postcode": "LS6", "birth_year": 1972, "sex": "F", "condition": "migraine"},
+    {"postcode": "LS6", "birth_year": 1990, "sex": "M", "condition": "asthma"},
+]
+quasi_identifiers = ("postcode", "birth_year", "sex")
+groups = Counter(tuple(r[q] for q in quasi_identifiers) for r in rows)
+unique = [key for key, count in groups.items() if count == 1]
+print("smallest group size (k):", min(groups.values()))
+print("people identifiable by postcode, birth year and sex alone:", len(unique), "of", len(rows))
+```
+
+It prints `smallest group size (k): 1` and `people identifiable by postcode, birth year and sex alone: 3 of 5`. Anyone who knows a neighbour's postcode area, birth year and sex can find their medical condition in this "anonymised" table. Techniques such as generalising values (age bands, shorter postcodes) to reach **k-anonymity**, adding noise (**differential privacy**), or publishing only aggregates reduce the risk; for sensitive data, get expert help.
+
+## Accessibility duties
+
+Building software everyone can use is an ethical baseline and, increasingly, a legal duty. The **Web Content Accessibility Guidelines** (WCAG 2.2) are the reference standard (the web course covers the practice). Laws that apply them include the **European Accessibility Act**, applying since June 2025 to many consumer products and services sold in the EU (including e-commerce, banking and transport services), the UK Equality Act and public-sector regulations, and the Americans with Disabilities Act in the United States. Treat accessibility as a requirement with automated checks in CI (this course's own site runs axe on every build) plus manual testing with a keyboard and a screen reader.
+
+## Open-source licences
+
+Almost all software depends on open-source code, and every package comes with a **licence** that says what you may do with it. Ignoring licences creates legal risk for your employer.
+
+- **Permissive** licences (**MIT**, **BSD**, **Apache 2.0**) let you use, modify and include the code in proprietary software, provided you keep the copyright and licence notices; Apache 2.0 also includes an explicit patent grant.
+- **Copyleft** licences require derivative works to be released under the same licence. The **GPL** applies when you distribute software containing the code; the **AGPL** extends this to software offered to users over a network (a SaaS product); the **LGPL** and **MPL** are weaker copyleft, applying to the library or file itself.
+- **Source-available** licences (the Business Source License, the Server Side Public License, and others) are not open source in the formal sense and often restrict competing hosted services.
+
+In practice: know your organisation's policy on which licences are allowed; check licences when adding dependencies (scanners such as those in <Ref to="m-static-quality" /> report them); keep an SBOM (<Ref to="m-appsec" />); and keep required notices in your distributions. When you publish code yourself, pick a licence explicitly: code without one is not open source at all.
+
+Code generated by AI assistants raises similar questions (whether output reproduces licensed code, and who owns it); follow your organisation's policy and review generated code as carefully as any other.
+
+## Ethics: harm, dark patterns and saying no
+
+Laws set a floor. Engineers also make many decisions no law covers, and their professional codes (such as the ACM Code of Ethics) put avoiding harm to the public first. Things to watch for:
+
+- **Dark patterns**: designs that trick users against their interests: pre-ticked boxes, cancellation hidden behind many steps, fake urgency ("3 people are looking at this"), confirmshaming ("No thanks, I don't like saving money"). Several are now illegal under consumer protection and privacy law in various countries.
+- **Bias and unfairness**: automated decisions (credit, hiring, fraud flags, content moderation, AI models) can encode and amplify discrimination present in their data. Test outcomes across groups, keep humans able to review and override, and explain decisions to the people affected. The EU AI Act now regulates high-risk uses.
+- **Surveillance and data misuse**: tracking beyond what users would reasonably expect, selling data, or quietly repurposing it.
+- **Safety**: in health, transport, finance and infrastructure, software failures harm people directly; reliability and security work is ethical work there.
+
+When asked to build something harmful, unlawful or deceptive:
+
+1. **Ask questions** to understand the intent; sometimes a request is badly worded rather than malicious.
+2. **Raise the concern clearly and in writing**, with the specific harm or legal risk, and propose a less harmful alternative that meets the legitimate goal.
+3. **Involve the right people**: your manager, the privacy, legal or security team, or an ethics channel if your organisation has one.
+4. If serious wrongdoing continues, know your organisation's **whistleblowing** procedures and the legal protections in your country.
+
+Saying no well is a skill: specific, constructive and timely objections are usually heard; engineers who raise them early are often thanked later.
+
+## Common mistakes
+
+- **Collecting data "in case it is useful"**, with no purpose or retention period.
+- **Personal data in logs, analytics, URLs and test environments.**
+- **Calling data anonymous** after removing names only.
+- **No way to find or erase one person's data** across systems.
+- **Accessibility as an afterthought**, tested only by automated tools or not at all.
+- **Adding dependencies without checking their licences**, especially AGPL in a SaaS product.
+- **Building dark patterns** because "the metric went up".
+- **Staying silent** about harm because "it's not my decision".
+
+## Practice
+
+**1. (warm-up)** Which of these are personal data? A customer's email; an order id linked to a customer; an IP address in an access log; the number of orders placed last Tuesday; a hashed email used as an analytics id.
+
+<Solution>
+
+All except the daily order count are personal data: the email directly; the order id and IP address because they can be linked to a person; and the hashed email because it is pseudonymised (it consistently identifies one person and can be matched by anyone holding the original email). A plain aggregate count is not personal data.
+
+</Solution>
+
+**2. (warm-up)** Name four data protection principles and one engineering decision each implies.
+
+<Solution>
+
+For example: data minimisation (do not add a date-of-birth field unless needed); storage limitation (a nightly job deletes abandoned baskets after 30 days); purpose limitation (delivery addresses are not exported to the marketing tool); integrity and confidentiality (support staff see masked card details and only for customers they are helping, with access logged).
+
+</Solution>
+
+**3. (standard)** Extend the redaction function to replace UK postcodes (such as `LS1 4AP` or `M1 1AE`) with `<postcode>`, and test it on one line.
+
+<Solution>
+
+```python
+import re
+
+POSTCODE = re.compile(r"\b[A-Z]{1,2}\d[A-Z\d]?\s*\d[A-Z]{2}\b")
+print(POSTCODE.sub("<postcode>", "delivery to LS1 4AP failed; retry for M1 1AE tomorrow"))
+```
+
+It prints **delivery to &lt;postcode&gt; failed; retry for &lt;postcode&gt; tomorrow**. As with all redaction, test it on real-looking data, and remember it is a safety net behind not logging the data in the first place.
+
+</Solution>
+
+**4. (standard)** Your team wants to add a library licensed under the AGPL to your SaaS product's back end. What do you do?
+
+<Solution>
+
+Check your organisation's licence policy before adding it, and raise it with whoever owns open-source compliance (often legal). The AGPL's network clause can require you to offer the source code of the combined work to users of the service, which most proprietary SaaS products cannot accept. Look for an alternative under a permissive licence, a commercial licence for the same library, or a way to use it as a fully separate service, as advised by legal.
+
+</Solution>
+
+**5. (stretch)** A product manager asks you to make account cancellation require a phone call, "to reduce churn". How do you respond?
+
+<Solution>
+
+Ask what problem they are trying to solve (customers leaving because of a fixable issue?). Explain the concerns specifically: it is a dark pattern that frustrates users and damages trust, and making cancellation much harder than signing up is restricted or illegal in a growing number of places (for example, subscription and consumer protection rules in the EU, UK and several US states). Propose alternatives that address churn honestly: an optional exit survey, an offer to pause instead of cancel, fixing the top reasons people leave, and a one-click cancellation that still shows those options. Put the concern in writing and involve legal if the request stands.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Personal data** is anything about an identifiable person; sensitive categories need extra care.
+- Data protection law (GDPR and similar) means: a lawful basis, **transparency**, **purpose limitation**, **minimisation**, accuracy, **retention limits**, security and accountability, plus users' **rights** and **breach** reporting. Design for them.
+- **Privacy by design**: question every field, keep personal data out of logs and test environments, restrict and log access, automate deletion. Redaction is a safety net.
+- Removing names does not **anonymise**; pseudonymised data is still personal data.
+- **Accessibility** (WCAG 2.2) is increasingly a legal duty, such as under the European Accessibility Act.
+- Know **licences**: permissive (MIT, BSD, Apache 2.0) versus copyleft (GPL, AGPL, LGPL); check before adding dependencies.
+- Avoid **dark patterns** and bias; raise concerns early, specifically and in writing, and propose better alternatives.
+
+## Go deeper
+
+- [Guide to the UK GDPR](https://ico.org.uk/for-organisations/uk-gdpr-guidance-and-resources/), the Information Commissioner's Office. Clear official guidance on data protection principles and rights.
+- [Data protection by design and by default](https://www.edpb.europa.eu/our-work-tools/our-documents/guidelines/guidelines-42019-article-25-data-protection-design-and_en), the European Data Protection Board. Official guidance on privacy by design.
+- [Choose a license](https://choosealicense.com/), GitHub. Plain-language summaries of open-source licences.
+- [Software Engineering Code of Ethics](https://www.computer.org/education/code-of-ethics), the IEEE Computer Society and the ACM. The joint code of ethics for software engineers.
+- [Deceptive patterns](https://www.deceptive.design/), Harry Brignull. A catalogue of dark patterns with real examples and the laws against them.

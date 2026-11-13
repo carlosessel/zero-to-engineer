@@ -1,0 +1,236 @@
+---
+title: "The mastery projects"
+summary: "Build-it-yourself projects that prove each part: a key-value store, a message queue, a rate limiter, a full service."
+prerequisites: [m-system-design]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will have a set of projects that turn this course's knowledge into skill. Reading about write-ahead logs, consumer offsets or circuit breakers teaches you the words; building them teaches you the trade-offs, the edge cases and the failure modes, which is what experienced engineers actually know. Each project lists what to build in stages, what it practises, and how to know it works. Do them in any language; doing one in a language you use at work and another in a language you are learning is a good combination.
+
+The 120 minutes is the time to read this chapter and plan; the projects themselves take days to weeks each.
+
+## How to approach the projects
+
+- **Build in small, working stages.** Each stage below runs and is tested before the next (<Ref to="m-working-well" />).
+- **Write tests first for the tricky parts** (<Ref to="m-testing" />), including tests that kill processes or inject failures.
+- **Measure** throughput and latency at each stage (<Ref to="m-performance" />), and write down what surprised you.
+- **Write a short design document** before starting and a short retrospective at the end (<Ref to="m-design-docs" />): what you would do differently is the most valuable part.
+- **Keep it public** on GitHub (without secrets), with a README explaining the design: it becomes a portfolio that shows how you think.
+- **Use AI assistants as a reviewer and tutor**, not an author: the point is that *you* build it (<Ref to="ai-tools" />).
+
+## Project 1: a key-value store
+
+**Practises**: parts 1, 2 and 7 (files and durability, hash maps and trees, write-ahead logs, compaction, indexes).
+
+Stages:
+
+1. An in-memory store with `get`, `set` and `delete`, behind a small TCP or HTTP interface.
+2. **Durability**: append every write to a log file and `fsync` it before acknowledging; on start, replay the log to rebuild the in-memory state.
+3. Compaction: the log grows forever, so periodically write a new file with only the latest value of each key and switch to it atomically.
+4. **Bigger than memory**: keep only an index (key to file offset) in memory, or move to a log-structured merge tree (sorted string tables, merging in the background) or a B-tree file (<Ref to="m-relational" />).
+5. **Stretch**: snapshots, range queries, time-to-live on keys, a simple replication protocol (leader streams its log to a follower, <Ref to="m-replication-partitioning" />).
+
+The heart of stage 2 fits in a few lines. This version writes each operation as a JSON line and rebuilds itself from the log after a simulated crash:
+
+```python
+import json
+import os
+import tempfile
+
+
+class LogStore:
+    def __init__(self, path):
+        self.path = path
+        self.data = {}
+        if os.path.exists(path):
+            with open(path) as log:
+                for line in log:
+                    entry = json.loads(line)
+                    if entry["op"] == "set":
+                        self.data[entry["key"]] = entry["value"]
+                    else:
+                        self.data.pop(entry["key"], None)
+        self.log = open(path, "a")
+
+    def _append(self, entry):
+        self.log.write(json.dumps(entry) + "\n")
+        self.log.flush()
+        os.fsync(self.log.fileno())
+
+    def set(self, key, value):
+        self._append({"op": "set", "key": key, "value": value})
+        self.data[key] = value
+
+    def delete(self, key):
+        self._append({"op": "delete", "key": key})
+        self.data.pop(key, None)
+
+    def get(self, key):
+        return self.data.get(key)
+
+
+path = os.path.join(tempfile.mkdtemp(), "store.log")
+store = LogStore(path)
+store.set("price:RYE-400", 450)
+store.set("price:JAM-STR", 380)
+store.set("price:RYE-400", 480)
+store.delete("price:JAM-STR")
+del store
+
+recovered = LogStore(path)
+print("after restart:", recovered.data)
+with open(path) as log:
+    print("log entries:", sum(1 for _ in log), "for", len(recovered.data), "live key")
+```
+
+It prints `after restart: {'price:RYE-400': 480}` and `log entries: 4 for 1 live key`: the store survived losing its memory because every change was on disk first, and the log already holds four entries for one key, which is why stage 3's compaction exists. Then the real questions start: what if the process crashes halfway through writing a line? How slow is `fsync` on your disk, and does batching several writes into one `fsync` (group commit) help? How do you compact while still accepting writes?
+
+**Done when**: a test that kills the process at random moments during writes never loses an acknowledged write and never corrupts the store.
+
+## Project 2: a message queue
+
+**Practises**: parts 6 and 8 (concurrency, back-pressure, delivery guarantees, offsets, consumer groups).
+
+Stages:
+
+1. A queue server: producers publish to named queues; consumers receive messages and **acknowledge** them; unacknowledged messages are redelivered after a timeout (<Ref to="m-messaging" />).
+2. **Durability**: persist messages (reuse your key-value store's log), surviving restarts.
+3. **Back-pressure and limits**: bounded queues, a prefetch limit per consumer (<Ref to="m-concurrency-patterns" />), and dead-lettering after a number of failed deliveries.
+4. **A log mode**: append-only topics with partitions, consumer groups that each track offsets, and replay from an offset (<Ref to="m-kafka" />).
+5. **Stretch**: replication of each partition to a second node; ordering per key; exactly-once processing for a consumer that writes to a database, with an inbox table.
+
+**Done when**: a load test with several producers and competing consumers, some of which crash mid-message, delivers every message at least once, processes each exactly once (thanks to idempotent consumers), and reports throughput and consumer lag.
+
+## Project 3: a distributed rate limiter
+
+**Practises**: parts 7 and 8 (caching, Redis, distributed counters, consistency trade-offs, resilience).
+
+Stages:
+
+1. A token-bucket limiter library with a fake clock and thorough tests (<Ref to="m-resilience" />).
+2. **Middleware** for a web framework you use, returning `429` with `Retry-After` and standard rate-limit headers (<Ref to="m-api-design" />).
+3. **Shared across instances**: keep the state in Redis with an atomic script, so three instances of the API enforce one combined limit (<Ref to="m-caching" />).
+4. **Failure behaviour**: decide and test what happens when Redis is slow or down (fail open, fail closed, or fall back to local limits), with timeouts and a circuit breaker.
+5. **Stretch**: a sliding-window algorithm and a comparison of accuracy and cost; per-plan limits from configuration; a dashboard of rejected requests (<Ref to="m-observability" />).
+
+**Done when**: a load test against three instances shows the combined rate held within a few percent of the limit, and the documented failure behaviour happens when Redis is stopped.
+
+## Project 4: a production-quality service
+
+**Practises**: everything, especially parts 3, 4, 5, 9 and 10.
+
+Build a small but complete service end to end, such as a URL shortener with click analytics or the bakery's order service used throughout this course (<Ref to="m-system-design" />). The point is not the features but doing every part to a professional standard:
+
+1. **Design**: a one-page design document with requirements, estimates, API, data model and trade-offs; an ADR for each significant decision.
+2. **Code**: clean, tested domain logic (<Ref to="m-clean-code" />, <Ref to="m-ddd" />), a hexagonal structure with adapters (<Ref to="m-architecture" />), validation at the edge, problem-details errors, idempotent writes.
+3. **Data**: a relational schema with constraints and migrations, indexes justified by query plans, a cache with a clear invalidation story.
+4. **Async**: click events published through a transactional outbox to a queue, consumed idempotently into an analytics store.
+5. **Quality**: unit, integration (Testcontainers) and contract tests; linting, formatting and static analysis in CI; dependency and secret scanning.
+6. **Delivery**: a multi-stage container image, a pipeline that builds once and deploys to a staging environment, feature flags, and a canary or rolling release (<Ref to="m-delivery" />).
+7. **Operations**: structured logs with correlation ids, RED metrics, tracing with OpenTelemetry, an SLO with a burn-rate alert, a runbook, and one game day where you break it on purpose and write a postmortem (<Ref to="m-reliability" />).
+8. **Security**: a threat model, authentication with an identity provider, authorisation checks per object, secrets from a secrets manager, and the OWASP Top 10 reviewed (<Ref to="m-appsec" />).
+
+**Done when**: someone else can clone the repository, run it with one command, understand it from the README and design document, and you can explain every decision in an interview.
+
+## More project ideas
+
+- **An HTTP server from raw sockets**: parsing requests, keep-alive, a thread pool or event loop, and measuring how many connections each model handles (<Ref to="m-networking" />, <Ref to="m-async" />).
+- **A toy Raft cluster**: leader election and log replication with a test harness that partitions the network and kills nodes (<Ref to="m-consistency-consensus" />).
+- **An LRU cache with TTLs** that is thread-safe, with benchmarks against a library such as Caffeine (<Ref to="m-caching" />, <Ref to="m-threads-locks" />).
+- **A tiny container runtime** using Linux namespaces and cgroups (<Ref to="m-containers" />).
+- **A search engine** over a few thousand documents with an inverted index and BM25 ranking (<Ref to="m-nosql" />).
+- **A load tester** that uses an open arrival model and reports percentiles correctly (<Ref to="m-performance" />).
+- **Contribute to an open-source project** you use: start with documentation or a small bug, and learn how mature codebases and reviews work (<Ref to="m-growth" />).
+
+## Practice
+
+**1. (warm-up)** In the key-value store example, why is the write appended to the log and synced before the in-memory dictionary is updated and the write acknowledged?
+
+<Solution>
+
+So that any write the client was told succeeded is already on disk: if the process crashes immediately afterwards, replaying the log on restart restores it. Updating memory or acknowledging first would allow an acknowledged write to be lost.
+
+</Solution>
+
+**2. (standard)** Add compaction to the key-value store: a `compact()` method that writes only the current data to a new file and replaces the old log atomically. Show the log shrinking.
+
+<Solution>
+
+```python
+import json
+import os
+import tempfile
+
+
+class LogStore:
+    def __init__(self, path):
+        self.path, self.data = path, {}
+        if os.path.exists(path):
+            with open(path) as log:
+                for line in log:
+                    e = json.loads(line)
+                    if e["op"] == "set":
+                        self.data[e["key"]] = e["value"]
+                    else:
+                        self.data.pop(e["key"], None)
+        self.log = open(path, "a")
+
+    def set(self, key, value):
+        self.log.write(json.dumps({"op": "set", "key": key, "value": value}) + "\n")
+        self.log.flush()
+        os.fsync(self.log.fileno())
+        self.data[key] = value
+
+    def compact(self):
+        tmp = self.path + ".compact"
+        with open(tmp, "w") as out:
+            for key, value in self.data.items():
+                out.write(json.dumps({"op": "set", "key": key, "value": value}) + "\n")
+            out.flush()
+            os.fsync(out.fileno())
+        self.log.close()
+        os.replace(tmp, self.path)
+        self.log = open(self.path, "a")
+
+
+path = os.path.join(tempfile.mkdtemp(), "store.log")
+store = LogStore(path)
+for price in range(400, 500, 10):
+    store.set("price:RYE-400", price)
+lines = lambda: sum(1 for _ in open(path))
+print("before compaction:", lines(), "lines")
+store.compact()
+print("after compaction:", lines(), "line;", LogStore(path).data)
+```
+
+It prints **before compaction: 10 lines** and `after compaction: 1 line; {'price:RYE-400': 490}`. Writing to a temporary file, syncing it, then renaming with `os.replace` (an atomic rename on the same file system) means a crash during compaction leaves either the old log or the new one, never a half-written file. Handling writes that arrive during compaction is the next challenge.
+
+</Solution>
+
+**3. (stretch)** Choose one project and write its one-page design document: requirements, estimates, the riskiest unknown and how you will test it first, and how you will know it is done.
+
+<Solution>
+
+Answers vary. A good one names concrete requirements (for the message queue: at-least-once delivery, 5,000 messages per second on a laptop, survives restarts), a first spike on the riskiest part (how fast is `fsync` on this disk, and is group commit needed?), the stages with their tests, and a measurable definition of done (the crash-test and load-test results). It also lists what is deliberately out of scope (replication, authentication) for the first version.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Building the systems you use is the fastest way to understand their trade-offs and failure modes.
+- Build in **small, tested stages**, measure, write a design document and a retrospective, and keep the work public.
+- **Key-value store**: write-ahead log with `fsync`, replay, compaction, indexes, replication.
+- **Message queue**: acknowledgements, redelivery, durability, back-pressure, dead letters, partitions and offsets.
+- **Distributed rate limiter**: token buckets, middleware, shared state in Redis, explicit failure behaviour.
+- **Production-quality service**: design, clean code, data, async messaging, tests, delivery, observability and security, all to a professional standard.
+
+## Go deeper
+
+- [Build your own Redis](https://build-your-own.org/redis/), James Smith. A free book that builds a Redis-like server step by step.
+- [CodeCrafters](https://codecrafters.io/), CodeCrafters. Guided challenges to build Redis, Kafka, Git, an HTTP server and more (some free).
+- [Fly.io distributed systems challenges](https://fly.io/dist-sys/), Fly.io and Kyle Kingsbury. Free exercises using the Maelstrom test harness, from echo to Raft-like logs.
+- [Bitcask: a log-structured hash table](https://riak.com/assets/bitcask-intro.pdf), Justin Sheehy and David Smith. The short paper behind the key-value store design in project 1.
+- [build-your-own-x](https://github.com/codecrafters-io/build-your-own-x), CodeCrafters and contributors. A large list of tutorials for building databases, containers, interpreters and more.

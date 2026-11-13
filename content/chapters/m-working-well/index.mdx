@@ -1,0 +1,194 @@
+---
+title: "How great engineers work"
+summary: "Breaking work down, estimating, communicating, writing, and working with product and design."
+prerequisites: [m-design-docs]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will know the working habits that separate engineers whose impact is large from those who are merely busy: understanding the problem before the solution, breaking work into small, shippable pieces, prioritising by impact, keeping people informed without being asked, asking for help well, writing clearly, and working as a partner with product managers and designers. The technical chapters of this course make you capable; these habits decide how much of that capability turns into results.
+
+## Start with the problem
+
+The most expensive mistake in software is building the wrong thing well. Before writing code, make sure you can answer:
+
+- **Who** has the problem, and **what** are they trying to do?
+- **Why** does it matter now? What happens if we do nothing?
+- **How will we know it worked?** A measurable outcome (fewer support tickets about failed payments, checkout conversion up, p99 latency under 300 ms), not "the feature shipped".
+- What is **out of scope**?
+
+Ask "why" until you reach a real need. A request for "an export to Excel button" may really be "the finance team reconciles payments by hand every Friday", which a scheduled report, or fixing the data they reconcile, solves better. Engineers who understand the problem often find simpler solutions than the one requested; that is one of the most valuable things you can do.
+
+## Breaking work down
+
+Large, vague tasks ("build the loyalty programme") hide risk and stall. Break them into pieces that each:
+
+- **deliver something usable or learnable** on their own (a thin **vertical slice** through every layer, rather than "all the database work first");
+- take **a day or a few days**, so progress is visible and problems surface early;
+- can be **merged and deployed independently**, behind a feature flag if needed (<Ref to="m-delivery" />);
+- put the **riskiest unknowns first**: the integration you have never used, the performance question, the unclear requirement. A short time-boxed **spike** answers them before the plan depends on a guess (<Ref to="m-design-docs" />).
+
+A loyalty programme might become: record points for each order (no user interface); show the points balance on the account page; let customers spend points at checkout for a small set of products; expand to all products; emails about expiring points. Each step ships, can be tried by real users, and informs the next.
+
+## Prioritising
+
+There is always more to do than time. Choose deliberately, by **impact** relative to effort, and say no (or "not now") to the rest. Simple scoring helps make the trade-offs visible and arguable; **RICE** (reach, impact, confidence, effort) is a common one:
+
+```ts
+type Idea = { name: string; reach: number; impact: number; confidence: number; effortWeeks: number };
+
+const ideas: Idea[] = [
+  { name: "Fix failed-payment retries", reach: 4000, impact: 2, confidence: 0.9, effortWeeks: 1 },
+  { name: "Loyalty programme", reach: 12000, impact: 1, confidence: 0.5, effortWeeks: 8 },
+  { name: "Dark mode", reach: 3000, impact: 0.5, confidence: 0.8, effortWeeks: 2 },
+  { name: "Faster product search", reach: 15000, impact: 1, confidence: 0.7, effortWeeks: 3 },
+];
+
+const score = (i: Idea) => (i.reach * i.impact * i.confidence) / i.effortWeeks;
+for (const idea of ideas.toSorted((a, b) => score(b) - score(a))) {
+  console.log(`${Math.round(score(idea)).toString().padStart(5)}  ${idea.name}`);
+}
+```
+
+It prints the ideas ranked by score: `7200  Fix failed-payment retries`, `3500  Faster product search`, `750  Loyalty programme` and `600  Dark mode`. The unglamorous fix wins because it helps many customers a lot, with high confidence, for little effort; the big new feature ranks low until its uncertain impact is tested more cheaply. The numbers are guesses, and the point is not precision but making assumptions explicit so people can challenge them.
+
+Also protect time for the work that never shouts: paying down the technical debt that slows every change (<Ref to="m-refactoring" />), reliability work when the error budget runs low (<Ref to="m-reliability" />), and improving the team's tools.
+
+## Estimating and committing
+
+Estimates are useful for planning and dangerous as promises. Give **ranges** with your confidence and assumptions, update them as you learn, and raise problems as soon as you see them (<Ref to="m-design-docs" />). "I said Thursday; I've found the payment provider's sandbox doesn't support refunds, so it's now Monday at the earliest; the options are A or B" is a professional message. Discovering on Thursday afternoon that you are two weeks late, and saying nothing until asked, is not.
+
+When a deadline is fixed, negotiate scope, not quality: cut features, not tests or security.
+
+## Communicating
+
+Most problems in teams are communication problems. Habits that prevent them:
+
+- **Make your work visible**: a short written update (what is done, what is next, what is blocked) on a regular rhythm, before anyone asks. Your manager and teammates should never be surprised.
+- **Raise risks early.** Bad news does not improve with age.
+- **Ask for help well**, after a reasonable effort of your own (fifteen minutes to an hour, depending on urgency): say what you are trying to do, what you expected, what happened instead, what you have already tried, and the smallest example that shows the problem. Writing this often solves it (<Ref to="m-debugging" />). Asking too late wastes days; asking well respects the other person's time.
+- **Default to written, asynchronous communication** for anything others need to find later (decisions, designs, status), and talk in person or on a call for disagreements, sensitive topics and fast back-and-forth, then write down the outcome.
+- **Close loops**: if you say you will do something, do it or say you can't. Reply to questions you were asked, even with "I don't know; I'll find out by tomorrow".
+- **Assume good intent**, and disagree with the idea, not the person (<Ref to="m-code-review" />).
+
+## Writing
+
+Engineers write constantly: pull request descriptions, design documents, incident reports, documentation, messages. Clear writing scales your influence beyond the meetings you attend. Principles:
+
+- **Lead with the point**: the conclusion, decision or request in the first sentence or two; detail afterwards.
+- **Know your reader**: what they already know and what they need to do with this.
+- **Short words, short sentences, active voice**, concrete examples and numbers instead of adjectives ("p99 rose from 240 ms to 1.2 s" rather than "much slower").
+- **Make it skimmable**: headings, short paragraphs, lists for parallel items, a table for comparisons.
+- **Edit**: cut what does not help the reader; read it once as the reader would.
+
+A status update that follows these rules:
+
+```text
+Loyalty points: on track for the 2 December beta, one risk.
+
+Done: points are recorded for every order (live behind a flag, 0 errors in 3 days).
+Next: balance on the account page (in review), then spending at checkout.
+Risk: the payments team's refund API does not yet return the order id we need
+to reverse points on refunds. Asked them on Tuesday; if it's not available by
+25 November, we'll launch the beta without spending points on refunded orders.
+Decision needed from Esi by Friday: is that fallback acceptable?
+```
+
+The headline, progress, the one risk with its fallback, and a specific decision with an owner and a date: a reader knows everything that matters in fifteen seconds.
+
+## Working with product and design
+
+Product managers decide **what** to build and **why**, based on users and the business; designers decide how it **works and feels** for users; engineers decide **how** to build it and what is feasible at what cost. The best results come when the three work as partners from the start rather than in a hand-off chain:
+
+- **Join discovery early**: technical insight often reveals a cheaper solution or a hidden risk before anything is designed.
+- **Offer options with trade-offs**, not just yes or no: "the full version takes six weeks; a version without real-time updates takes two, and we can add them later".
+- **Respect their expertise** as you want yours respected; ask why when you disagree.
+- **Care about the outcome**: watch the metrics after launch, read support tickets, sit in on user research. Engineers who understand users make better decisions in a hundred small moments nobody specified.
+
+## Focus and sustainable pace
+
+Deep work (designing, debugging, writing) needs long uninterrupted stretches; constant context switching destroys it. Protect focus time, batch notifications, keep work in progress small (finish things before starting new ones), and write down where you stopped so you can resume quickly. Long hours are not a strategy: tired engineers make the mistakes that cause incidents. A sustainable pace beats heroics over any period longer than a week.
+
+## Ownership
+
+The engineers people most want to work with **own outcomes**, not just tasks: they make sure the feature actually works for users after it ships, notice and fix problems outside their exact ticket (or raise them with the people who can), follow through on incidents and their action items, and leave code, documentation and processes better than they found them. Ownership does not mean doing everything yourself; it means making sure it gets done.
+
+## Common mistakes
+
+- **Building before understanding the problem**, or building exactly what was asked when a simpler solution exists.
+- **Huge tasks** that stay "90% done" for weeks.
+- **Starting with the easy parts** and leaving the risky unknowns for last.
+- **Silent struggle**: not asking for help, or raising a delay only at the deadline.
+- **Status by meeting only**, with nothing written down.
+- **Burying the point** at the end of long messages.
+- **Treating product and design as people who hand over tickets.**
+- **Heroics and long hours** instead of sustainable pace and better systems.
+
+## Practice
+
+**1. (warm-up)** Rewrite this request as a problem statement: "Add a button that exports all orders to a spreadsheet."
+
+<Solution>
+
+For example: "The finance team spends about three hours every Friday reconciling card payments with orders by copying data into a spreadsheet. We want reconciliation to take minutes and catch mismatches automatically. Success: Friday reconciliation under 15 minutes, with mismatches flagged." This opens other solutions (a scheduled reconciliation report, an automatic matching job) besides a button.
+
+</Solution>
+
+**2. (warm-up)** You realise on Tuesday that a task promised for Wednesday will take until next Tuesday. What do you do?
+
+<Solution>
+
+Tell the people depending on it today, not on Wednesday: what you found, the new estimate as a range with its assumptions, and options (cut scope to ship part on Wednesday, get help, move the date), with your recommendation. Then keep them updated as you learn more.
+
+</Solution>
+
+**3. (standard)** Break "let customers schedule recurring weekly orders" into five independently shippable slices, riskiest first.
+
+<Solution>
+
+One reasonable breakdown: (1) a spike on charging saved cards automatically with the payment provider, the riskiest part (what does it support, how are failures and authentication challenges handled?); (2) store a recurring order and create the order each week, internal only, behind a flag, with no payment yet; (3) charge the saved card for the created order, with retries and failure emails; (4) let customers create, pause and cancel a recurring order in their account; (5) reminders before each delivery and the ability to skip one week. Each step ships and teaches something before the next.
+
+</Solution>
+
+**4. (standard)** Add a fifth idea to the RICE example: "Show estimated delivery dates", reaching 10,000 customers with impact 1, confidence 0.8 and 2 weeks of effort. Where does it rank?
+
+<Solution>
+
+```ts
+type Idea = { name: string; reach: number; impact: number; confidence: number; effortWeeks: number };
+const score = (i: Idea) => (i.reach * i.impact * i.confidence) / i.effortWeeks;
+console.log(score({ name: "Show estimated delivery dates", reach: 10000, impact: 1, confidence: 0.8, effortWeeks: 2 }));
+```
+
+It prints **4000**, ranking it second, between the payment retry fix (7200) and faster product search (3500).
+
+</Solution>
+
+**5. (stretch)** A designer proposes an animated, real-time stock indicator on every product page that would need a WebSocket connection per visitor. You estimate four weeks. How do you respond?
+
+<Solution>
+
+Ask what problem it solves (customers disappointed at checkout when an item has sold out?) and how success would be measured. Then offer options with trade-offs: the full real-time version (four weeks, plus running many connections, <Ref to="m-realtime" />); stock shown at page load and re-checked when adding to the basket (a few days, solving most of the disappointment); or real-time updates only on low-stock items through server-sent events (about a week). Recommend starting with the cheap version, measuring abandoned checkouts, and investing further only if the data supports it. Keep the designer involved in choosing; it is a shared decision.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Understand the problem** (who, what, why now, how we will know) before choosing a solution; ask why until you reach the real need.
+- **Break work into thin, independently shippable slices**, riskiest first, with spikes for unknowns.
+- **Prioritise** by impact relative to effort (RICE or similar), and protect time for debt and reliability.
+- **Estimate in ranges**, update early, and negotiate scope rather than quality.
+- **Communicate proactively**: written updates, early risks, well-formed requests for help, closed loops.
+- **Write** with the point first, for your reader, with concrete numbers, skimmable and edited.
+- **Partner** with product and design from the start; offer options with trade-offs; care about outcomes.
+- Protect focus, keep a **sustainable pace**, and **own outcomes**, not just tasks.
+
+## Go deeper
+
+- [Being Glue](https://www.noidea.dog/glue), Tanya Reilly. The essential but often invisible work that makes teams succeed, and how to make it count.
+- [Technical writing courses](https://developers.google.com/tech-writing), Google. Free courses on clear technical writing for engineers.
+- [RICE: simple prioritization for product managers](https://www.intercom.com/blog/rice-simple-prioritization-for-product-managers/), Sean McBride (Intercom). The scoring method used in this chapter.
+- [Shape Up](https://basecamp.com/shapeup), Ryan Singer (Basecamp). A free book on shaping and scoping work into bets.
+- [StaffEng guides](https://staffeng.com/guides/), Will Larson. Free guides on working effectively as a senior and staff engineer.

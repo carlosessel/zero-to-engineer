@@ -1,0 +1,160 @@
+---
+title: "Growing from junior to senior and beyond"
+summary: "What changes at each level, learning new technology fast, reading source code, mentoring."
+prerequisites: [m-working-well]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will know what is expected of engineers at each career level and what actually changes between them, how to learn a new technology quickly and deeply, how to find your way around large unfamiliar codebases, how to get better on purpose with feedback and deliberate practice, and how to help others grow. Technical knowledge, which most of this course covers, is necessary but not sufficient: careers are shaped as much by scope, judgement and influence.
+
+## What changes at each level
+
+Titles differ between companies, but the progression is broadly similar. What grows at each step is the scope of problems you can take on, the **ambiguity** you can handle, and the **influence** you have beyond your own code.
+
+- **Junior engineer**: completes well-defined tasks with guidance; learns the codebase, tools and practices; asks good questions; grows quickly by shipping and receiving feedback.
+- **Mid-level engineer**: owns features end to end with little guidance; makes sound decisions within a well-understood area; reviews others' code usefully; dependable on delivery.
+- **Senior engineer**: owns problems rather than tasks, often with unclear requirements; designs systems and makes trade-offs other engineers rely on; spots risks early; raises the quality of the whole team through reviews, mentoring and example; communicates well with product, design and other teams.
+- **Staff and principal engineers**: work across teams or the whole organisation: setting technical direction, solving problems no single team owns, improving how many teams work, and multiplying others' impact more than writing code themselves.
+
+Beyond senior, most companies offer two parallel tracks: the **individual contributor** track (staff, principal) and the **management** track (engineering manager, director). Management is a different job (hiring, people's growth, team health, delivery), not a promotion for the best coder. Both are valid; try the work (leading a project, mentoring) before choosing.
+
+The jump from mid-level to senior is often the hardest, because it is not about knowing more technology. It is about judgement: knowing which problems matter, what can be simplified, when good enough is good enough, and making the people around you more effective.
+
+## Learning new technology fast
+
+Technology changes constantly; the ability to learn quickly is the most durable skill you have. An approach that works:
+
+1. **Learn the model, not just the syntax.** Every tool embodies a few core ideas: Kafka is a replicated log with consumer offsets (<Ref to="m-kafka" />); Kubernetes is reconciliation loops over declared state (<Ref to="m-kubernetes" />); React is a function from state to UI. Find those ideas first (official "concepts" pages, the original paper or announcement), and the details hang on them.
+2. **Read the official documentation**, especially the getting-started guide and the concepts section. It is usually better than third-party tutorials, and more up to date.
+3. **Build something small but real** immediately: not a copy of the tutorial, but a tiny version of something you need. You learn by hitting the problems.
+4. **Break it on purpose**: kill a process, cut the network, feed it bad input, and see what happens. Understanding failure modes is what makes you trustworthy with a technology in production.
+5. **Connect it to what you know**: "this is a queue with replay", "this is a key-value store with a sort key". The fundamentals in this course are what make each new tool easy.
+6. **Teach it**: explaining to a colleague or writing a short internal note reveals the gaps in your understanding.
+
+Be sceptical of hype. For every new technology, ask what problem it solves, what it costs (operationally and in complexity), and whether you have that problem (<Ref to="m-anti-patterns" />).
+
+## Reading unfamiliar code
+
+Engineers read far more code than they write. Strategies for a large, unfamiliar codebase:
+
+- **Start from the outside in**: the README, how to build and run it, the entry points (the `main` function, the HTTP routes, the message handlers), and the tests, which show how the code is meant to be used.
+- **Follow one request** from the edge to the database and back, with a debugger or by reading (<Ref to="m-debugging" />). One complete path teaches you the architecture.
+- **Use your tools**: "go to definition", "find all references" and call hierarchies in the editor; search across the repository; a debugger on a running system; and AI assistants to summarise unfamiliar modules (checking what they say against the code).
+- **Read the history**: version control records *why* code is the way it is. `git log` on a file, `git blame` on a line, and `git log -S` to find when a piece of text appeared or disappeared, usually lead to a commit message, a pull request and a ticket that explain a puzzling decision:
+
+```bash
+git init -q -b main shop && cd shop
+printf 'def shipping(pence):\n    return 0 if pence >= 3000 else 350\n' > pricing.py
+git add pricing.py && git commit -q -m "Add flat shipping with free delivery from 30 pounds"
+printf 'def shipping(pence, express=False):\n    base = 0 if pence >= 3000 else 350\n    return base + (400 if express else 0)\n' > pricing.py
+git commit -q -am "Add express delivery for 4 pounds"
+printf 'def shipping(pence, express=False):\n    base = 0 if pence >= 4000 else 350\n    return base + (400 if express else 0)\n' > pricing.py
+git commit -q -am "Raise free delivery threshold to 40 pounds (finance request, ticket SHOP-212)"
+
+echo "history of pricing.py:"
+git log --format='%s' -- pricing.py
+echo "who last changed the threshold line, and why:"
+git blame -L 2,2 --porcelain pricing.py | grep '^summary'
+echo "when did the 3000 threshold disappear?"
+git log -S 3000 --format='%s' -- pricing.py
+```
+
+It builds a tiny repository with three commits, then shows the file's history newest first, the commit that last changed line 2 (`summary Raise free delivery threshold to 40 pounds (finance request, ticket SHOP-212)`), and, with `git log -S 3000`, the two commits where the number `3000` appeared and disappeared. When you wonder "why on earth is the threshold 4000?", this answers it in seconds, which is also why good commit messages explain *why*, not just *what*.
+
+- **Read open-source code** you depend on. Reading how a mature library (a web framework's router, a database driver's connection pool, the JDK's `HashMap`) solves problems is one of the best ways to improve your own design sense, and it demystifies "magic" when debugging.
+- **Draw it**: sketch the main components and data flows as you learn them (<Ref to="m-design-docs" />), and write down what surprised you; it becomes onboarding documentation for the next person.
+
+## Getting better on purpose
+
+Experience alone does not guarantee growth; ten years can be one year repeated ten times. **Deliberate practice** means working at the edge of your ability on specific weaknesses, with fast feedback:
+
+- **Seek feedback** actively: ask reviewers what would have made your pull request better, ask your manager what separates your work from the next level, and ask after incidents and launches what you could do differently. Receive it with curiosity, not defence (<Ref to="m-code-review" />).
+- **Take on slightly-too-hard work**: the feature in an unfamiliar area, the on-call rotation, the design document, the production incident. Discomfort is where growth happens; ask for support rather than avoiding it.
+- **Build things outside work** occasionally, from scratch: the projects in <Ref to="m-projects" /> exist because implementing a key-value store or a message queue teaches what using one never will.
+- **Keep a record of your work** (sometimes called a brag document): what you shipped, its impact, problems solved, people helped. It helps you notice patterns, makes performance reviews accurate, and reminds you how far you have come.
+- **Study the classics** and keep up selectively (the books and courses in this course's library chapter), favouring fundamentals that last over frameworks that churn.
+
+## Mentoring and being mentored
+
+**Find mentors**: people a level or two ahead whose judgement you admire, inside or outside your company. Come with specific questions ("how did you decide to split this service?", "how do you prepare a design review?"), not just "teach me". Many people are glad to help when asked well.
+
+**Mentor others** as early as you can, even as a mid-level engineer helping a newer one. Good mentoring:
+
+- asks questions before giving answers ("what have you tried? what do you think is happening?"), so the other person builds their own reasoning;
+- explains the *why* behind practices, not just the rules;
+- gives specific, kind, timely feedback, and praise for real progress;
+- creates safety to ask "stupid" questions and to make mistakes in reviews rather than in production;
+- shares context people would not otherwise get: how decisions are really made, who to ask, what matters to the business.
+
+Teaching also deepens your own understanding, and helping others succeed is a large part of what seniority means.
+
+## Common traps
+
+- **Equating seniority with knowing more frameworks** rather than with judgement, scope and influence.
+- **Tutorial loops**: watching courses without building anything.
+- **Hype-driven choices**: adopting technology because it is new.
+- **Avoiding feedback**, or hearing it as an attack.
+- **Staying where you no longer learn** for too long, or switching so often you never see the consequences of your decisions.
+- **Neglecting communication and writing**, which limit careers more often than technical gaps.
+- **Burnout** from trying to learn everything at once. Steady, sustained progress compounds.
+
+## Practice
+
+**1. (warm-up)** What three things typically grow from junior to senior?
+
+<Solution>
+
+The scope of problems you take on (tasks, then features, then problems and systems), the ambiguity you can handle (from well-defined tasks to unclear goals), and your influence beyond your own work (reviews, mentoring, design decisions others rely on, cross-team communication).
+
+</Solution>
+
+**2. (warm-up)** What are three ways version control helps you understand why code is the way it is?
+
+<Solution>
+
+`git log` on a file shows its history and the reasons given in commit messages; `git blame` shows which commit last changed each line; `git log -S "text"` finds the commits where a particular string appeared or disappeared. Each leads to commit messages, pull requests and tickets that record the reasoning.
+
+</Solution>
+
+**3. (standard)** You must learn a message broker you have never used, for a project starting in two weeks. Write a plan using the approach in this chapter.
+
+<Solution>
+
+Days 1 to 2: read its concepts documentation and find its core model (queue or log? how are messages acknowledged, ordered, retained? how does it replicate?), mapping each concept to <Ref to="m-messaging" />. Days 3 to 5: run it locally with Docker and build a small producer and consumer for a realistic flow from the project, with retries and idempotent handling. Days 6 to 7: break it: kill a consumer mid-message, stop a broker node, send malformed messages, fill a queue; note the behaviour. Days 8 to 9: read its operations guide (monitoring, configuration that matters, known pitfalls) and one or two post-incident write-ups by other companies. Day 10: write a two-page internal note and walk the team through it, collecting the questions you could not answer.
+
+</Solution>
+
+**4. (standard)** A junior colleague asks you to fix their failing test. How do you help, as a mentor?
+
+<Solution>
+
+Ask them to walk you through what the test checks, what they expected and what happened, and what they have tried; ask questions that lead them to read the error and form a hypothesis (<Ref to="m-debugging" />), rather than taking the keyboard. If they are stuck after that, show the next step and explain why you looked there. Afterwards, point out what they did well, and if a general lesson emerged (reading stack traces, isolating the failure), mention it briefly. They learn the method, not just the fix.
+
+</Solution>
+
+**5. (stretch)** Write down, honestly, the three skills from this course that would most improve your work this year, and a concrete practice for each.
+
+<Solution>
+
+Answers differ by person. A good one is specific and practised, for example: "Reading query plans: run EXPLAIN on our five slowest endpoints this month and fix one (<Ref to="m-relational" />). Writing design documents: write one for my next feature and get it reviewed by a senior engineer (<Ref to="m-design-docs" />). Observability: add tracing to our two busiest services and use it in the next incident (<Ref to="m-observability" />)." Vague goals ("get better at databases") rarely lead anywhere.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Levels differ in scope, **ambiguity** and **influence**; seniority is judgement and multiplying others, not knowing more frameworks. Individual contributor and management are parallel tracks.
+- Learn new technology by its **core model**, official docs, building something real, breaking it, connecting it to fundamentals, and teaching it.
+- Read code **outside in**, follow one request end to end, use editor tools and debuggers, read the **history** (`git log`, `blame`, `-S`), and read good open-source code.
+- Grow through **deliberate practice**: seek feedback, take on slightly-too-hard work, build from scratch, keep a record, study fundamentals.
+- **Find mentors** with specific questions, and **mentor others** by asking, explaining why, and giving kind, specific feedback.
+
+## Go deeper
+
+- [StaffEng: stories and guides](https://staffeng.com/), Will Larson. How staff-plus engineers describe their work.
+- [Dropbox engineering career framework](https://dropbox.github.io/dbx-career-framework/), Dropbox. A public, detailed description of what each engineering level means.
+- [Get your work recognized: write a brag document](https://jvns.ca/blog/brag-documents/), Julia Evans. Keeping a record of your work, with a template.
+- [Pro Git: viewing the commit history](https://git-scm.com/book/en/v2/Git-Basics-Viewing-the-Commit-History), Scott Chacon and Ben Straub. `git log` options for code archaeology.
+- [How to ask good questions](https://jvns.ca/blog/good-questions/), Julia Evans. Getting help effectively from colleagues.

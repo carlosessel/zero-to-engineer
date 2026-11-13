@@ -77,7 +77,7 @@ Good logging practice:
 - **Levels**: `error` for failures needing attention, `warn` for unexpected but handled situations, `info` for significant business events, `debug` for detail you switch on when investigating. Production usually runs at `info`.
 - **Write to standard output** and let the platform ship logs to a central store (Elasticsearch or OpenSearch, Loki, Splunk, Datadog, CloudWatch, Azure Monitor) (<Ref to="m-cloud-patterns" />).
 - **Log an error once**, where it is handled, with its stack trace and cause (<Ref to="m-errors" />).
-- **Never log secrets or sensitive personal data**: passwords, tokens, card numbers, full addresses, health data. Log ids instead (`customer_id`), and redact in the logging layer as a safety net. Logs are copied widely and kept for a long time, so a password in a log is a breach (the privacy and ethics chapter covers the law).
+- **Never log secrets or sensitive personal data**: passwords, tokens, card numbers, full addresses, health data. Log ids instead (`customer_id`), and redact in the logging layer as a safety net. Logs are copied widely and kept for a long time, so a password in a log is a breach (<Ref to="m-ethics" /> covers the law).
 - **Mind the volume and cost**: logging every request body at `info` can cost more than the service itself. Sample high-volume debug logs.
 
 ## Metrics

@@ -1,0 +1,13 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    after restart: {'price:RYE-400': 480}
+    log entries: 4 for 1 live key
+- block: 2
+  lang: python
+  check: python
+  output: |
+    before compaction: 10 lines
+    after compaction: 1 line; {'price:RYE-400': 490}
