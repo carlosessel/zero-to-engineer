@@ -1,0 +1,74 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: http
+  check: illustration
+  note: The text form of an HTTP/1.1 request, as curl -v shows one; the token is cut short on purpose.
+- block: 2
+  lang: http
+  check: illustration
+  note: The text form of an HTTP/1.1 response, as curl -v shows one.
+- block: 3
+  lang: json
+  check: shell
+  script: |
+    python3 -c "import json, sys; d = json.load(open(sys.argv[1])); print(sorted(d), d['status'])" "$BLOCK"
+  output_contains:
+  - '[''detail'', ''instance'', ''status'', ''title'', ''type''] 409'
+- block: 4
+  lang: ts
+  check: shell
+  script: |
+    mkdir b4 && cd b4
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '200 max-age=60 36 bytes
+
+    304 0 bytes'
+- block: 5
+  lang: http
+  check: illustration
+  note: A Set-Cookie header; each attribute is described in the list below it and on MDN's Set-Cookie page.
+- block: 6
+  lang: ts
+  check: shell
+  script: |
+    mkdir b6 && cd b6
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '204 https://bakery.example GET, POST
+
+    200 null'
+- block: 7
+  lang: ts
+  check: shell
+  script: |
+    mkdir b7 && cd b7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '{ ok: true, value: { items: [ [Object] ] } }'
+  - '''items[0].sku is not a valid product code'''
+  - '''items[0].quantity must be a whole number from 1 to 99'''
+  - '''note must be text of at most 500 characters'''
+  - '{ ok: false, errors: [ ''body must be a JSON object'' ] }'
+- block: 8
+  lang: ts
+  check: shell
+  script: |
+    mkdir b8 && cd b8
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - 200 application/json {"id":"o-1","status":"placed","totalPence":1250}
+  - 404 application/problem+json {"type":"about:blank","title":"Not Found","status":404,"detail":"No order at /orders/o-9"}
+- block: 9
+  lang: ts
+  check: shell
+  script: |
+    mkdir b9 && cd b9
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - 'items must not repeat a product: RYE-400'

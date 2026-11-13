@@ -1,0 +1,149 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    bash -e "$BLOCK" >/dev/null 2>&1
+    cd bakery-api
+    node -p "require('./package.json').type"
+    node -e "import('express').then(() => import('zod')).then(() => console.log('both load'))"
+    test -d node_modules/@types/express && echo "types installed"
+  output_contains:
+  - 'module
+
+    both load
+
+    types installed'
+- block: 2
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir b2 && cd b2
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 zod@4.6.7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - 'Bakery API
+
+    [{"sku":"RYE-400","name":"Rye loaf","pricePence":450},{"sku":"BAG-250","name":"Bagel","pricePence":120}]
+
+    404'
+- block: 3
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir b3 && cd b3
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 zod@4.6.7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - /products?page=2 -> 200 [{"sku":"RYE-400","name":"Rye loaf","pricePence":450,"category":"bread"}]
+  - /products?category=pastry -> 200 [{"sku":"CRO-090"
+  - /products?page=abc -> 200 [{"sku":"BAG-250"
+  - /products/NOPE -> 404 {"title":"Not Found","status":404,"detail":"No product NOPE"}
+- block: 4
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir b4 && cd b4
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 zod@4.6.7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '201 /orders/o-1001 {"id":"o-1001","customer":"Ama","lineCount":1}
+
+    400 application/problem+json; charset=utf-8'
+  - '{"field":"customer","message":"Too small'
+  - '{"field":"lines.0.sku","message":"must be a product code such as RYE-400"}'
+  - '{"field":"lines.0.quantity","message":"Too big'
+- block: 5
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir b5 && cd b5
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 zod@4.6.7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - "POST /orders/o-1/cancel -> 204 \nPOST /orders/o-7/cancel -> 409 {\"title\":\"Order already shipped\",\"status\":409,\"detail\":\"Order o-7 can no longer be cancelled.\"}\nPOST /orders/o-404/cancel -> 404 {\"title\":\"Not Found\",\"status\":404,\"detail\":\"No order o-404\"}\nGET /boom -> 500 {\"title\":\"Internal Server Error\",\"status\":500}\nPOST /orders/o-1/cancel -> 400 {\"title\":\"Bad Request\",\"status\":400}\nGET /nowhere -> 404 {\"title\":\"Not Found\",\"status\":404}"
+- block: 6
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir b6 && cd b6
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 zod@4.6.7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '201 /orders/o-1
+
+    {"id":"o-1","customer":"Ama","totalPence":1250}'
+- block: 7
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir b7 && cd b7
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 zod@4.6.7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '[ ''customer'', ''lines'' ]
+
+    1 99'
+- block: 8
+  lang: ts
+  check: illustration
+  note: A Fastify server that listens until stopped, shown for comparison; it needs the fastify package. Its route options follow Fastify's getting-started guide.
+- block: 9
+  lang: ts
+  check: illustration
+  note: A NestJS controller, shown for comparison; it needs a NestJS project and the OrdersService and PlaceOrderDto classes.
+- block: 10
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir b10 && cd b10
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 zod@4.6.7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '{ email: ''ama@example.com'', name: ''Ama'', marketing: false }
+
+    email, name'
+- block: 11
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir b11 && cd b11
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 zod@4.6.7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '201 {"stars":5,"text":"Best rye in Leeds"}
+
+    400 {"title":"Invalid request","status":400,"errors":[{"field":"stars"'

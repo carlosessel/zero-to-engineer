@@ -1,0 +1,478 @@
+---
+title: "Dependency injection and structuring a service"
+summary: "Layers, dependency injection in .NET, Spring and Node, configuration and the options pattern."
+prerequisites: [be-api-aspnet]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will structure a service so it stays easy to change and test: thin endpoints, services holding the business rules, and data access behind interfaces, all wired together with **dependency injection**. You will use the containers built into ASP.NET Core and Spring, compose a Node.js app by hand, choose the right **lifetime** for each service, and load typed, validated configuration. The API chapters of your track each touched on this; this chapter makes it systematic. <Ref to="m-solid" /> and <Ref to="m-architecture" /> explain the design principles behind it. Read the sections for your own stack; skim the others to see that the ideas are the same.
+
+## Layers
+
+Most services split their code into **layers**, each with one job:
+
+| Layer | Job | Knows about |
+|---|---|---|
+| **API** (endpoints, controllers) | Read and validate requests, call the application, turn results into responses | HTTP, the application layer |
+| **Application** (services) | Business rules and use cases: place an order, cancel it | Domain types, interfaces for data and other systems |
+| **Infrastructure** (repositories, clients) | Talk to the database, message broker, other APIs | Databases, SDKs, the interfaces it implements |
+
+Dependencies point **inward**: the API depends on the application layer; the application layer defines interfaces such as `IOrderRepository` and the infrastructure implements them. The business rules then never mention HTTP or SQL, so they can be tested without either, and the database can change without touching them (**dependency inversion**, <Ref to="m-solid" />).
+
+## What dependency injection is
+
+A class **depends** on another when it uses it. Instead of creating its dependencies itself (`new SqlOrderRepository(...)`), a class receives them, usually through its **constructor**. Something else, the **composition root**, creates the real objects once and passes them in:
+
+```ts
+interface Clock {
+  now(): Date;
+}
+
+interface OrderRepository {
+  save(order: { id: string; placedAt: string }): void;
+}
+
+class OrderService {
+  private readonly repository: OrderRepository;
+  private readonly clock: Clock;
+
+  constructor(repository: OrderRepository, clock: Clock) {
+    this.repository = repository;
+    this.clock = clock;
+  }
+
+  place(id: string): string {
+    const placedAt = this.clock.now().toISOString();
+    this.repository.save({ id, placedAt });
+    return `${id} placed at ${placedAt}`;
+  }
+}
+
+// Composition root for a test: fixed time, an in-memory store.
+const saved: unknown[] = [];
+const fixedClock: Clock = { now: () => new Date("2026-11-13T07:30:00Z") };
+const service = new OrderService({ save: (o) => saved.push(o) }, fixedClock);
+
+console.log(service.place("o-1"));
+console.log(saved.length);
+```
+
+It prints `o-1 placed at 2026-11-13T07:30:00.000Z` and `1`. Because `OrderService` receives its repository and clock, a test can give it a fake store and a fixed time, and production can give it a database and the real clock, without changing `OrderService` at all. That is all dependency injection is; a **DI container** just automates the composition root for large applications.
+
+## .NET: the built-in container
+
+ASP.NET Core has a container built in. You register services with the builder, and the container creates them and passes them to constructors and handlers that ask for them:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+services.AddSingleton<IClock, SystemClock>();
+services.AddScoped<IOrderRepository, InMemoryOrderRepository>();
+services.AddScoped<OrderService>();
+services.AddTransient<ReceiptFormatter>();
+
+using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+
+for (var request = 1; request <= 2; request++)
+{
+    using var scope = provider.CreateScope();
+    var first = scope.ServiceProvider.GetRequiredService<OrderService>();
+    var second = scope.ServiceProvider.GetRequiredService<OrderService>();
+    Console.WriteLine($"request {request}: same service in one scope: {ReferenceEquals(first, second)}, repository #{first.RepositoryNumber}");
+}
+
+var clockA = provider.GetRequiredService<IClock>();
+var clockB = provider.GetRequiredService<IClock>();
+Console.WriteLine($"one clock for the whole app: {ReferenceEquals(clockA, clockB)}");
+
+using (var scope = provider.CreateScope())
+{
+    var f1 = scope.ServiceProvider.GetRequiredService<ReceiptFormatter>();
+    var f2 = scope.ServiceProvider.GetRequiredService<ReceiptFormatter>();
+    Console.WriteLine($"transient gives a new formatter each time: {!ReferenceEquals(f1, f2)}");
+}
+
+interface IClock { DateTimeOffset Now { get; } }
+class SystemClock : IClock { public DateTimeOffset Now => DateTimeOffset.UtcNow; }
+
+interface IOrderRepository { int Number { get; } }
+class InMemoryOrderRepository : IOrderRepository
+{
+    private static int _created;
+    public int Number { get; } = Interlocked.Increment(ref _created);
+}
+
+class OrderService(IOrderRepository repository, IClock clock)
+{
+    public int RepositoryNumber => repository.Number;
+    public DateTimeOffset Now => clock.Now;
+}
+
+class ReceiptFormatter;
+```
+
+It prints:
+
+```text
+request 1: same service in one scope: True, repository #1
+request 2: same service in one scope: True, repository #2
+one clock for the whole app: True
+transient gives a new formatter each time: True
+```
+
+The three **lifetimes**:
+
+- **Singleton**: one instance for the whole application. For stateless helpers, caches, clients designed to be shared (such as `HttpClient` factories) and configuration. Must be thread-safe.
+- **Scoped**: one instance per **scope**, which in ASP.NET Core means **per request**. The usual choice for services and repositories, and required for Entity Framework's `DbContext` (covered in the data part of this course), which is not thread-safe.
+- **Transient**: a new instance every time it is asked for. For lightweight, stateless objects.
+
+In an ASP.NET Core app you write `builder.Services.AddScoped<...>()` instead of creating a `ServiceCollection`, and the framework creates a scope for each request. Constructors list what they need; ASP.NET Core supplies it to endpoints, controllers and other services.
+
+### The captive dependency
+
+A service must never depend on one with a **shorter** lifetime. If a singleton holds a scoped repository, that one repository (and its database connection) is captured and shared by every request for ever, which is a classic source of concurrency bugs. With `ValidateScopes` on, as in development by default, .NET refuses:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+services.AddScoped<IOrderRepository, InMemoryOrderRepository>();
+services.AddSingleton<PriceCache>();
+
+try
+{
+    using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+}
+catch (AggregateException e)
+{
+    Console.WriteLine(e.InnerExceptions[0].Message.Split(':')[0]);
+    Console.WriteLine(e.InnerExceptions[0].Message.Contains("Cannot consume scoped service"));
+}
+
+interface IOrderRepository;
+class InMemoryOrderRepository : IOrderRepository;
+class PriceCache(IOrderRepository repository);
+```
+
+It prints `Error while validating the service descriptor 'ServiceType` and `True`: the container caught the mistake at start-up. Fix it by making `PriceCache` scoped too, or by having it create a scope when it needs a repository.
+
+### The options pattern
+
+Configuration values that belong together are bound to a class, validated at start-up, and injected as **`IOptions<T>`**:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using System.ComponentModel.DataAnnotations;
+using Microsoft.Extensions.Options;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+{
+    ["Delivery:FreeFromPence"] = "3000",
+    ["Delivery:ChargePence"] = "350",
+});
+builder.Services.AddOptions<DeliveryOptions>()
+    .BindConfiguration("Delivery")
+    .ValidateDataAnnotations()
+    .ValidateOnStart();
+builder.Services.AddSingleton<DeliveryCalculator>();
+var app = builder.Build();
+
+var calculator = app.Services.GetRequiredService<DeliveryCalculator>();
+Console.WriteLine(calculator.ChargeFor(2450));
+Console.WriteLine(calculator.ChargeFor(3000));
+
+var broken = WebApplication.CreateBuilder(args);
+broken.Logging.SetMinimumLevel(LogLevel.None);
+broken.Configuration.AddInMemoryCollection(new Dictionary<string, string?> { ["Delivery:ChargePence"] = "-5" });
+broken.Services.AddOptions<DeliveryOptions>().BindConfiguration("Delivery").ValidateDataAnnotations().ValidateOnStart();
+var brokenApp = broken.Build();
+try
+{
+    await brokenApp.StartAsync();
+}
+catch (OptionsValidationException e)
+{
+    Console.WriteLine(string.Join(" | ", e.Failures));
+}
+
+public class DeliveryOptions
+{
+    [Range(1, 100_000)] public int FreeFromPence { get; set; }
+    [Range(0, 5_000)] public int ChargePence { get; set; }
+}
+
+class DeliveryCalculator(IOptions<DeliveryOptions> options)
+{
+    private readonly DeliveryOptions _options = options.Value;
+    public int ChargeFor(int basketPence) => basketPence >= _options.FreeFromPence ? 0 : _options.ChargePence;
+}
+```
+
+It prints `350`, `0`, and then the two validation failures for the broken settings (`FreeFromPence` missing, so 0, and `ChargePence` negative), raised when the app starts rather than at the first order. In a real app the values come from `appsettings.json` and environment variables (`Delivery__ChargePence=350`); the in-memory values here just keep the example self-contained. `IOptionsSnapshot<T>` and `IOptionsMonitor<T>` add reloading when configuration changes.
+
+## Spring: beans and the application context
+
+In Spring, the container is the **application context**, and the objects it manages are **beans**. Classes marked `@Component`, `@Service`, `@Repository`, `@RestController` or `@Configuration` are found by component scanning; a single constructor is injected automatically. **`@Bean`** methods in a `@Configuration` class create beans you need to construct yourself, such as library objects. **`@ConfigurationProperties`** binds a group of settings to a record, the counterpart of .NET's options pattern:
+
+```java
+package com.bakery;
+
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import org.springframework.boot.CommandLineRunner;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationProperties;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.stereotype.Service;
+import org.springframework.validation.annotation.Validated;
+
+@SpringBootApplication
+@ConfigurationPropertiesScan
+public class BakeryApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(BakeryApplication.class, args);
+    }
+
+    @Bean
+    CommandLineRunner demo(DeliveryCalculator calculator, Clock clock) {
+        return args -> {
+            System.out.println(calculator.chargeFor(2450));
+            System.out.println(calculator.chargeFor(3000));
+            System.out.println(clock.instant());
+        };
+    }
+}
+
+@ConfigurationProperties(prefix = "delivery")
+@Validated
+record DeliveryProperties(@Min(1) int freeFromPence, @Min(0) @Max(5000) int chargePence) {}
+
+@Configuration
+class TimeConfig {
+    @Bean
+    Clock clock() {
+        return Clock.fixed(Instant.parse("2026-11-13T07:30:00Z"), ZoneOffset.UTC);
+    }
+}
+
+@Service
+class DeliveryCalculator {
+    private final DeliveryProperties properties;
+
+    DeliveryCalculator(DeliveryProperties properties) {
+        this.properties = properties;
+    }
+
+    int chargeFor(int basketPence) {
+        return basketPence >= properties.freeFromPence() ? 0 : properties.chargePence();
+    }
+}
+```
+
+With `delivery.free-from-pence=3000` and `delivery.charge-pence=350` in `application.properties`, starting the app prints `350`, `0` and `2026-11-13T07:30:00Z`. Notes:
+
+- Beans are **singletons** by default, the right choice for stateless services. Other scopes exist (`prototype`, `request`), but are rarely needed. Spring does not refuse the captive-dependency mistake for you, so keep services stateless.
+- The `Clock` bean is replaced by a fixed one here to show that a `@Bean` can supply any object; in production you would return `Clock.systemUTC()` and fix it only in tests.
+- `@Validated` on the properties record makes start-up fail if the settings break the constraints, just like `ValidateOnStart` in .NET.
+- Property names are relaxed: `delivery.free-from-pence`, `DELIVERY_FREEFROMPENCE` and `delivery.freeFromPence` all bind to `freeFromPence`.
+
+## Node.js: a composition root by hand
+
+Node has no built-in container, and many teams do not use one: they pass dependencies to factory functions or constructors in one place at start-up. NestJS has a container like Spring's, and libraries such as Awilix add one to Express apps, but plain functions go a long way:
+
+```ts
+type Config = { freeFromPence: number; chargePence: number; port: number };
+
+function loadConfig(env: Record<string, string | undefined>): Config {
+  const read = (name: string, min: number, max: number): number => {
+    const value = Number(env[name]);
+    if (!Number.isInteger(value) || value < min || value > max) {
+      throw new Error(`${name} must be a whole number from ${min} to ${max}, got ${JSON.stringify(env[name])}`);
+    }
+    return value;
+  };
+  return {
+    freeFromPence: read("DELIVERY_FREE_FROM_PENCE", 1, 100_000),
+    chargePence: read("DELIVERY_CHARGE_PENCE", 0, 5_000),
+    port: read("PORT", 1, 65_535),
+  };
+}
+
+function createDeliveryCalculator(config: Pick<Config, "freeFromPence" | "chargePence">) {
+  return {
+    chargeFor: (basketPence: number) => (basketPence >= config.freeFromPence ? 0 : config.chargePence),
+  };
+}
+
+function createCheckout(deps: { delivery: ReturnType<typeof createDeliveryCalculator>; now: () => Date }) {
+  return {
+    total(basketPence: number) {
+      return { totalPence: basketPence + deps.delivery.chargeFor(basketPence), at: deps.now().toISOString() };
+    },
+  };
+}
+
+// The composition root: the only place that knows how everything is built.
+const config = loadConfig({ DELIVERY_FREE_FROM_PENCE: "3000", DELIVERY_CHARGE_PENCE: "350", PORT: "8080" });
+const checkout = createCheckout({ delivery: createDeliveryCalculator(config), now: () => new Date("2026-11-13T07:30:00Z") });
+console.log(checkout.total(2450));
+
+try {
+  loadConfig({ DELIVERY_FREE_FROM_PENCE: "3000", DELIVERY_CHARGE_PENCE: "-5", PORT: "8080" });
+} catch (error) {
+  console.log((error as Error).message);
+}
+```
+
+It prints `{ totalPence: 2800, at: '2026-11-13T07:30:00.000Z' }` and `DELIVERY_CHARGE_PENCE must be a whole number from 0 to 5000, got "-5"`. In a real app, `loadConfig(process.env)` runs first, so a bad setting stops start-up with a clear message, and `createApp(...)` from <Ref to="be-api-node" /> receives the services built here. Because each module exports factories rather than ready-made instances, nothing is a hidden global, and tests build exactly what they need.
+
+## Folder structure
+
+Organise code **by feature** rather than by technical type once a service has more than a handful of files. Instead of `controllers/`, `services/`, `repositories/` folders each holding every feature, keep each feature's endpoint, service, repository and types together:
+
+```text
+src/
+  orders/
+    orders.routes.ts       (or OrdersController.java, OrderEndpoints.cs)
+    order-service.ts
+    order-repository.ts
+    order.ts
+  products/
+    ...
+  shared/
+    config.ts
+    errors.ts
+  app.ts                   composition root
+  server.ts                starts listening
+```
+
+Changes usually touch one feature, so its files sit together; and it is easy to see what the service does from the folder names. The same layout works in every stack: namespaces in .NET (`Bakery.Api.Orders`), packages in Java (`com.bakery.orders`).
+
+## Common mistakes
+
+- **`new`-ing dependencies inside classes**, so they cannot be swapped or tested.
+- **Service locator**: passing the container around and asking it for things, which hides dependencies just like globals.
+- **Captive dependencies**: a singleton holding a scoped service.
+- **Mutable state in singletons** without thread safety.
+- **Constructors with ten dependencies**, a sign the class does too much (<Ref to="m-solid" />).
+- **Reading configuration everywhere** with raw strings instead of one typed, validated object.
+- **Configuration that is only checked when first used**, so a bad setting fails at 3 a.m. rather than at deploy time.
+
+## Practice
+
+**1. (warm-up)** Which .NET lifetime would you choose for: (a) a class that formats prices and holds no state; (b) an EF Core `DbContext`; (c) a cache of the menu shared by all requests?
+
+<Solution>
+
+(a) Transient or singleton; both are fine for stateless classes, and singleton avoids creating many objects. (b) Scoped: one per request, never shared between threads. (c) Singleton, and it must be thread-safe (for example, built on `ConcurrentDictionary` or `IMemoryCache`).
+
+</Solution>
+
+**2. (warm-up)** Why is passing a `Clock` (or `IClock`, or a `now` function) into a service better than calling `DateTime.UtcNow`, `Instant.now()` or `new Date()` inside it?
+
+<Solution>
+
+The service's behaviour then depends on an input you control. Tests can fix the time ("it is 23:59 on the last day of the offer") and check time-based rules exactly, without waiting or flaky timing; production passes the real clock.
+
+</Solution>
+
+**3. (standard)** Rewrite this class so it can be tested without a real email service, and show a test-style use with a fake:
+
+```ts
+class Signup {
+  register(email: string) {
+    const smtp = new SmtpClient("smtp.bakery.example", 587);
+    smtp.send(email, "Welcome to the bakery!");
+    return "registered";
+  }
+}
+```
+
+<Solution>
+
+```ts
+interface Mailer {
+  send(to: string, body: string): void;
+}
+
+class Signup {
+  private readonly mailer: Mailer;
+
+  constructor(mailer: Mailer) {
+    this.mailer = mailer;
+  }
+
+  register(email: string): string {
+    this.mailer.send(email, "Welcome to the bakery!");
+    return "registered";
+  }
+}
+
+const sent: string[] = [];
+const signup = new Signup({ send: (to, body) => sent.push(`${to}: ${body}`) });
+console.log(signup.register("ama@example.com"));
+console.log(sent);
+```
+
+It prints `registered` and `[ 'ama@example.com: Welcome to the bakery!' ]`. Production code passes a `Mailer` backed by the real SMTP client, built once in the composition root.
+
+</Solution>
+
+**4. (stretch)** A .NET singleton `ReportService` needs an `IOrderRepository`, which is scoped. Why can't it simply take the repository in its constructor, and how can it use one safely?
+
+<Solution>
+
+The singleton lives for the whole application, so a repository passed to its constructor would be captured and shared by every request and thread, along with its database connection: a captive dependency, which .NET refuses when scope validation is on. Instead, inject `IServiceScopeFactory` and create a scope for each unit of work:
+
+```csharp
+class ReportService(IServiceScopeFactory scopes)
+{
+    public async Task<int> CountOrdersAsync()
+    {
+        using var scope = scopes.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IOrderRepository>();
+        return await repository.CountAsync();
+    }
+}
+```
+
+Each call gets its own repository, disposed with the scope. Background services use exactly this pattern (covered in the background work part of this course).
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Split a service into **API**, **application** and **infrastructure** layers, with dependencies pointing inward and interfaces at the boundaries.
+- **Dependency injection**: classes receive their dependencies, usually through constructors; a **composition root** builds the real objects; a **container** automates it.
+- .NET lifetimes: **singleton** (one per app), **scoped** (one per request), **transient** (new each time). Never let a longer-lived service capture a shorter-lived one.
+- Typed configuration: the **options pattern** with validation on start in .NET, **`@ConfigurationProperties`** with `@Validated` in Spring, a validated `loadConfig` in Node.
+- Spring **beans** come from component scanning and `@Bean` methods, singletons by default.
+- Organise folders **by feature**.
+
+## Go deeper
+
+- [Dependency injection in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/dependency-injection), Microsoft. Registering services, lifetimes and scope validation.
+- [Options pattern in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/configuration/options), Microsoft. Binding and validating configuration.
+- [Spring Framework: the IoC container](https://docs.spring.io/spring-framework/reference/core/beans.html), the Spring team. Beans, scopes and configuration.
+- [Spring Boot reference: externalized configuration](https://docs.spring.io/spring-boot/reference/features/external-config.html), the Spring team. Properties, profiles and `@ConfigurationProperties`.
+- [Dependency injection principles, practices and patterns, chapter 1](https://www.manning.com/books/dependency-injection-principles-practices-patterns), Steven van Deursen and Mark Seemann. The free first chapter explains DI from first principles.

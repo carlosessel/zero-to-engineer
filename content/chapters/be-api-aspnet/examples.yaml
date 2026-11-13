@@ -1,0 +1,96 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: csharp
+  check: csharp
+  output: |
+    Bakery API
+    [{"sku":"RYE-400","name":"Rye loaf","pricePence":450},{"sku":"BAG-250","name":"Bagel","pricePence":120}]
+- block: 2
+  lang: csharp
+  check: csharp
+  output: "/products -> 200 [{\"sku\":\"BAG-250\",\"name\":\"Bagel\",\"pricePence\":120,\"category\":\"bread\"},{\"sku\":\"CRO-090\",\"name\":\"Croissant\",\"pricePence\":275,\"category\":\"pastry\"}]\n/products?page=2 -> 200 [{\"sku\":\"RYE-400\",\"name\":\"Rye loaf\",\"pricePence\":450,\"category\":\"bread\"}]\n/products?category=pastry -> 200 [{\"sku\":\"CRO-090\",\"name\":\"Croissant\",\"pricePence\":275,\"category\":\"pastry\"}]\n/products/RYE-400 -> 200 {\"sku\":\"RYE-400\",\"name\":\"Rye loaf\",\"pricePence\":450,\"category\":\"bread\"}\n/products/NOPE -> 404 \n/orders/42 -> 200 order number 42\n/orders/abc -> 404 \n"
+- block: 3
+  lang: text
+  check: illustration
+  note: The output of the example above, shown on its own.
+- block: 4
+  lang: csharp
+  check: csharp
+  output_contains:
+  - '201 /orders/o-1001 {"id":"o-1001","totalPence":900}
+
+    400 application/problem+json
+
+    '
+  - '"Lines[0].Sku":["The field Sku must match the regular expression'
+  - '"Lines[0].Quantity":["The field Quantity must be between 1 and 99."]'
+  - '"Note":["The field Note must be a string with a maximum length of 500."]'
+  - '
+
+    400
+
+    '
+- block: 5
+  lang: csharp
+  check: csharp
+  output: |
+    /orders/o-1/cancel -> 204  False
+    /orders/o-7/cancel -> 409 application/problem+json False
+    {"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"Order already shipped","status":409,"detail":"Order o-7 left the bakery and can no longer be cancelled."}
+    /orders/o-404/cancel -> 404 application/problem+json False
+    /boom -> 500 application/problem+json False
+- block: 6
+  lang: text
+  check: illustration
+  note: The output of the example above, shown on its own.
+- block: 7
+  lang: csharp
+  check: csharp
+  output: |
+    -> GET /menu
+    <- 401 in under a second: True
+    401
+    -> GET /menu
+    <- 200 in under a second: True
+    rye, bagel
+- block: 8
+  lang: csharp
+  check: csharp
+  output: |
+    201 /orders/o-1
+    {"id":"o-1","customer":"Ama","totalPence":1250}
+- block: 9
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - '3.1.1
+
+    GetProduct
+
+    Get one product by its code
+
+    200, 404'
+- block: 10
+  lang: csharp
+  check: illustration
+  note: A controller class; it needs a project with AddControllers and the IOrderStore, Order and NewOrder types from the services example, so it is not run on its own.
+- block: 11
+  lang: csharp
+  check: csharp
+  output: |
+    204
+    404
+- block: 12
+  lang: csharp
+  check: csharp
+  output: |
+    201
+    400
+    Email, Name
+- block: 13
+  lang: csharp
+  check: csharp
+  output: |
+    abc-123
+    36

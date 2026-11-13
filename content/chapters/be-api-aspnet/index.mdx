@@ -1,0 +1,535 @@
+---
+title: "Building an API with ASP.NET Core"
+summary: "Minimal APIs and controllers, routing, model binding, validation, errors and OpenAPI."
+prerequisites: [be-http, dotnet-projects-testing]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will build a JSON API with **ASP.NET Core**, Microsoft's web framework: endpoints with routes and parameters, request bodies bound to records, validation, consistent errors as problem details, middleware, services injected into handlers, and an OpenAPI description that other teams can generate clients from. This is the .NET track's API chapter; <Ref to="m-api-design" /> covers what makes an API well designed, and <Ref to="be-http" /> the HTTP underneath.
+
+## A first API
+
+Create a project with `dotnet new web --name Bakery.Api`, or, to experiment, use a single file like the examples below. The `#:sdk` line at the top tells `dotnet run` it is a web app:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+var app = builder.Build();
+
+app.MapGet("/", () => "Bakery API");
+app.MapGet("/menu", () => new[] { new MenuItem("RYE-400", "Rye loaf", 450), new MenuItem("BAG-250", "Bagel", 120) });
+
+await app.StartAsync();
+
+// Act as a client: call our own API, then stop.
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+Console.WriteLine(await http.GetStringAsync("/"));
+Console.WriteLine(await http.GetStringAsync("/menu"));
+await app.StopAsync();
+
+record MenuItem(string Sku, string Name, int PricePence);
+```
+
+It prints `Bakery API` and `[{"sku":"RYE-400","name":"Rye loaf","pricePence":450},{"sku":"BAG-250","name":"Bagel","pricePence":120}]`. The pieces:
+
+- **`WebApplication.CreateBuilder`** sets up configuration, logging and **services**; `builder.Build()` creates the app.
+- **`MapGet(path, handler)`** maps a **route** to a **handler**, a function that returns the response. Returning a string sends text; returning an object sends **JSON**, with property names in camelCase.
+- In a real service you end with **`app.Run()`**, which listens until the process is stopped. These examples instead start the app on any free port (`UseUrls("http://127.0.0.1:0")`), call it with `HttpClient`, and stop, so each one is a complete, checkable program. Logging is turned down to keep the output short, and `PublishAot=false` turns off a compile-ahead mode that file-based apps use by default and that some web features do not support.
+
+These handler-per-route APIs are called **minimal APIs**. ASP.NET Core also has controllers (classes of action methods), shown later; new services increasingly use minimal APIs.
+
+## Routes, parameters and results
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using Microsoft.AspNetCore.Http.HttpResults;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+var app = builder.Build();
+
+var products = new Dictionary<string, Product>
+{
+    ["RYE-400"] = new("RYE-400", "Rye loaf", 450, "bread"),
+    ["BAG-250"] = new("BAG-250", "Bagel", 120, "bread"),
+    ["CRO-090"] = new("CRO-090", "Croissant", 275, "pastry"),
+};
+
+var group = app.MapGroup("/products");
+
+group.MapGet("/", (string? category, int page = 1, int size = 2) =>
+    products.Values
+        .Where(p => category is null || p.Category == category)
+        .OrderBy(p => p.Sku)
+        .Skip((page - 1) * size)
+        .Take(Math.Clamp(size, 1, 50)));
+
+group.MapGet("/{sku}", Results<Ok<Product>, NotFound> (string sku) =>
+    products.TryGetValue(sku, out var product) ? TypedResults.Ok(product) : TypedResults.NotFound());
+
+app.MapGet("/orders/{id:int}", (int id) => $"order number {id}");
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+foreach (var path in new[] { "/products", "/products?page=2", "/products?category=pastry", "/products/RYE-400", "/products/NOPE", "/orders/42", "/orders/abc" })
+{
+    var response = await http.GetAsync(path);
+    Console.WriteLine($"{path} -> {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+}
+await app.StopAsync();
+
+record Product(string Sku, string Name, int PricePence, string Category);
+```
+
+It prints:
+
+```text
+/products -> 200 [{"sku":"BAG-250","name":"Bagel","pricePence":120,"category":"bread"},{"sku":"CRO-090","name":"Croissant","pricePence":275,"category":"pastry"}]
+/products?page=2 -> 200 [{"sku":"RYE-400","name":"Rye loaf","pricePence":450,"category":"bread"}]
+/products?category=pastry -> 200 [{"sku":"CRO-090","name":"Croissant","pricePence":275,"category":"pastry"}]
+/products/RYE-400 -> 200 {"sku":"RYE-400","name":"Rye loaf","pricePence":450,"category":"bread"}
+/products/NOPE -> 404 
+/orders/42 -> 200 order number 42
+/orders/abc -> 404 
+```
+
+- **Route parameters** (`{sku}`) come from the path; **query parameters** (`category`, `page`, `size`) are any other handler parameters of simple types, optional if nullable or given a default. This matching of request data to parameters is **model binding**.
+- **Route constraints** such as `{id:int}` only match the right shape; `/orders/abc` finds no route and gets 404.
+- **`MapGroup`** gives a set of endpoints a common prefix (and, later, common settings such as authorisation).
+- **`TypedResults`** create responses with a specific status: `Ok`, `Created`, `NoContent`, `NotFound`, `Conflict`, `BadRequest`, `Problem`. Declaring the return type as `Results<Ok<Product>, NotFound>` documents exactly which responses an endpoint can give, which also feeds the OpenAPI description.
+
+## Request bodies and validation
+
+Complex parameters (records and classes) are read from the **JSON body**. .NET 10 validates them with the same **data annotations** used across .NET (`[Required]`, `[Range]`, `[StringLength]`, `[RegularExpression]`, `[EmailAddress]`), once you call `AddValidation()`:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using System.ComponentModel.DataAnnotations;
+using System.Net.Http.Json;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+builder.Services.AddValidation();
+builder.Services.AddProblemDetails();
+var app = builder.Build();
+
+var nextId = 1000;
+app.MapPost("/orders", (PlaceOrder request) =>
+{
+    var id = $"o-{++nextId}";
+    var total = request.Lines.Sum(l => l.Quantity * 450);
+    return TypedResults.Created($"/orders/{id}", new OrderPlaced(id, total));
+});
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+
+var ok = await http.PostAsJsonAsync("/orders", new { lines = new[] { new { sku = "RYE-400", quantity = 2 } } });
+Console.WriteLine($"{(int)ok.StatusCode} {ok.Headers.Location} {await ok.Content.ReadAsStringAsync()}");
+
+var bad = await http.PostAsJsonAsync("/orders", new { lines = new[] { new { sku = "rye", quantity = 120 } }, note = new string('x', 600) });
+Console.WriteLine($"{(int)bad.StatusCode} {bad.Content.Headers.ContentType?.MediaType}");
+Console.WriteLine(await bad.Content.ReadAsStringAsync());
+
+var broken = await http.PostAsync("/orders", new StringContent("{\"lines\": [", System.Text.Encoding.UTF8, "application/json"));
+Console.WriteLine($"{(int)broken.StatusCode}");
+await app.StopAsync();
+
+public record PlaceOrder([Required, MinLength(1), MaxLength(50)] List<OrderLine> Lines, [StringLength(500)] string? Note);
+public record OrderLine([Required, RegularExpression("^[A-Z]{3,4}-[0-9]{2,4}$")] string Sku, [Range(1, 99)] int Quantity);
+public record OrderPlaced(string Id, int TotalPence);
+```
+
+It prints `201 /orders/o-1001 {"id":"o-1001","totalPence":900}`, then `400 application/problem+json` and a body listing each problem by field (`Lines[0].Sku`, `Lines[0].Quantity`, `Note`), then `400` for the broken JSON. Notes:
+
+- Validation also checks **nested** objects and list items, and runs **before** your handler, so the handler only ever sees valid data.
+- Types to validate must be **`public`**: the validation code is generated at compile time for public types only.
+- For rules that need code or other data ("the delivery date must be a day we bake"), many teams use the **FluentValidation** library, or check in the handler and return `TypedResults.ValidationProblem(...)`.
+- **Never bind request bodies directly to database entities**: a client could then set fields such as `IsAdmin` or `PricePence` that it should not control (**over-posting**). Use separate request and response records (DTOs) (<Ref to="m-appsec" />).
+
+## Errors
+
+Clients need consistent errors, and your service must never leak stack traces. Three lines give you problem-details responses for everything:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.None);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+builder.Services.AddProblemDetails();
+var app = builder.Build();
+app.UseExceptionHandler();
+app.UseStatusCodePages();
+
+var shipped = new HashSet<string> { "o-7" };
+
+app.MapPost("/orders/{id}/cancel", IResult (string id) =>
+{
+    if (id == "o-404") return TypedResults.NotFound();
+    if (shipped.Contains(id))
+        return TypedResults.Problem(statusCode: 409, title: "Order already shipped", detail: $"Order {id} left the bakery and can no longer be cancelled.");
+    return TypedResults.NoContent();
+});
+
+app.MapGet("/boom", string () => throw new InvalidOperationException("connection string Password=hunter2 rejected"));
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+foreach (var (method, path) in new[] { ("POST", "/orders/o-1/cancel"), ("POST", "/orders/o-7/cancel"), ("POST", "/orders/o-404/cancel"), ("GET", "/boom") })
+{
+    var response = await http.SendAsync(new HttpRequestMessage(new HttpMethod(method), path));
+    var body = await response.Content.ReadAsStringAsync();
+    Console.WriteLine($"{path} -> {(int)response.StatusCode} {response.Content.Headers.ContentType?.MediaType} {body.Contains("hunter2")}");
+    if (response.StatusCode == System.Net.HttpStatusCode.Conflict) Console.WriteLine(body.Split(",\"traceId")[0] + "}");
+}
+await app.StopAsync();
+```
+
+It prints:
+
+```text
+/orders/o-1/cancel -> 204  False
+/orders/o-7/cancel -> 409 application/problem+json False
+{"type":"https://tools.ietf.org/html/rfc9110#section-15.5.10","title":"Order already shipped","status":409,"detail":"Order o-7 left the bakery and can no longer be cancelled."}
+/orders/o-404/cancel -> 404 application/problem+json False
+/boom -> 500 application/problem+json False
+```
+
+- **`AddProblemDetails`** makes errors use the RFC 9457 format.
+- **`UseExceptionHandler`** catches unhandled exceptions, logs them, and returns a generic 500: the message containing the password never reaches the client (`False` on every line).
+- **`UseStatusCodePages`** gives bodiless errors (the 404) a problem-details body too.
+- Expected failures are returned as results (`NotFound`, `Problem` with 409); exceptions are for the unexpected. Each response also carries a `traceId` that matches the server's logs (<Ref to="m-observability" />).
+
+## Middleware
+
+Every request passes through a **pipeline** of **middleware**: components that can inspect or change the request, call the next one, and then inspect or change the response. Exception handling, HTTPS redirection, CORS, authentication, authorisation and routing are all middleware, and their **order matters**:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using System.Diagnostics;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+var app = builder.Build();
+
+app.Use(async (context, next) =>
+{
+    var clock = Stopwatch.StartNew();
+    Console.WriteLine($"-> {context.Request.Method} {context.Request.Path}");
+    await next(context);
+    Console.WriteLine($"<- {context.Response.StatusCode} in under a second: {clock.ElapsedMilliseconds < 1000}");
+});
+
+app.Use(async (context, next) =>
+{
+    if (context.Request.Headers["X-Api-Key"] != "demo-key")
+    {
+        context.Response.StatusCode = 401;
+        return;
+    }
+    await next(context);
+});
+
+app.MapGet("/menu", () => "rye, bagel");
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+Console.WriteLine((int)(await http.GetAsync("/menu")).StatusCode);
+http.DefaultRequestHeaders.Add("X-Api-Key", "demo-key");
+Console.WriteLine(await http.GetStringAsync("/menu"));
+await app.StopAsync();
+```
+
+It prints the timing middleware's lines around each request: the first is stopped by the key check with `401`, the second reaches the endpoint and returns `rye, bagel`. The timing middleware sees both because it runs first. A hand-written key check like this is only for illustration; real services use ASP.NET Core's authentication and authorisation middleware (covered in the security part of this course). The usual order is: exception handler, HTTPS redirection, CORS, authentication, authorisation, then your endpoints.
+
+## Services in handlers
+
+Handlers rarely do the work themselves; they call **services**: classes that hold business logic or data access. You register services with the builder, and ASP.NET Core passes them into any handler that asks for them as a parameter. This is **dependency injection**, covered in depth in <Ref to="be-dependency-injection" />:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using Microsoft.AspNetCore.Http.HttpResults;
+using System.Collections.Concurrent;
+using System.Net.Http.Json;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+builder.Services.AddSingleton<IOrderStore, InMemoryOrderStore>();
+var app = builder.Build();
+
+app.MapPost("/orders", (NewOrder request, IOrderStore store) =>
+{
+    var order = store.Add(request.Customer, request.TotalPence);
+    return TypedResults.Created($"/orders/{order.Id}", order);
+});
+
+app.MapGet("/orders/{id}", Results<Ok<Order>, NotFound> (string id, IOrderStore store) =>
+    store.Find(id) is { } order ? TypedResults.Ok(order) : TypedResults.NotFound());
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+var created = await http.PostAsJsonAsync("/orders", new NewOrder("Ama", 1250));
+Console.WriteLine($"{(int)created.StatusCode} {created.Headers.Location}");
+Console.WriteLine(await http.GetStringAsync(created.Headers.Location));
+await app.StopAsync();
+
+record NewOrder(string Customer, int TotalPence);
+record Order(string Id, string Customer, int TotalPence);
+
+interface IOrderStore
+{
+    Order Add(string customer, int totalPence);
+    Order? Find(string id);
+}
+
+class InMemoryOrderStore : IOrderStore
+{
+    private readonly ConcurrentDictionary<string, Order> _orders = new();
+    private int _next;
+
+    public Order Add(string customer, int totalPence)
+    {
+        var order = new Order($"o-{Interlocked.Increment(ref _next)}", customer, totalPence);
+        _orders[order.Id] = order;
+        return order;
+    }
+
+    public Order? Find(string id) => _orders.GetValueOrDefault(id);
+}
+```
+
+It prints `201 /orders/o-1` and `{"id":"o-1","customer":"Ama","totalPence":1250}`. Because the handlers depend on the `IOrderStore` interface, the in-memory store can later be swapped for a database one (covered in the data part of this course) without touching them. The store is a **singleton** shared by all requests at once, so it uses thread-safe `ConcurrentDictionary` and `Interlocked` (<Ref to="cs-errors-async" />).
+
+## OpenAPI
+
+An **OpenAPI** document describes every endpoint, parameter, body and response of your API in a standard JSON format. Other teams use it to read your API, generate clients, and test against it. ASP.NET Core generates it from your code:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:package Microsoft.AspNetCore.OpenApi@10.0.0
+#:property PublishAot=false
+
+using Microsoft.AspNetCore.Http.HttpResults;
+using System.Text.Json;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+builder.Services.AddOpenApi();
+var app = builder.Build();
+app.MapOpenApi();
+
+app.MapGet("/products/{sku}", Results<Ok<Product>, NotFound> (string sku) =>
+    sku == "RYE-400" ? TypedResults.Ok(new Product(sku, "Rye loaf", 450)) : TypedResults.NotFound())
+    .WithName("GetProduct")
+    .WithSummary("Get one product by its code");
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+using var doc = JsonDocument.Parse(await http.GetStringAsync("/openapi/v1.json"));
+var get = doc.RootElement.GetProperty("paths").GetProperty("/products/{sku}").GetProperty("get");
+Console.WriteLine(doc.RootElement.GetProperty("openapi").GetString());
+Console.WriteLine(get.GetProperty("operationId").GetString());
+Console.WriteLine(get.GetProperty("summary").GetString());
+Console.WriteLine(string.Join(", ", get.GetProperty("responses").EnumerateObject().Select(r => r.Name)));
+await app.StopAsync();
+
+record Product(string Sku, string Name, int PricePence);
+```
+
+It prints the OpenAPI version (`3.1.1` with .NET 10), `GetProduct`, the summary, and `200, 404`: the two typed results became the two documented responses. The document is served at `/openapi/v1.json`; add a viewer such as **Scalar** or Swagger UI in development to browse and try the API. Treat the document as part of your API's contract: review changes to it like code (<Ref to="m-api-design" />).
+
+## Controllers
+
+Many existing codebases use controllers instead of minimal APIs: classes whose public methods are actions, with routes in attributes. It looks like this (in a project, after `builder.Services.AddControllers()` and `app.MapControllers()`):
+
+```csharp
+[ApiController]
+[Route("orders")]
+public class OrdersController(IOrderStore store) : ControllerBase
+{
+    [HttpGet("{id}")]
+    public ActionResult<Order> Get(string id) =>
+        store.Find(id) is { } order ? order : NotFound();
+
+    [HttpPost]
+    public ActionResult<Order> Place(NewOrder request)
+    {
+        var order = store.Add(request.Customer, request.TotalPence);
+        return CreatedAtAction(nameof(Get), new { id = order.Id }, order);
+    }
+}
+```
+
+`[ApiController]` turns on automatic validation of data annotations (with a 400 problem-details response) and body binding. Everything else in this chapter (problem details, middleware, services, OpenAPI) works the same with controllers. Use whichever your team uses; for new services, minimal APIs are simpler.
+
+## Configuration
+
+Settings come from **configuration**, which ASP.NET Core reads in layers: `appsettings.json`, then `appsettings.{Environment}.json` (such as `appsettings.Development.json`), then environment variables, then command-line arguments, each overriding the one before. Read values with `builder.Configuration["Bakery:FreeDeliveryFromPence"]`, or bind a section to a class (the **options pattern**, <Ref to="be-dependency-injection" />). In environment variables, `__` replaces `:` (`Bakery__FreeDeliveryFromPence=3000`). The environment name comes from `ASPNETCORE_ENVIRONMENT` (`Development`, `Staging`, `Production`). Keep secrets out of `appsettings.json`: use **user secrets** (`dotnet user-secrets`) on your machine and environment variables or a secret store in production (<Ref to="m-appsec" />).
+
+## Common mistakes
+
+- **Binding request bodies straight to database entities** (over-posting).
+- **Leaking exceptions** to clients; use `UseExceptionHandler` and problem details.
+- **Throwing exceptions for expected outcomes** such as "not found" instead of returning a result.
+- **Middleware in the wrong order**, such as authorisation before authentication.
+- **Shared state in singletons** that is not thread-safe.
+- **Missing validation** on query parameters such as page sizes.
+- **Secrets in `appsettings.json`** committed to Git.
+
+## Practice
+
+**1. (warm-up)** Which part of the request does each handler parameter come from? `app.MapGet("/shops/{city}/products", (string city, string? q, int page = 1) => ...)` called as `/shops/leeds/products?q=rye`.
+
+<Solution>
+
+`city` comes from the route (`leeds`); `q` from the query string (`rye`); `page` from the query string too, and is missing, so it takes its default of 1.
+
+</Solution>
+
+**2. (standard)** Add `DELETE /products/{sku}` to a products API: 204 if it existed and was removed, 404 otherwise. Check both.
+
+<Solution>
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using Microsoft.AspNetCore.Http.HttpResults;
+using System.Collections.Concurrent;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+var app = builder.Build();
+
+var products = new ConcurrentDictionary<string, string>(new Dictionary<string, string> { ["RYE-400"] = "Rye loaf" });
+
+app.MapDelete("/products/{sku}", Results<NoContent, NotFound> (string sku) =>
+    products.TryRemove(sku, out _) ? TypedResults.NoContent() : TypedResults.NotFound());
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+Console.WriteLine((int)(await http.DeleteAsync("/products/RYE-400")).StatusCode);
+Console.WriteLine((int)(await http.DeleteAsync("/products/RYE-400")).StatusCode);
+await app.StopAsync();
+```
+
+It prints **204** then **404**: the second delete finds nothing. `DELETE` is idempotent in effect: the product is gone either way, even though the status differs.
+
+</Solution>
+
+**3. (standard)** Add validation to a `POST /customers` endpoint: `Email` required and a valid email address, `Name` 1 to 100 characters. Show a valid and an invalid request.
+
+<Solution>
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using System.ComponentModel.DataAnnotations;
+using System.Net.Http.Json;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+builder.Services.AddValidation();
+builder.Services.AddProblemDetails();
+var app = builder.Build();
+
+app.MapPost("/customers", (NewCustomer c) => TypedResults.Created($"/customers/c-1", c));
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+Console.WriteLine((int)(await http.PostAsJsonAsync("/customers", new { email = "ama@example.com", name = "Ama" })).StatusCode);
+var bad = await http.PostAsJsonAsync("/customers", new { email = "not-an-email", name = "" });
+Console.WriteLine((int)bad.StatusCode);
+var problem = await bad.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>();
+Console.WriteLine(string.Join(", ", problem.GetProperty("errors").EnumerateObject().Select(e => e.Name).Order()));
+await app.StopAsync();
+
+public record NewCustomer([Required, EmailAddress] string Email, [Required, StringLength(100, MinimumLength = 1)] string Name);
+```
+
+It prints **201**, **400** and **Email, Name**.
+
+</Solution>
+
+**4. (stretch)** Write a middleware that adds an `X-Request-Id` header to every response: the incoming `X-Request-Id` if the client sent a sensible one (letters, digits and dashes, at most 64 characters), otherwise a new GUID. Why check the incoming value?
+
+<Solution>
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using System.Text.RegularExpressions;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+var app = builder.Build();
+
+var safe = new Regex("^[A-Za-z0-9-]{1,64}$");
+app.Use(async (context, next) =>
+{
+    string incoming = context.Request.Headers["X-Request-Id"].ToString();
+    var id = safe.IsMatch(incoming) ? incoming : Guid.NewGuid().ToString();
+    context.Response.Headers["X-Request-Id"] = id;
+    await next(context);
+});
+app.MapGet("/", () => "ok");
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+var mine = new HttpRequestMessage(HttpMethod.Get, "/");
+mine.Headers.Add("X-Request-Id", "abc-123");
+Console.WriteLine((await http.SendAsync(mine)).Headers.GetValues("X-Request-Id").Single());
+var evil = new HttpRequestMessage(HttpMethod.Get, "/");
+evil.Headers.TryAddWithoutValidation("X-Request-Id", new string('A', 500));
+Console.WriteLine((await http.SendAsync(evil)).Headers.GetValues("X-Request-Id").Single().Length);
+await app.StopAsync();
+```
+
+It prints **abc-123**, then **36**, the length of a new GUID. The incoming value is checked because it is untrusted input that ends up in logs and other services: a huge or strangely formatted value could bloat logs, break log parsing, or inject fake log lines.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Minimal APIs** map routes to handlers with `MapGet`, `MapPost`, `MapPut`, `MapDelete`, grouped with `MapGroup`. Objects are returned as JSON.
+- **Model binding** fills handler parameters from the route, query string, body and services; **route constraints** restrict shapes.
+- **`TypedResults`** give precise status codes and document the possible responses.
+- **Validation**: `AddValidation()` plus data annotations on public request records; use separate request and response types.
+- **Errors**: `AddProblemDetails`, `UseExceptionHandler` and `UseStatusCodePages`; return results for expected failures.
+- **Middleware** forms an ordered pipeline; **services** are registered with the builder and injected into handlers.
+- **OpenAPI** is generated with `AddOpenApi` and `MapOpenApi`. Controllers are the older, class-based style.
+
+## Go deeper
+
+- [Minimal APIs overview](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/minimal-apis/overview), Microsoft. Routing, parameters and responses in minimal APIs.
+- [Tutorial: create a minimal API](https://learn.microsoft.com/en-us/aspnet/core/tutorials/min-web-api), Microsoft. A complete small API with a database, step by step.
+- [Handle errors in ASP.NET Core APIs](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/error-handling-api), Microsoft. Problem details and exception handling.
+- [ASP.NET Core middleware](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/middleware/), Microsoft. The pipeline and the order of built-in middleware.
+- [Generate OpenAPI documents](https://learn.microsoft.com/en-us/aspnet/core/fundamentals/openapi/aspnetcore-openapi), Microsoft. OpenAPI in ASP.NET Core.

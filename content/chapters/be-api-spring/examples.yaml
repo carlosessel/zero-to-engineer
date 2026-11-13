@@ -1,0 +1,308 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: kotlin
+  check: illustration
+  note: A project file; block 8's check builds the project from it and calls the running API.
+- block: 2
+  lang: java
+  check: illustration
+  note: A project file; block 8's check builds the project from it and calls the running API.
+- block: 3
+  lang: java
+  check: illustration
+  note: A project file; block 8's check builds the project from it and calls the running API.
+- block: 4
+  lang: java
+  check: illustration
+  note: A project file; block 8's check builds the project from it and calls the running API.
+- block: 5
+  lang: java
+  check: illustration
+  note: A project file; block 8's check builds the project from it and calls the running API.
+- block: 6
+  lang: properties
+  check: illustration
+  note: A project file; block 8's check builds the project from it and calls the running API.
+- block: 7
+  lang: java
+  check: illustration
+  note: A project file; block 8's check builds the project from it and calls the running API.
+- block: 8
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    mkdir run && cd run
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    test -n "$GRADLE" || { echo "needs Gradle"; exit 1; }
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+        id("org.springframework.boot") version "4.1.2"
+        id("io.spring.dependency-management") version "1.1.7"
+    }
+
+    group = "com.bakery"
+    version = "0.0.1-SNAPSHOT"
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-webmvc")
+        implementation("org.springframework.boot:spring-boot-starter-validation")
+        implementation("org.springdoc:springdoc-openapi-starter-webmvc-api:3.2.0")
+        testImplementation("org.springframework.boot:spring-boot-starter-test")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/BakeryApplication.java)
+    cat > src/main/java/com/bakery/BakeryApplication.java <<'SRC_EOF'
+    package com.bakery;
+
+    import org.springframework.boot.SpringApplication;
+    import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+    @SpringBootApplication
+    public class BakeryApplication {
+        public static void main(String[] args) {
+            SpringApplication.run(BakeryApplication.class, args);
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/MenuController.java)
+    cat > src/main/java/com/bakery/MenuController.java <<'SRC_EOF'
+    package com.bakery;
+
+    import java.util.Comparator;
+    import java.util.List;
+    import java.util.Map;
+    import org.springframework.http.ResponseEntity;
+    import org.springframework.web.bind.annotation.GetMapping;
+    import org.springframework.web.bind.annotation.PathVariable;
+    import org.springframework.web.bind.annotation.RequestMapping;
+    import org.springframework.web.bind.annotation.RequestParam;
+    import org.springframework.web.bind.annotation.RestController;
+
+    @RestController
+    @RequestMapping("/products")
+    public class MenuController {
+        public record Product(String sku, String name, int pricePence, String category) {}
+
+        private final Map<String, Product> products = Map.of(
+            "RYE-400", new Product("RYE-400", "Rye loaf", 450, "bread"),
+            "BAG-250", new Product("BAG-250", "Bagel", 120, "bread"),
+            "CRO-090", new Product("CRO-090", "Croissant", 275, "pastry"));
+
+        @GetMapping
+        List<Product> list(@RequestParam(required = false) String category,
+                           @RequestParam(defaultValue = "1") int page,
+                           @RequestParam(defaultValue = "2") int size) {
+            int pageSize = Math.clamp(size, 1, 50);
+            return products.values().stream()
+                .filter(p -> category == null || p.category().equals(category))
+                .sorted(Comparator.comparing(Product::sku))
+                .skip((long) (Math.max(page, 1) - 1) * pageSize)
+                .limit(pageSize)
+                .toList();
+        }
+
+        @GetMapping("/{sku}")
+        ResponseEntity<Product> get(@PathVariable String sku) {
+            Product product = products.get(sku);
+            return product == null ? ResponseEntity.notFound().build() : ResponseEntity.ok(product);
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/OrderService.java)
+    cat > src/main/java/com/bakery/OrderService.java <<'SRC_EOF'
+    package com.bakery;
+
+    import java.util.List;
+    import java.util.Map;
+    import java.util.Optional;
+    import java.util.concurrent.ConcurrentHashMap;
+    import java.util.concurrent.atomic.AtomicInteger;
+    import org.springframework.stereotype.Service;
+
+    @Service
+    public class OrderService {
+        public record Line(String sku, int quantity) {}
+        public record Order(String id, String customer, List<Line> lines, String status) {}
+
+        private final Map<String, Order> orders = new ConcurrentHashMap<>();
+        private final AtomicInteger next = new AtomicInteger(1000);
+
+        public Order place(String customer, List<Line> lines) {
+            var order = new Order("o-" + next.incrementAndGet(), customer, List.copyOf(lines), "placed");
+            orders.put(order.id(), order);
+            return order;
+        }
+
+        public Optional<Order> find(String id) {
+            return Optional.ofNullable(orders.get(id));
+        }
+
+        public Order cancel(String id) {
+            Order order = find(id).orElseThrow(() -> new OrderNotFoundException(id));
+            if (order.status().equals("shipped")) throw new OrderAlreadyShippedException(id);
+            Order cancelled = new Order(id, order.customer(), order.lines(), "cancelled");
+            orders.put(id, cancelled);
+            return cancelled;
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/OrderController.java)
+    cat > src/main/java/com/bakery/OrderController.java <<'SRC_EOF'
+    package com.bakery;
+
+    import jakarta.validation.Valid;
+    import jakarta.validation.constraints.Max;
+    import jakarta.validation.constraints.Min;
+    import jakarta.validation.constraints.NotBlank;
+    import jakarta.validation.constraints.Pattern;
+    import jakarta.validation.constraints.Size;
+    import java.net.URI;
+    import java.util.List;
+    import org.springframework.http.ResponseEntity;
+    import org.springframework.web.bind.annotation.GetMapping;
+    import org.springframework.web.bind.annotation.PathVariable;
+    import org.springframework.web.bind.annotation.PostMapping;
+    import org.springframework.web.bind.annotation.RequestBody;
+    import org.springframework.web.bind.annotation.RequestMapping;
+    import org.springframework.web.bind.annotation.RestController;
+
+    @RestController
+    @RequestMapping("/orders")
+    public class OrderController {
+        public record LineRequest(
+            @NotBlank @Pattern(regexp = "^[A-Z]{3,4}-[0-9]{2,4}$") String sku,
+            @Min(1) @Max(99) int quantity) {}
+
+        public record PlaceOrderRequest(
+            @NotBlank @Size(max = 100) String customer,
+            @Size(min = 1, max = 50) List<@Valid LineRequest> lines) {}
+
+        private final OrderService orders;
+
+        public OrderController(OrderService orders) {
+            this.orders = orders;
+        }
+
+        @PostMapping
+        ResponseEntity<OrderService.Order> place(@Valid @RequestBody PlaceOrderRequest request) {
+            var lines = request.lines().stream().map(l -> new OrderService.Line(l.sku(), l.quantity())).toList();
+            var order = orders.place(request.customer(), lines);
+            return ResponseEntity.created(URI.create("/orders/" + order.id())).body(order);
+        }
+
+        @GetMapping("/{id}")
+        ResponseEntity<OrderService.Order> get(@PathVariable String id) {
+            return ResponseEntity.of(orders.find(id));
+        }
+
+        @PostMapping("/{id}/cancel")
+        OrderService.Order cancel(@PathVariable String id) {
+            return orders.cancel(id);
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/resources/application.properties)
+    cat > src/main/resources/application.properties <<'SRC_EOF'
+    spring.application.name=bakery-api
+    spring.mvc.problemdetails.enabled=true
+    server.error.include-stacktrace=never
+    server.error.include-message=never
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/ApiErrors.java)
+    cat > src/main/java/com/bakery/ApiErrors.java <<'SRC_EOF'
+    package com.bakery;
+
+    import org.springframework.http.HttpStatus;
+    import org.springframework.http.ProblemDetail;
+    import org.springframework.web.bind.annotation.ExceptionHandler;
+    import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+    class OrderNotFoundException extends RuntimeException {
+        OrderNotFoundException(String id) {
+            super("No order " + id);
+        }
+    }
+
+    class OrderAlreadyShippedException extends RuntimeException {
+        OrderAlreadyShippedException(String id) {
+            super("Order " + id + " left the bakery and can no longer be cancelled.");
+        }
+    }
+
+    @RestControllerAdvice
+    class ApiErrors {
+        @ExceptionHandler(OrderNotFoundException.class)
+        ProblemDetail notFound(OrderNotFoundException e) {
+            return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+
+        @ExceptionHandler(OrderAlreadyShippedException.class)
+        ProblemDetail shipped(OrderAlreadyShippedException e) {
+            ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+            problem.setTitle("Order already shipped");
+            return problem;
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/StockController.java)
+    cat > src/main/java/com/bakery/StockController.java <<'SRC_EOF'
+    package com.bakery;
+
+    import java.util.Map;
+    import java.util.concurrent.ConcurrentHashMap;
+    import org.springframework.http.ResponseEntity;
+    import org.springframework.web.bind.annotation.DeleteMapping;
+    import org.springframework.web.bind.annotation.PathVariable;
+    import org.springframework.web.bind.annotation.RestController;
+
+    @RestController
+    public class StockController {
+        private final Map<String, String> stock = new ConcurrentHashMap<>(Map.of("JAM-380", "Jam"));
+
+        @DeleteMapping("/stock/{sku}")
+        ResponseEntity<Void> delete(@PathVariable String sku) {
+            return stock.remove(sku) != null ? ResponseEntity.noContent().build() : ResponseEntity.notFound().build();
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname settings.gradle.kts)
+    cat > settings.gradle.kts <<'SRC_EOF'
+    rootProject.name = "bakery-api"
+    SRC_EOF
+    "$GRADLE" --no-daemon -q bootJar
+    SERVER_PORT=18080 java -jar build/libs/*-SNAPSHOT.jar > app.log 2>&1 &
+    PID=$!
+    trap "kill $PID 2>/dev/null || true" EXIT
+    for i in $(seq 1 90); do if grep -q "Started " app.log; then break; fi; sleep 1; done
+    sed "s/localhost:8080/localhost:18080/g" "$BLOCK" > calls.sh
+    bash -e calls.sh
+    curl -s -o /dev/null -w 'delete %{http_code}\n' -X DELETE localhost:18080/stock/JAM-380
+    curl -s -o /dev/null -w 'delete %{http_code}\n' -X DELETE localhost:18080/stock/JAM-380
+  output_contains:
+  - "[{\"sku\":\"CRO-090\",\"name\":\"Croissant\",\"pricePence\":275,\"category\":\"pastry\"}]\n404\nHTTP/1.1 201 \nLocation: /orders/o-1001\n400\n{\"detail\":\"No order o-404\",\"instance\":\"/orders/o-404/cancel\",\"status\":404,\"title\":\"Not Found\"}\n\"/orders/{id}/cancel\"\ndelete 204\ndelete 404"
+- block: 9
+  lang: text
+  check: illustration
+  note: The output of the curl commands above, shown on its own.
+- block: 10
+  lang: java
+  check: illustration
+  note: A project file; block 8's check builds the project from it and calls the running API.

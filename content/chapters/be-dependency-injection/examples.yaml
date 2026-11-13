@@ -1,0 +1,100 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    o-1 placed at 2026-11-13T07:30:00.000Z
+    1
+- block: 2
+  lang: csharp
+  check: csharp
+  output_contains:
+  - 'request 1: same service in one scope: True, repository #1
+
+    request 2: same service in one scope: True, repository #2
+
+    one clock for the whole app: True
+
+    transient gives a new formatter each time: True'
+- block: 3
+  lang: text
+  check: illustration
+  note: The output of the example above, shown on its own.
+- block: 4
+  lang: csharp
+  check: csharp
+  output_contains:
+  - 'Error while validating the service descriptor ''ServiceType
+
+    True'
+- block: 5
+  lang: csharp
+  check: csharp
+  output_contains:
+  - '350
+
+    0
+
+    '
+  - '''FreeFromPence'' with the error: ''The field FreeFromPence must be between 1 and 100000.'''
+  - '''ChargePence'' with the error: ''The field ChargePence must be between 0 and 5000.'''
+- block: 6
+  lang: java
+  check: shell
+  needs: network
+  script: |
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    mkdir -p di/src/main/java/com/bakery di/src/main/resources && cd di
+    echo 'rootProject.name = "di-demo"' > settings.gradle.kts
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+        id("org.springframework.boot") version "4.1.2"
+        id("io.spring.dependency-management") version "1.1.7"
+    }
+    java { toolchain { languageVersion = JavaLanguageVersion.of(21) } }
+    repositories { mavenCentral() }
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter")
+        implementation("org.springframework.boot:spring-boot-starter-validation")
+    }
+    SRC_EOF
+    printf 'delivery.free-from-pence=3000\ndelivery.charge-pence=350\nspring.main.banner-mode=off\nlogging.level.root=warn\n' > src/main/resources/application.properties
+    cp "$BLOCK" src/main/java/com/bakery/BakeryApplication.java
+    "$GRADLE" --no-daemon -q bootJar
+    java -jar build/libs/di-demo.jar
+    printf 'delivery.free-from-pence=3000\ndelivery.charge-pence=-5\nspring.main.banner-mode=off\nlogging.level.root=off\n' > bad.properties
+    if java -jar build/libs/di-demo.jar --spring.config.location=file:bad.properties > bad.log 2>&1; then echo "should have failed"; exit 1; fi
+    echo "refused to start with a negative charge"
+  output_contains:
+  - '350
+
+    0
+
+    2026-11-13T07:30:00Z
+
+    refused to start with a negative charge'
+- block: 7
+  lang: ts
+  check: ts
+  output: |
+    { totalPence: 2800, at: "2026-11-13T07:30:00.000Z" }
+    DELIVERY_CHARGE_PENCE must be a whole number from 0 to 5000, got "-5"
+- block: 8
+  lang: text
+  check: illustration
+  note: A folder layout, described in the text.
+- block: 9
+  lang: ts
+  check: illustration
+  note: Code with a problem, for the exercise to fix; SmtpClient is not defined.
+- block: 10
+  lang: ts
+  check: ts
+  output: |
+    registered
+    ["ama@example.com: Welcome to the bakery!"]
+- block: 11
+  lang: csharp
+  check: illustration
+  note: A class fragment; it needs an IOrderRepository with CountAsync, so it is not run on its own.

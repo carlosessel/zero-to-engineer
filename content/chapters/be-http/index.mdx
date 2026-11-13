@@ -1,0 +1,358 @@
+---
+title: "HTTP for back-end engineers"
+summary: "Requests and responses in detail: methods, status codes, headers, content types, cookies and CORS."
+prerequisites: [internet]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will read and write HTTP as fluently as a back-end engineer must: what exactly is in a request and a response, which method and status code to use, the headers that matter (content types, caching, authentication, cookies), how browsers decide whether a page from another site may call your API (CORS), and why every request body must be validated. <Ref to="internet" /> introduced HTTP from the outside; this chapter is the view from the server. The examples use Node.js and `curl`, but everything here applies to every stack.
+
+## A request and a response
+
+HTTP is text (HTTP/1.1) or a binary encoding of the same thing (HTTP/2 and HTTP/3). A **request** has a method, a path, headers and, sometimes, a body:
+
+```http
+POST /orders?source=app HTTP/1.1
+Host: api.bakery.example
+Content-Type: application/json
+Accept: application/json
+Authorization: Bearer eyJhbGciOi...
+Content-Length: 52
+
+{"items":[{"sku":"RYE-400","quantity":2}],"note":""}
+```
+
+A **response** has a status code, headers and, usually, a body:
+
+```http
+HTTP/1.1 201 Created
+Content-Type: application/json
+Location: /orders/o-1042
+Cache-Control: no-store
+
+{"id":"o-1042","status":"placed","totalPence":1250}
+```
+
+- The **path** (`/orders`) names the resource; the **query string** (`?source=app`) adds optional parameters.
+- **Headers** are `Name: value` lines with information about the message: what format the body is in, who is calling, how long it may be cached.
+- A blank line separates headers from the **body**.
+
+You can see real exchanges with `curl -v`, which prints the request lines (starting `>`) and response lines (starting `<`), and in your browser's developer tools, Network tab.
+
+## Methods
+
+The **method** says what the client wants to do with the resource:
+
+| Method | Meaning | Safe | Idempotent | Typical success |
+|---|---|---|---|---|
+| `GET` | Read a resource | yes | yes | 200 OK |
+| `POST` | Create something, or run an action | no | no | 201 Created, or 200 / 202 |
+| `PUT` | Replace a resource completely | no | yes | 200 OK or 204 No Content |
+| `PATCH` | Change part of a resource | no | not necessarily | 200 OK |
+| `DELETE` | Remove a resource | no | yes | 204 No Content |
+| `HEAD` | Like GET, but headers only | yes | yes | 200 OK |
+| `OPTIONS` | Ask what is allowed (used by CORS) | yes | yes | 204 No Content |
+
+- **Safe** means it must not change anything on the server. Crawlers, caches and browsers assume `GET` is safe and may repeat or prefetch it, so never change data in a `GET` handler.
+- **Idempotent** means doing it twice has the same effect as once. Clients and proxies may retry idempotent requests after a network error. `POST` is not idempotent: retrying "place order" could place two orders, which is why payment and order APIs accept an **idempotency key** header (<Ref to="m-api-design" />).
+
+## Status codes
+
+The **status code** tells the client what happened, in five groups:
+
+| Range | Meaning | Codes you will use |
+|---|---|---|
+| 1xx | Informational | rarely used directly |
+| 2xx | Success | 200 OK, 201 Created, 202 Accepted, 204 No Content |
+| 3xx | Look elsewhere | 301 Moved Permanently, 304 Not Modified, 307 / 308 redirects |
+| 4xx | The client got something wrong | 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 409 Conflict, 422 Unprocessable Content, 429 Too Many Requests |
+| 5xx | The server failed | 500 Internal Server Error, 502 Bad Gateway, 503 Service Unavailable, 504 Gateway Timeout |
+
+The ones people confuse:
+
+- **401 vs 403**: 401 means "I don't know who you are" (missing or invalid credentials; sign in). 403 means "I know who you are, and you may not do this".
+- **400 vs 422**: 400 for a request that cannot be read at all (broken JSON); 422 for well-formed data that breaks the rules (quantity of -3). Many APIs use 400 for both; pick one convention and keep to it.
+- **404** for something that does not exist, and also, often, for something the caller may not know exists (another customer's order), so as not to leak its existence.
+- **409 Conflict** when the request clashes with the current state: the order was already shipped, or someone else changed it first.
+- **500** means your code failed. A client can never fix it by changing the request, so every 500 is a bug or an outage to investigate (<Ref to="m-observability" />).
+- **502, 503, 504** usually come from a load balancer or gateway in front of your service: it could not reach you, you were overloaded or down, or you were too slow.
+
+## Headers that matter
+
+### Content types
+
+**`Content-Type`** says what format a body is in; **`Accept`** says what format the client wants back. JSON APIs use `application/json`; HTML forms send `application/x-www-form-urlencoded` or, with file uploads, `multipart/form-data`. A server should refuse bodies it does not understand with **415 Unsupported Media Type**, and should always set `Content-Type` on its responses.
+
+### Errors as data
+
+Clients need errors they can read. A widely used standard is **problem details** (RFC 9457), content type `application/problem+json`:
+
+```json
+{
+  "type": "https://api.bakery.example/problems/out-of-stock",
+  "title": "Out of stock",
+  "status": 409,
+  "detail": "Only 3 Rye loaves are left; you asked for 5.",
+  "instance": "/orders"
+}
+```
+
+ASP.NET Core and Spring Boot produce this format built in, and Node libraries exist for it. Never send stack traces or internal messages to clients: they help attackers and confuse users (<Ref to="m-appsec" />).
+
+### Caching
+
+Responses can be cached by browsers, CDNs and proxies, which saves work and time (<Ref to="m-caching" />). The server controls this with headers:
+
+- **`Cache-Control: max-age=300`**: may be reused for 300 seconds. `no-store`: never store (for private or changing data). `private`: only the user's own browser may store it, not shared caches.
+- **`ETag`**: a fingerprint of the response. The client sends it back in **`If-None-Match`**; if nothing changed, the server replies **304 Not Modified** with no body.
+
+Here is a tiny server that does exactly that, and a client that uses it:
+
+```ts
+import { createServer } from "node:http";
+import { createHash } from "node:crypto";
+
+const menu = JSON.stringify([{ sku: "RYE-400", pricePence: 450 }]);
+const etag = `"${createHash("sha256").update(menu).digest("hex").slice(0, 16)}"`;
+
+const server = createServer((req, res) => {
+  if (req.headers["if-none-match"] === etag) {
+    res.writeHead(304, { etag }).end();
+    return;
+  }
+  res.writeHead(200, { "content-type": "application/json", "cache-control": "max-age=60", etag }).end(menu);
+});
+
+server.listen(0, async () => {
+  const address = server.address();
+  const url = `http://localhost:${typeof address === "object" && address ? address.port : 0}/menu`;
+
+  const first = await fetch(url);
+  const tag = first.headers.get("etag") ?? "";
+  console.log(first.status, first.headers.get("cache-control"), (await first.text()).length, "bytes");
+
+  const second = await fetch(url, { headers: { "if-none-match": tag } });
+  console.log(second.status, (await second.text()).length, "bytes");
+
+  server.close();
+});
+```
+
+It prints `200 max-age=60 36 bytes`, then `304 0 bytes`: the second time, nothing had changed, so no body was sent.
+
+### Authentication
+
+Requests prove who is calling with the **`Authorization`** header, usually `Authorization: Bearer <token>` with a token from a sign-in service, or with a **cookie** (<Ref to="m-identity" />). Never put tokens or passwords in URLs: URLs end up in logs, browser history and `Referer` headers.
+
+### Cookies
+
+A **cookie** is a small value the server asks the browser to store and send back with every later request to the same site. The server sets it with a response header:
+
+```http
+Set-Cookie: session=7f3a9c...; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=3600
+```
+
+- **`HttpOnly`**: JavaScript in the page cannot read it, so a cross-site scripting bug cannot steal it.
+- **`Secure`**: sent only over HTTPS.
+- **`SameSite=Lax`** (or `Strict`): not sent on most requests started by other sites, which blocks cross-site request forgery (**CSRF**) for those requests.
+- **`Max-Age`** or `Expires`: how long it lasts; without one, it is deleted when the browser closes.
+
+Session cookies should always have all of `HttpOnly`, `Secure` and `SameSite`.
+
+## CORS
+
+Browsers enforce the **same-origin policy**: JavaScript on `https://bakery.example` may not read responses from `https://api.bakery.example`, because they are different **origins** (scheme, host and port must all match). Without it, any website you visit could read your bank's API using your cookies.
+
+**CORS** (cross-origin resource sharing) lets a server allow particular origins. The browser sends an `Origin` header; if the response says `Access-Control-Allow-Origin` with that origin, the page may read it. For requests that could change things (a `POST` with JSON, or any custom header), the browser first sends a **preflight** `OPTIONS` request to ask:
+
+```ts
+import { createServer } from "node:http";
+
+const allowed = new Set(["https://bakery.example"]);
+
+const server = createServer((req, res) => {
+  const origin = req.headers.origin ?? "";
+  if (allowed.has(origin)) {
+    res.setHeader("access-control-allow-origin", origin);
+    res.setHeader("vary", "Origin");
+  }
+  if (req.method === "OPTIONS") {
+    res.setHeader("access-control-allow-methods", "GET, POST");
+    res.setHeader("access-control-allow-headers", "content-type, authorization");
+    res.setHeader("access-control-max-age", "600");
+    res.writeHead(204).end();
+    return;
+  }
+  res.writeHead(200, { "content-type": "application/json" }).end('{"ok":true}');
+});
+
+server.listen(0, async () => {
+  const address = server.address();
+  const url = `http://localhost:${typeof address === "object" && address ? address.port : 0}/orders`;
+
+  const preflight = await fetch(url, {
+    method: "OPTIONS",
+    headers: { origin: "https://bakery.example", "access-control-request-method": "POST" },
+  });
+  console.log(preflight.status, preflight.headers.get("access-control-allow-origin"), preflight.headers.get("access-control-allow-methods"));
+
+  const other = await fetch(url, { headers: { origin: "https://evil.example" } });
+  console.log(other.status, other.headers.get("access-control-allow-origin"));
+
+  server.close();
+});
+```
+
+It prints `204 https://bakery.example GET, POST`, then `200 null`. Notice the second line: the server still answered the other origin, because **CORS is enforced by browsers, not servers**. Without the allow header, the browser hides the response from the page, but the request still reached your server. CORS is not access control: every endpoint still needs authentication and authorisation (<Ref to="m-appsec" />). Never answer `Access-Control-Allow-Origin: *` on endpoints that use cookies, and never echo back any origin you receive.
+
+## Never trust the request
+
+Everything in a request comes from the client and can be anything: missing fields, wrong types, huge strings, negative quantities, other customers' ids. **Validate every input** at the edge of your service, and reject bad requests with a clear 400 or 422 before any business logic runs:
+
+```ts
+type OrderRequest = { items: { sku: string; quantity: number }[]; note?: string };
+
+function validateOrder(body: unknown): { ok: true; value: OrderRequest } | { ok: false; errors: string[] } {
+  const errors: string[] = [];
+  if (typeof body !== "object" || body === null) return { ok: false, errors: ["body must be a JSON object"] };
+  const { items, note } = body as Record<string, unknown>;
+  if (!Array.isArray(items) || items.length === 0 || items.length > 50) {
+    errors.push("items must be a list of 1 to 50 lines");
+  } else {
+    items.forEach((line, i) => {
+      const { sku, quantity } = (line ?? {}) as Record<string, unknown>;
+      if (typeof sku !== "string" || !/^[A-Z]{3,4}-\d{2,4}$/.test(sku)) errors.push(`items[${i}].sku is not a valid product code`);
+      if (!Number.isInteger(quantity) || (quantity as number) < 1 || (quantity as number) > 99) errors.push(`items[${i}].quantity must be a whole number from 1 to 99`);
+    });
+  }
+  if (note !== undefined && (typeof note !== "string" || note.length > 500)) errors.push("note must be text of at most 500 characters");
+  return errors.length ? { ok: false, errors } : { ok: true, value: body as OrderRequest };
+}
+
+console.log(validateOrder({ items: [{ sku: "RYE-400", quantity: 2 }] }));
+console.log(validateOrder({ items: [{ sku: "rye", quantity: -3 }], note: 7 }));
+console.log(validateOrder("hello"));
+```
+
+It prints `{ ok: true, value: { items: [ [Object] ] } }`, then the three errors for the second request, then `body must be a JSON object`. Writing this by hand is tedious; each framework chapter in this part shows the library that does it for you (data annotations or FluentValidation in .NET, Bean Validation in Spring, Zod in Node). Also limit **request size** (most frameworks have a default, often around 1 MB to 30 MB), so nobody can send you a 2 GB body.
+
+## Common mistakes
+
+- **Changing data in a `GET` handler.**
+- **200 OK with `{"error": ...}` in the body**; use the right status code.
+- **500 for bad input**, because validation was missing and the code crashed later.
+- **401 and 403 mixed up.**
+- **Stack traces in error responses.**
+- **Treating CORS as security**, or setting `Access-Control-Allow-Origin: *` on cookie-authenticated APIs.
+- **Session cookies without `HttpOnly`, `Secure` and `SameSite`.**
+- **Tokens in URLs.**
+
+## Practice
+
+**1. (warm-up)** Which status code fits each case? (a) The order was created. (b) No sign-in token was sent. (c) A signed-in customer asks to cancel someone else's order. (d) The JSON body is cut off halfway. (e) The order has already shipped and cannot be cancelled. (f) The database is down.
+
+<Solution>
+
+(a) 201 Created, with a `Location` header. (b) 401 Unauthorized. (c) 404 Not Found is usual, so as not to reveal that the order exists (403 Forbidden if you do not mind revealing it). (d) 400 Bad Request. (e) 409 Conflict. (f) 503 Service Unavailable if you detect it and fail cleanly; an unexpected crash would give 500.
+
+</Solution>
+
+**2. (warm-up)** Why may a client safely retry `PUT /customers/c-1/address` after a timeout, but not `POST /orders`?
+
+<Solution>
+
+`PUT` is idempotent: sending the same full address twice leaves the same result. `POST /orders` creates a new order each time, so a retry after a timeout (where the first request may actually have succeeded) can create a duplicate. To make it safe, the client sends an idempotency key, and the server returns the original result for a repeated key.
+
+</Solution>
+
+**3. (standard)** Write a Node server that answers `GET /orders/o-1` with the order and `GET /orders/` with any other id with a problem-details 404, and check both with `fetch`.
+
+<Solution>
+
+```ts
+import { createServer } from "node:http";
+
+const orders = new Map([["o-1", { id: "o-1", status: "placed", totalPence: 1250 }]]);
+
+const server = createServer((req, res) => {
+  const match = req.method === "GET" ? /^\/orders\/([\w-]+)$/.exec(req.url ?? "") : null;
+  const order = match ? orders.get(match[1]) : undefined;
+  if (order) {
+    res.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(order));
+    return;
+  }
+  res.writeHead(404, { "content-type": "application/problem+json" }).end(JSON.stringify({
+    type: "about:blank", title: "Not Found", status: 404, detail: `No order at ${req.url}`,
+  }));
+});
+
+server.listen(0, async () => {
+  const address = server.address();
+  const base = `http://localhost:${typeof address === "object" && address ? address.port : 0}`;
+  for (const path of ["/orders/o-1", "/orders/o-9"]) {
+    const response = await fetch(base + path);
+    console.log(response.status, response.headers.get("content-type"), await response.text());
+  }
+  server.close();
+});
+```
+
+It prints the 200 with the order, then `404 application/problem+json` with the problem details.
+
+</Solution>
+
+**4. (standard)** A colleague sets `Access-Control-Allow-Origin: *` "to fix CORS" on an API that authenticates with cookies, and says the API is now protected because only browsers enforce CORS. What is wrong?
+
+<Solution>
+
+Two things. First, browsers will not send cookies on cross-origin requests to an endpoint that answers `*` (credentialed requests need a specific origin), so it may not even work; the tempting next step, echoing back any `Origin`, would let every website read the API with the user's cookies. Allow a fixed list of your own origins instead. Second, CORS protects users' browsers, not the API: any script, `curl` or server can call the API directly, ignoring CORS completely. The API still needs authentication and authorisation on every endpoint.
+
+</Solution>
+
+**5. (stretch)** Extend `validateOrder` so that the same `sku` may not appear twice in one order, and show it rejecting such a request.
+
+<Solution>
+
+Add this after the per-line checks, inside the `else` branch:
+
+```ts
+type Line = { sku: string; quantity: number };
+
+function duplicateSkus(items: Line[]): string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+  for (const { sku } of items) {
+    if (seen.has(sku)) duplicates.add(sku);
+    seen.add(sku);
+  }
+  return [...duplicates];
+}
+
+const items = [{ sku: "RYE-400", quantity: 1 }, { sku: "BAG-250", quantity: 2 }, { sku: "RYE-400", quantity: 3 }];
+const repeated = duplicateSkus(items);
+console.log(repeated.length ? `items must not repeat a product: ${repeated.join(", ")}` : "ok");
+```
+
+It prints **items must not repeat a product: RYE-400**. In `validateOrder`, push that message into `errors` when `duplicateSkus(items as Line[])` is not empty.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A request has a **method**, a **path** and query, **headers** and an optional **body**; a response has a **status code**, headers and a body.
+- **GET** reads and must be **safe**; **PUT** and **DELETE** are **idempotent**; **POST** is neither, so use idempotency keys for things like orders and payments.
+- Status codes: 2xx success, 4xx the client's fault (400, 401, 403, 404, 409, 422, 429), 5xx yours. Send errors as **problem details**, never stack traces.
+- Key headers: `Content-Type` and `Accept`, `Cache-Control` and **ETag** with 304, `Authorization`, and `Set-Cookie` with `HttpOnly`, `Secure` and `SameSite`.
+- **CORS** lets browsers' pages read your API from other origins; it is enforced by browsers and is not access control.
+- **Validate every input** at the edge and limit request sizes.
+
+## Go deeper
+
+- [MDN: an overview of HTTP](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Overview), Mozilla. Requests, responses and the protocol's design.
+- [MDN: HTTP response status codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status), Mozilla. Every status code and when to use it.
+- [MDN: cross-origin resource sharing (CORS)](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/CORS), Mozilla. Origins, preflights and credentials.
+- [RFC 9457: problem details for HTTP APIs](https://www.rfc-editor.org/rfc/rfc9457), IETF. The standard error format.
+- [HTTP caching](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching), Mozilla. Cache-Control, ETags and revalidation.

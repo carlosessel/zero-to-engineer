@@ -1,0 +1,36 @@
+- question: In app.MapGet("/products/{sku}", (string sku, int page = 1) => ...), where does page come from?
+  options:
+  - The query string, defaulting to 1
+  - The route
+  answer: 0
+  explanation: Simple parameters not in the route are bound from the query string.
+- question: What does AddValidation() with data annotations do for a minimal API?
+  options:
+  - Validates public request types before the handler runs and returns a 400 problem response
+  - Validates the response
+  answer: 0
+  explanation: The handler only sees valid data.
+- question: Why use separate request records instead of binding to database entities?
+  options:
+  - To stop over-posting of fields the client must not control
+  - Because entities cannot be JSON
+  answer: 0
+  explanation: A client could otherwise set fields such as prices or roles.
+- question: What does UseExceptionHandler do?
+  options:
+  - Turns unhandled exceptions into a logged, generic 500 problem response
+  - Stops exceptions from being thrown
+  answer: 0
+  explanation: Exception details never reach the client.
+- question: Why does middleware order matter?
+  options:
+  - Each runs in turn, so authentication must come before authorisation, for example
+  - It does not; ASP.NET Core sorts it
+  answer: 0
+  explanation: The pipeline runs in the order you add it.
+- question: Where is the generated OpenAPI document served by default?
+  options:
+  - /openapi/v1.json
+  - /swagger
+  answer: 0
+  explanation: MapOpenApi serves it; viewers such as Scalar read it.

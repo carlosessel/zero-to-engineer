@@ -1,0 +1,42 @@
+- question: What does it mean that GET is safe?
+  options:
+  - It must not change anything on the server
+  - It is encrypted
+  answer: 0
+  explanation: Caches, crawlers and browsers may repeat or prefetch GET requests.
+- question: Why can a client retry PUT but not POST after a timeout?
+  options:
+  - PUT is idempotent; repeating POST may create a duplicate
+  - POST requests cannot be retried by HTTP
+  answer: 0
+  explanation: Idempotency keys make POST safe to retry.
+- question: A request has no sign-in token. Which status code?
+  options:
+  - 401 Unauthorized
+  - 403 Forbidden
+  answer: 0
+  explanation: 403 means the caller is known but not allowed.
+- question: What does a 304 Not Modified response mean?
+  options:
+  - The client's cached copy, identified by its ETag, is still current
+  - The resource was deleted
+  answer: 0
+  explanation: No body is sent, saving time and bandwidth.
+- question: Which cookie attribute stops page JavaScript from reading a session cookie?
+  options:
+  - HttpOnly
+  - SameSite
+  answer: 0
+  explanation: SameSite limits cross-site sending; HttpOnly hides it from scripts.
+- question: Does CORS stop a script on a server from calling your API?
+  options:
+  - No; CORS is enforced by browsers only
+  - Yes; the server refuses the request
+  answer: 0
+  explanation: Every endpoint still needs authentication and authorisation.
+- question: Where should request validation happen?
+  options:
+  - At the edge of the service, before business logic runs
+  - Only in the database
+  answer: 0
+  explanation: Reject bad input early with a clear 400 or 422.

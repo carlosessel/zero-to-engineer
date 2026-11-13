@@ -1,0 +1,498 @@
+---
+title: "Building an API with Node.js"
+summary: "Express with TypeScript, routing, validation with Zod, errors and OpenAPI; a look at Fastify and NestJS."
+prerequisites: [be-http, node-server-basics]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will build a JSON API in TypeScript with **Express**, the most widely used Node.js web framework: routes and parameters, request bodies validated with **Zod**, consistent errors, a structure where routes call services, and an OpenAPI description generated from your schemas. You will also see how **Fastify** and **NestJS**, the two main alternatives, compare. This is the Node.js track's API chapter; <Ref to="m-api-design" /> covers what makes an API well designed, and <Ref to="be-http" /> the HTTP underneath.
+
+## Setting up
+
+Create a project and install Express and Zod, plus type definitions for development:
+
+```bash
+mkdir bakery-api && cd bakery-api
+npm init -y
+npm pkg set type=module
+npm install express@5 zod@4
+npm install --save-dev typescript @types/express @types/node
+```
+
+`type=module` makes `.ts` and `.js` files ES modules, so `import` works. Node runs the TypeScript directly (<Ref to="node-server-basics" />); `node --watch src/server.ts` restarts it whenever you save, and `npx tsc --noEmit` checks the types. Because Node only strips types, imports of things that exist only as types must say so: `import { type Request } from "express"`.
+
+The examples below are each a complete file. Like the Node chapter's server, each listens on any free port (`listen(0)`), calls itself with `fetch`, and closes, so you can run it with `node file.ts` and see the result. Type stripping also rules out TypeScript's shorthand constructor parameters (`constructor(readonly status: number)`), so classes below declare their fields in full. In a real service, the app is created in one module (`app.ts`) and a small `server.ts` calls `app.listen(Number(process.env.PORT ?? 3000))`.
+
+## A first API
+
+```ts
+import express from "express";
+
+const app = express();
+
+app.get("/", (_req, res) => {
+  res.send("Bakery API");
+});
+
+app.get("/menu", (_req, res) => {
+  res.json([
+    { sku: "RYE-400", name: "Rye loaf", pricePence: 450 },
+    { sku: "BAG-250", name: "Bagel", pricePence: 120 },
+  ]);
+});
+
+const server = app.listen(0, async () => {
+  const address = server.address();
+  const base = `http://localhost:${typeof address === "object" && address ? address.port : 0}`;
+  console.log(await (await fetch(base + "/")).text());
+  console.log(await (await fetch(base + "/menu")).text());
+  const missing = await fetch(base + "/cakes");
+  console.log(missing.status);
+  server.close();
+});
+```
+
+It prints `Bakery API`, the menu as JSON, and `404`. **`app.get(path, handler)`** registers a **route**; the handler receives the request (`req`) and the response (`res`). `res.send` sends text, `res.json` sends JSON with the right `Content-Type`, and unmatched paths get Express's default 404.
+
+## Routes, parameters and status codes
+
+```ts
+import express, { type Request, type Response } from "express";
+
+type Product = { sku: string; name: string; pricePence: number; category: string };
+const products = new Map<string, Product>([
+  ["RYE-400", { sku: "RYE-400", name: "Rye loaf", pricePence: 450, category: "bread" }],
+  ["BAG-250", { sku: "BAG-250", name: "Bagel", pricePence: 120, category: "bread" }],
+  ["CRO-090", { sku: "CRO-090", name: "Croissant", pricePence: 275, category: "pastry" }],
+]);
+
+const router = express.Router();
+
+router.get("/", (req: Request, res: Response) => {
+  const category = typeof req.query.category === "string" ? req.query.category : undefined;
+  const page = Math.max(1, Number(req.query.page ?? 1) || 1);
+  const size = Math.min(50, Math.max(1, Number(req.query.size ?? 2) || 2));
+  const list = [...products.values()]
+    .filter((p) => !category || p.category === category)
+    .sort((a, b) => a.sku.localeCompare(b.sku))
+    .slice((page - 1) * size, page * size);
+  res.json(list);
+});
+
+router.get("/:sku", (req: Request<{ sku: string }>, res: Response) => {
+  const product = products.get(req.params.sku);
+  if (!product) {
+    res.status(404).json({ title: "Not Found", status: 404, detail: `No product ${req.params.sku}` });
+    return;
+  }
+  res.json(product);
+});
+
+const app = express();
+app.use("/products", router);
+
+const server = app.listen(0, async () => {
+  const address = server.address();
+  const base = `http://localhost:${typeof address === "object" && address ? address.port : 0}`;
+  for (const path of ["/products", "/products?page=2", "/products?category=pastry", "/products?page=abc", "/products/RYE-400", "/products/NOPE"]) {
+    const response = await fetch(base + path);
+    console.log(path, "->", response.status, await response.text());
+  }
+  server.close();
+});
+```
+
+It prints each path with its status and body: the first two products, the third on page 2, the croissant for `category=pastry`, page 1 again for `page=abc`, the rye loaf, and a 404 with a problem-details body for `NOPE`. Notes:
+
+- **`express.Router()`** groups related routes; `app.use("/products", router)` mounts them under a prefix.
+- **Route parameters** (`:sku`) arrive in `req.params`; the query string in `req.query`.
+- Query values are **strings** (or arrays, if repeated, as in `?page=1&page=2`), never numbers, and anything can be sent. Convert and limit them yourself, as here, or validate them with Zod as in the next section.
+- `res.status(404)` sets the status before sending. Always `return` after sending a response, so the code below does not try to send a second one.
+
+## Request bodies and validation with Zod
+
+**`express.json()`** is **middleware** that reads JSON bodies into `req.body`, which TypeScript types as `any`: it is whatever the client sent. **Zod** describes the shape you expect as a **schema**, checks data against it at run time, and gives you the matching TypeScript type for free:
+
+```ts
+import express, { type Request, type Response } from "express";
+import { z } from "zod";
+
+const OrderLine = z.object({
+  sku: z.string().regex(/^[A-Z]{3,4}-\d{2,4}$/, "must be a product code such as RYE-400"),
+  quantity: z.number().int().min(1).max(99),
+});
+
+const PlaceOrder = z.object({
+  customer: z.string().trim().min(1).max(100),
+  lines: z.array(OrderLine).min(1).max(50),
+  note: z.string().max(500).optional(),
+});
+type PlaceOrder = z.infer<typeof PlaceOrder>;
+
+const app = express();
+app.use(express.json({ limit: "100kb" }));
+
+let nextId = 1000;
+app.post("/orders", (req: Request, res: Response) => {
+  const parsed = PlaceOrder.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).type("application/problem+json").json({
+      title: "Invalid request",
+      status: 400,
+      errors: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+    });
+    return;
+  }
+  const order: PlaceOrder = parsed.data;
+  const id = `o-${++nextId}`;
+  res.status(201).location(`/orders/${id}`).json({ id, customer: order.customer, lineCount: order.lines.length });
+});
+
+const server = app.listen(0, async () => {
+  const address = server.address();
+  const url = `http://localhost:${typeof address === "object" && address ? address.port : 0}/orders`;
+  const post = (body: unknown) => fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  const ok = await post({ customer: " Ama ", lines: [{ sku: "RYE-400", quantity: 2 }] });
+  console.log(ok.status, ok.headers.get("location"), await ok.text());
+
+  const bad = await post({ customer: "", lines: [{ sku: "rye", quantity: 120 }], admin: true });
+  console.log(bad.status, bad.headers.get("content-type"));
+  console.log(await bad.text());
+  server.close();
+});
+```
+
+It prints `201 /orders/o-1001 {"id":"o-1001","customer":"Ama","lineCount":1}`, then `400 application/problem+json; charset=utf-8` and the list of problems: `customer` too short, `lines.0.sku` not a product code, `lines.0.quantity` too big. Notes:
+
+- **`safeParse`** returns either `success: true` with the parsed `data`, or the `error` with every **issue** and its path. `parse` throws instead.
+- **`z.infer`** turns the schema into a TypeScript type, so the type and the runtime check can never disagree.
+- Zod **strips unknown keys** by default (the `admin: true` above never reaches your code), which protects against over-posting (<Ref to="m-appsec" />). `.trim()` also cleaned up `" Ama "`.
+- **`limit: "100kb"`** refuses huge bodies with 413 Payload Too Large.
+- Validate query strings and route parameters the same way, with `z.coerce.number()` to turn text into numbers.
+
+## Errors
+
+**Error-handling middleware** is a function with four parameters, `(err, req, res, next)`, added after the routes. In Express 5, errors thrown in handlers, **including rejected promises from `async` handlers**, all reach it (Express 4 needed extra code for async errors):
+
+```ts
+import express, { type NextFunction, type Request, type Response } from "express";
+
+class HttpError extends Error {
+  readonly status: number;
+  readonly title: string;
+  constructor(status: number, title: string, detail: string) {
+    super(detail);
+    this.status = status;
+    this.title = title;
+  }
+}
+
+const shipped = new Set(["o-7"]);
+const app = express();
+app.use(express.json());
+
+app.post("/orders/:id/cancel", async (req: Request<{ id: string }>, res: Response) => {
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  if (req.params.id === "o-404") throw new HttpError(404, "Not Found", `No order ${req.params.id}`);
+  if (shipped.has(req.params.id)) throw new HttpError(409, "Order already shipped", `Order ${req.params.id} can no longer be cancelled.`);
+  res.status(204).end();
+});
+
+app.get("/boom", async () => {
+  throw new Error("connection to db.internal refused for user admin");
+});
+
+app.use((_req: Request, res: Response) => {
+  res.status(404).type("application/problem+json").json({ title: "Not Found", status: 404 });
+});
+
+app.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  const status = err instanceof HttpError ? err.status : typeof (err as { status?: unknown }).status === "number" ? (err as { status: number }).status : 500;
+  if (status >= 500) console.error(`[error] ${req.method} ${req.path}:`, (err as Error).message);
+  res.status(status).type("application/problem+json").json({
+    title: err instanceof HttpError ? err.title : status >= 500 ? "Internal Server Error" : "Bad Request",
+    status,
+    ...(err instanceof HttpError ? { detail: err.message } : {}),
+  });
+});
+
+const server = app.listen(0, async () => {
+  const address = server.address();
+  const base = `http://localhost:${typeof address === "object" && address ? address.port : 0}`;
+  const calls: [string, string, string?][] = [["POST", "/orders/o-1/cancel"], ["POST", "/orders/o-7/cancel"], ["POST", "/orders/o-404/cancel"], ["GET", "/boom"], ["POST", "/orders/o-1/cancel", "{not json"], ["GET", "/nowhere"]];
+  for (const [method, path, body] of calls) {
+    const response = await fetch(base + path, { method, headers: { "content-type": "application/json" }, body });
+    console.log(method, path, "->", response.status, await response.text());
+  }
+  server.close();
+});
+```
+
+It prints `204` for the first cancel, the 409 and 404 with their details, a generic `500` with no details for `/boom` (the message with the host name goes only to the server's error output), `400` for the broken JSON (the JSON parser's error carries `status: 400`), and the 404 fallback for `/nowhere`. Order matters: the 404 fallback and the error handler come **after** all routes.
+
+## Structure: routes call services
+
+As an API grows, keep handlers thin: they read and validate the request, call a **service** that does the work, and turn the result into a response. Pass the service in, rather than importing a global one, so tests and other environments can supply their own (<Ref to="be-dependency-injection" />):
+
+```ts
+import express, { type Request, type Response, Router } from "express";
+
+type Order = { id: string; customer: string; totalPence: number };
+
+interface OrderStore {
+  add(customer: string, totalPence: number): Promise<Order>;
+  find(id: string): Promise<Order | undefined>;
+}
+
+class InMemoryOrderStore implements OrderStore {
+  private orders = new Map<string, Order>();
+  private next = 0;
+  async add(customer: string, totalPence: number): Promise<Order> {
+    const order = { id: `o-${++this.next}`, customer, totalPence };
+    this.orders.set(order.id, order);
+    return order;
+  }
+  async find(id: string): Promise<Order | undefined> {
+    return this.orders.get(id);
+  }
+}
+
+function ordersRouter(store: OrderStore): Router {
+  const router = Router();
+  router.post("/", async (req: Request, res: Response) => {
+    const order = await store.add(String(req.body.customer), Number(req.body.totalPence));
+    res.status(201).location(`/orders/${order.id}`).json(order);
+  });
+  router.get("/:id", async (req: Request<{ id: string }>, res: Response) => {
+    const order = await store.find(req.params.id);
+    if (!order) {
+      res.status(404).json({ title: "Not Found", status: 404 });
+      return;
+    }
+    res.json(order);
+  });
+  return router;
+}
+
+export function createApp(store: OrderStore) {
+  const app = express();
+  app.use(express.json());
+  app.use("/orders", ordersRouter(store));
+  return app;
+}
+
+const server = createApp(new InMemoryOrderStore()).listen(0, async () => {
+  const address = server.address();
+  const base = `http://localhost:${typeof address === "object" && address ? address.port : 0}`;
+  const created = await fetch(base + "/orders", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ customer: "Ama", totalPence: 1250 }) });
+  const location = created.headers.get("location") ?? "";
+  console.log(created.status, location);
+  console.log(await (await fetch(base + location)).text());
+  server.close();
+});
+```
+
+It prints `201 /orders/o-1` and `{"id":"o-1","customer":"Ama","totalPence":1250}` (validation is left out here to keep the example short). `createApp(store)` builds the whole app from its dependencies, so a test can create one with a fake store, and production with a database-backed one (covered in the data part of this course).
+
+## OpenAPI from your schemas
+
+Zod 4 can turn any schema into **JSON Schema**, which is what OpenAPI uses to describe bodies, so your validation and your documentation come from one source:
+
+```ts
+import { z } from "zod";
+
+const PlaceOrder = z.object({
+  customer: z.string().min(1).max(100),
+  lines: z.array(z.object({ sku: z.string(), quantity: z.number().int().min(1).max(99) })).min(1),
+});
+
+const openapi = {
+  openapi: "3.1.0",
+  info: { title: "Bakery API", version: "1.0.0" },
+  paths: {
+    "/orders": {
+      post: {
+        operationId: "placeOrder",
+        requestBody: { required: true, content: { "application/json": { schema: z.toJSONSchema(PlaceOrder) } } },
+        responses: { "201": { description: "Order placed" }, "400": { description: "Invalid request" } },
+      },
+    },
+  },
+};
+
+const schema = openapi.paths["/orders"].post.requestBody.content["application/json"].schema as {
+  required: string[];
+  properties: { lines: { minItems: number; items: { properties: { quantity: { maximum: number } } } } };
+};
+console.log(schema.required);
+console.log(schema.properties.lines.minItems, schema.properties.lines.items.properties.quantity.maximum);
+```
+
+It prints `[ 'customer', 'lines' ]` and `1 99`. Serve the document from a route such as `GET /openapi.json`. For bigger APIs, libraries such as `zod-openapi` build the whole document from schemas attached to routes.
+
+## Fastify and NestJS
+
+Express is the most common, but you will meet two others:
+
+**Fastify** is faster, has validation and serialisation built in using JSON Schema, encapsulated plugins, and good TypeScript support:
+
+```ts
+import Fastify from "fastify";
+
+const app = Fastify({ logger: true });
+
+app.post("/orders", {
+  schema: {
+    body: {
+      type: "object",
+      required: ["customer"],
+      properties: { customer: { type: "string", minLength: 1 } },
+    },
+  },
+}, async (request, reply) => {
+  reply.code(201);
+  return { id: "o-1", customer: (request.body as { customer: string }).customer };
+});
+
+await app.listen({ port: 3000 });
+```
+
+**NestJS** is a full framework in the style of Spring and ASP.NET Core: modules, controllers and services in classes, decorators for routes, and built-in dependency injection. Large teams like its structure:
+
+```ts
+@Controller("orders")
+export class OrdersController {
+  constructor(private readonly orders: OrdersService) {}
+
+  @Get(":id")
+  find(@Param("id") id: string) {
+    return this.orders.find(id);
+  }
+
+  @Post()
+  @HttpCode(201)
+  place(@Body() body: PlaceOrderDto) {
+    return this.orders.place(body);
+  }
+}
+```
+
+The ideas in this chapter (routing, validation at the edge, problem-details errors, thin handlers calling services, OpenAPI) carry over to all three. Choose what your team uses; for a new small service, Express or Fastify; for a large codebase where structure matters most, NestJS.
+
+## Common mistakes
+
+- **Trusting `req.body`** without validation; its type is `any` for a reason.
+- **Treating query values as numbers** without converting and limiting them.
+- **Sending two responses** because of a missing `return`.
+- **Error handler before the routes**, or a 500 that includes `err.message` or the stack.
+- **Using Express 4** patterns for async errors in Express 5 code, or the reverse.
+- **No body size limit.**
+- **Importing global singletons** everywhere instead of passing dependencies in, which makes testing hard.
+
+## Practice
+
+**1. (warm-up)** For `router.get("/shops/:city/products", ...)` called as `/shops/leeds/products?page=2&page=3`, what are `req.params.city` and `req.query.page`?
+
+<Solution>
+
+`req.params.city` is `"leeds"`. `req.query.page` is the array `["2", "3"]`, because the parameter was repeated, and both values are strings. This is why query values must be validated, not assumed to be single numbers.
+
+</Solution>
+
+**2. (standard)** Write a Zod schema for a new customer (`email`: a valid email; `name`: 1 to 100 characters after trimming; `marketing`: a boolean, defaulting to `false`) and show it accepting one input and rejecting another.
+
+<Solution>
+
+```ts
+import { z } from "zod";
+
+const NewCustomer = z.object({
+  email: z.email(),
+  name: z.string().trim().min(1).max(100),
+  marketing: z.boolean().default(false),
+});
+
+console.log(NewCustomer.parse({ email: "ama@example.com", name: " Ama " }));
+const result = NewCustomer.safeParse({ email: "not-an-email", name: "   " });
+console.log(result.success ? "ok" : result.error.issues.map((i) => i.path.join(".")).join(", "));
+```
+
+It prints `{ email: 'ama@example.com', name: 'Ama', marketing: false }` and **email, name**. In Zod 4, string formats such as `z.email()` are top-level functions.
+
+</Solution>
+
+**3. (standard)** Why does the error handler use `err.status` when it is a number below 500, and why must it never send `err.message` for a 500?
+
+<Solution>
+
+Express's own errors, such as the JSON parser's error for a broken body or the 413 for a body that is too large, carry a `status` saying they are the client's fault; without using it, every bad request would look like a server failure (a 500), wrongly alerting the team. For a real 500, the message comes from your code or libraries and can contain internal details (host names, SQL, file paths, sometimes secrets), so it goes only to the server's logs, and the client gets a generic message.
+
+</Solution>
+
+**4. (stretch)** Write a `validate(schema)` middleware that checks `req.body` against a Zod schema, replaces `req.body` with the parsed data, and sends the 400 problem response itself when it fails. Use it on a route.
+
+<Solution>
+
+```ts
+import express, { type NextFunction, type Request, type Response } from "express";
+import { z } from "zod";
+
+function validate(schema: z.ZodType) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const parsed = schema.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).type("application/problem+json").json({
+        title: "Invalid request",
+        status: 400,
+        errors: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      });
+      return;
+    }
+    req.body = parsed.data;
+    next();
+  };
+}
+
+const Review = z.object({ stars: z.number().int().min(1).max(5), text: z.string().max(1000) });
+
+const app = express();
+app.use(express.json());
+app.post("/reviews", validate(Review), (req: Request, res: Response) => {
+  res.status(201).json(req.body);
+});
+
+const server = app.listen(0, async () => {
+  const address = server.address();
+  const url = `http://localhost:${typeof address === "object" && address ? address.port : 0}/reviews`;
+  for (const body of [{ stars: 5, text: "Best rye in Leeds", extra: 1 }, { stars: 9, text: "" }]) {
+    const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    console.log(response.status, await response.text());
+  }
+  server.close();
+});
+```
+
+It prints `201 {"stars":5,"text":"Best rye in Leeds"}` (the unknown `extra` key was stripped) and a **400** listing `stars`. Middleware like this keeps every handler free of validation code.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Express** routes requests to handlers with `app.get`, `app.post` and friends, grouped with `Router`; `req.params` and `req.query` (always strings) carry request data; `res.status().json()` responds.
+- **`express.json()`** parses bodies, with a size limit. **Zod** schemas validate bodies, queries and parameters at run time, give TypeScript types with `z.infer`, and strip unknown keys.
+- **Error-handling middleware** (four parameters, after the routes) turns thrown errors, including async ones in Express 5, into problem-details responses without leaking internals.
+- Keep handlers thin and **pass services in** (`createApp(store)`), so tests and environments can swap them.
+- Zod's **`z.toJSONSchema`** turns schemas into the JSON Schema that **OpenAPI** documents use.
+- **Fastify** (fast, schema-based) and **NestJS** (structured, decorators and DI) are the main alternatives.
+
+## Go deeper
+
+- [Express: routing](https://expressjs.com/en/guide/routing.html), the Express project. Routes, parameters and routers.
+- [Express: error handling](https://expressjs.com/en/guide/error-handling.html), the Express project. Error middleware and async errors in Express 5.
+- [Zod documentation](https://zod.dev/), Colin McDonnell and contributors. Schemas, parsing, errors and JSON Schema.
+- [Fastify: getting started](https://fastify.dev/docs/latest/Guides/Getting-Started/), the Fastify team. Routes, schemas and plugins.
+- [NestJS: first steps](https://docs.nestjs.com/first-steps), the NestJS team. Modules, controllers and providers.

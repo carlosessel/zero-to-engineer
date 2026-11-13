@@ -4,6 +4,19 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 5 (HTTP and APIs)
+
+Added
+- Five chapters: HTTP for back-end engineers (methods, safety and idempotency, status codes, problem details, caching with ETags, cookies, CORS, input validation); building an API with ASP.NET Core minimal APIs; with Spring Boot 4.1; with Express 5 and Zod 4 (plus a look at Fastify and NestJS); and dependency injection and service structure in all three stacks. The part also reuses the Mastery chapters on API design and real-time communication.
+- The examples run in the checks as real servers: each ASP.NET Core and Express example starts, calls itself and stops; the Spring Boot project is built with Gradle, started, and called with the chapter's own `curl` commands, whose output must match the chapter; the Spring configuration example must refuse to start with a bad setting.
+- 17 glossary terms, and the course added to the existing terms the chapters use.
+
+Fixed
+- The glossary entry "Singleton" now also gives the dependency-injection meaning.
+
+Not verified
+- No person has reviewed these chapters. The Spring, Express, OpenAPI and Node setup checks download packages, so they run only where network checks are switched on.
+
 ### 2026-11-13: Zero to Backend Engineer, part 4 (Node.js and TypeScript track)
 
 Added

@@ -1,0 +1,36 @@
+- question: What does @SpringBootApplication turn on?
+  options:
+  - Auto-configuration and component scanning of its package and below
+  - Only the web server
+  answer: 0
+  explanation: Spring finds and wires classes marked @RestController, @Service and so on.
+- question: How does a controller get the OrderService it needs?
+  options:
+  - Spring passes it to the controller's constructor
+  - The controller calls new OrderService()
+  answer: 0
+  explanation: Constructor injection is the recommended style.
+- question: What happens if you leave out @Valid on a @RequestBody parameter?
+  options:
+  - The validation annotations on the record are ignored
+  - The request is refused
+  answer: 0
+  explanation: Validation only runs when asked for.
+- question: Where should exceptions be mapped to status codes?
+  options:
+  - In one @RestControllerAdvice class
+  - In a try-catch in every controller method
+  answer: 0
+  explanation: One place keeps errors consistent.
+- question: What does ResponseEntity.of(optional) return?
+  options:
+  - 200 with the value, or 404 when the Optional is empty
+  - Always 200
+  answer: 0
+  explanation: It is a shortcut for the common find-by-id case.
+- question: Where does springdoc serve the OpenAPI document by default?
+  options:
+  - /v3/api-docs
+  - /openapi.json
+  answer: 0
+  explanation: Add the UI starter for Swagger UI.

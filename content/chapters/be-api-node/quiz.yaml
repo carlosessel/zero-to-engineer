@@ -1,0 +1,36 @@
+- question: What type is req.query.page in Express?
+  options:
+  - A string, an array of strings, or missing; never a number
+  - A number
+  answer: 0
+  explanation: Query values are text and must be converted and validated.
+- question: What does Zod's safeParse return?
+  options:
+  - Either success with the parsed data, or the error with every issue
+  - The data, or throws
+  answer: 0
+  explanation: parse throws; safeParse returns a result.
+- question: What happens to unknown keys such as admin in a body parsed by a Zod object schema?
+  options:
+  - They are stripped by default
+  - They cause an error by default
+  answer: 0
+  explanation: This protects against over-posting.
+- question: How does Express recognise error-handling middleware?
+  options:
+  - 'It has four parameters: err, req, res, next'
+  - It is named errorHandler
+  answer: 0
+  explanation: Add it after all routes.
+- question: What changed for async handlers in Express 5?
+  options:
+  - Rejected promises reach the error handler automatically
+  - Async handlers are no longer allowed
+  answer: 0
+  explanation: Express 4 needed a wrapper for this.
+- question: Why build the app with createApp(store) rather than importing a global store?
+  options:
+  - Tests and environments can pass their own store
+  - It runs faster
+  answer: 0
+  explanation: Dependencies are passed in, not reached for.
