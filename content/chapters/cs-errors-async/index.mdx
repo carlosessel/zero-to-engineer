@@ -1,0 +1,379 @@
+---
+title: "C#: exceptions, async and await"
+summary: "Throwing and handling exceptions, cleaning up with using, and asynchronous code with Task, async, await and cancellation."
+prerequisites: [cs-collections-linq]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will handle failures in C# with exceptions (throwing the right ones, catching only what you can handle, and cleaning up reliably with `using`), and write **asynchronous** code with `Task`, `async` and `await`, including running work concurrently, timeouts and cancellation. Every ASP.NET Core endpoint that touches a database or another service is async, so this is everyday back-end C#. <Ref to="m-errors" /> covers error-handling design and <Ref to="m-async" /> explains how async works underneath.
+
+## Exceptions
+
+When something goes wrong that the current code cannot deal with, C# **throws** an **exception**: an object describing the problem. It travels up through the calling methods until a `catch` block handles it; if none does, the program (or, in a web app, the request) fails.
+
+```csharp
+Console.WriteLine(Divide(10, 2));
+
+try
+{
+    Console.WriteLine(Divide(10, 0));
+}
+catch (DivideByZeroException e)
+{
+    Console.WriteLine($"Caught: {e.GetType().Name}");
+}
+
+try
+{
+    var qty = int.Parse("ten");
+}
+catch (FormatException e)
+{
+    Console.WriteLine($"Bad number: {e.Message}");
+}
+finally
+{
+    Console.WriteLine("finally always runs");
+}
+
+static int Divide(int a, int b) => a / b;
+```
+
+It prints `5`, `Caught: DivideByZeroException`, `Bad number: The input string 'ten' was not in a correct format.` and `finally always runs`. The parts:
+
+- **`try`** wraps code that may fail.
+- **`catch (SomeException e)`** handles one kind of exception; you can have several, most specific first.
+- **`finally`** runs whether or not an exception happened: for clean-up.
+
+### Throwing your own
+
+Throw when a method cannot do what its name promises. Use the standard exception types where they fit, and your own when callers need to tell your failure apart:
+
+```csharp
+var orders = new OrderService();
+try
+{
+    orders.Cancel("o-42");
+}
+catch (OrderNotFoundException e)
+{
+    Console.WriteLine($"404: {e.Message}");
+}
+
+try
+{
+    orders.Place("", 2);
+}
+catch (ArgumentException e)
+{
+    Console.WriteLine($"400: {e.ParamName}");
+}
+
+class OrderNotFoundException(string orderId) : Exception($"Order {orderId} not found")
+{
+    public string OrderId { get; } = orderId;
+}
+
+class OrderService
+{
+    public void Place(string sku, int quantity)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(sku);
+        ArgumentOutOfRangeException.ThrowIfLessThan(quantity, 1);
+    }
+
+    public void Cancel(string orderId) => throw new OrderNotFoundException(orderId);
+}
+```
+
+It prints `404: Order o-42 not found` and `400: sku`. Notice how an API maps each failure to an HTTP status (<Ref to="m-api-design" />). The `ThrowIf...` helpers are the modern, short way to check arguments.
+
+Common standard exceptions: `ArgumentException` (and `ArgumentNullException`, `ArgumentOutOfRangeException`) for bad arguments, `InvalidOperationException` when the object's state does not allow the call, `NotSupportedException`, `KeyNotFoundException`, `TimeoutException`, and `OperationCanceledException`.
+
+### Rules for exceptions
+
+- **Catch only what you can handle.** Catching `Exception` everywhere hides bugs. In a web app, let unexpected exceptions reach the framework's error handler, which logs them and returns a 500 (<Ref to="m-observability" />).
+- **Never swallow exceptions** with an empty `catch`.
+- **Rethrow with `throw;`**, not `throw e;`, so the original stack trace is kept.
+- **Don't use exceptions for normal control flow.** For expected outcomes ("is this input valid?") use `TryParse`-style methods or return a result.
+- **Add context** by wrapping: `throw new PaymentFailedException("Charge failed for order o-17", e);` keeps the original as the inner exception.
+
+### Cleaning up with using
+
+Files, network connections and database connections hold resources that must be released. Types that need clean-up implement **`IDisposable`**, and a **`using`** declaration calls `Dispose` automatically at the end of the scope, even if an exception is thrown:
+
+```csharp
+try
+{
+    using var log = new AuditLog("orders");
+    log.Write("order o-1 placed");
+    throw new InvalidOperationException("something broke");
+}
+catch (InvalidOperationException e)
+{
+    Console.WriteLine($"Caught: {e.Message}");
+}
+
+class AuditLog(string name) : IDisposable
+{
+    public void Write(string line) => Console.WriteLine($"[{name}] {line}");
+    public void Dispose() => Console.WriteLine($"[{name}] closed");
+}
+```
+
+It prints `[orders] order o-1 placed`, `[orders] closed` and then `Caught: something broke`: the log was closed before the exception was handled. Always use `using` with streams, `HttpResponseMessage`, database connections and similar objects.
+
+## Asynchronous code
+
+Most back-end work is **waiting**: for the database, another service, a file. If a thread sat blocked during each wait, a server would need thousands of threads to serve thousands of requests. **Asynchronous** code releases the thread while it waits, so a few threads can serve many requests (<Ref to="m-async" />).
+
+In C#, an asynchronous operation returns a **`Task`** (no result) or **`Task<T>`** (a result of type `T`). Inside a method marked **`async`**, **`await`** pauses the method until the task completes, without blocking the thread, and gives you the result:
+
+```csharp
+using System.Diagnostics;
+
+var clock = Stopwatch.StartNew();
+var menu = await LoadMenuAsync();
+Console.WriteLine($"{menu.Count} items after about {Round(clock)} ms");
+
+static async Task<List<string>> LoadMenuAsync()
+{
+    await Task.Delay(200);
+    return ["Rye", "Sourdough", "Bagel"];
+}
+
+static long Round(Stopwatch s) => (s.ElapsedMilliseconds + 50) / 100 * 100;
+```
+
+It prints `3 items after about 200 ms`. `Task.Delay` stands in for a real database or HTTP call. By convention, async method names end in `Async`.
+
+### Running work concurrently
+
+`await` one call after another runs them **in sequence**. To run independent calls **at the same time**, start them all, then await them together with `Task.WhenAll`:
+
+```csharp
+using System.Diagnostics;
+
+var clock = Stopwatch.StartNew();
+var customer = await FetchAsync("customer", 300);
+var orders = await FetchAsync("orders", 300);
+Console.WriteLine($"one after another: {Round(clock)} ms");
+
+clock.Restart();
+var customerTask = FetchAsync("customer", 300);
+var ordersTask = FetchAsync("orders", 300);
+await Task.WhenAll(customerTask, ordersTask);
+Console.WriteLine($"together: {Round(clock)} ms, got {customerTask.Result} and {ordersTask.Result}");
+
+static async Task<string> FetchAsync(string what, int ms)
+{
+    await Task.Delay(ms);
+    return what;
+}
+
+static long Round(Stopwatch s) => (s.ElapsedMilliseconds + 50) / 100 * 100;
+```
+
+It prints `one after another: 600 ms` and `together: 300 ms, got customer and orders`. Reading `.Result` is safe here only because `WhenAll` has already finished; elsewhere, always `await`.
+
+### Exceptions in async code
+
+An exception inside an async method is stored in its task and thrown again where you `await` it, so ordinary `try` and `catch` work:
+
+```csharp
+try
+{
+    await ChargeCardAsync(-5);
+}
+catch (ArgumentOutOfRangeException e)
+{
+    Console.WriteLine($"Refused: {e.ParamName}");
+}
+
+static async Task ChargeCardAsync(int pence)
+{
+    await Task.Delay(10);
+    ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pence);
+}
+```
+
+It prints `Refused: pence`.
+
+### Cancellation and timeouts
+
+A **`CancellationToken`** lets the caller say "stop, I no longer need this": the client disconnected, or a timeout passed. Async methods take a token as their last parameter and pass it on to everything they call. ASP.NET Core gives each request a token that is cancelled if the client goes away.
+
+```csharp
+using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(150));
+try
+{
+    await SlowReportAsync(timeout.Token);
+}
+catch (OperationCanceledException)
+{
+    Console.WriteLine("Gave up after the timeout");
+}
+
+var report = await SlowReportAsync(CancellationToken.None);
+Console.WriteLine(report);
+
+static async Task<string> SlowReportAsync(CancellationToken ct)
+{
+    for (var step = 1; step <= 3; step++)
+    {
+        await Task.Delay(100, ct);
+    }
+    return "report done";
+}
+```
+
+It prints `Gave up after the timeout`, then `report done`. Every call to another service should have a timeout (<Ref to="m-resilience" />).
+
+### Async rules
+
+- **Async all the way**: if a method awaits, its callers should be async too.
+- **Never block on async code** with `.Result` or `.Wait()` on an unfinished task; it wastes threads and can deadlock.
+- **Avoid `async void`** except for event handlers; exceptions from it cannot be caught by the caller. Return `Task`.
+- **Pass `CancellationToken`s through** to every call that accepts one.
+- **Don't start work and forget it** (`_ = DoAsync();`) in a web request; use a background job (<Ref to="m-messaging" />).
+- **Shared state needs care**: tasks may run on different threads at once (<Ref to="m-threads-locks" />).
+
+## Common mistakes
+
+- **Catching `Exception` and carrying on** as if nothing happened.
+- **`throw e;`** instead of `throw;`, losing the stack trace.
+- **Forgetting `using`** on disposable objects, leaking connections until the pool runs out.
+- **Calling `.Result`** on a task in request code.
+- **Awaiting independent calls one by one** when they could run together.
+- **No timeout** on calls to other services.
+
+## Practice
+
+**1. (warm-up)** Write a method `ParseQuantity(string text)` that returns the number, or throws `ArgumentException` with a helpful message when the text is not a whole number from 1 to 99.
+
+<Solution>
+
+```csharp
+Console.WriteLine(ParseQuantity("3"));
+foreach (var bad in new[] { "zero", "0", "120" })
+{
+    try { ParseQuantity(bad); }
+    catch (ArgumentException e) { Console.WriteLine(e.Message); }
+}
+
+static int ParseQuantity(string text)
+{
+    if (!int.TryParse(text, out var n) || n < 1 || n > 99)
+        throw new ArgumentException($"Quantity must be a whole number from 1 to 99, not '{text}'");
+    return n;
+}
+```
+
+It prints **3**, then the message three times, for **zero**, **0** and **120**.
+
+</Solution>
+
+**2. (warm-up)** What is wrong with this code?
+
+```csharp
+try { SaveOrder(); }
+catch (Exception) { }
+```
+
+<Solution>
+
+It swallows every exception, including bugs and database failures, silently: the order may not be saved and nobody will know. Catch only exceptions you can handle, and log or rethrow the rest.
+
+</Solution>
+
+**3. (standard)** Three independent calls take 200 ms, 300 ms and 100 ms. Write code that runs them concurrently and prints all three results and the total time (rounded to 100 ms).
+
+<Solution>
+
+```csharp
+using System.Diagnostics;
+
+var clock = Stopwatch.StartNew();
+var results = await Task.WhenAll(FetchAsync("prices", 200), FetchAsync("stock", 300), FetchAsync("offers", 100));
+Console.WriteLine(string.Join(", ", results));
+Console.WriteLine($"{(clock.ElapsedMilliseconds + 50) / 100 * 100} ms");
+
+static async Task<string> FetchAsync(string what, int ms)
+{
+    await Task.Delay(ms);
+    return what;
+}
+```
+
+It prints **prices, stock, offers** and **300 ms**: the time of the slowest call. `Task.WhenAll` returns the results in the order the tasks were given.
+
+</Solution>
+
+**4. (standard)** Write `WithTimeoutAsync`, which awaits a `Func<CancellationToken, Task<string>>` but gives up after a given number of milliseconds and returns `"timed out"`.
+
+<Solution>
+
+```csharp
+Console.WriteLine(await WithTimeoutAsync(ct => WorkAsync(50, ct), 200));
+Console.WriteLine(await WithTimeoutAsync(ct => WorkAsync(500, ct), 200));
+
+static async Task<string> WithTimeoutAsync(Func<CancellationToken, Task<string>> work, int ms)
+{
+    using var cts = new CancellationTokenSource(ms);
+    try
+    {
+        return await work(cts.Token);
+    }
+    catch (OperationCanceledException) when (cts.IsCancellationRequested)
+    {
+        return "timed out";
+    }
+}
+
+static async Task<string> WorkAsync(int ms, CancellationToken ct)
+{
+    await Task.Delay(ms, ct);
+    return $"done in {ms} ms";
+}
+```
+
+It prints **done in 50 ms** and **timed out**. The `when` clause is an **exception filter**: it catches the cancellation only if our own timeout caused it. In real projects, resilience libraries such as Polly provide timeouts and retries (<Ref to="m-resilience" />).
+
+</Solution>
+
+**5. (stretch)** A colleague wrote this inside an ASP.NET Core endpoint. List the problems.
+
+```csharp
+var user = GetUserAsync(id).Result;
+var orders = GetOrdersAsync(id).Result;
+async void Audit() { await WriteAuditAsync(id); }
+Audit();
+```
+
+<Solution>
+
+- `.Result` blocks a thread on each call: under load the server runs out of threads. Use `await`.
+- The two calls are independent but run one after another; start both and await them with `Task.WhenAll`.
+- `async void` means an exception in `WriteAuditAsync` cannot be caught and can crash the process; and the audit is fire-and-forget, so it may be lost if the request ends or the app stops. Await it, or hand it to a background job or queue.
+- No `CancellationToken` is passed, so the work continues even if the client has gone.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Exceptions** signal failures; `try`, `catch` (specific types, most specific first) and `finally` handle them. Throw standard types or your own; catch only what you can handle; rethrow with `throw;`.
+- **`using`** disposes resources reliably, even when exceptions happen.
+- **Async**: methods return `Task` or `Task<T>`; `await` waits without blocking a thread; name them `...Async`.
+- Run independent work **concurrently** with `Task.WhenAll`.
+- Pass **`CancellationToken`s** everywhere and put **timeouts** on every external call.
+- Never block with `.Result` or `.Wait()`, and avoid `async void`.
+
+## Go deeper
+
+- [Exceptions and exception handling](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/exceptions/), Microsoft. Throwing, catching and creating exceptions.
+- [Best practices for exceptions](https://learn.microsoft.com/en-us/dotnet/standard/exceptions/best-practices-for-exceptions), Microsoft. When and how to use exceptions.
+- [Asynchronous programming with async and await](https://learn.microsoft.com/en-us/dotnet/csharp/asynchronous-programming/), Microsoft. The async model in C#, with a worked example.
+- [Cancellation in managed threads](https://learn.microsoft.com/en-us/dotnet/standard/threading/cancellation-in-managed-threads), Microsoft. How cancellation tokens work.

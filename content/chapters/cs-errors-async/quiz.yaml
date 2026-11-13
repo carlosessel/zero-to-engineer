@@ -1,0 +1,42 @@
+- question: Where should you catch an exception?
+  options:
+  - Only where you can actually handle it
+  - In every method, to be safe
+  answer: 0
+  explanation: Catching everywhere hides bugs; let unexpected exceptions reach the framework's handler.
+- question: Why rethrow with throw; rather than throw e;?
+  options:
+  - throw; keeps the original stack trace
+  - throw e; does not compile
+  answer: 0
+  explanation: throw e; resets the stack trace to the current line.
+- question: What does a using declaration guarantee?
+  options:
+  - Dispose is called at the end of the scope, even if an exception is thrown
+  - The object is never null
+  answer: 0
+  explanation: It is the safe way to release connections, streams and files.
+- question: Two independent calls take 300 ms each. How long does awaiting them with Task.WhenAll take?
+  options:
+  - About 300 ms
+  - About 600 ms
+  answer: 0
+  explanation: They run at the same time.
+- question: Why avoid .Result on an unfinished task in a web request?
+  options:
+  - It blocks a thread and can deadlock or exhaust the thread pool
+  - It returns the wrong value
+  answer: 0
+  explanation: Use await instead.
+- question: What is a CancellationToken for?
+  options:
+  - Telling async work to stop, for example on timeout or client disconnect
+  - Retrying failed calls
+  answer: 0
+  explanation: Pass it on to everything that accepts one.
+- question: Why avoid async void?
+  options:
+  - Its exceptions cannot be caught by the caller
+  - It runs synchronously
+  answer: 0
+  explanation: Return Task instead, except for event handlers.

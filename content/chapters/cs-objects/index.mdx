@@ -1,0 +1,388 @@
+---
+title: "C#: classes, interfaces and records"
+summary: "Object-oriented C#: classes, properties, interfaces, records, inheritance and nullable references."
+prerequisites: [cs-basics]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will model real things in C#: classes with properties, constructors and methods that protect their own rules, interfaces that let parts be swapped, records for simple values, enums for fixed sets of choices, inheritance where it fits, and C#'s nullable reference types that stop most null-reference crashes before the program runs. These are the building blocks of every ASP.NET Core service. <Ref to="m-oop" /> explains the design ideas in depth; this chapter is about writing them in C#.
+
+## Classes and objects
+
+A **class** describes a kind of thing: the data it holds and what it can do. An **object** (or **instance**) is one particular thing made from the class with `new`.
+
+```csharp
+var account = new Account("Ama");
+account.Deposit(50.00m);
+account.Withdraw(12.50m);
+Console.WriteLine($"{account.Owner} has £{account.Balance}");
+
+try
+{
+    account.Withdraw(100m);
+}
+catch (InvalidOperationException e)
+{
+    Console.WriteLine($"Refused: {e.Message}");
+}
+Console.WriteLine($"Still £{account.Balance}");
+
+class Account
+{
+    public Account(string owner)
+    {
+        Owner = owner;
+    }
+
+    public string Owner { get; }
+    public decimal Balance { get; private set; }
+
+    public void Deposit(decimal amount)
+    {
+        if (amount <= 0) throw new ArgumentOutOfRangeException(nameof(amount), "Deposits must be positive");
+        Balance += amount;
+    }
+
+    public void Withdraw(decimal amount)
+    {
+        if (amount > Balance) throw new InvalidOperationException("Insufficient funds");
+        Balance -= amount;
+    }
+}
+```
+
+It prints `Ama has £37.50`, then `Refused: Insufficient funds`, then `Still £37.50`. The pieces:
+
+- The **constructor** (`public Account(string owner)`) runs when the object is created and sets it up.
+- **Properties** (`Owner`, `Balance`) expose data. `{ get; }` makes `Owner` read-only after construction; `{ get; private set; }` lets anyone read `Balance` but only the class change it.
+- **Methods** (`Deposit`, `Withdraw`) are the only way to change the balance, so the rule "never go below zero" is enforced in one place: **encapsulation**.
+- **Access modifiers**: `public` is visible everywhere, `private` (the default for members) only inside the class, `internal` inside the same project, `protected` in the class and its subclasses.
+- Throwing an exception refuses invalid operations (<Ref to="cs-errors-async" /> covers exceptions).
+
+### Shorter ways to write classes
+
+**Primary constructors** put the parameters on the class line, and **object initialisers** set properties at creation; `required` makes a property mandatory and `init` makes it settable only during initialisation:
+
+```csharp
+var shop = new Shop("Leeds") { Manager = "Kofi" };
+var product = new Product { Sku = "RYE-400", Name = "Rye loaf", PricePence = 450 };
+Console.WriteLine(shop.Describe());
+Console.WriteLine($"{product.Name} ({product.Sku}): {product.PricePence}p, vegan: {product.Vegan}");
+
+class Shop(string city)
+{
+    public string? Manager { get; set; }
+    public string Describe() => $"The {city} shop, managed by {Manager ?? "nobody yet"}";
+}
+
+class Product
+{
+    public required string Sku { get; init; }
+    public required string Name { get; init; }
+    public int PricePence { get; init; }
+    public bool Vegan { get; init; } = true;
+}
+```
+
+It prints `The Leeds shop, managed by Kofi` and `Rye loaf (RYE-400): 450p, vegan: True`. Leaving out `Sku` or `Name` is a compile error, and trying to change `product.PricePence` after creation is too, so a product cannot be half-built or changed by accident.
+
+## Records
+
+A **record** is a type mainly for holding data, with **value equality** (two records with the same values are equal), a readable `ToString`, and non-destructive changes with `with`. Records are ideal for value objects, DTOs and messages (<Ref to="m-oop" />, <Ref to="m-enterprise-patterns" />).
+
+```csharp
+var a = new Money(450, "GBP");
+var b = new Money(450, "GBP");
+var c = a with { Pence = 500 };
+Console.WriteLine(a == b);
+Console.WriteLine(c);
+Console.WriteLine(a.Add(c));
+
+var p1 = new Point(1, 2);
+var p2 = new Point(1, 2);
+Console.WriteLine(p1 == p2);
+
+record Money(long Pence, string Currency)
+{
+    public Money Add(Money other) =>
+        other.Currency == Currency ? this with { Pence = Pence + other.Pence } : throw new InvalidOperationException("Currencies differ");
+}
+
+class Point(int x, int y)
+{
+    public int X => x;
+    public int Y => y;
+}
+```
+
+It prints `True` (same values), `Money { Pence = 500, Currency = GBP }`, `Money { Pence = 950, Currency = GBP }`, and then `False` for the two `Point` objects: ordinary classes compare by **reference** (are they the same object?), records by **value**. `record Money(long Pence, string Currency)` is a **positional record**: one line declares the constructor and two read-only properties.
+
+## Enums
+
+An **enum** is a type with a fixed set of named values, safer than magic strings or numbers (<Ref to="m-anti-patterns" />):
+
+```csharp
+var status = OrderStatus.Paid;
+Console.WriteLine(status);
+Console.WriteLine(Next(status));
+Console.WriteLine(Enum.GetNames<OrderStatus>().Length);
+
+static OrderStatus Next(OrderStatus s) => s switch
+{
+    OrderStatus.Placed => OrderStatus.Paid,
+    OrderStatus.Paid => OrderStatus.Shipped,
+    OrderStatus.Shipped => OrderStatus.Delivered,
+    _ => s,
+};
+
+enum OrderStatus { Placed, Paid, Shipped, Delivered, Cancelled }
+```
+
+It prints `Paid`, `Shipped` and `5`.
+
+## Interfaces
+
+An **interface** declares what something can do, without saying how. Any class that **implements** it can be used where the interface is expected, which lets code depend on abilities rather than concrete classes, and makes testing with fakes easy (<Ref to="m-solid" />):
+
+```csharp
+INotifier[] notifiers = [new EmailNotifier(), new SmsNotifier()];
+foreach (var notifier in notifiers)
+{
+    Console.WriteLine(notifier.Send("Ama", "Your order is ready"));
+}
+
+var fake = new FakeNotifier();
+PlaceOrder(fake, "Kofi");
+Console.WriteLine($"Fake recorded: {fake.Sent.Count} message(s)");
+
+static void PlaceOrder(INotifier notifier, string customer) => notifier.Send(customer, "Order placed");
+
+interface INotifier
+{
+    string Send(string to, string message);
+}
+
+class EmailNotifier : INotifier
+{
+    public string Send(string to, string message) => $"email to {to}: {message}";
+}
+
+class SmsNotifier : INotifier
+{
+    public string Send(string to, string message) => $"SMS to {to}: {message}";
+}
+
+class FakeNotifier : INotifier
+{
+    public List<string> Sent { get; } = [];
+    public string Send(string to, string message)
+    {
+        Sent.Add($"{to}: {message}");
+        return "recorded";
+    }
+}
+```
+
+It prints the email and SMS lines, then `Fake recorded: 1 message(s)`. By convention, interface names start with `I`. A class can implement many interfaces.
+
+## Inheritance
+
+A class can **inherit** from one base class, reusing its members and **overriding** the ones marked `virtual` or `abstract`. An **abstract** class cannot be created directly and can leave methods for subclasses to fill in. A **sealed** class cannot be inherited from.
+
+```csharp
+Delivery[] deliveries = [new StandardDelivery(), new ExpressDelivery()];
+foreach (var d in deliveries)
+{
+    Console.WriteLine($"{d.Name}: £{d.Cost(2.5m)}");
+}
+
+abstract class Delivery
+{
+    public abstract string Name { get; }
+    protected abstract decimal BaseCharge { get; }
+    public virtual decimal Cost(decimal weightKg) => BaseCharge + Math.Max(0, Math.Ceiling(weightKg) - 2) * 1.00m;
+}
+
+sealed class StandardDelivery : Delivery
+{
+    public override string Name => "Standard";
+    protected override decimal BaseCharge => 3.50m;
+}
+
+sealed class ExpressDelivery : Delivery
+{
+    public override string Name => "Express";
+    protected override decimal BaseCharge => 6.00m;
+    public override decimal Cost(decimal weightKg) => base.Cost(weightKg) * 1.5m;
+}
+```
+
+It prints `Standard: £4.50` and `Express: £10.500`. Use inheritance sparingly, for true "is a" relationships; prefer interfaces and composition (<Ref to="m-design-principles" />), and mark classes `sealed` unless they are designed to be extended.
+
+## Nullable reference types
+
+In C#, a variable of a class type can hold **`null`**, meaning "no object". Using a member of `null` throws a `NullReferenceException`, one of the most common bugs in any language. Modern C# projects turn on **nullable reference types** (on by default in new projects and file-based apps): `string` means "never null", `string?` means "may be null", and the compiler warns wherever you might use a null value.
+
+```csharp
+string? middleName = null;
+string firstName = "Ama";
+
+Console.WriteLine(firstName.Length);
+Console.WriteLine(middleName?.Length);
+Console.WriteLine(middleName?.Length ?? 0);
+Console.WriteLine(Greeting(null));
+Console.WriteLine(Greeting("Esi"));
+
+static string Greeting(string? name)
+{
+    if (name is null) return "Hello, guest";
+    return $"Hello, {name}";
+}
+```
+
+It prints `3`, an empty line (because `middleName?.Length` is null when `middleName` is null), `0`, `Hello, guest` and `Hello, Esi`. The tools:
+
+- **`?.`** (null-conditional): use the member only if the value is not null, otherwise the result is null.
+- **`??`** (null-coalescing): use a fallback when the value is null.
+- **`is null`** checks: after the check, the compiler knows the value is not null.
+- **`!`** (null-forgiving) tells the compiler "trust me, this is not null". Use it rarely; it hides real bugs.
+
+Treat nullable warnings as errors in real projects (<Ref to="m-static-quality" />).
+
+## Static members
+
+Members marked **`static`** belong to the type itself, not to any object: `Math.Max`, `Console.WriteLine`, `DateTime.Now`. Use them for helpers that need no object state. Avoid static mutable state (a static list everyone changes), which is shared across the whole program and every web request (<Ref to="m-threads-locks" />).
+
+## Common mistakes
+
+- **Public setters for everything**, so any code can break an object's rules.
+- **Comparing class objects with `==`** expecting value equality; use records, or override equality.
+- **Ignoring nullable warnings**, or silencing them with `!`.
+- **Deep inheritance hierarchies** where an interface would do.
+- **Magic strings** for statuses instead of enums.
+- **Static mutable fields** shared across requests.
+
+## Practice
+
+**1. (warm-up)** Write a record `Customer(string Id, string Email)` and show that two customers with the same values are equal.
+
+<Solution>
+
+```csharp
+var a = new Customer("c-17", "ama@example.com");
+var b = new Customer("c-17", "ama@example.com");
+Console.WriteLine(a == b);
+Console.WriteLine(a);
+
+record Customer(string Id, string Email);
+```
+
+It prints **True** and `Customer { Id = c-17, Email = ama@example.com }`.
+
+</Solution>
+
+**2. (warm-up)** What is the difference between `{ get; }`, `{ get; init; }` and `{ get; private set; }`?
+
+<Solution>
+
+`{ get; }`: read-only, set only in the constructor. `{ get; init; }`: set in the constructor or an object initialiser, then read-only. `{ get; private set; }`: readable by anyone, changeable only by the class's own methods.
+
+</Solution>
+
+**3. (standard)** Write a `Basket` class that holds lines (product name, unit price in pence, quantity), refuses quantities below 1, and has a `TotalPence` property. Show it working and refusing a bad quantity.
+
+<Solution>
+
+```csharp
+var basket = new Basket();
+basket.Add("Rye loaf", 450, 2);
+basket.Add("Jam", 380, 1);
+Console.WriteLine(basket.TotalPence);
+try
+{
+    basket.Add("Croissant", 275, 0);
+}
+catch (ArgumentOutOfRangeException e)
+{
+    Console.WriteLine(e.ParamName);
+}
+
+class Basket
+{
+    private readonly List<(string Name, int UnitPence, int Quantity)> _lines = [];
+
+    public void Add(string name, int unitPence, int quantity)
+    {
+        if (quantity < 1) throw new ArgumentOutOfRangeException(nameof(quantity));
+        _lines.Add((name, unitPence, quantity));
+    }
+
+    public int TotalPence => _lines.Sum(l => l.UnitPence * l.Quantity);
+}
+```
+
+It prints **1280** and **quantity**. The lines are private, so the only way in is `Add`, which checks the rule.
+
+</Solution>
+
+**4. (standard)** Define an interface `IDiscount` with `int Apply(int pence)`, two implementations (10% off; £5 off orders over £50) and apply both to 6000 pence.
+
+<Solution>
+
+```csharp
+IDiscount[] discounts = [new PercentOff(10), new FiverOverFifty()];
+foreach (var d in discounts) Console.WriteLine(d.Apply(6000));
+
+interface IDiscount { int Apply(int pence); }
+
+class PercentOff(int percent) : IDiscount
+{
+    public int Apply(int pence) => pence - pence * percent / 100;
+}
+
+class FiverOverFifty : IDiscount
+{
+    public int Apply(int pence) => pence > 5000 ? pence - 500 : pence;
+}
+```
+
+It prints **5400** and **5500**.
+
+</Solution>
+
+**5. (stretch)** Write a method that takes a `string?` postcode and returns it trimmed and upper-cased, or `"UNKNOWN"` if it is null or blank, without any nullable warnings.
+
+<Solution>
+
+```csharp
+Console.WriteLine(Normalise(" ls1 4ap "));
+Console.WriteLine(Normalise(null));
+Console.WriteLine(Normalise("   "));
+
+static string Normalise(string? postcode) =>
+    string.IsNullOrWhiteSpace(postcode) ? "UNKNOWN" : postcode.Trim().ToUpperInvariant();
+```
+
+It prints **LS1 4AP**, **UNKNOWN** and **UNKNOWN**. `string.IsNullOrWhiteSpace` is annotated so the compiler knows `postcode` is not null in the other branch.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **class** bundles data (**properties**) and behaviour (**methods**); objects are made with `new`. Constructors set objects up; **access modifiers** and private setters enforce **encapsulation**.
+- **Primary constructors**, object initialisers, `required` and `init` make classes concise and hard to misuse.
+- **Records** give value equality, readable output and `with` copies: ideal for values, DTOs and messages.
+- **Enums** name a fixed set of values.
+- **Interfaces** declare abilities; classes implement them; code depends on interfaces and tests use fakes.
+- **Inheritance** with `abstract`, `virtual`, `override` and `sealed`; use it sparingly.
+- **Nullable reference types**: `string?` may be null; use `?.`, `??` and `is null`, and avoid `!`.
+
+## Go deeper
+
+- [Object-oriented programming (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/object-oriented/), Microsoft. Object-oriented programming in C#.
+- [Records (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/types/records), Microsoft. Value equality, positional records and `with`.
+- [Interfaces (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/types/interfaces), Microsoft. Declaring and implementing interfaces.
+- [Nullable reference types (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/nullable-references), Microsoft. How the compiler tracks nulls.

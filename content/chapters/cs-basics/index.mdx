@@ -1,0 +1,351 @@
+---
+title: "C# from zero: values, types and control flow"
+summary: "Variables, types, decisions, loops and methods, with the dotnet command line."
+prerequisites: [be-setup]
+estimated_minutes: 300
+status: resources-verified
+---
+
+By the end of this chapter you will write and run small C# programs: storing values in variables of the right type, doing arithmetic and building text, making decisions with `if` and `switch`, repeating work with loops, and organising code into methods. C# is a modern, statically typed language created by Microsoft, used for web back ends with ASP.NET Core, desktop and mobile apps, cloud services and games (Unity). No programming experience is assumed; you need the .NET 10 SDK from <Ref to="be-setup" />.
+
+## Running C#
+
+Since .NET 10, you can run a single C# file directly. Make a folder, create a file called `app.cs`, put this in it, and run `dotnet run app.cs` in the terminal:
+
+```csharp
+Console.WriteLine("Hello from C#!");
+Console.WriteLine(2 + 3);
+```
+
+It prints `Hello from C#!` and `5`. `Console.WriteLine` writes a line of text to the terminal. Each **statement** ends with a semicolon. The first run takes a few seconds while .NET compiles the file; later runs are faster. Every example in this chapter is a complete `app.cs` you can run the same way. In <Ref to="dotnet-projects-testing" /> you will move to full projects with several files.
+
+## Variables and types
+
+A **variable** is a named place that holds a value. In C#, every variable has a **type**, fixed when you declare it, which decides what values it can hold and what you can do with it. The compiler checks types before the program runs, which catches many mistakes early (<Ref to="m-types" />).
+
+```csharp
+int loavesBaked = 48;
+double averageWeightKg = 0.45;
+decimal pricePounds = 4.50m;
+bool ovenIsHot = true;
+char grade = 'A';
+string bakeryName = "Ama's Bakery";
+
+Console.WriteLine(loavesBaked);
+Console.WriteLine(averageWeightKg);
+Console.WriteLine(pricePounds);
+Console.WriteLine(ovenIsHot);
+Console.WriteLine(grade);
+Console.WriteLine(bakeryName);
+
+loavesBaked = loavesBaked + 12;
+Console.WriteLine(loavesBaked);
+```
+
+It prints `48`, `0.45`, `4.50`, `True`, `A`, `Ama's Bakery` and then `60`, because the last assignment changed the variable. The common built-in types:
+
+| Type | Holds | Example |
+|---|---|---|
+| `int` | whole numbers up to about ±2.1 billion | `48` |
+| `long` | larger whole numbers (up to about ±9.2 × 10¹⁸) | `7_000_000_000L` |
+| `double` | numbers with fractions, approximate | `0.45` |
+| `decimal` | exact decimal numbers, for money | `4.50m` |
+| `bool` | `true` or `false` | `true` |
+| `char` | one character | `'A'` |
+| `string` | text | `"Ama's Bakery"` |
+
+Use `decimal` (or whole numbers of pence in a `long`) for money, never `double`: floating-point numbers cannot represent most decimal fractions exactly (<Ref to="m-data-representation" />). The `m` suffix marks a `decimal` literal, and underscores in numbers (`7_000_000_000`) are only for readability.
+
+**`var`** lets the compiler work out the type from the value: `var loaves = 48;` is still an `int`, fixed for good; it just saves typing when the type is obvious. **`const`** declares a value that can never change: `const decimal DeliveryCharge = 3.50m;`.
+
+## Arithmetic and text
+
+```csharp
+int loaves = 17;
+int perBox = 5;
+Console.WriteLine(loaves / perBox);
+Console.WriteLine(loaves % perBox);
+Console.WriteLine(17.0 / 5);
+Console.WriteLine(0.1 + 0.2);
+Console.WriteLine(0.1m + 0.2m);
+
+decimal price = 4.50m;
+int quantity = 3;
+decimal total = price * quantity;
+string customer = "Kofi";
+Console.WriteLine($"{customer} owes £{total} for {quantity} loaves");
+Console.WriteLine($"Total with VAT: £{total * 1.2m:F2}");
+Console.WriteLine("Rye".ToUpper() + " " + "LOAF".ToLower() + " " + "sourdough".Length);
+```
+
+It prints `3` and `2` (dividing two whole numbers gives a whole number, and `%` gives the remainder), `3.4`, then `0.30000000000000004` for the doubles but exactly `0.3` for the decimals, then `Kofi owes £13.50 for 3 loaves`, `Total with VAT: £16.20` and `RYE loaf 9`. A string starting with `$` is an **interpolated string**: expressions inside `{ }` are inserted, and `:F2` formats to two decimal places. Strings have methods such as `ToUpper`, `ToLower`, `Trim`, `Contains`, `Replace` and `Split`, and a `Length` property.
+
+## Decisions
+
+An **`if`** statement runs code only when a condition is `true`. Conditions use comparisons (`==`, `!=`, `<`, `<=`, `>`, `>=`) and combine with `&&` (and), `||` (or) and `!` (not).
+
+```csharp
+decimal basket = 27.80m;
+bool isMember = true;
+
+if (basket >= 30m)
+{
+    Console.WriteLine("Free delivery");
+}
+else if (isMember && basket >= 20m)
+{
+    Console.WriteLine("Free delivery for members");
+}
+else
+{
+    Console.WriteLine($"Delivery £3.50 (spend £{30m - basket} more for free delivery)");
+}
+```
+
+It prints `Free delivery for members`. Change `isMember` to `false` and it prints `Delivery £3.50 (spend £2.20 more for free delivery)`.
+
+When choosing between many values, a **switch expression** is shorter and the compiler warns if you miss a case:
+
+```csharp
+string Size(int weightGrams) => weightGrams switch
+{
+    < 300 => "small",
+    < 700 => "medium",
+    _ => "large",
+};
+
+string DayType(DayOfWeek day) => day switch
+{
+    DayOfWeek.Saturday or DayOfWeek.Sunday => "weekend",
+    _ => "weekday",
+};
+
+Console.WriteLine(Size(250));
+Console.WriteLine(Size(400));
+Console.WriteLine(Size(800));
+Console.WriteLine(DayType(DayOfWeek.Sunday));
+```
+
+It prints `small`, `medium`, `large` and `weekend`. Each line is a **pattern** and its result; `_` matches anything left. (The `=>` arrow here defines a short method; methods are explained below.)
+
+## Loops
+
+Loops repeat work. A **`for`** loop counts; a **`foreach`** loop visits each item of a collection; a **`while`** loop repeats while a condition holds.
+
+```csharp
+for (int day = 1; day <= 3; day++)
+{
+    Console.WriteLine($"Day {day}: bake");
+}
+
+string[] breads = ["rye", "sourdough", "baguette"];
+foreach (string bread in breads)
+{
+    Console.WriteLine($"{bread} has {bread.Length} letters");
+}
+
+int dough = 1000;
+int loaves = 0;
+while (dough >= 450)
+{
+    dough -= 450;
+    loaves++;
+}
+Console.WriteLine($"{loaves} loaves, {dough} g of dough left");
+```
+
+It prints three `Day` lines, then `rye has 3 letters`, `sourdough has 9 letters`, `baguette has 8 letters`, and finally `2 loaves, 100 g of dough left`. `day++` adds one; `dough -= 450` is short for `dough = dough - 450`. `string[]` is an **array** of strings, written with a **collection expression** in square brackets; <Ref to="cs-collections-linq" /> covers collections properly. Inside any loop, `break` leaves the loop and `continue` skips to the next round.
+
+## Methods
+
+A **method** is a named, reusable block of code that takes **parameters** and can **return** a value. Methods keep programs readable: each does one thing with a clear name (<Ref to="m-clean-code" />).
+
+```csharp
+Console.WriteLine(LineTotal(4.50m, 3));
+Console.WriteLine(LineTotal(2.75m, 2, discountPercent: 10));
+Console.WriteLine(DeliveryCharge(27.80m));
+Console.WriteLine(DeliveryCharge(35m));
+PrintReceipt("Esi", 16.15m);
+
+static decimal LineTotal(decimal unitPrice, int quantity, int discountPercent = 0)
+{
+    decimal total = unitPrice * quantity;
+    return total - total * discountPercent / 100;
+}
+
+static decimal DeliveryCharge(decimal basket) => basket >= 30m ? 0m : 3.50m;
+
+static void PrintReceipt(string name, decimal amount)
+{
+    Console.WriteLine($"Receipt for {name}: £{amount:F2}");
+}
+```
+
+It prints `13.50`, `4.95`, `3.50`, `0` and `Receipt for Esi: £16.15`. Things to notice:
+
+- Each parameter has a type, and the method declares its **return type** (`decimal`), or `void` if it returns nothing.
+- `int discountPercent = 0` is an **optional parameter** with a default; callers can name arguments (`discountPercent: 10`) for clarity.
+- `=>` defines a method whose body is a single expression, and `condition ? a : b` (the **conditional operator**) chooses between two values.
+- In a file of top-level statements, the methods go after the code that uses them; `static` means they do not need an object (objects are in <Ref to="cs-objects" />).
+
+## Reading input
+
+Programs often need input. `Console.ReadLine()` reads a line the user types; converting text to a number needs parsing, which can fail if the text is not a number, so `int.TryParse` reports success instead of crashing:
+
+```csharp
+Console.Write("How many loaves? ");
+string? text = Console.ReadLine();
+if (int.TryParse(text, out int loaves) && loaves > 0)
+{
+    Console.WriteLine($"That will be £{loaves * 4.50m}");
+}
+else
+{
+    Console.WriteLine($"'{text}' is not a sensible number of loaves");
+}
+```
+
+Typing `4` prints `That will be £18.00`; typing `four` prints `'four' is not a sensible number of loaves`. `string?` means the value may be `null` (no text at all, if input has ended); C# tracks this to prevent null errors, as <Ref to="cs-objects" /> explains.
+
+## Common mistakes
+
+- **Forgetting the semicolon** or a closing brace; read the compiler's first error message, which gives the line and column.
+- **`double` for money**, giving answers such as `0.30000000000000004`.
+- **Whole-number division**: `17 / 5` is `3`; write `17.0 / 5` or convert first.
+- **`=` instead of `==`** in a condition (assignment versus comparison); C# usually refuses to compile it, which helps.
+- **Parsing input with `int.Parse`**, which throws an exception on bad input; use `TryParse`.
+- **Long methods that do everything**; split them into small, well-named ones.
+
+## Practice
+
+**1. (warm-up)** Declare variables for a product's name, price and whether it is vegan, then print them in one sentence.
+
+<Solution>
+
+```csharp
+string name = "Rye loaf";
+decimal price = 4.50m;
+bool vegan = true;
+Console.WriteLine($"{name} costs £{price} and is {(vegan ? "vegan" : "not vegan")}");
+```
+
+It prints **Rye loaf costs £4.50 and is vegan**. The conditional expression is wrapped in brackets inside the interpolation hole.
+
+</Solution>
+
+**2. (warm-up)** What does each line print? `Console.WriteLine(7 / 2);` `Console.WriteLine(7 % 2);` `Console.WriteLine(7 / 2.0);`
+
+<Solution>
+
+```csharp
+Console.WriteLine(7 / 2);
+Console.WriteLine(7 % 2);
+Console.WriteLine(7 / 2.0);
+```
+
+It prints **3**, **1** and **3.5**: whole-number division drops the fraction, `%` is the remainder, and one fractional operand makes the division fractional.
+
+</Solution>
+
+**3. (standard)** Write a method `BoxesNeeded(int loaves, int perBox)` that returns how many boxes are needed (a part-full box still counts), and print it for 17 loaves with 5 per box and for 20 loaves.
+
+<Solution>
+
+```csharp
+Console.WriteLine(BoxesNeeded(17, 5));
+Console.WriteLine(BoxesNeeded(20, 5));
+
+static int BoxesNeeded(int loaves, int perBox) => (loaves + perBox - 1) / perBox;
+```
+
+It prints **4** and **4**. Adding `perBox - 1` before dividing rounds up without using fractions; `(int)Math.Ceiling(loaves / (double)perBox)` also works.
+
+</Solution>
+
+**4. (standard)** Print the numbers 1 to 15, but print `Bake` for multiples of 3, `Sell` for multiples of 5 and `BakeSell` for multiples of both.
+
+<Solution>
+
+```csharp
+for (int i = 1; i <= 15; i++)
+{
+    string word = (i % 3, i % 5) switch
+    {
+        (0, 0) => "BakeSell",
+        (0, _) => "Bake",
+        (_, 0) => "Sell",
+        _ => i.ToString(),
+    };
+    Console.Write(word + (i < 15 ? " " : "\n"));
+}
+```
+
+It prints **1 2 Bake 4 Sell Bake 7 8 Bake Sell 11 Bake 13 14 BakeSell**. Switching on a pair of values (a **tuple**) checks both conditions at once; `Console.Write` writes without starting a new line.
+
+</Solution>
+
+**5. (standard)** Write a method that returns the total of an array of prices, ignoring any negative values, and test it.
+
+<Solution>
+
+```csharp
+decimal[] prices = [4.50m, 2.75m, -1.00m, 3.20m];
+Console.WriteLine(SumValid(prices));
+
+static decimal SumValid(decimal[] values)
+{
+    decimal total = 0m;
+    foreach (decimal value in values)
+    {
+        if (value < 0) continue;
+        total += value;
+    }
+    return total;
+}
+```
+
+It prints **10.45**. `continue` skips the negative value.
+
+</Solution>
+
+**6. (stretch)** Write a program that asks for a basket total, reads it with `decimal.TryParse`, and prints the delivery charge (free from £30, else £3.50) or an error for bad input.
+
+<Solution>
+
+```csharp
+Console.Write("Basket total: ");
+string? input = Console.ReadLine();
+if (decimal.TryParse(input, out decimal basket) && basket >= 0)
+{
+    decimal delivery = basket >= 30m ? 0m : 3.50m;
+    Console.WriteLine($"Delivery: £{delivery:F2}, total £{basket + delivery:F2}");
+}
+else
+{
+    Console.WriteLine("Please enter a number such as 24.50");
+}
+```
+
+With the input `24.5` it prints **Delivery: £3.50, total £28.00**. Note that `decimal.TryParse` uses the computer's regional settings for the decimal separator; servers usually pass `CultureInfo.InvariantCulture` to make parsing predictable.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Run a C# file with `dotnet run app.cs`; statements end with `;`.
+- Every **variable** has a **type**: `int`, `long`, `double`, `decimal` (money), `bool`, `char`, `string`. `var` infers it; `const` fixes a value.
+- Whole-number division truncates; `%` is the remainder; doubles are approximate.
+- **Interpolated strings** (`$"...{value:F2}..."`) build text.
+- **`if`/`else`** and **switch expressions** with patterns make decisions.
+- **`for`**, **`foreach`** and **`while`** loops repeat work; `break` and `continue` control them.
+- **Methods** take typed parameters (optional and named ones too) and return a typed value, or `void`.
+- Read input with `Console.ReadLine` and parse it safely with `TryParse`.
+
+## Go deeper
+
+- [C# documentation: tour of C#](https://learn.microsoft.com/en-us/dotnet/csharp/tour-of-csharp/), Microsoft. The official overview of the language.
+- [Run C# files directly (file-based apps)](https://learn.microsoft.com/en-us/dotnet/core/sdk/file-based-apps), Microsoft. How `dotnet run app.cs` works.
+- [Built-in types (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/built-in-types), Microsoft. Every built-in type and its range.
+- [Pattern matching (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/functional/pattern-matching), Microsoft. Switch expressions and patterns.

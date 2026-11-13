@@ -1,0 +1,355 @@
+---
+title: "C#: collections, generics and LINQ"
+summary: "Lists, dictionaries and sets, generic types and methods, lambdas, and querying data with LINQ."
+prerequisites: [cs-objects]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will store groups of values in the right C# collection (list, dictionary, set or array), write your own generic types and methods, pass behaviour around with lambdas, and filter, transform, group and summarise data with **LINQ**, the query tool C# developers use every day. Back-end code is mostly about moving collections of data around: orders, customers, products, rows from a database. <Ref to="data-structures" /> explains how these structures work inside and what each operation costs.
+
+## Lists
+
+A **`List<T>`** is a growable, ordered collection. The `T` in angle brackets is the type of item it holds: `List<string>`, `List<Order>`.
+
+```csharp
+List<string> breads = ["Sourdough", "Rye", "Baguette"];
+breads.Add("Focaccia");
+breads.Insert(0, "Brioche");
+breads.Remove("Rye");
+
+Console.WriteLine(breads.Count);
+Console.WriteLine(breads[0]);
+Console.WriteLine(string.Join(", ", breads));
+Console.WriteLine(breads.Contains("Rye"));
+Console.WriteLine(breads.IndexOf("Baguette"));
+
+breads.Sort();
+Console.WriteLine(string.Join(", ", breads));
+```
+
+It prints `4`, `Brioche`, `Brioche, Sourdough, Baguette, Focaccia`, `False`, `2` and then the sorted `Baguette, Brioche, Focaccia, Sourdough`. Indexes start at 0. Reading `breads[10]` throws `ArgumentOutOfRangeException`.
+
+The square brackets `[...]` are a **collection expression** (C# 12 and later), the modern way to create lists and arrays. **Arrays** (`string[]`, `int[]`) have a fixed length; use them when the size never changes, and lists otherwise.
+
+## Dictionaries
+
+A **`Dictionary<TKey, TValue>`** maps keys to values, with very fast lookup by key (a hash table, <Ref to="data-structures" />):
+
+```csharp
+var stock = new Dictionary<string, int>
+{
+    ["RYE-400"] = 12,
+    ["SOUR-800"] = 3,
+};
+
+stock["BAG-250"] = 20;
+stock["RYE-400"] -= 2;
+
+Console.WriteLine(stock["RYE-400"]);
+Console.WriteLine(stock.ContainsKey("CRO-90"));
+
+if (stock.TryGetValue("SOUR-800", out var count))
+{
+    Console.WriteLine($"Sourdough: {count}");
+}
+
+Console.WriteLine(stock.GetValueOrDefault("CRO-90", 0));
+
+foreach (var (sku, qty) in stock)
+{
+    Console.WriteLine($"{sku} = {qty}");
+}
+```
+
+It prints `10`, `False`, `Sourdough: 3`, `0`, then each entry. Reading a missing key with `stock["CRO-90"]` throws `KeyNotFoundException`; use `TryGetValue` or `GetValueOrDefault` when the key may be missing. Do not rely on the order a dictionary returns its entries.
+
+## Sets
+
+A **`HashSet<T>`** holds unique values, with fast "is this in the set?" checks:
+
+```csharp
+var allergens = new HashSet<string> { "gluten", "sesame" };
+Console.WriteLine(allergens.Add("gluten"));
+Console.WriteLine(allergens.Add("milk"));
+Console.WriteLine(allergens.Count);
+
+var customerAvoids = new HashSet<string> { "milk", "nuts" };
+allergens.IntersectWith(customerAvoids);
+Console.WriteLine(string.Join(", ", allergens));
+```
+
+It prints `False` (already there), `True`, `3`, then `milk`: the allergens this product contains that the customer avoids.
+
+## Which collection?
+
+| Need | Use |
+|---|---|
+| An ordered list that grows | `List<T>` |
+| A fixed number of items | `T[]` (array) |
+| Look up by a key | `Dictionary<TKey, TValue>` |
+| Unique values, fast "contains" | `HashSet<T>` |
+| First in, first out | `Queue<T>` |
+| Last in, first out | `Stack<T>` |
+| Shared between threads | `ConcurrentDictionary<TKey, TValue>` and friends |
+
+A common performance bug is calling `list.Contains` inside a loop over another big list, which is slow (it checks every item each time); put one list in a `HashSet` first (<Ref to="m-complexity" />).
+
+## Generics
+
+**Generics** let one class or method work with any type while staying type-safe. `List<T>` is generic; you can write your own:
+
+```csharp
+var latest = new RecentItems<string>(3);
+foreach (var page in new[] { "/menu", "/basket", "/checkout", "/pay" }) latest.Add(page);
+Console.WriteLine(string.Join(" ", latest.Items));
+
+var nums = new RecentItems<int>(2);
+nums.Add(1); nums.Add(2); nums.Add(3);
+Console.WriteLine(string.Join(" ", nums.Items));
+
+Console.WriteLine(Largest([4, 9, 2]));
+Console.WriteLine(Largest(["pear", "apple", "fig"]));
+
+static T Largest<T>(IEnumerable<T> items) where T : IComparable<T>
+{
+    T best = items.First();
+    foreach (var item in items)
+    {
+        if (item.CompareTo(best) > 0) best = item;
+    }
+    return best;
+}
+
+class RecentItems<T>(int capacity)
+{
+    private readonly Queue<T> _items = new();
+    public IReadOnlyCollection<T> Items => _items;
+
+    public void Add(T item)
+    {
+        _items.Enqueue(item);
+        if (_items.Count > capacity) _items.Dequeue();
+    }
+}
+```
+
+It prints `/basket /checkout /pay`, `2 3`, `9` and `pear`. The **constraint** `where T : IComparable<T>` says `Largest` only works with types that can be compared, so `item.CompareTo` is allowed. Returning `IReadOnlyCollection<T>` lets callers read the items but not change them.
+
+## Lambdas and delegates
+
+A **lambda** is a small unnamed function written inline: `x => x * 2`. Lambdas can be stored in variables of **delegate** types such as `Func<T, TResult>` (takes arguments, returns a value) and `Action<T>` (returns nothing):
+
+```csharp
+Func<int, int> addVat = pence => pence * 120 / 100;
+Func<string, bool> isLong = s => s.Length > 5;
+Action<string> shout = message => Console.WriteLine(message.ToUpperInvariant());
+
+Console.WriteLine(addVat(450));
+Console.WriteLine(isLong("Rye"));
+shout("fresh bread");
+
+int ApplyTwice(Func<int, int> f, int x) => f(f(x));
+Console.WriteLine(ApplyTwice(addVat, 1000));
+```
+
+It prints `540`, `False`, `FRESH BREAD` and `1440`. Passing functions as values is what makes LINQ possible.
+
+## LINQ
+
+**LINQ** (Language Integrated Query) is a set of methods for querying any collection: filter with `Where`, transform with `Select`, sort with `OrderBy`, summarise with `Count`, `Sum`, `Average`, `Min` and `Max`, and group with `GroupBy`. The same style queries databases through Entity Framework Core, covered in the data part of this course.
+
+```csharp
+List<Order> orders =
+[
+    new("o-1", "Ama", "Leeds", 1250, OrderStatus.Delivered),
+    new("o-2", "Kofi", "York", 450, OrderStatus.Paid),
+    new("o-3", "Ama", "Leeds", 3100, OrderStatus.Delivered),
+    new("o-4", "Esi", "Leeds", 980, OrderStatus.Cancelled),
+    new("o-5", "Kofi", "York", 2200, OrderStatus.Delivered),
+];
+
+var bigDelivered = orders
+    .Where(o => o.Status == OrderStatus.Delivered && o.TotalPence >= 2000)
+    .OrderByDescending(o => o.TotalPence)
+    .Select(o => $"{o.Id} {o.Customer} {o.TotalPence}p");
+Console.WriteLine(string.Join(" | ", bigDelivered));
+
+Console.WriteLine(orders.Count(o => o.Status != OrderStatus.Cancelled));
+Console.WriteLine(orders.Where(o => o.Status != OrderStatus.Cancelled).Sum(o => o.TotalPence));
+Console.WriteLine(orders.Any(o => o.Customer == "Esi"));
+Console.WriteLine(orders.All(o => o.TotalPence > 0));
+Console.WriteLine(orders.FirstOrDefault(o => o.Customer == "Yaw")?.Id ?? "none");
+
+var byCity = orders
+    .Where(o => o.Status != OrderStatus.Cancelled)
+    .GroupBy(o => o.City)
+    .Select(g => new { City = g.Key, Orders = g.Count(), Revenue = g.Sum(o => o.TotalPence) })
+    .OrderBy(x => x.City);
+foreach (var row in byCity) Console.WriteLine($"{row.City}: {row.Orders} orders, {row.Revenue}p");
+
+var lookup = orders.ToDictionary(o => o.Id);
+Console.WriteLine(lookup["o-3"].Customer);
+
+record Order(string Id, string Customer, string City, int TotalPence, OrderStatus Status);
+enum OrderStatus { Paid, Delivered, Cancelled }
+```
+
+It prints:
+
+```text
+o-3 Ama 3100p | o-5 Kofi 2200p
+4
+7000
+True
+True
+none
+Leeds: 2 orders, 4350p
+York: 2 orders, 2650p
+Ama
+```
+
+The `new { City = ..., Orders = ... }` creates an **anonymous type**, handy for intermediate results inside a method. Other useful methods: `Take` and `Skip` (paging), `Distinct`, `SelectMany` (flatten lists of lists), `ToList`, `ToArray`, `MaxBy` and `MinBy`, `Chunk`, and `Zip`.
+
+### Deferred execution
+
+Most LINQ methods do not run immediately: they build a recipe that runs when you **enumerate** it (with `foreach`, `ToList`, `Count` and so on). That means a query runs again each time you enumerate it, and sees later changes to the source:
+
+```csharp
+List<int> numbers = [1, 2, 3];
+var evens = numbers.Where(n => n % 2 == 0);
+numbers.Add(4);
+Console.WriteLine(string.Join(",", evens));
+
+var snapshot = numbers.Where(n => n % 2 == 0).ToList();
+numbers.Add(6);
+Console.WriteLine(string.Join(",", snapshot));
+Console.WriteLine(string.Join(",", evens));
+```
+
+It prints `2,4`, then `2,4` for the snapshot, then `2,4,6`, because `evens` ran again. Call `ToList()` when you want the results fixed, or to avoid running an expensive query several times.
+
+### Query syntax
+
+LINQ also has a SQL-like **query syntax**, which compiles to the same methods. Most teams use the method syntax above; you will see both:
+
+```csharp
+int[] prices = [450, 380, 1200, 275];
+var cheap = from p in prices
+            where p < 500
+            orderby p
+            select p;
+Console.WriteLine(string.Join(", ", cheap));
+```
+
+It prints `275, 380, 450`.
+
+## Common mistakes
+
+- **Using `list.Contains` in a loop** over a large list instead of a `HashSet`.
+- **Reading a dictionary key that may be missing** with `[]` instead of `TryGetValue`.
+- **Enumerating the same expensive query several times**; call `ToList()` once.
+- **Changing a list while looping over it** with `foreach`, which throws `InvalidOperationException`.
+- **Using `First` where nothing may match**; it throws, so use `FirstOrDefault` and handle null.
+- **Returning a mutable `List<T>`** from a class when callers should only read; return `IReadOnlyList<T>`.
+
+## Practice
+
+**1. (warm-up)** Count how many times each word appears in `"rye sourdough rye bagel rye bagel"` using a dictionary.
+
+<Solution>
+
+```csharp
+var counts = new Dictionary<string, int>();
+foreach (var word in "rye sourdough rye bagel rye bagel".Split(' '))
+{
+    counts[word] = counts.GetValueOrDefault(word) + 1;
+}
+foreach (var (word, n) in counts) Console.WriteLine($"{word}: {n}");
+```
+
+It prints **rye: 3**, **sourdough: 1** and **bagel: 2**. With LINQ, `words.GroupBy(w => w).ToDictionary(g => g.Key, g => g.Count())` does the same.
+
+</Solution>
+
+**2. (warm-up)** Given `int[] scores = [72, 95, 58, 88, 64]`, use LINQ to print the average, the highest, and the scores of 70 or more in order.
+
+<Solution>
+
+```csharp
+int[] scores = [72, 95, 58, 88, 64];
+Console.WriteLine(scores.Average());
+Console.WriteLine(scores.Max());
+Console.WriteLine(string.Join(", ", scores.Where(s => s >= 70).Order()));
+```
+
+It prints **75.4**, **95** and **72, 88, 95**.
+
+</Solution>
+
+**3. (standard)** Given a list of `(string Customer, int Pence)` sales, print each customer's total spending, highest first.
+
+<Solution>
+
+```csharp
+List<(string Customer, int Pence)> sales = [("Ama", 450), ("Kofi", 1200), ("Ama", 900), ("Esi", 300), ("Kofi", 100)];
+var totals = sales
+    .GroupBy(s => s.Customer)
+    .Select(g => (Customer: g.Key, Total: g.Sum(s => s.Pence)))
+    .OrderByDescending(t => t.Total);
+foreach (var (customer, total) in totals) Console.WriteLine($"{customer}: {total}");
+```
+
+It prints **Ama: 1350**, **Kofi: 1300** and **Esi: 300**.
+
+</Solution>
+
+**4. (standard)** Write a generic method `Page<T>(IEnumerable<T> items, int page, int size)` that returns page `page` (starting at 1) of the items. Show page 2 of the numbers 1 to 10 with a size of 3.
+
+<Solution>
+
+```csharp
+Console.WriteLine(string.Join(",", Page(Enumerable.Range(1, 10), 2, 3)));
+
+static List<T> Page<T>(IEnumerable<T> items, int page, int size) =>
+    items.Skip((page - 1) * size).Take(size).ToList();
+```
+
+It prints **4,5,6**. A real API also limits `size` and refuses `page < 1` (<Ref to="m-api-design" />).
+
+</Solution>
+
+**5. (stretch)** You have 50,000 order ids and 200,000 payment ids, both as lists of strings. Write code that finds the orders with no payment, and say why your version is fast.
+
+<Solution>
+
+```csharp
+List<string> orderIds = Enumerable.Range(1, 50_000).Select(i => $"o-{i}").ToList();
+List<string> paymentOrderIds = Enumerable.Range(1, 200_000).Where(i => i % 7 != 0).Select(i => $"o-{i}").ToList();
+
+var paid = new HashSet<string>(paymentOrderIds);
+var unpaid = orderIds.Where(id => !paid.Contains(id)).ToList();
+Console.WriteLine(unpaid.Count);
+Console.WriteLine(unpaid[0]);
+```
+
+It prints **7142** and **o-7**. Building the set takes one pass over the payments, then each lookup is roughly constant time, so the work grows with the sum of the sizes. Using `paymentOrderIds.Contains` inside the loop would compare up to 200,000 strings for each of 50,000 orders. `orderIds.Except(paymentOrderIds)` also uses a set internally.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **`List<T>`** for ordered, growable data; **arrays** for fixed sizes; **`Dictionary<TKey, TValue>`** for lookup by key (use `TryGetValue`); **`HashSet<T>`** for unique values and fast membership checks.
+- **Generics** make types and methods work with any type, safely; **constraints** (`where T : ...`) limit which types.
+- **Lambdas** are inline functions, stored as `Func` and `Action` delegates.
+- **LINQ**: `Where`, `Select`, `OrderBy`, `GroupBy`, `Sum`, `Count`, `Any`, `FirstOrDefault`, `ToDictionary` and friends.
+- LINQ queries are **deferred**: they run when enumerated; call `ToList()` to fix the results.
+
+## Go deeper
+
+- [Collections (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/builtin-types/collections), Microsoft. The collection types and when to use each.
+- [Generic classes and methods](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/types/generics), Microsoft. Writing your own generics.
+- [Lambda expressions](https://learn.microsoft.com/en-us/dotnet/csharp/language-reference/operators/lambda-expressions), Microsoft. Lambdas, `Func` and `Action`.
+- [Language Integrated Query (LINQ)](https://learn.microsoft.com/en-us/dotnet/csharp/linq/), Microsoft. LINQ from the basics to grouping and joins.

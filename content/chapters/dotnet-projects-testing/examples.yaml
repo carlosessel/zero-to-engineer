@@ -1,0 +1,317 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  output_contains:
+  - Hello, World!
+- block: 2
+  lang: xml
+  check: shell
+  script: |
+    mkdir w2 && cd w2
+    TOP=$PWD
+    mkdir w2 && cd w2
+    dotnet new console --name Hello --output Hello >/dev/null
+    grep -o '<OutputType>Exe</OutputType>' Hello/Hello.csproj
+    grep -o '<Nullable>enable</Nullable>' Hello/Hello.csproj
+  output_contains:
+  - <OutputType>Exe</OutputType>
+  - <Nullable>enable</Nullable>
+- block: 3
+  lang: text
+  check: illustration
+  note: A folder layout; block 4 creates it.
+- block: 4
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    mkdir w4 && cd w4
+    TOP=$PWD
+    bash -e "$BLOCK"
+    ls Bakery/src Bakery/tests
+  output_contains:
+  - Bakery.Core
+  - Bakery.Core.Tests
+- block: 5
+  lang: csharp
+  check: illustration
+  note: A library file; block 7's check builds and tests it.
+- block: 6
+  lang: csharp
+  check: illustration
+  note: A test file; block 7's check runs it.
+- block: 7
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    mkdir w7 && cd w7
+    TOP=$PWD
+    mkdir Bakery && cd Bakery
+    dotnet new sln --name Bakery
+    dotnet new classlib --name Bakery.Core --output src/Bakery.Core
+    dotnet new xunit --name Bakery.Core.Tests --output tests/Bakery.Core.Tests
+    dotnet sln add src/Bakery.Core tests/Bakery.Core.Tests
+    dotnet add tests/Bakery.Core.Tests reference src/Bakery.Core
+    rm src/Bakery.Core/Class1.cs tests/Bakery.Core.Tests/UnitTest1.cs
+    cat > src/Bakery.Core/PriceCalculator.cs <<'CS_EOF'
+    namespace Bakery.Core;
+
+    public record BasketLine(string Sku, int UnitPence, int Quantity);
+
+    public class PriceCalculator
+    {
+        public const int FreeDeliveryFromPence = 3000;
+        public const int DeliveryPence = 350;
+
+        public int Subtotal(IEnumerable<BasketLine> lines) => lines.Sum(l => l.UnitPence * l.Quantity);
+
+        public int Total(IReadOnlyCollection<BasketLine> lines)
+        {
+            if (lines.Count == 0) throw new ArgumentException("A basket needs at least one line", nameof(lines));
+            var subtotal = Subtotal(lines);
+            return subtotal >= FreeDeliveryFromPence ? subtotal : subtotal + DeliveryPence;
+        }
+    }
+    CS_EOF
+    cat > tests/Bakery.Core.Tests/PriceCalculatorTests.cs <<'CS_EOF'
+    using Bakery.Core;
+
+    namespace Bakery.Core.Tests;
+
+    public class PriceCalculatorTests
+    {
+        private readonly PriceCalculator _calculator = new();
+
+        [Fact]
+        public void Adds_delivery_below_the_free_delivery_threshold()
+        {
+            BasketLine[] lines = [new("RYE-400", 450, 2)];
+
+            var total = _calculator.Total(lines);
+
+            Assert.Equal(900 + 350, total);
+        }
+
+        [Theory]
+        [InlineData(2999, 3349)]
+        [InlineData(3000, 3000)]
+        [InlineData(4500, 4500)]
+        public void Delivery_is_free_from_thirty_pounds(int subtotal, int expected)
+        {
+            BasketLine[] lines = [new("CAKE", subtotal, 1)];
+
+            Assert.Equal(expected, _calculator.Total(lines));
+        }
+
+        [Fact]
+        public void Refuses_an_empty_basket()
+        {
+            var error = Assert.Throws<ArgumentException>(() => _calculator.Total([]));
+            Assert.Equal("lines", error.ParamName);
+        }
+    }
+    CS_EOF
+    bash -e "$BLOCK"
+  output_contains:
+  - Passed!
+  - 'Passed:     5'
+- block: 8
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    mkdir w8 && cd w8
+    TOP=$PWD
+    mkdir Bakery && cd Bakery
+    dotnet new sln --name Bakery
+    dotnet new classlib --name Bakery.Core --output src/Bakery.Core
+    dotnet new xunit --name Bakery.Core.Tests --output tests/Bakery.Core.Tests
+    dotnet sln add src/Bakery.Core tests/Bakery.Core.Tests
+    dotnet add tests/Bakery.Core.Tests reference src/Bakery.Core
+    rm src/Bakery.Core/Class1.cs tests/Bakery.Core.Tests/UnitTest1.cs
+    bash -e "$BLOCK" >/dev/null
+    grep -o 'PackageReference Include="Humanizer"' src/Bakery.Core/Bakery.Core.csproj
+  output_contains:
+  - PackageReference Include="Humanizer"
+- block: 9
+  lang: xml
+  check: illustration
+  note: A settings file; each property is documented in the MSBuild reference.
+- block: 10
+  lang: csharp
+  check: shell
+  needs: network
+  script: |
+    mkdir w10 && cd w10
+    TOP=$PWD
+    mkdir Bakery && cd Bakery
+    dotnet new sln --name Bakery
+    dotnet new classlib --name Bakery.Core --output src/Bakery.Core
+    dotnet new xunit --name Bakery.Core.Tests --output tests/Bakery.Core.Tests
+    dotnet sln add src/Bakery.Core tests/Bakery.Core.Tests
+    dotnet add tests/Bakery.Core.Tests reference src/Bakery.Core
+    rm src/Bakery.Core/Class1.cs tests/Bakery.Core.Tests/UnitTest1.cs
+    cat > src/Bakery.Core/PriceCalculator.cs <<'CS_EOF'
+    namespace Bakery.Core;
+
+    public record BasketLine(string Sku, int UnitPence, int Quantity);
+
+    public class PriceCalculator
+    {
+        public const int FreeDeliveryFromPence = 3000;
+        public const int DeliveryPence = 350;
+
+        public int Subtotal(IEnumerable<BasketLine> lines) => lines.Sum(l => l.UnitPence * l.Quantity);
+
+        public int Total(IReadOnlyCollection<BasketLine> lines)
+        {
+            if (lines.Count == 0) throw new ArgumentException("A basket needs at least one line", nameof(lines));
+            var subtotal = Subtotal(lines);
+            return subtotal >= FreeDeliveryFromPence ? subtotal : subtotal + DeliveryPence;
+        }
+    }
+    CS_EOF
+    cat > tests/Bakery.Core.Tests/PriceCalculatorTests.cs <<'CS_EOF'
+    using Bakery.Core;
+
+    namespace Bakery.Core.Tests;
+
+    public class PriceCalculatorTests
+    {
+        private readonly PriceCalculator _calculator = new();
+
+        [Fact]
+        public void Adds_delivery_below_the_free_delivery_threshold()
+        {
+            BasketLine[] lines = [new("RYE-400", 450, 2)];
+
+            var total = _calculator.Total(lines);
+
+            Assert.Equal(900 + 350, total);
+        }
+
+        [Theory]
+        [InlineData(2999, 3349)]
+        [InlineData(3000, 3000)]
+        [InlineData(4500, 4500)]
+        public void Delivery_is_free_from_thirty_pounds(int subtotal, int expected)
+        {
+            BasketLine[] lines = [new("CAKE", subtotal, 1)];
+
+            Assert.Equal(expected, _calculator.Total(lines));
+        }
+
+        [Fact]
+        public void Refuses_an_empty_basket()
+        {
+            var error = Assert.Throws<ArgumentException>(() => _calculator.Total([]));
+            Assert.Equal("lines", error.ParamName);
+        }
+    }
+    CS_EOF
+    cp "$BLOCK" tests/Bakery.Core.Tests/SubtotalTests.cs
+    dotnet test
+  output_contains:
+  - 'Passed:     7'
+- block: 11
+  lang: csharp
+  check: shell
+  needs: network
+  script: |
+    mkdir w11 && cd w11
+    TOP=$PWD
+    cat > new.cs <<'CS_EOF'
+        public int Subtotal(IEnumerable<BasketLine> lines) => lines.Sum(LineTotal);
+
+        private static int LineTotal(BasketLine line)
+        {
+            var full = line.UnitPence * line.Quantity;
+            return line.Quantity >= 10 ? full - full / 10 : full;
+        }
+    CS_EOF
+    mkdir Bakery && cd Bakery
+    dotnet new sln --name Bakery
+    dotnet new classlib --name Bakery.Core --output src/Bakery.Core
+    dotnet new xunit --name Bakery.Core.Tests --output tests/Bakery.Core.Tests
+    dotnet sln add src/Bakery.Core tests/Bakery.Core.Tests
+    dotnet add tests/Bakery.Core.Tests reference src/Bakery.Core
+    rm src/Bakery.Core/Class1.cs tests/Bakery.Core.Tests/UnitTest1.cs
+    cat > src/Bakery.Core/PriceCalculator.cs <<'CS_EOF'
+    namespace Bakery.Core;
+
+    public record BasketLine(string Sku, int UnitPence, int Quantity);
+
+    public class PriceCalculator
+    {
+        public const int FreeDeliveryFromPence = 3000;
+        public const int DeliveryPence = 350;
+
+        public int Subtotal(IEnumerable<BasketLine> lines) => lines.Sum(l => l.UnitPence * l.Quantity);
+
+        public int Total(IReadOnlyCollection<BasketLine> lines)
+        {
+            if (lines.Count == 0) throw new ArgumentException("A basket needs at least one line", nameof(lines));
+            var subtotal = Subtotal(lines);
+            return subtotal >= FreeDeliveryFromPence ? subtotal : subtotal + DeliveryPence;
+        }
+    }
+    CS_EOF
+    cat > tests/Bakery.Core.Tests/PriceCalculatorTests.cs <<'CS_EOF'
+    using Bakery.Core;
+
+    namespace Bakery.Core.Tests;
+
+    public class PriceCalculatorTests
+    {
+        private readonly PriceCalculator _calculator = new();
+
+        [Fact]
+        public void Adds_delivery_below_the_free_delivery_threshold()
+        {
+            BasketLine[] lines = [new("RYE-400", 450, 2)];
+
+            var total = _calculator.Total(lines);
+
+            Assert.Equal(900 + 350, total);
+        }
+
+        [Theory]
+        [InlineData(2999, 3349)]
+        [InlineData(3000, 3000)]
+        [InlineData(4500, 4500)]
+        public void Delivery_is_free_from_thirty_pounds(int subtotal, int expected)
+        {
+            BasketLine[] lines = [new("CAKE", subtotal, 1)];
+
+            Assert.Equal(expected, _calculator.Total(lines));
+        }
+
+        [Fact]
+        public void Refuses_an_empty_basket()
+        {
+            var error = Assert.Throws<ArgumentException>(() => _calculator.Total([]));
+            Assert.Equal("lines", error.ParamName);
+        }
+    }
+    CS_EOF
+    cp "$BLOCK" tests/Bakery.Core.Tests/BulkDiscountTests.cs
+    if dotnet test > before.txt; then echo "should fail first"; exit 1; fi
+    NEW=$TOP/new.cs python3 - <<'PY_EOF'
+    import os
+    from pathlib import Path
+    p = Path("src/Bakery.Core/PriceCalculator.cs")
+    s = p.read_text()
+    old = "    public int Subtotal(IEnumerable<BasketLine> lines) => lines.Sum(l => l.UnitPence * l.Quantity);\n"
+    new = Path(os.environ["NEW"]).read_text()
+    assert old in s
+    p.write_text(s.replace(old, new))
+    PY_EOF
+    dotnet test
+  output_contains:
+  - 'Failed:     0, Passed:     8'
+- block: 12
+  lang: csharp
+  check: illustration
+  note: The change to Subtotal; block 11's check applies it and runs the tests.

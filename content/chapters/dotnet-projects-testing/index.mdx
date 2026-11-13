@@ -1,0 +1,308 @@
+---
+title: ".NET projects, packages and tests"
+summary: "Projects and solutions, the dotnet command line, NuGet packages, and unit tests with xUnit."
+prerequisites: [cs-errors-async]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will lay out a real .NET codebase the way teams do (a **solution** holding several **projects**), add packages from **NuGet**, and write and run **unit tests** with xUnit. Until now you ran single files with `dotnet run app.cs`; services are built from projects, and every change to them is checked by tests. <Ref to="m-testing" /> explains what to test and why; this chapter is the .NET mechanics.
+
+## Projects
+
+A **project** is a folder with a `.csproj` file that says how to build it: which .NET version, what kind of output (a program or a library), and which packages it uses. Create one with `dotnet new`:
+
+```bash
+dotnet new console --name Hello --output Hello
+cd Hello
+dotnet run
+```
+
+It prints `Hello, World!`. The folder contains `Hello.csproj` and `Program.cs`. The project file is short:
+
+```xml
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>
+```
+
+- **`OutputType`** `Exe` makes a runnable program; without it you get a **class library** (a `.dll` other projects use).
+- **`TargetFramework`** is the .NET version.
+- **`ImplicitUsings`** adds common `using` lines (`System`, `System.Linq`, `System.Collections.Generic` and so on) to every file.
+- **`Nullable`** turns on nullable reference types (<Ref to="cs-objects" />).
+
+Every `.cs` file in the folder is compiled; you do not list them. Useful commands:
+
+| Command | What it does |
+|---|---|
+| `dotnet new list` | Show the project templates (`console`, `classlib`, `webapi`, `xunit` and more) |
+| `dotnet build` | Compile, reporting errors and warnings |
+| `dotnet run` | Build and run the program |
+| `dotnet test` | Build and run the tests |
+| `dotnet add package NAME` | Add a NuGet package |
+| `dotnet add reference PATH` | Let one project use another |
+| `dotnet publish -c Release` | Produce the optimised files to deploy |
+
+## Solutions
+
+A real service is several projects: the web API, the business logic, the data access, and a test project for each. A **solution** (a `.sln` or `.slnx` file) groups them so you can build and test everything with one command, and so editors open them together. A common layout:
+
+```text
+Bakery/
+  Bakery.sln
+  src/
+    Bakery.Core/          business rules (a class library)
+    Bakery.Api/           the web API (added in the API part of this course)
+  tests/
+    Bakery.Core.Tests/    unit tests for Bakery.Core
+```
+
+Create it from the terminal:
+
+```bash
+mkdir Bakery && cd Bakery
+dotnet new sln --name Bakery
+dotnet new classlib --name Bakery.Core --output src/Bakery.Core
+dotnet new xunit --name Bakery.Core.Tests --output tests/Bakery.Core.Tests
+dotnet sln add src/Bakery.Core tests/Bakery.Core.Tests
+dotnet add tests/Bakery.Core.Tests reference src/Bakery.Core
+rm src/Bakery.Core/Class1.cs tests/Bakery.Core.Tests/UnitTest1.cs
+```
+
+The last two lines delete the template's placeholder files. The test project now **references** the library, so tests can use its classes. Dependencies point one way: tests depend on the code, never the reverse, and later the API will depend on Core, not the other way round (<Ref to="m-architecture" />).
+
+## Code in a library
+
+Add the business rule to `src/Bakery.Core/PriceCalculator.cs`:
+
+```csharp
+namespace Bakery.Core;
+
+public record BasketLine(string Sku, int UnitPence, int Quantity);
+
+public class PriceCalculator
+{
+    public const int FreeDeliveryFromPence = 3000;
+    public const int DeliveryPence = 350;
+
+    public int Subtotal(IEnumerable<BasketLine> lines) => lines.Sum(l => l.UnitPence * l.Quantity);
+
+    public int Total(IReadOnlyCollection<BasketLine> lines)
+    {
+        if (lines.Count == 0) throw new ArgumentException("A basket needs at least one line", nameof(lines));
+        var subtotal = Subtotal(lines);
+        return subtotal >= FreeDeliveryFromPence ? subtotal : subtotal + DeliveryPence;
+    }
+}
+```
+
+A **namespace** groups related types and avoids name clashes; by convention it matches the project and folder. Writing `namespace Bakery.Core;` at the top applies it to the whole file. Types are `public` so other projects can use them; types left `internal` are visible only inside their own project.
+
+## Unit tests with xUnit
+
+**xUnit** is the most popular .NET test framework (MSTest and NUnit are the others, and work much the same way). A test is a public method marked **`[Fact]`**; a **`[Theory]`** runs once for each **`[InlineData]`** row. Add `tests/Bakery.Core.Tests/PriceCalculatorTests.cs`:
+
+```csharp
+using Bakery.Core;
+
+namespace Bakery.Core.Tests;
+
+public class PriceCalculatorTests
+{
+    private readonly PriceCalculator _calculator = new();
+
+    [Fact]
+    public void Adds_delivery_below_the_free_delivery_threshold()
+    {
+        BasketLine[] lines = [new("RYE-400", 450, 2)];
+
+        var total = _calculator.Total(lines);
+
+        Assert.Equal(900 + 350, total);
+    }
+
+    [Theory]
+    [InlineData(2999, 3349)]
+    [InlineData(3000, 3000)]
+    [InlineData(4500, 4500)]
+    public void Delivery_is_free_from_thirty_pounds(int subtotal, int expected)
+    {
+        BasketLine[] lines = [new("CAKE", subtotal, 1)];
+
+        Assert.Equal(expected, _calculator.Total(lines));
+    }
+
+    [Fact]
+    public void Refuses_an_empty_basket()
+    {
+        var error = Assert.Throws<ArgumentException>(() => _calculator.Total([]));
+        Assert.Equal("lines", error.ParamName);
+    }
+}
+```
+
+Run every test in the solution from its folder:
+
+```bash
+dotnet test
+```
+
+The last line reports `Passed!  - Failed: 0, Passed: 5, Skipped: 0, Total: 5`: the two facts plus three theory rows. Things to notice:
+
+- Each test follows **arrange, act, assert**: set up the input, call the code, check the result.
+- Test names describe the **behaviour**, so a failure reads as a sentence.
+- The theory tests the **boundary** (2999, 3000) where bugs hide (<Ref to="m-testing" />).
+- xUnit creates a **new instance of the test class for every test**, so the `_calculator` field is never shared between tests.
+- **Assertions**: `Assert.Equal(expected, actual)`, `Assert.True`, `Assert.Null`, `Assert.Contains`, `Assert.Throws<T>` and `await Assert.ThrowsAsync<T>(...)` for async code. Test methods can be `async Task`.
+
+Break the rule on purpose (change `>=` to `>`) and run `dotnet test` again: the 3000 row fails, and the message shows the expected and actual values. Seeing a test fail for the right reason is how you know it tests something.
+
+Useful options: `dotnet test --filter Delivery` runs only tests whose names contain "Delivery"; `dotnet watch test` reruns the tests on every save.
+
+## Packages from NuGet
+
+**NuGet** (nuget.org) is .NET's package registry. Add a package to a project with:
+
+```bash
+dotnet add src/Bakery.Core package Humanizer
+```
+
+This adds a `<PackageReference Include="Humanizer" Version="..." />` line to the project file, and `dotnet build` downloads it. Before adding a package, check it is maintained, widely used and licensed for your use, because every dependency is code you trust (<Ref to="m-appsec" />). `dotnet list package --vulnerable` reports packages with known security problems, and `dotnet list package --outdated` shows available updates.
+
+## Shared settings
+
+A **`Directory.Build.props`** file at the solution root applies settings to every project below it. Teams commonly use it to treat warnings, including nullable warnings, as errors, so problems cannot pile up (<Ref to="m-static-quality" />):
+
+```xml
+<Project>
+  <PropertyGroup>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+  </PropertyGroup>
+</Project>
+```
+
+Run `dotnet format` to fix code style to the rules in the solution's `.editorconfig` file. Commit the solution, projects and code to Git, but not the `bin/` and `obj/` build folders: `dotnet new gitignore` writes a suitable `.gitignore`.
+
+## Common mistakes
+
+- **One giant project** for everything instead of separating API, logic and tests.
+- **Tests that depend on each other** or on shared static state, so they pass alone and fail together.
+- **Testing private methods** directly instead of the public behaviour.
+- **Adding packages casually** without checking maintenance, licence and vulnerabilities.
+- **Ignoring warnings** until there are hundreds.
+- **Committing `bin/` and `obj/`.**
+
+## Practice
+
+**1. (warm-up)** Which command creates a class library, and how does its project file differ from a console app's?
+
+<Solution>
+
+`dotnet new classlib --name NAME`. Its project file has no `<OutputType>Exe</OutputType>`, so it builds a `.dll` for other projects to reference instead of a runnable program.
+
+</Solution>
+
+**2. (warm-up)** Why does the test project reference the library, and not the library the test project?
+
+<Solution>
+
+Tests use the library's code, so they depend on it. The library must not know its tests exist: production code would otherwise ship with test code and test frameworks. Dependencies always point from the outer, more specific parts (tests, the API) towards the core.
+
+</Solution>
+
+**3. (standard)** Add tests for `Subtotal`: an empty basket gives 0, and a basket of two lines (450p × 2 and 380p × 1) gives 1280.
+
+<Solution>
+
+```csharp
+using Bakery.Core;
+
+namespace Bakery.Core.Tests;
+
+public class SubtotalTests
+{
+    private readonly PriceCalculator _calculator = new();
+
+    [Fact]
+    public void Empty_basket_has_zero_subtotal() => Assert.Equal(0, _calculator.Subtotal([]));
+
+    [Fact]
+    public void Subtotal_adds_every_line()
+    {
+        BasketLine[] lines = [new("RYE-400", 450, 2), new("JAM", 380, 1)];
+
+        Assert.Equal(1280, _calculator.Subtotal(lines));
+    }
+}
+```
+
+Save it as `tests/Bakery.Core.Tests/SubtotalTests.cs`; `dotnet test` now reports 7 passed.
+
+</Solution>
+
+**4. (stretch)** The bakery adds a rule: orders of 10 or more of the same product get 10% off that line, rounded down to the nearest penny. Write the tests first, as a theory, then change `Subtotal` to make them pass.
+
+<Solution>
+
+The tests, including the boundary at 9 and 10:
+
+```csharp
+using Bakery.Core;
+
+namespace Bakery.Core.Tests;
+
+public class BulkDiscountTests
+{
+    [Theory]
+    [InlineData(9, 4050)]
+    [InlineData(10, 4050)]
+    [InlineData(12, 4860)]
+    public void Ten_or_more_of_one_product_get_ten_percent_off(int quantity, int expected)
+    {
+        BasketLine[] lines = [new("RYE-400", 450, quantity)];
+
+        Assert.Equal(expected, new PriceCalculator().Subtotal(lines));
+    }
+}
+```
+
+Nine loaves cost 4050p at full price; ten cost 4500p minus 450p, also 4050p; twelve cost 5400p minus 540p, 4860p. Then change `Subtotal`:
+
+```csharp
+public int Subtotal(IEnumerable<BasketLine> lines) => lines.Sum(LineTotal);
+
+private static int LineTotal(BasketLine line)
+{
+    var full = line.UnitPence * line.Quantity;
+    return line.Quantity >= 10 ? full - full / 10 : full;
+}
+```
+
+Integer division `full / 10` rounds the discount down, so the customer's total is never rounded in the bakery's favour by more than a penny. The earlier tests still pass, which shows the change broke nothing.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **project** (`.csproj`) builds a program or a **class library**; a **solution** groups projects. Lay them out as `src/` and `tests/`, with dependencies pointing inward.
+- The **`dotnet`** command creates, builds, runs, tests, packages and publishes.
+- **xUnit** tests: `[Fact]` for one case, `[Theory]` with `[InlineData]` for many; arrange, act, assert; descriptive names; test boundaries; watch a test fail.
+- **NuGet** packages are added with `dotnet add package`; check them before trusting them.
+- **`Directory.Build.props`** shares settings such as treating warnings as errors.
+
+## Go deeper
+
+- [.NET CLI overview](https://learn.microsoft.com/en-us/dotnet/core/tools/), Microsoft. Every `dotnet` command.
+- [Unit testing C# with xUnit](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-csharp-with-xunit), Microsoft. A worked example of a solution with a test project.
+- [Unit testing best practices](https://learn.microsoft.com/en-us/dotnet/core/testing/unit-testing-best-practices), Microsoft. Naming, arrange-act-assert and what to avoid.
+- [xUnit.net: getting started](https://xunit.net/docs/getting-started/v3/getting-started), the xUnit project. The framework's own documentation.

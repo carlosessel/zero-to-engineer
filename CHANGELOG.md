@@ -4,6 +4,19 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 2 (C# and .NET track)
+
+Added
+- Five chapters teaching C# from zero: values, types, decisions, loops and methods; classes, records, enums, interfaces, inheritance and nullable reference types; collections, generics, lambdas and LINQ; exceptions, `using`, async and await, `Task.WhenAll`, cancellation and timeouts; and .NET projects, solutions, NuGet and unit tests with xUnit.
+- Every C# example runs as a file-based app in the example checks, and the projects chapter's checks build the whole Bakery solution with `dotnet new`, run its xUnit tests, and check that the practice test fails before the change and passes after it.
+- 17 glossary terms, and the course added to the existing terms the chapters use.
+
+Fixed
+- The glossary entries "Project", "Namespace" and "Property" now give the meaning each course uses; "Variable" has a meaning for this course.
+
+Not verified
+- No person has reviewed these chapters. The projects chapter's checks download NuGet packages, so they run only where network checks are switched on.
+
 ### 2026-11-13: Zero to Backend Engineer, part 1 (Start here)
 
 Added

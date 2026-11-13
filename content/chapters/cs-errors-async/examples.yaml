@@ -1,0 +1,70 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: csharp
+  check: csharp
+  output: |
+    5
+    Caught: DivideByZeroException
+    Bad number: The input string 'ten' was not in a correct format.
+    finally always runs
+- block: 2
+  lang: csharp
+  check: csharp
+  output: |
+    404: Order o-42 not found
+    400: sku
+- block: 3
+  lang: csharp
+  check: csharp
+  output: |
+    [orders] order o-1 placed
+    [orders] closed
+    Caught: something broke
+- block: 4
+  lang: csharp
+  check: csharp
+  output_contains:
+  - 3 items after about
+- block: 5
+  lang: csharp
+  check: csharp
+  output_contains:
+  - got customer and orders
+- block: 6
+  lang: csharp
+  check: csharp
+  output: |
+    Refused: pence
+- block: 7
+  lang: csharp
+  check: csharp
+  output: |
+    Gave up after the timeout
+    report done
+- block: 8
+  lang: csharp
+  check: csharp
+  output: |
+    3
+    Quantity must be a whole number from 1 to 99, not 'zero'
+    Quantity must be a whole number from 1 to 99, not '0'
+    Quantity must be a whole number from 1 to 99, not '120'
+- block: 9
+  lang: csharp
+  check: illustration
+  note: A fragment showing a mistake; SaveOrder is not defined.
+- block: 10
+  lang: csharp
+  check: csharp
+  output_contains:
+  - prices, stock, offers
+- block: 11
+  lang: csharp
+  check: csharp
+  output: |
+    done in 50 ms
+    timed out
+- block: 12
+  lang: csharp
+  check: illustration
+  note: A fragment from an endpoint, showing mistakes; the methods it calls are not defined.
