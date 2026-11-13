@@ -1,0 +1,186 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: csharp
+  check: csharp
+  output_contains:
+  - '{"EventId":0,"LogLevel":"Information","Category":"OrderService","Message":"Placed order for customer c-17 worth 1250p","State":{"CustomerId":"c-17","TotalPence":1250,"{OriginalFormat}":"Placed order for customer {CustomerId} worth {TotalPence}p"},"Scopes":[{"Message":"Order o-1042","OrderId":"o-1042","{OriginalFormat}":"Order {OrderId}"}]}'
+  - '{"EventId":0,"LogLevel":"Warning","Category":"OrderService","Message":"Rejected order for customer c-18: total -5 is not positive","State":{"CustomerId":"c-18","TotalPence":-5,"{OriginalFormat}":"Rejected order for customer {CustomerId}: total {TotalPence} is not positive"},"Scopes":[{"Message":"Order o-1043","OrderId":"o-1043","{OriginalFormat}":"Order {OrderId}"}]}'
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the example above, which its check compares.
+- block: 3
+  lang: java
+  check: illustration
+  note: The application; block 7's check builds and runs it, then checks its log lines and metrics.
+- block: 4
+  lang: properties
+  check: illustration
+  note: Settings; block 7's check runs the application with them.
+- block: 5
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir nd && cd nd
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 pino@10.4.0 prom-client@15.1.3
+    cp "$BLOCK" app.ts
+    node app.ts
+  output_contains:
+  - '{"level":30,"service":"bakery-api","requestId":"req-1","orderId":"o-1042","totalPence":1250,"msg":"Placed order"}
+
+    {"level":40,"service":"bakery-api","requestId":"req-2","orderId":"o-1043","totalPence":-5,"msg":"Rejected order: total is not positive"}'
+  - 'bakery_orders_placed_total{channel="web"} 1
+
+    http_server_request_duration_seconds_count{method="POST",route="/orders",status="201"} 1
+
+    http_server_request_duration_seconds_count{method="POST",route="/orders",status="400"} 1'
+- block: 6
+  lang: text
+  check: illustration
+  note: The output of the Node program, which block 5's check compares.
+- block: 7
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    mkdir sp && cd sp
+    echo 'rootProject.name = "bakery-api"' > settings.gradle.kts
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+        id("org.springframework.boot") version "4.1.2"
+        id("io.spring.dependency-management") version "1.1.7"
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-webmvc")
+        implementation("org.springframework.boot:spring-boot-starter-actuator")
+        runtimeOnly("io.micrometer:micrometer-registry-prometheus")
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/resources/application.properties)
+    cat > src/main/resources/application.properties <<'SRC_EOF'
+    spring.application.name=bakery-api
+    spring.main.banner-mode=off
+    logging.structured.format.console=ecs
+    logging.level.root=warn
+    logging.level.com.bakery=info
+    management.endpoints.web.exposure.include=health,prometheus
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/BakeryApplication.java)
+    cat > src/main/java/com/bakery/BakeryApplication.java <<'SRC_EOF'
+    package com.bakery;
+
+    import io.micrometer.core.instrument.Counter;
+    import io.micrometer.core.instrument.DistributionSummary;
+    import io.micrometer.core.instrument.MeterRegistry;
+    import java.net.URI;
+    import org.slf4j.Logger;
+    import org.slf4j.LoggerFactory;
+    import org.slf4j.MDC;
+    import org.springframework.boot.SpringApplication;
+    import org.springframework.boot.autoconfigure.SpringBootApplication;
+    import org.springframework.http.ResponseEntity;
+    import org.springframework.web.bind.annotation.PostMapping;
+    import org.springframework.web.bind.annotation.RequestParam;
+    import org.springframework.web.bind.annotation.RestController;
+
+    @SpringBootApplication
+    public class BakeryApplication {
+        public static void main(String[] args) {
+            SpringApplication.run(BakeryApplication.class, args);
+        }
+    }
+
+    @RestController
+    class OrderController {
+        private static final Logger log = LoggerFactory.getLogger(OrderController.class);
+        private final Counter placed;
+        private final DistributionSummary value;
+
+        OrderController(MeterRegistry registry) {
+            this.placed = Counter.builder("bakery.orders.placed").tag("channel", "web").register(registry);
+            this.value = DistributionSummary.builder("bakery.order.value").baseUnit("pence").register(registry);
+        }
+
+        @PostMapping("/orders")
+        ResponseEntity<Void> place(@RequestParam String orderId, @RequestParam int totalPence) {
+            try (var ignored = MDC.putCloseable("orderId", orderId)) {
+                if (totalPence <= 0) {
+                    log.atWarn().addKeyValue("totalPence", totalPence).log("Rejected order: total is not positive");
+                    return ResponseEntity.badRequest().build();
+                }
+                placed.increment();
+                value.record(totalPence);
+                log.atInfo().addKeyValue("totalPence", totalPence).log("Placed order");
+                return ResponseEntity.created(URI.create("/orders/" + orderId)).build();
+            }
+        }
+    }
+    SRC_EOF
+    "$GRADLE" --no-daemon -q bootJar
+    SERVER_PORT=18080 java -jar build/libs/bakery-api.jar > app.log 2>&1 &
+    PID=$!
+    trap "kill $PID 2>/dev/null || true" EXIT
+    for i in $(seq 1 90); do if grep -q "Started " app.log; then break; fi; sleep 1; done
+    sed "s/localhost:8080/localhost:18080/g" "$BLOCK" > calls.sh
+    bash calls.sh
+    grep -o '"message":"Placed order","orderId":"o-1042","totalPence":1250' app.log
+    grep -o '"message":"Rejected order: total is not positive","orderId":"o-1043","totalPence":-5' app.log
+  output_contains:
+  - 'bakery_order_value_pence_count 1
+
+    bakery_order_value_pence_sum 1250.0
+
+    bakery_order_value_pence_max 1250.0
+
+    bakery_orders_placed_total{channel="web"} 1.0'
+  - '"message":"Placed order","orderId":"o-1042","totalPence":1250'
+  - '"message":"Rejected order: total is not positive","orderId":"o-1043","totalPence":-5'
+- block: 8
+  lang: text
+  check: illustration
+  note: The output of the curl commands, which block 7's check compares.
+- block: 9
+  lang: text
+  check: illustration
+  note: Lines printed by the Node program; block 5's check compares them.
+- block: 10
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - 'span ''POST /orders'' kind Server, parent none
+
+    span ''price order'' kind Internal, parent the request
+
+    traces: 3
+
+    metric bakery.orders.placed ({order}): 3
+
+    metric bakery.order.value (p): count 3, sum 4800
+
+    and the built-in http.server.request.duration histogram'
+- block: 11
+  lang: text
+  check: illustration
+  note: The output of the example above, which its check compares.
+- block: 12
+  lang: ts
+  check: not-run
+  reason: It needs the OpenTelemetry packages, an application to instrument and a collector at OTEL_EXPORTER_OTLP_ENDPOINT; the setup follows the OpenTelemetry JavaScript getting-started guide.

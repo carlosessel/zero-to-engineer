@@ -1,0 +1,150 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: csharp
+  check: csharp
+  output: |
+    database up: live 200 Healthy, ready 200 Healthy
+    database down: live 200 Healthy, ready 503 Unhealthy
+- block: 2
+  lang: properties
+  check: illustration
+  note: Actuator settings; block 4's check runs the application with them.
+- block: 3
+  lang: java
+  check: illustration
+  note: The application; block 4's check builds and runs it.
+- block: 4
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    mkdir sp && cd sp
+    echo 'rootProject.name = "bakery-api"' > settings.gradle.kts
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+        id("org.springframework.boot") version "4.1.2"
+        id("io.spring.dependency-management") version "1.1.7"
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-webmvc")
+        implementation("org.springframework.boot:spring-boot-starter-actuator")
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/resources/application.properties)
+    cat > src/main/resources/application.properties <<'SRC_EOF'
+    management.endpoints.web.exposure.include=health
+    management.endpoint.health.probes.enabled=true
+    management.endpoint.health.group.readiness.include=readinessState,database
+    server.shutdown=graceful
+    spring.lifecycle.timeout-per-shutdown-phase=20s
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/BakeryApplication.java)
+    cat > src/main/java/com/bakery/BakeryApplication.java <<'SRC_EOF'
+    package com.bakery;
+
+    import java.util.concurrent.atomic.AtomicBoolean;
+    import org.springframework.boot.SpringApplication;
+    import org.springframework.boot.autoconfigure.SpringBootApplication;
+    import org.springframework.boot.health.contributor.Health;
+    import org.springframework.boot.health.contributor.HealthIndicator;
+    import org.springframework.stereotype.Component;
+    import org.springframework.web.bind.annotation.PostMapping;
+    import org.springframework.web.bind.annotation.RestController;
+
+    @SpringBootApplication
+    public class BakeryApplication {
+        public static void main(String[] args) {
+            SpringApplication.run(BakeryApplication.class, args);
+        }
+    }
+
+    @Component("database")
+    class DatabaseHealth implements HealthIndicator {
+        final AtomicBoolean reachable = new AtomicBoolean(true);
+
+        @Override
+        public Health health() {
+            return reachable.get() ? Health.up().build() : Health.down().withDetail("reason", "cannot reach the database").build();
+        }
+    }
+
+    @RestController
+    class DemoControls {
+        private final DatabaseHealth database;
+
+        DemoControls(DatabaseHealth database) {
+            this.database = database;
+        }
+
+        @PostMapping("/demo/database-down")
+        void databaseDown() {
+            database.reachable.set(false);
+        }
+    }
+    SRC_EOF
+    "$GRADLE" --no-daemon -q bootJar
+    SERVER_PORT=18080 java -jar build/libs/bakery-api.jar > app.log 2>&1 &
+    PID=$!
+    trap "kill $PID 2>/dev/null || true" EXIT
+    for i in $(seq 1 90); do if grep -q "Started " app.log; then break; fi; sleep 1; done
+    sed "s/localhost:8080/localhost:18080/g" "$BLOCK" > probes.sh
+    bash probes.sh
+  output_contains:
+  - 'database up: live 200, ready {"status":"UP"} 200
+
+    database down: live 200, ready {"status":"DOWN"} 503'
+- block: 5
+  lang: ts
+  check: shell
+  script: |
+    cp "$BLOCK" app.ts
+    node app.ts
+  output: |
+    database up: live 200, ready 200 ready
+    database down: live 200, ready 503 not ready
+    shutting down: live 200, ready 503 not ready
+    closed after finishing in-flight requests
+- block: 6
+  lang: text
+  check: illustration
+  note: The output of the Node program above, which its check compares.
+- block: 7
+  lang: dockerfile
+  check: not-run
+  reason: Building the image needs Docker and the project around it; Docker was not running where the checks ran. The base images and commands are from each project's container documentation linked below.
+- block: 8
+  lang: dockerfile
+  check: not-run
+  reason: Building the image needs Docker and the project around it; Docker was not running where the checks ran. The base images and commands are from each project's container documentation linked below.
+- block: 9
+  lang: dockerfile
+  check: not-run
+  reason: Building the image needs Docker and the project around it; Docker was not running where the checks ran. The base images and commands are from each project's container documentation linked below.
+- block: 10
+  lang: yaml
+  check: illustration
+  note: A Compose file; running it needs Docker, so the check parses it and checks its structure.
+  verify: |
+    import yaml
+    d = yaml.safe_load(block)
+    assert list(d['services']) == ['db', 'api']
+    assert d['services']['api']['depends_on']['db']['condition'] == 'service_healthy'
+    assert '@db:5432' in d['services']['api']['environment']['DATABASE_URL']
+- block: 11
+  lang: dockerfile
+  check: illustration
+  note: A Dockerfile with problems, for the exercise to review.

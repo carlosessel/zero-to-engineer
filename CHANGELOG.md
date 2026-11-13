@@ -4,6 +4,19 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 11 (Shipping and running)
+
+Added
+- Two chapters. Deploying a service: the twelve-factor rules, configuration and secrets, liveness and readiness checks in each stack (ASP.NET Core health checks, Spring Boot Actuator probes, Node endpoints with a readiness-first shutdown), container images for each stack, Docker Compose with PostgreSQL, migrations as a deployment step with expand and contract, and zero-downtime rolling deployments. Logging, metrics and tracing: structured JSON logs with context (`ILogger` scopes, Spring's ECS format with MDC, pino child loggers), metrics (Micrometer with Prometheus, prom-client, `System.Diagnostics.Metrics`), and OpenTelemetry tracing. The part also reuses seven Mastery chapters on containers, load balancing, delivery, observability, memory, performance and reliability.
+- The health checks run in the checks in all three stacks (ready turns 503 when the database check fails, live stays 200); the Compose file is parsed and its structure checked; the log lines, Prometheus metrics and OpenTelemetry spans and metrics (exported to memory) are all compared with the chapter.
+- 6 glossary terms, and the course added to the existing terms the chapters use.
+
+Fixed
+- The glossary entries "Root" and "Virtual machine" had no meaning for this course; both now do.
+
+Not verified
+- No person has reviewed these chapters. The Dockerfiles and the Node OpenTelemetry setup were not run, because Docker and a collector were not available where the checks ran.
+
 ### 2026-11-13: Zero to Backend Engineer, part 10 (Design and architecture)
 
 Added

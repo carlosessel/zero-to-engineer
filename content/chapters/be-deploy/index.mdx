@@ -1,0 +1,396 @@
+---
+title: "Deploying a service"
+summary: "Twelve-factor configuration and secrets, health checks, containerising each stack, and deploying with a database."
+prerequisites: [m-containers, m-load-balancing]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will make a service ready for production and ship it: configuration and secrets from the environment, **liveness** and **readiness** health checks in each stack, a container image for your stack, a local environment with a database, database migrations as a deployment step, and deployments that replace instances without dropping requests. <Ref to="m-containers" />, <Ref to="m-load-balancing" /> and <Ref to="m-delivery" /> explain the underlying ideas; this chapter applies them to the services you have built.
+
+## The twelve-factor checklist
+
+The **twelve-factor app** is a well-known set of rules for services that deploy cleanly. The ones that matter most day to day:
+
+- **One codebase, many deploys**: the same code (and the same built image) runs in test, staging and production; only configuration differs.
+- **Configuration in the environment**: database addresses, API keys, feature switches come from environment variables or a secret store, never from the code or the image.
+- **Backing services as attached resources**: the database, cache and broker are reached through configured addresses, so they can be swapped without code changes.
+- **Build, release, run**: build an artefact once, combine it with an environment's configuration to make a release, then run it; never change code on a running server.
+- **Stateless processes**: keep nothing important in memory or on local disk between requests; sessions, files and queues live in backing services, so any instance can serve any request and instances can come and go.
+- **Disposability**: start fast and shut down gracefully on `SIGTERM`.
+- **Logs as event streams**: write logs to standard output and let the platform collect them (<Ref to="be-observability-stacks" />).
+
+## Configuration and secrets
+
+Each stack reads configuration in layers, with environment variables winning over files: `appsettings.json` and `Section__Key` variables in .NET, `application.properties` and `SECTION_KEY` variables in Spring, `process.env` in Node (<Ref to="be-dependency-injection" />). Rules:
+
+- **Validate configuration at start-up**, so a missing or wrong value stops the deployment instead of failing at the first request.
+- **Secrets** (database passwords, signing keys, API keys) come from a **secret store** (Azure Key Vault, AWS Secrets Manager, Google Secret Manager, HashiCorp Vault, Kubernetes Secrets), injected as environment variables or files. Never commit them, never bake them into images, never log them.
+- **Prefer identities to passwords** where the platform allows: managed identities, IAM roles or workload identity let a service reach the database or a storage bucket without any secret to leak or rotate.
+
+## Health checks
+
+The platform running your service needs to know two things about each instance:
+
+- **Liveness**: is the process working at all? If not, restart it. Keep this check trivial; it must not depend on the database, or a database outage would make the platform restart every instance in a loop.
+- **Readiness**: can it serve requests right now? If not, stop sending it traffic, but do not restart it. It fails while the service is starting, while it is shutting down, and when a dependency it cannot work without is unreachable.
+
+Load balancers and Kubernetes call these endpoints every few seconds (<Ref to="m-load-balancing" />). Here they are in each stack, with a database check that can be switched off to show the difference.
+
+### ASP.NET Core
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.None);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+builder.Services.AddSingleton<DatabaseCheck>();
+builder.Services.AddHealthChecks()
+    .AddCheck<DatabaseCheck>("database", tags: ["ready"]);
+var app = builder.Build();
+
+app.MapHealthChecks("/health/live", new HealthCheckOptions { Predicate = _ => false });
+app.MapHealthChecks("/health/ready", new HealthCheckOptions { Predicate = check => check.Tags.Contains("ready") });
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+async Task Probe(string label)
+{
+    var live = await http.GetAsync("/health/live");
+    var ready = await http.GetAsync("/health/ready");
+    Console.WriteLine($"{label}: live {(int)live.StatusCode} {await live.Content.ReadAsStringAsync()}, ready {(int)ready.StatusCode} {await ready.Content.ReadAsStringAsync()}");
+}
+var db = app.Services.GetRequiredService<DatabaseCheck>();
+await Probe("database up");
+db.Reachable = false;
+await Probe("database down");
+await app.StopAsync();
+
+class DatabaseCheck : IHealthCheck
+{
+    public volatile bool Reachable = true;
+    public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken ct = default) =>
+        Task.FromResult(Reachable ? HealthCheckResult.Healthy() : HealthCheckResult.Unhealthy("cannot reach the database"));
+}
+```
+
+It prints `database up: live 200 Healthy, ready 200 Healthy`, then `database down: live 200 Healthy, ready 503 Unhealthy`. The liveness endpoint runs no checks at all (`Predicate = _ => false`); readiness runs only the checks tagged `ready`. Packages such as `AspNetCore.HealthChecks.NpgSql` add ready-made checks for databases, caches and brokers.
+
+### Spring Boot
+
+**Spring Boot Actuator** (`spring-boot-starter-actuator`) provides the endpoints. With these settings:
+
+```properties
+management.endpoints.web.exposure.include=health
+management.endpoint.health.probes.enabled=true
+management.endpoint.health.group.readiness.include=readinessState,database
+server.shutdown=graceful
+spring.lifecycle.timeout-per-shutdown-phase=20s
+```
+
+and a `HealthIndicator` bean (Spring Boot already provides indicators for databases, Redis and many others; this one can be switched off for the demonstration):
+
+```java
+package com.bakery;
+
+import java.util.concurrent.atomic.AtomicBoolean;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.health.contributor.Health;
+import org.springframework.boot.health.contributor.HealthIndicator;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+@SpringBootApplication
+public class BakeryApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(BakeryApplication.class, args);
+    }
+}
+
+@Component("database")
+class DatabaseHealth implements HealthIndicator {
+    final AtomicBoolean reachable = new AtomicBoolean(true);
+
+    @Override
+    public Health health() {
+        return reachable.get() ? Health.up().build() : Health.down().withDetail("reason", "cannot reach the database").build();
+    }
+}
+
+@RestController
+class DemoControls {
+    private final DatabaseHealth database;
+
+    DemoControls(DatabaseHealth database) {
+        this.database = database;
+    }
+
+    @PostMapping("/demo/database-down")
+    void databaseDown() {
+        database.reachable.set(false);
+    }
+}
+```
+
+the probes behave the same way:
+
+```bash
+probe() {
+  live=$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/actuator/health/liveness)
+  ready=$(curl -s -w ' %{http_code}' localhost:8080/actuator/health/readiness)
+  echo "$1: live $live, ready $ready"
+}
+probe "database up"
+curl -s -X POST localhost:8080/demo/database-down
+probe "database down"
+```
+
+It prints `database up: live 200, ready {"status":"UP"} 200`, then `database down: live 200, ready {"status":"DOWN"} 503`. Only `health` is exposed over HTTP; Actuator's other endpoints (environment, heap dumps, configuration) reveal internals and must stay closed or protected. `server.shutdown=graceful` lets in-flight requests finish when the app is stopped.
+
+### Node.js
+
+```ts
+import { createServer } from "node:http";
+
+let databaseReachable = true;
+let shuttingDown = false;
+
+async function checkDatabase(): Promise<boolean> {
+  return databaseReachable; // in a real service: run "SELECT 1" with a short timeout
+}
+
+const server = createServer(async (req, res) => {
+  if (req.url === "/health/live") {
+    res.writeHead(200, { "content-type": "text/plain" }).end("ok");
+    return;
+  }
+  if (req.url === "/health/ready") {
+    const ready = !shuttingDown && (await checkDatabase());
+    res.writeHead(ready ? 200 : 503, { "content-type": "text/plain" }).end(ready ? "ready" : "not ready");
+    return;
+  }
+  res.writeHead(404).end();
+});
+
+async function shutdown(): Promise<void> {
+  shuttingDown = true; // readiness fails, so the load balancer stops sending new requests
+  await new Promise((resolve) => setTimeout(resolve, 100)); // in production: a few seconds
+  server.close(() => console.log("closed after finishing in-flight requests"));
+}
+process.once("SIGTERM", shutdown);
+
+server.listen(0, async () => {
+  const address = server.address();
+  const base = `http://localhost:${typeof address === "object" && address ? address.port : 0}`;
+  const probe = async (label: string) => {
+    const live = await fetch(`${base}/health/live`);
+    const ready = await fetch(`${base}/health/ready`);
+    console.log(`${label}: live ${live.status}, ready ${ready.status} ${await ready.text()}`);
+  };
+  await probe("database up");
+  databaseReachable = false;
+  await probe("database down");
+  databaseReachable = true;
+  const stopping = shutdown();
+  await probe("shutting down");
+  await stopping;
+});
+```
+
+It prints:
+
+```text
+database up: live 200, ready 200 ready
+database down: live 200, ready 503 not ready
+shutting down: live 200, ready 503 not ready
+closed after finishing in-flight requests
+```
+
+On `SIGTERM`, readiness fails first, so the load balancer stops sending new requests; after a short pause, `server.close` stops accepting connections and waits for in-flight requests to finish. Give the pause a few seconds in production, longer than the load balancer's check interval.
+
+## Container images
+
+A **container image** packages the service with everything it needs to run, so it runs the same everywhere (<Ref to="m-containers" />). Good images are small, run as a non-root user, contain no build tools or secrets, and are built once and promoted from staging to production unchanged.
+
+**.NET** can build an image without a Dockerfile: `dotnet publish --os linux --arch x64 /t:PublishContainer` produces one from Microsoft's base images, running as a non-root user. With a Dockerfile, use a multi-stage build:
+
+```dockerfile
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+WORKDIR /src
+COPY src/Bakery.Api/Bakery.Api.csproj src/Bakery.Api/
+RUN dotnet restore src/Bakery.Api/Bakery.Api.csproj
+COPY . .
+RUN dotnet publish src/Bakery.Api/Bakery.Api.csproj -c Release -o /app --no-restore
+
+FROM mcr.microsoft.com/dotnet/aspnet:10.0
+WORKDIR /app
+COPY --from=build /app .
+USER $APP_UID
+ENV ASPNETCORE_HTTP_PORTS=8080
+EXPOSE 8080
+ENTRYPOINT ["dotnet", "Bakery.Api.dll"]
+```
+
+**Spring Boot** can build an image with Cloud Native Buildpacks, again without a Dockerfile: `./gradlew bootBuildImage`. With a Dockerfile, extract the jar's **layers** so that dependencies, which change rarely, are cached separately from your code:
+
+```dockerfile
+FROM eclipse-temurin:21-jdk AS build
+WORKDIR /src
+COPY . .
+RUN ./gradlew bootJar --no-daemon && \
+    java -Djarmode=tools -jar build/libs/*-SNAPSHOT.jar extract --layers --launcher --destination /extracted
+
+FROM eclipse-temurin:21-jre
+WORKDIR /app
+RUN useradd --system --uid 10001 app
+COPY --from=build /extracted/dependencies/ ./
+COPY --from=build /extracted/spring-boot-loader/ ./
+COPY --from=build /extracted/snapshot-dependencies/ ./
+COPY --from=build /extracted/application/ ./
+USER app
+EXPOSE 8080
+ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
+```
+
+**Node.js**: install production dependencies only, and copy the source; with type stripping there is no build step:
+
+```dockerfile
+FROM node:24-slim
+WORKDIR /app
+ENV NODE_ENV=production
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev
+COPY src ./src
+USER node
+EXPOSE 3000
+CMD ["node", "src/server.ts"]
+```
+
+In all three, the dependency files are copied and restored **before** the source code, so Docker reuses the cached dependency layer when only your code changes. Add a `.dockerignore` (with `bin/`, `obj/`, `build/`, `node_modules/`, `.git/` and `.env`) so local files and secrets never enter the image. Scan images for known vulnerabilities in CI (<Ref to="m-appsec" />).
+
+## Running locally with a database
+
+**Docker Compose** runs the service and its backing services together on your machine, configured the way production is, through the environment:
+
+```yaml
+services:
+  db:
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_DB: bakery
+      POSTGRES_USER: bakery_app
+      POSTGRES_PASSWORD: local-only-password
+    ports: ["5432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U bakery_app -d bakery"]
+      interval: 2s
+      retries: 15
+
+  api:
+    build: .
+    environment:
+      DATABASE_URL: postgres://bakery_app:local-only-password@db:5432/bakery
+    ports: ["8080:8080"]
+    depends_on:
+      db:
+        condition: service_healthy
+```
+
+`docker compose up --build` builds the image, starts PostgreSQL, waits until it is healthy, then starts the API, which reaches the database by its service name, `db`. The password here is for a throwaway local database only; real ones come from the secret store.
+
+## Deploying with a database
+
+Each release that changes the schema must apply its migrations, and the order matters:
+
+1. **Build** the image once, tag it with the commit id, push it to a registry.
+2. **Migrate** the database as a separate step before the new version starts: `dotnet ef migrations bundle` or an idempotent script for EF Core, Flyway's command or the migration running at start-up of one dedicated job for Spring, `drizzle-kit migrate` for Node. Run it once, not from every instance at start-up, where several instances would race.
+3. **Deploy** the new image, replacing instances gradually.
+
+Because old instances keep running during the rollout, every migration must work with **both** the old and the new code: add before you use, and remove only after nothing uses it (**expand and contract**, <Ref to="m-delivery" />). A column rename, for example, takes three releases: add the new column and write both; backfill and read the new one; drop the old one.
+
+## Zero-downtime deployments
+
+In a **rolling deployment**, the platform starts a new instance, waits until its **readiness** check passes, moves traffic to it, then stops an old instance with `SIGTERM`, and repeats. Requests are never dropped if:
+
+- readiness fails until the service is truly ready (connections opened, caches warmed);
+- on `SIGTERM`, readiness fails first, then the service finishes in-flight requests and exits within the platform's grace period;
+- the old and new versions can run side by side (compatible APIs, messages and schema).
+
+**Blue-green** and **canary** deployments add the ability to switch back instantly or to try a release on a small share of traffic first (<Ref to="m-delivery" />). Whatever the platform (Kubernetes, Azure Container Apps, Google Cloud Run, AWS ECS, or a platform-as-a-service), the service's side of the contract is the same: configuration from the environment, health endpoints, graceful shutdown, logs to standard output.
+
+## Common mistakes
+
+- **Different builds for each environment**, so what was tested is not what runs.
+- **Secrets in images, repositories or logs.**
+- **A liveness check that calls the database**, so a database blip restarts every instance.
+- **No readiness check**, so traffic reaches instances that are still starting or already stopping.
+- **Ignoring `SIGTERM`**, so deployments cut requests off.
+- **Migrations that break the running version**, or that every instance runs at start-up.
+- **Running containers as root**, with build tools and shells the service does not need.
+- **State on local disk** (uploads, sessions) that vanishes when an instance is replaced.
+
+## Practice
+
+**1. (warm-up)** Which check, liveness or readiness, should fail in each case? (a) The process has deadlocked and answers nothing. (b) The database is unreachable. (c) The service has received `SIGTERM` and is finishing its requests. (d) The service is still loading its caches at start-up.
+
+<Solution>
+
+(a) Liveness: the platform should restart it (in practice the liveness request times out). (b) Readiness: stop sending traffic, but restarting would not fix the database. (c) Readiness: so no new requests arrive while it finishes. (d) Readiness, until the caches are loaded (Kubernetes also has a separate startup probe for slow starts).
+
+</Solution>
+
+**2. (standard)** You need to rename the column `orders.note` to `orders.customer_note` without downtime. List the releases and what each does.
+
+<Solution>
+
+Release 1: add `customer_note` (nullable); the code writes both columns and still reads `note`. Then backfill `customer_note` from `note` for existing rows. Release 2: the code reads and writes only `customer_note`. Release 3, once no running version uses it: drop `note`. At every step, the version still running during the rollout works with the schema.
+
+</Solution>
+
+**3. (stretch)** Review this Dockerfile for a Node service and list the problems:
+
+```dockerfile
+FROM node:24
+COPY . .
+RUN npm install
+ENV DATABASE_URL=postgres://admin:S3cret@db.prod.internal/bakery
+CMD node src/server.ts
+```
+
+<Solution>
+
+- A **secret** (the production database password) is baked into the image: anyone with the image can read it, and changing it needs a rebuild. Pass it at run time from the secret store.
+- `COPY . .` before installing means every code change invalidates the dependency layer, so builds are slow; it also copies `.env`, `.git` and local `node_modules` without a `.dockerignore`.
+- `npm install` instead of `npm ci --omit=dev`: not reproducible from the lock file, and development dependencies end up in production.
+- The full `node:24` image is large; `node:24-slim` (or a distroless image) is smaller with less to attack.
+- It runs as **root**; add `USER node`.
+- No `WORKDIR`, so files land in the image's root folder.
+- `CMD` in shell form runs through `/bin/sh`, which may not pass `SIGTERM` on to Node, breaking graceful shutdown; use the exec form `CMD ["node", "src/server.ts"]`.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Follow the **twelve-factor** rules: one build for every environment, configuration and secrets from the environment, stateless processes, logs to standard output, fast start and graceful shutdown.
+- **Liveness** says "restart me" and stays trivial; **readiness** says "send me traffic" and checks critical dependencies, start-up and shutdown. ASP.NET Core health checks, Spring Boot Actuator probes and simple Node endpoints implement them.
+- Build small, non-root **container images** with cached dependency layers and no secrets: SDK container publishing or multi-stage Dockerfiles for .NET, `bootBuildImage` or layered jars for Spring, `npm ci --omit=dev` for Node.
+- Use **Docker Compose** locally; run **migrations** once per release, before the rollout, in **expand-and-contract** steps.
+- **Rolling deployments** need readiness, graceful `SIGTERM` handling and versions that work side by side.
+
+## Go deeper
+
+- [The twelve-factor app](https://12factor.net/), Adam Wiggins and contributors. The original rules, one page each.
+- [Health checks in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/host-and-deploy/health-checks), Microsoft. Checks, tags, probes and ready-made packages.
+- [Spring Boot reference: Kubernetes probes](https://docs.spring.io/spring-boot/reference/actuator/endpoints.html#actuator.endpoints.kubernetes-probes), the Spring team. Liveness and readiness groups in Actuator.
+- [Containerize a .NET app with dotnet publish](https://learn.microsoft.com/en-us/dotnet/core/containers/sdk-publish), Microsoft. Building images without a Dockerfile.
+- [Docker: multi-stage builds](https://docs.docker.com/build/building/multi-stage/), Docker. Small images from separate build and run stages.
+- [Kubernetes: configure liveness, readiness and startup probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/), the Kubernetes project. How the platform uses health checks.

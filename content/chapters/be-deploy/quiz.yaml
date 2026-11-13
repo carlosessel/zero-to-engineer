@@ -1,0 +1,36 @@
+- question: Why must a liveness check not depend on the database?
+  options:
+  - A database outage would make the platform restart every instance
+  - Liveness checks cannot open connections
+  answer: 0
+  explanation: Readiness is the check that depends on critical dependencies.
+- question: What should readiness do when a service receives SIGTERM?
+  options:
+  - Fail, so the load balancer stops sending new requests
+  - Keep passing until the process exits
+  answer: 0
+  explanation: Then finish in-flight requests and exit.
+- question: Where do production secrets belong?
+  options:
+  - A secret store, injected at run time
+  - In the container image
+  answer: 0
+  explanation: Never in images, repositories or logs.
+- question: Why copy dependency files before the source in a Dockerfile?
+  options:
+  - Docker reuses the cached dependency layer when only code changes
+  - It makes images run faster
+  answer: 0
+  explanation: Builds stay fast.
+- question: When should database migrations run in a deployment?
+  options:
+  - Once, as a step before the new version rolls out
+  - From every instance at start-up
+  answer: 0
+  explanation: Instances starting together would race.
+- question: What does expand and contract mean for schema changes?
+  options:
+  - Add new structures first, switch code, and remove old ones in a later release
+  - Grow the database, then shrink it
+  answer: 0
+  explanation: Old and new versions run side by side during a rollout.

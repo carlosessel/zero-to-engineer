@@ -1,0 +1,36 @@
+- question: Why use a message template instead of string interpolation in a log call?
+  options:
+  - The values become separate, searchable fields
+  - Templates are shorter
+  answer: 0
+  explanation: Interpolation flattens everything into one string.
+- question: What should never appear in logs?
+  options:
+  - Passwords, tokens and customers' personal data
+  - Order ids
+  answer: 0
+  explanation: Log ids, and redact by default.
+- question: Which metric type fits request durations?
+  options:
+  - A histogram
+  - A counter
+  answer: 0
+  explanation: Percentiles such as p99 come from histograms.
+- question: Why must metric labels not include customer ids?
+  options:
+  - Each distinct label value creates a time series, so cardinality explodes
+  - Labels must be numbers
+  answer: 0
+  explanation: Keep labels to small fixed sets of values.
+- question: How does a trace follow a request from one service to the next?
+  options:
+  - The trace context travels in the traceparent header
+  - Each service guesses from timestamps
+  answer: 0
+  explanation: Instrumentation adds and reads the header.
+- question: What is OTLP?
+  options:
+  - OpenTelemetry's protocol for sending telemetry to a collector
+  - A logging library
+  answer: 0
+  explanation: Instrument once; choose backends freely.

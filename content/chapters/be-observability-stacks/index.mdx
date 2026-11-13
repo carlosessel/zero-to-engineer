@@ -1,0 +1,425 @@
+---
+title: "Logging, metrics and tracing in your stack"
+summary: "Structured logs, metrics and OpenTelemetry tracing in .NET, Spring and Node."
+prerequisites: [m-observability, be-deploy]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will make a service observable in your stack: **structured logs** with context such as the order and request ids, **metrics** that dashboards and alerts are built on, and **distributed traces** that follow a request across services, using the standard tools of each ecosystem and **OpenTelemetry**. <Ref to="m-observability" /> explains what to measure and why; this chapter is the code. Each stack logs the same two orders (one placed, one rejected) and counts them.
+
+## OpenTelemetry in one paragraph
+
+**OpenTelemetry** (OTel) is the vendor-neutral standard for telemetry: APIs and SDKs for every language to create logs, metrics and traces, automatic **instrumentation** for common libraries (web frameworks, HTTP clients, database drivers), and one protocol, **OTLP**, to send it all to a **collector**. The collector forwards it to whatever backends you use: Prometheus and Grafana, Jaeger or Tempo, Elasticsearch, or a commercial service. Instrument once with OpenTelemetry, and you can change backends without touching the code.
+
+## Structured logs
+
+A **structured log** is a record with named fields (JSON, usually), not just a sentence, so you can search for "every warning for order o-1043" instead of grepping text. Every stack does it the same way: a message template, the values as separate fields, and context (request id, order id) attached to every log line within a unit of work.
+
+### .NET: ILogger
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:property PublishAot=false
+
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+
+var builder = Host.CreateApplicationBuilder(args);
+builder.Logging.ClearProviders();
+builder.Logging.AddJsonConsole(o =>
+{
+    o.IncludeScopes = true;
+    o.JsonWriterOptions = new() { Indented = false };
+});
+builder.Services.AddSingleton<OrderService>();
+using var host = builder.Build();
+
+var service = host.Services.GetRequiredService<OrderService>();
+service.Place("o-1042", "c-17", 1250);
+service.Place("o-1043", "c-18", -5);
+
+class OrderService(ILogger<OrderService> logger)
+{
+    public void Place(string orderId, string customerId, int totalPence)
+    {
+        using var scope = logger.BeginScope("Order {OrderId}", orderId);
+        if (totalPence <= 0)
+        {
+            logger.LogWarning("Rejected order for customer {CustomerId}: total {TotalPence} is not positive", customerId, totalPence);
+            return;
+        }
+        logger.LogInformation("Placed order for customer {CustomerId} worth {TotalPence}p", customerId, totalPence);
+    }
+}
+```
+
+It prints one JSON object per line:
+
+```text
+{"EventId":0,"LogLevel":"Information","Category":"OrderService","Message":"Placed order for customer c-17 worth 1250p","State":{"CustomerId":"c-17","TotalPence":1250,"{OriginalFormat}":"Placed order for customer {CustomerId} worth {TotalPence}p"},"Scopes":[{"Message":"Order o-1042","OrderId":"o-1042","{OriginalFormat}":"Order {OrderId}"}]}
+{"EventId":0,"LogLevel":"Warning","Category":"OrderService","Message":"Rejected order for customer c-18: total -5 is not positive","State":{"CustomerId":"c-18","TotalPence":-5,"{OriginalFormat}":"Rejected order for customer {CustomerId}: total {TotalPence} is not positive"},"Scopes":[{"Message":"Order o-1043","OrderId":"o-1043","{OriginalFormat}":"Order {OrderId}"}]}
+```
+
+- The **message template** `"Placed order for customer {CustomerId} worth {TotalPence}p"` produces both the readable `Message` and the separate `CustomerId` and `TotalPence` fields. Never build the message with string interpolation (`$"..."`), which loses the fields.
+- **`BeginScope`** attaches `OrderId` to every log line written inside the `using`, however deep in the call stack.
+- `AddJsonConsole` writes JSON to standard output for the platform to collect (<Ref to="be-deploy" />). Many teams use **Serilog** for richer sinks and enrichment, with the same templates. With OpenTelemetry (below), logs also carry the current trace id.
+
+### Spring Boot: SLF4J with structured output
+
+Spring Boot writes structured JSON logs with one setting, `logging.structured.format.console=ecs` (Elastic Common Schema; `logstash` and `gelf` are the alternatives). Context goes in the **MDC** (mapped diagnostic context), and extra fields with SLF4J's fluent API:
+
+```java
+package com.bakery;
+
+import io.micrometer.core.instrument.Counter;
+import io.micrometer.core.instrument.DistributionSummary;
+import io.micrometer.core.instrument.MeterRegistry;
+import java.net.URI;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
+
+@SpringBootApplication
+public class BakeryApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(BakeryApplication.class, args);
+    }
+}
+
+@RestController
+class OrderController {
+    private static final Logger log = LoggerFactory.getLogger(OrderController.class);
+    private final Counter placed;
+    private final DistributionSummary value;
+
+    OrderController(MeterRegistry registry) {
+        this.placed = Counter.builder("bakery.orders.placed").tag("channel", "web").register(registry);
+        this.value = DistributionSummary.builder("bakery.order.value").baseUnit("pence").register(registry);
+    }
+
+    @PostMapping("/orders")
+    ResponseEntity<Void> place(@RequestParam String orderId, @RequestParam int totalPence) {
+        try (var ignored = MDC.putCloseable("orderId", orderId)) {
+            if (totalPence <= 0) {
+                log.atWarn().addKeyValue("totalPence", totalPence).log("Rejected order: total is not positive");
+                return ResponseEntity.badRequest().build();
+            }
+            placed.increment();
+            value.record(totalPence);
+            log.atInfo().addKeyValue("totalPence", totalPence).log("Placed order");
+            return ResponseEntity.created(URI.create("/orders/" + orderId)).build();
+        }
+    }
+}
+```
+
+With the settings:
+
+```properties
+spring.application.name=bakery-api
+spring.main.banner-mode=off
+logging.structured.format.console=ecs
+logging.level.root=warn
+logging.level.com.bakery=info
+management.endpoints.web.exposure.include=health,prometheus
+```
+
+each request logs a line such as `{"@timestamp":"...","log":{"level":"INFO","logger":"com.bakery.OrderController"},...,"message":"Placed order","orderId":"o-1042","totalPence":1250,...}`. The same controller also records metrics with **Micrometer**, Spring's metrics library, shown in the next section.
+
+### Node.js: pino
+
+**pino** is the standard fast JSON logger for Node. A **child logger** carries context fields into every line it writes:
+
+```ts
+import { randomUUID } from "node:crypto";
+import express, { type NextFunction, type Request, type Response } from "express";
+import { pino } from "pino";
+import { Counter, Histogram, Registry, collectDefaultMetrics } from "prom-client";
+
+const logger = pino({ base: { service: "bakery-api" }, timestamp: false });
+
+const registry = new Registry();
+collectDefaultMetrics({ register: registry });
+const ordersPlaced = new Counter({ name: "bakery_orders_placed_total", help: "Orders placed", labelNames: ["channel"], registers: [registry] });
+const requestDuration = new Histogram({
+  name: "http_server_request_duration_seconds",
+  help: "HTTP request duration",
+  labelNames: ["method", "route", "status"],
+  buckets: [0.005, 0.01, 0.05, 0.1, 0.5, 1, 5],
+  registers: [registry],
+});
+
+type LoggedRequest = Request & { log: typeof logger };
+
+const app = express();
+
+app.use((req: Request, res: Response, next: NextFunction) => {
+  const requestId = req.header("x-request-id") ?? randomUUID();
+  (req as LoggedRequest).log = logger.child({ requestId });
+  const stop = requestDuration.startTimer({ method: req.method });
+  res.on("finish", () => stop({ route: req.route?.path ?? "unmatched", status: String(res.statusCode) }));
+  next();
+});
+
+app.post("/orders", (req: Request, res: Response) => {
+  const log = (req as LoggedRequest).log.child({ orderId: String(req.query.orderId) });
+  const totalPence = Number(req.query.totalPence);
+  if (!(totalPence > 0)) {
+    log.warn({ totalPence }, "Rejected order: total is not positive");
+    res.status(400).end();
+    return;
+  }
+  ordersPlaced.inc({ channel: "web" });
+  log.info({ totalPence }, "Placed order");
+  res.status(201).end();
+});
+
+app.get("/metrics", async (_req: Request, res: Response) => {
+  res.type(registry.contentType).send(await registry.metrics());
+});
+
+const server = app.listen(0, async () => {
+  const address = server.address();
+  const base = `http://localhost:${typeof address === "object" && address ? address.port : 0}`;
+  await fetch(`${base}/orders?orderId=o-1042&totalPence=1250`, { method: "POST", headers: { "x-request-id": "req-1" } });
+  await fetch(`${base}/orders?orderId=o-1043&totalPence=-5`, { method: "POST", headers: { "x-request-id": "req-2" } });
+  const metrics = await (await fetch(`${base}/metrics`)).text();
+  console.log(metrics.split("\n").filter((l) => /^bakery_orders_placed_total|^http_server_request_duration_seconds_count/.test(l)).join("\n"));
+  server.close();
+});
+```
+
+It prints:
+
+```text
+{"level":30,"service":"bakery-api","requestId":"req-1","orderId":"o-1042","totalPence":1250,"msg":"Placed order"}
+{"level":40,"service":"bakery-api","requestId":"req-2","orderId":"o-1043","totalPence":-5,"msg":"Rejected order: total is not positive"}
+```
+
+`level` 30 is info and 40 is warning. The first middleware gives each request a child logger with its request id (taken from the caller's `x-request-id` header, or a new one), and the handler adds the order id.
+
+### Rules for logs
+
+- **Levels mean something**: error for failures needing attention, warning for unusual but handled events, information for significant business events, debug for detail switched on when needed.
+- **Never log secrets or personal data**: passwords, tokens, card numbers, full addresses or email addresses of customers. Log ids instead, and redact by default (<Ref to="m-appsec" />). Logs are copied to many places and kept for a long time.
+- **Correlate**: every line carries a request id or trace id, so one request's story can be found among millions.
+- **Log once, where the error is handled**, not at every layer it passes through.
+
+## Metrics
+
+**Metrics** are numbers aggregated over time: request rates, error rates, durations, queue lengths. They are cheap to keep, fast to query, and the basis of dashboards and alerts. Three kinds cover nearly everything:
+
+- **Counter**: only goes up (orders placed, errors).
+- **Gauge**: a current value (queue length, connections in use).
+- **Histogram**: a distribution (request durations, order values), from which percentiles such as p99 are computed.
+
+For every service, start with the **RED** metrics for each endpoint: **R**ate, **E**rrors and **D**uration (<Ref to="m-observability" />). The frameworks record these for you; add **business metrics** (orders placed, payments failed) yourself.
+
+In **Spring**, Micrometer's `Counter` and `DistributionSummary` in the controller above are exposed at `/actuator/prometheus` (with `micrometer-registry-prometheus`) for Prometheus to scrape. After the two orders:
+
+```bash
+curl -s -o /dev/null -X POST "localhost:8080/orders?orderId=o-1042&totalPence=1250"
+curl -s -o /dev/null -X POST "localhost:8080/orders?orderId=o-1043&totalPence=-5"
+curl -s localhost:8080/actuator/prometheus | grep -E "^bakery_(orders_placed|order_value)"
+```
+
+prints:
+
+```text
+bakery_order_value_pence_count 1
+bakery_order_value_pence_sum 1250.0
+bakery_order_value_pence_max 1250.0
+bakery_orders_placed_total{channel="web"} 1.0
+```
+
+Only the placed order was counted. Spring also records `http_server_requests_seconds` for every endpoint automatically.
+
+In **Node**, `prom-client` does the same; the program above prints its counter and the request-duration histogram it recorded per route and status:
+
+```text
+bakery_orders_placed_total{channel="web"} 1
+http_server_request_duration_seconds_count{method="POST",route="/orders",status="201"} 1
+http_server_request_duration_seconds_count{method="POST",route="/orders",status="400"} 1
+```
+
+In **.NET**, metrics use the built-in `System.Diagnostics.Metrics` API (`Meter`, `Counter<T>`, `Histogram<T>`), exported through OpenTelemetry, shown with tracing below.
+
+**Watch the labels.** Each distinct combination of label values is a separate time series. Labels such as `channel`, `route` and `status` have a few values; never use order ids, customer ids or raw URLs as labels, or the metrics system will drown in millions of series (high **cardinality**).
+
+## Distributed tracing
+
+A **trace** follows one request through every service and component it touches; each step is a **span** with a start, a duration, attributes and a parent. Services pass the trace context to each other in the W3C **`traceparent`** HTTP header (and in message headers), which the instrumentation libraries add and read for you (<Ref to="m-observability" />).
+
+### .NET: OpenTelemetry
+
+.NET's tracing API is built in (`ActivitySource` creates spans, called activities), and the OpenTelemetry packages instrument ASP.NET Core, `HttpClient` and many libraries, and export spans and metrics. This example exports to memory so it can print what was recorded; production exports to a collector with `AddOtlpExporter()`:
+
+```csharp
+#:sdk Microsoft.NET.Sdk.Web
+#:package OpenTelemetry.Extensions.Hosting@1.21.0
+#:package OpenTelemetry.Instrumentation.AspNetCore@1.21.0
+#:package OpenTelemetry.Exporter.InMemory@1.21.0
+#:property PublishAot=false
+
+using System.Diagnostics;
+using System.Diagnostics.Metrics;
+using OpenTelemetry.Metrics;
+using OpenTelemetry.Resources;
+using OpenTelemetry.Trace;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Logging.SetMinimumLevel(LogLevel.Warning);
+builder.WebHost.UseUrls("http://127.0.0.1:0");
+
+var exportedSpans = new List<Activity>();
+var exportedMetrics = new List<Metric>();
+builder.Services.AddOpenTelemetry()
+    .ConfigureResource(r => r.AddService("bakery-api"))
+    .WithTracing(t => t
+        .AddAspNetCoreInstrumentation()
+        .AddSource(Bakery.Telemetry.Source.Name)
+        .AddInMemoryExporter(exportedSpans))
+    .WithMetrics(m => m
+        .AddAspNetCoreInstrumentation()
+        .AddMeter(Bakery.Telemetry.Meter.Name)
+        .AddInMemoryExporter(exportedMetrics));
+var app = builder.Build();
+
+app.MapPost("/orders", async (int totalPence) =>
+{
+    using var activity = Bakery.Telemetry.Source.StartActivity("price order");
+    activity?.SetTag("order.total_pence", totalPence);
+    await Task.Delay(20);
+    Bakery.Telemetry.OrdersPlaced.Add(1, new KeyValuePair<string, object?>("channel", "web"));
+    Bakery.Telemetry.OrderValue.Record(totalPence);
+    return Results.Created("/orders/o-1", null);
+});
+
+await app.StartAsync();
+using var http = new HttpClient { BaseAddress = new Uri(app.Urls.First()) };
+foreach (var total in new[] { 1250, 450, 3100 }) await http.PostAsync($"/orders?totalPence={total}", null);
+await app.StopAsync();
+app.Services.GetRequiredService<MeterProvider>().ForceFlush();
+
+foreach (var span in exportedSpans.Where(s => s.TraceId == exportedSpans[0].TraceId).OrderBy(s => s.StartTimeUtc))
+    Console.WriteLine($"span '{span.DisplayName}' kind {span.Kind}, parent {(span.ParentSpanId == default ? "none" : "the request")}");
+Console.WriteLine($"traces: {exportedSpans.Select(s => s.TraceId).Distinct().Count()}");
+foreach (var metric in exportedMetrics.Where(m => m.MeterName == Bakery.Telemetry.Meter.Name).DistinctBy(m => m.Name))
+{
+    foreach (ref readonly var point in metric.GetMetricPoints())
+    {
+        var value = metric.MetricType == MetricType.LongSum ? point.GetSumLong().ToString() : $"count {point.GetHistogramCount()}, sum {point.GetHistogramSum()}";
+        Console.WriteLine($"metric {metric.Name} ({metric.Unit}): {value}");
+    }
+}
+Console.WriteLine(exportedMetrics.Any(m => m.Name == "http.server.request.duration") ? "and the built-in http.server.request.duration histogram" : "");
+
+namespace Bakery
+{
+    static class Telemetry
+    {
+        public static readonly ActivitySource Source = new("Bakery.Orders");
+        public static readonly Meter Meter = new("Bakery.Orders");
+        public static readonly Counter<long> OrdersPlaced = Meter.CreateCounter<long>("bakery.orders.placed", unit: "{order}");
+        public static readonly Histogram<int> OrderValue = Meter.CreateHistogram<int>("bakery.order.value", unit: "p");
+    }
+}
+```
+
+It prints:
+
+```text
+span 'POST /orders' kind Server, parent none
+span 'price order' kind Internal, parent the request
+traces: 3
+metric bakery.orders.placed ({order}): 3
+metric bakery.order.value (p): count 3, sum 4800
+and the built-in http.server.request.duration histogram
+```
+
+Each request made one trace: the server span from the ASP.NET Core instrumentation, with the custom `price order` span as its child. The custom counter and histogram were exported alongside the framework's own HTTP duration histogram.
+
+### Spring Boot and Node.js
+
+In **Spring Boot**, add the `spring-boot-starter-opentelemetry` starter and set the OTLP endpoint of your collector in `application.properties` (the property names are in the Spring Boot reference under "Tracing"). Micrometer Observation then creates spans for incoming and outgoing HTTP requests, JDBC calls and Kafka messages, propagates `traceparent`, and puts the trace id into the MDC, so the structured logs carry it.
+
+In **Node**, the OpenTelemetry SDK with the automatic instrumentations patches `http`, Express, `pg`, Redis clients and more. It must load before the application, so it lives in its own file, loaded with `node --import ./src/telemetry.ts src/server.ts`:
+
+```ts
+import { getNodeAutoInstrumentations } from "@opentelemetry/auto-instrumentations-node";
+import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
+import { NodeSDK } from "@opentelemetry/sdk-node";
+
+const sdk = new NodeSDK({
+  serviceName: "bakery-api",
+  traceExporter: new OTLPTraceExporter({ url: process.env.OTEL_EXPORTER_OTLP_ENDPOINT }),
+  instrumentations: [getNodeAutoInstrumentations()],
+});
+
+sdk.start();
+process.once("SIGTERM", () => void sdk.shutdown());
+```
+
+The standard environment variables (`OTEL_SERVICE_NAME`, `OTEL_EXPORTER_OTLP_ENDPOINT`, `OTEL_TRACES_SAMPLER`) work the same in every language, so operators can configure telemetry without code changes. Busy services **sample** traces (keep, say, 10%, plus every trace with an error) to control cost.
+
+## Common mistakes
+
+- **Unstructured logs** built with string concatenation.
+- **Secrets or personal data in logs**, labels or span attributes.
+- **No correlation id**, so one request cannot be followed.
+- **Logging the same error at every layer.**
+- **High-cardinality labels** (user ids, order ids, full URLs) on metrics.
+- **Only infrastructure metrics** (CPU, memory) and nothing about what users experience.
+- **Tracing that stops at the service boundary** because context is not propagated through HTTP calls or messages.
+- **Telemetry configured in code per environment** instead of through the standard environment variables.
+
+## Practice
+
+**1. (warm-up)** What is wrong with `logger.LogInformation($"Order {orderId} placed by {customerEmail}")`, and how would you write it?
+
+<Solution>
+
+Two things. String interpolation makes the message a plain string, so `orderId` is not a separate field you can search on. And it logs the customer's **email address**, personal data that should not be in logs. Write `logger.LogInformation("Order {OrderId} placed by customer {CustomerId}", orderId, customerId)`: a template with separate fields, and an id instead of the email. The same applies to SLF4J (`log.atInfo().addKeyValue("orderId", id).log("Order placed")`) and pino (`log.info({ orderId, customerId }, "Order placed")`).
+
+</Solution>
+
+**2. (standard)** Which metric type and labels would you use for: (a) payments that failed, by reason; (b) how long calls to the payment provider take; (c) jobs waiting in the receipt queue?
+
+<Solution>
+
+(a) A counter, `payments_failed_total`, with a `reason` label that has a small fixed set of values (`declined`, `timeout`, `error`), never the raw error message. (b) A histogram of durations in seconds, labelled by `outcome` (`success`, `failure`), from which you read the p50, p95 and p99. (c) A gauge of the current queue length; also consider a gauge of the age of the oldest job, which shows a stuck worker even when the queue is short.
+
+</Solution>
+
+**3. (stretch)** A customer reports that placing an order "sometimes takes ten seconds". With the telemetry in this chapter, describe how you would find out why.
+
+<Solution>
+
+Start with metrics: the `POST /orders` duration histogram shows how often requests are slow (its p99) and when it started, and whether errors rose at the same time. Then find slow traces for `POST /orders` in the tracing backend (filter by duration over, say, 5 s): the spans show where the time went, such as a slow database query, a payment-provider call waiting for a timeout, or a lock. Use the trace id to pull that request's structured logs, which show the order id and any warnings. Fix the cause (an index, a shorter timeout with a retry, a circuit breaker, <Ref to="m-resilience" />), and add an alert on the endpoint's p99 so the team hears about it before customers do.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **OpenTelemetry** is the standard: instrument once, send OTLP to a collector, choose backends freely.
+- **Structured logs** with templates and context: `ILogger` with scopes and JSON output in .NET, SLF4J with MDC and `logging.structured.format.console` in Spring, pino child loggers in Node. No secrets or personal data; correlate with request and trace ids.
+- **Metrics**: counters, gauges and histograms; RED metrics per endpoint plus business metrics; `System.Diagnostics.Metrics`, Micrometer, prom-client; keep label cardinality low.
+- **Traces**: spans linked by parent ids and propagated with `traceparent`; OpenTelemetry instrumentation for ASP.NET Core, Spring (`spring-boot-starter-opentelemetry`) and Node (the Node SDK loaded with `--import`); sample in busy services.
+
+## Go deeper
+
+- [OpenTelemetry documentation](https://opentelemetry.io/docs/), the OpenTelemetry project. Concepts, the collector and each language's SDK.
+- [Logging in .NET](https://learn.microsoft.com/en-us/dotnet/core/extensions/logging), Microsoft. `ILogger`, templates, scopes and providers.
+- [.NET observability with OpenTelemetry](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/observability-with-otel), Microsoft. Metrics, traces and exporters in .NET.
+- [Spring Boot reference: logging](https://docs.spring.io/spring-boot/reference/features/logging.html), the Spring team. Including structured logging formats.
+- [Micrometer documentation](https://docs.micrometer.io/micrometer/reference/), the Micrometer team. Counters, timers, distribution summaries and registries.
+- [pino](https://getpino.io/), the pino team. Fast JSON logging for Node.
