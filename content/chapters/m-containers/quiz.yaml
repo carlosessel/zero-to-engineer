@@ -1,0 +1,36 @@
+- question: What is a container, underneath?
+  options:
+  - A Linux process isolated by namespaces and limited by cgroups
+  - A small virtual machine
+  answer: 0
+  explanation: It shares the host's kernel.
+- question: Why copy package files and install dependencies before copying the code?
+  options:
+  - So a code change does not invalidate the cached dependency layer
+  - It makes images smaller
+  answer: 0
+  explanation: Layers rebuild from the first changed one onwards.
+- question: What does a multi-stage build achieve?
+  options:
+  - A final image without compilers and build-only dependencies
+  - Faster networking
+  answer: 0
+  explanation: Smaller and safer images.
+- question: Why prefer CMD ["node", "server.js"] to CMD node server.js?
+  options:
+  - The app runs as PID 1 and receives SIGTERM directly
+  - It is shorter
+  answer: 0
+  explanation: A shell may not forward signals.
+- question: Is it safe to delete a secret in a later Dockerfile layer?
+  options:
+  - No; earlier layers still contain it
+  - 'Yes'
+  answer: 0
+  explanation: Inject secrets at run time.
+- question: How do services in a Compose file reach each other?
+  options:
+  - By service name on the network Compose creates
+  - By the host's IP address
+  answer: 0
+  explanation: For example db:5432.

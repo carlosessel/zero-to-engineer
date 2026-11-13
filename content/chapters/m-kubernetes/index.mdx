@@ -1,0 +1,311 @@
+---
+title: "Kubernetes"
+summary: "Pods, deployments, services, configuration, scaling and health checks."
+prerequisites: [m-containers, m-load-balancing]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will understand how Kubernetes runs containers across a cluster of machines: the declarative model and the control loops behind it, pods, deployments and rolling updates, services and ingress, configuration and secrets, health probes, resource requests and limits, and autoscaling. You will be able to read and write the manifests for a typical web service and know what to check when it misbehaves. Kubernetes is the most widely used platform for running containers in production, offered by every cloud (Amazon EKS, Azure AKS, Google GKE) and run on-premises.
+
+## What Kubernetes does
+
+Running one container on one machine is easy (<Ref to="m-containers" />). Running hundreds across dozens of machines raises questions: which machine has room, what happens when a machine dies, how do containers find each other, how do you update without downtime, how do you scale? **Kubernetes** (often **k8s**) answers them. Given a description of what you want running, it **schedules** containers onto machines (**nodes**), restarts or replaces them when they fail, gives them stable network addresses, rolls out new versions gradually, and scales them.
+
+A cluster has a **control plane** (the API server, which everything talks to; **etcd**, the consistent store holding the cluster's state, kept with Raft, <Ref to="m-consistency-consensus" />; the **scheduler**; and **controllers**) and **worker nodes**, each running a **kubelet** agent and a container runtime. You interact through the API, usually with `kubectl` and YAML **manifests**.
+
+## Declarative, with control loops
+
+You do not tell Kubernetes *what to do*; you tell it *what you want*, the **desired state**, and **controllers** continuously compare it with the **actual state** and act to close the gap. This is a **reconciliation loop**, and it is why Kubernetes heals itself: a crashed container or a lost node is just a difference to correct.
+
+```ts
+type Pod = { name: string; node: string; healthy: boolean };
+
+let nextId = 1;
+function reconcile(desired: number, pods: Pod[], nodes: string[]): { pods: Pod[]; actions: string[] } {
+  const actions: string[] = [];
+  let running = pods.filter((p) => p.healthy && nodes.includes(p.node));
+  for (const p of pods) if (!running.includes(p)) actions.push(`remove ${p.name} (${p.healthy ? "node lost" : "unhealthy"})`);
+  while (running.length < desired) {
+    const counts = nodes.map((n) => running.filter((p) => p.node === n).length);
+    const node = nodes[counts.indexOf(Math.min(...counts))];
+    const pod = { name: `orders-${nextId++}`, node, healthy: true };
+    running = [...running, pod];
+    actions.push(`create ${pod.name} on ${node}`);
+  }
+  while (running.length > desired) {
+    const extra = running.at(-1)!;
+    running = running.slice(0, -1);
+    actions.push(`delete ${extra.name}`);
+  }
+  return { pods: running, actions };
+}
+
+let state = reconcile(3, [], ["node-a", "node-b"]);
+console.log(state.actions);
+state.pods[0].healthy = false;
+state = reconcile(3, state.pods, ["node-b", "node-c"]);
+console.log(state.actions);
+state = reconcile(2, state.pods, ["node-b", "node-c"]);
+console.log(state.actions, state.pods.map((p) => `${p.name}@${p.node}`));
+```
+
+It prints three rounds. First, three pods are created and spread across two nodes. Then one pod becomes unhealthy and `node-a` disappears: the loop removes the lost and unhealthy pods and creates replacements on the nodes that exist. Finally the desired count drops to two and one pod is deleted. Real controllers do this constantly, for every kind of object, which is why you change the cluster by changing manifests and applying them (`kubectl apply -f`), ideally from Git (**GitOps**, with tools such as Argo CD or Flux).
+
+## Pods
+
+A **pod** is the smallest unit Kubernetes runs: one or more containers that share a network address and can share volumes, always scheduled together. Usually a pod has one application container, sometimes plus **sidecars** (<Ref to="m-cloud-patterns" />) or **init containers** that run first (for example, waiting for a dependency or running migrations). Pods are **disposable**: they get new IP addresses when replaced and should never be managed one by one. You create them through higher-level objects.
+
+## Deployments and rolling updates
+
+A **Deployment** manages a set of identical, stateless pods: it says which image to run and how many **replicas**, and it handles updates. Change the image tag and apply: the deployment performs a **rolling update**, creating new pods and removing old ones gradually, controlled by `maxSurge` (how many extra pods may exist during the update) and `maxUnavailable` (how many may be missing), waiting for each new pod to become **ready** before continuing. If the new version fails its readiness checks, the rollout stalls instead of replacing healthy pods, and `kubectl rollout undo` goes back.
+
+```yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-api
+  labels:
+    app: orders-api
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: orders-api
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: orders-api
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: api
+          image: registry.example.com/orders-api:1.4.2
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: orders-config
+            - secretRef:
+                name: orders-secrets
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              memory: 512Mi
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            runAsNonRoot: true
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+```
+
+Three replicas of version 1.4.2, updated one extra pod at a time and never below three ready pods; configuration from a ConfigMap and a Secret; resource requests and a memory limit; separate readiness and liveness probes (<Ref to="m-load-balancing" />); 30 seconds for graceful shutdown after SIGTERM (<Ref to="m-linux" />); and a locked-down security context. Labels (`app: orders-api`) connect objects: the deployment's selector finds its pods by label, and so will the service.
+
+A rolling update with these settings proceeds like this:
+
+```ts
+function rollingUpdate(replicas: number, maxSurge: number, maxUnavailable: number): string[] {
+  let oldPods = replicas;
+  let newPods = 0;
+  const steps: string[] = [`start: ${oldPods} old, ${newPods} new`];
+  while (oldPods > 0) {
+    const canCreate = Math.min(replicas + maxSurge - (oldPods + newPods), replicas - newPods);
+    newPods += canCreate;
+    const minAvailable = replicas - maxUnavailable;
+    const canRemove = Math.min(oldPods, oldPods + newPods - minAvailable);
+    oldPods -= canRemove;
+    steps.push(`+${canCreate} new, -${canRemove} old: ${oldPods} old, ${newPods} new`);
+  }
+  return steps;
+}
+
+console.log(rollingUpdate(3, 1, 0));
+console.log(rollingUpdate(4, 2, 1));
+```
+
+It prints `start: 3 old, 0 new` and then three steps of `+1 new, -1 old` ending at `0 old, 3 new` for the first deployment (never fewer than three running, one extra at a time), and a faster two-step update for the second, which allows two extra pods and one missing. In the real controller, each step waits until the new pods pass their readiness probes.
+
+Other workload kinds: **StatefulSets** for pods that need stable names and their own persistent storage (databases, Kafka brokers; though managed cloud databases are usually a better choice than running your own); **DaemonSets** for one pod per node (log collectors, monitoring agents); **Jobs** and **CronJobs** for run-to-completion and scheduled work.
+
+## Services and ingress
+
+Pods come and go with new IP addresses, so clients need something stable. A **Service** gives a set of pods (chosen by label) one stable virtual IP address and DNS name, and load-balances connections across the pods that are **ready** (<Ref to="m-load-balancing" />):
+
+```yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders-api
+spec:
+  selector:
+    app: orders-api
+  ports:
+    - port: 80
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: shop
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts: [api.example.com]
+      secretName: api-example-com-tls
+  rules:
+    - host: api.example.com
+      http:
+        paths:
+          - path: /orders
+            pathType: Prefix
+            backend:
+              service:
+                name: orders-api
+                port:
+                  number: 80
+```
+
+Inside the cluster, other services reach it at `http://orders-api` (or `orders-api.<namespace>.svc.cluster.local`). The default service type, `ClusterIP`, is internal only; `LoadBalancer` asks the cloud for an external load balancer. For HTTP, an **Ingress** (or its successor, the **Gateway API**) routes external requests by host and path to services, with TLS, through an ingress controller such as NGINX or Envoy-based gateways: a layer 7 reverse proxy for the cluster.
+
+## Configuration and secrets
+
+**ConfigMaps** hold non-secret configuration; **Secrets** hold passwords, keys and certificates. Both can be exposed to pods as environment variables or files (<Ref to="m-cloud-patterns" />), so one image runs in every environment. Kubernetes Secrets are only base64-encoded by default, not encrypted: enable encryption at rest in etcd, restrict who can read them with role-based access control, and in many organisations sync them from a real secrets manager (with the External Secrets Operator or a cloud CSI driver) rather than storing them in Git.
+
+## Resources, scheduling and autoscaling
+
+Each container declares **requests** (what it needs; the scheduler places pods only where the requested CPU and memory fit) and **limits** (the maximum it may use). Exceeding the **memory limit** gets the container killed (OOMKilled, exit status 137); exceeding a **CPU limit** throttles it, slowing it down. Many teams set memory limits but leave CPU limits off, so pods can use idle CPU, relying on requests for fair sharing. Without requests, the scheduler packs pods blindly and nodes become overloaded.
+
+The **Horizontal Pod Autoscaler** (HPA) changes a deployment's replica count based on a metric, most often average CPU utilisation relative to requests, using:
+
+desiredReplicas = ceil(currentReplicas × currentMetric ÷ targetMetric)
+
+```ts
+function desiredReplicas(current: number, currentUtilisation: number, target: number, min: number, max: number): number {
+  const ratio = currentUtilisation / target;
+  if (Math.abs(ratio - 1) <= 0.1) return current;
+  return Math.min(max, Math.max(min, Math.ceil(current * ratio)));
+}
+
+for (const cpu of [30, 58, 65, 90, 250]) {
+  console.log(`4 pods at ${cpu}% CPU (target 60%) -> ${desiredReplicas(4, cpu, 60, 2, 10)} pods`);
+}
+```
+
+It prints 2, 4, 4, 6 and 10 pods for 30%, 58%, 65%, 90% and 250%. Small deviations within the 10% tolerance change nothing (to avoid flapping), and the result is clamped to the configured minimum and maximum. The HPA can also scale on custom metrics such as requests per second or queue length (KEDA scales on queue depth, <Ref to="m-cloud-patterns" />). The **cluster autoscaler** (or Karpenter) adds nodes when pods cannot be scheduled and removes idle ones. A **PodDisruptionBudget** stops voluntary disruptions (node upgrades) from taking down too many replicas at once.
+
+## Debugging
+
+The commands you will use most:
+
+```bash
+kubectl get pods -l app=orders-api -o wide
+kubectl describe pod orders-api-7d9f8c6b5-x2k4p
+kubectl logs orders-api-7d9f8c6b5-x2k4p --previous
+kubectl get events --sort-by=.lastTimestamp | tail -20
+kubectl rollout status deployment/orders-api
+kubectl rollout undo deployment/orders-api
+kubectl exec -it orders-api-7d9f8c6b5-x2k4p -- sh
+kubectl top pods
+```
+
+Common pod states and what they usually mean:
+
+- **Pending**: cannot be scheduled (not enough CPU or memory for its requests, or a node selector nothing matches). `describe` shows why.
+- **ImagePullBackOff**: the image name or tag is wrong, or the cluster lacks permission to pull it.
+- **CrashLoopBackOff**: the container starts and exits repeatedly; read `logs --previous`. Often a missing configuration value or an unreachable dependency at start-up.
+- **OOMKilled**: exceeded its memory limit.
+- **Running but not Ready**: failing its readiness probe, so it receives no traffic.
+
+## Should you use Kubernetes?
+
+Kubernetes is powerful and complex. A handful of services may be better served by simpler platforms that still run containers: managed container services (AWS App Runner and ECS Fargate, Azure Container Apps, Google Cloud Run) or a platform-as-a-service. Kubernetes pays off with many services, teams that need a common platform, or requirements those services do not meet, and even then a managed control plane (EKS, AKS, GKE) is the norm.
+
+## Common mistakes
+
+- **No resource requests**, or memory limits below what the runtime needs.
+- **Liveness probes that check dependencies**, so a database blip restarts every pod (<Ref to="m-load-balancing" />).
+- **No readiness probe**, so traffic reaches pods before they are ready.
+- **`latest` image tags**, making rollouts and rollbacks unpredictable.
+- **Ignoring SIGTERM**, so rolling updates drop requests.
+- **Secrets in plain manifests in Git.**
+- **Running databases in the cluster** without the expertise to operate them.
+- **Editing live objects with `kubectl edit`** instead of changing manifests in Git.
+
+## Practice
+
+**1. (warm-up)** What is the difference between a pod, a deployment and a service?
+
+<Solution>
+
+A pod is one or more containers running together with one IP address; it is disposable. A deployment keeps a number of identical pods running and performs rolling updates. A service gives a set of pods (chosen by label) a stable address and DNS name and load-balances across the ready ones.
+
+</Solution>
+
+**2. (warm-up)** A pod is stuck in Pending. Name two likely causes and the command that tells you which.
+
+<Solution>
+
+No node has enough unrequested CPU or memory for its requests, or its scheduling constraints (node selector, affinity, taints) match no node; a persistent volume it needs may also be unavailable. `kubectl describe pod <name>` shows the scheduler's events explaining why.
+
+</Solution>
+
+**3. (standard)** Using the HPA formula, how many replicas does a deployment of 5 pods at 85% CPU with a 50% target and a maximum of 8 get? What if the maximum were 20?
+
+<Solution>
+
+ceil(5 × 85 ÷ 50) = ceil(8.5) = 9, clamped to the maximum of 8. With a maximum of 20, it scales to 9.
+
+</Solution>
+
+**4. (standard)** A deployment's new version crashes on start because a configuration value is missing. What happens during the rolling update with `maxUnavailable: 0`, and how do you recover?
+
+<Solution>
+
+The new pods enter CrashLoopBackOff and never become ready, so the rollout stalls: with `maxUnavailable: 0`, Kubernetes removes no old pods until new ones are ready, so the old version keeps serving all traffic. `kubectl rollout status` shows it stuck and `kubectl logs --previous` shows the error. Recover with `kubectl rollout undo` (or by reverting the change in Git), then add the missing configuration and validate configuration at start-up (<Ref to="m-cloud-patterns" />).
+
+</Solution>
+
+**5. (stretch)** Design the manifests' key settings for a web API that must survive node upgrades with no downtime.
+
+<Solution>
+
+At least three replicas spread across nodes and zones (topology spread constraints or pod anti-affinity); a PodDisruptionBudget allowing at most one unavailable pod; rolling updates with `maxUnavailable: 0`; a readiness probe that reflects real readiness; a liveness probe that checks only the process itself; graceful shutdown on SIGTERM with `terminationGracePeriodSeconds` longer than the longest request, plus a short pre-stop delay so the service removes the pod from load balancing before it stops accepting connections; resource requests so the scheduler places replicas sensibly; and an HPA with a minimum of three.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Kubernetes schedules containers across **nodes**, keeps the **desired state** with **control loops**, and heals, updates and scales them. Its state lives in **etcd**.
+- **Pods** are disposable units of one or more containers; manage them through **Deployments** (stateless, rolling updates with `maxSurge` and `maxUnavailable`), StatefulSets, DaemonSets, Jobs and CronJobs.
+- **Services** give pods stable names and load balancing; **Ingress** or the Gateway API route external HTTP.
+- **ConfigMaps** and **Secrets** configure pods; protect Secrets properly.
+- **Requests** drive scheduling, **limits** cap use (memory over limit means OOMKilled); probes control traffic and restarts.
+- The **HPA** scales replicas by metric with a simple ratio; cluster autoscalers add nodes; PodDisruptionBudgets protect availability.
+- Debug with `get`, `describe`, `logs --previous`, `events` and `rollout`; consider simpler container platforms for small systems.
+
+## Go deeper
+
+- [Kubernetes concepts](https://kubernetes.io/docs/concepts/), the Kubernetes authors. The official explanation of every object.
+- [Kubernetes basics tutorial](https://kubernetes.io/docs/tutorials/kubernetes-basics/), the Kubernetes authors. Deploy, expose, scale and update an app.
+- [Horizontal Pod Autoscaling](https://kubernetes.io/docs/tasks/run-application/horizontal-pod-autoscale/), the Kubernetes authors. The algorithm, including tolerance and behaviour settings.
+- [Configure liveness, readiness and startup probes](https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/), the Kubernetes authors. Probes in detail.
+- [Kubernetes the hard way](https://github.com/kelseyhightower/kubernetes-the-hard-way), Kelsey Hightower. Building a cluster by hand to understand every part.

@@ -4,6 +4,22 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 9 (Infrastructure and operations)
+
+Added
+- Seven chapters: Linux for engineers; containers and Docker in depth; Kubernetes; cloud and infrastructure as code (networks, IAM, cost, Terraform); continuous delivery (pipelines, trunk-based development, feature flags, canaries, DORA metrics); observability (structured logs, RED and USE metrics, tracing, OpenTelemetry, alerting); and reliability engineering (SLOs, error budgets, burn-rate alerts, incidents, blameless postmortems, backups). About 14,800 words, 35 practice problems, 42 quiz questions, 35 checked resources.
+- Real shell examples, checked in a fresh folder: permissions and the umask, a worker that handles SIGTERM gracefully beside one killed by SIGKILL (exit status 137), and log analysis with awk, grep and sort. A Python example writes structured JSON logs with a request id; another plans subnets with `ipaddress`. TypeScript simulations cover Docker layer caching, the Kubernetes reconciliation loop, rolling updates and the autoscaler formula, IAM policy evaluation, a Terraform-style plan, sticky percentage feature flags, canary analysis, DORA metrics, RED metrics from a histogram, trace context propagation, nines and error budgets, and burn-rate alerts. Kubernetes and GitHub Actions YAML is parsed and its key settings asserted; the Compose file is validated with `docker compose config` when Docker checks are on.
+- Earlier chapters now link to the containers, Kubernetes, delivery, observability and reliability chapters.
+- 78 glossary terms.
+
+Fixed (found while checking)
+- A shell example's fixed half-second wait was too short on a busy machine; it now waits until the worker reports it has started.
+- Example names clashing with browser globals (`Window`, `Request`) were renamed.
+- Three glossary entries would have linked ordinary words in other courses ("Linux", "Metrics", "Red"); they were renamed or lost the alias. Two resources blocked automated checks or were paid (Netflix's blog, an O'Reilly book) and were replaced with free equivalents from the same authors' sources.
+
+Not verified
+- No person has reviewed these chapters. Kubernetes, Terraform, Docker builds and cloud services were not run (no cluster, Terraform or Docker daemon here). Problem counts are below the standard's 30 to 50.
+
 ### 2026-11-13: Software Engineering Mastery, part 8 (Distributed systems and messaging)
 
 Added

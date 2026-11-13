@@ -1,0 +1,51 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    ["create orders-1 on node-a", "create orders-2 on node-b", "create orders-3 on node-a"]
+    ["remove orders-1 (unhealthy)", "remove orders-3 (node lost)", "create orders-4 on node-c", "create orders-5 on node-b"]
+    ["delete orders-5"] ["orders-2@node-b", "orders-4@node-c"]
+- block: 2
+  lang: yaml
+  check: illustration
+  note: A Deployment manifest; applying it needs a cluster. The check parses it and confirms the settings the text describes.
+  verify: |
+    import yaml
+    d = yaml.safe_load(block)
+    assert d['kind'] == 'Deployment' and d['spec']['replicas'] == 3
+    assert d['spec']['selector']['matchLabels'] == d['spec']['template']['metadata']['labels'] == {'app': 'orders-api'}
+    assert d['spec']['strategy']['rollingUpdate'] == {'maxSurge': 1, 'maxUnavailable': 0}
+    c = d['spec']['template']['spec']['containers'][0]
+    assert c['resources']['limits'] == {'memory': '512Mi'} and c['readinessProbe']['httpGet']['path'] == '/health/ready'
+    assert c['securityContext']['runAsNonRoot'] is True
+- block: 3
+  lang: ts
+  check: ts
+  output: |
+    ["start: 3 old, 0 new", "+1 new, -1 old: 2 old, 1 new", "+1 new, -1 old: 1 old, 2 new", "+1 new, -1 old: 0 old, 3 new"]
+    ["start: 4 old, 0 new", "+2 new, -3 old: 1 old, 2 new", "+2 new, -1 old: 0 old, 4 new"]
+- block: 4
+  lang: yaml
+  check: illustration
+  note: A Service and an Ingress; applying them needs a cluster. The check parses both and confirms the service selects the deployment's pods and the ingress routes to it.
+  verify: |
+    import yaml
+    svc, ing = list(yaml.safe_load_all(block))
+    assert svc['kind'] == 'Service' and svc['spec']['selector'] == {'app': 'orders-api'}
+    assert svc['spec']['ports'][0] == {'port': 80, 'targetPort': 8080}
+    backend = ing['spec']['rules'][0]['http']['paths'][0]['backend']['service']
+    assert ing['kind'] == 'Ingress' and backend == {'name': 'orders-api', 'port': {'number': 80}}
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    4 pods at 30% CPU (target 60%) -> 2 pods
+    4 pods at 58% CPU (target 60%) -> 4 pods
+    4 pods at 65% CPU (target 60%) -> 4 pods
+    4 pods at 90% CPU (target 60%) -> 6 pods
+    4 pods at 250% CPU (target 60%) -> 10 pods
+- block: 6
+  lang: bash
+  check: not-run
+  reason: kubectl commands against a running cluster and pod, which this course does not provide.

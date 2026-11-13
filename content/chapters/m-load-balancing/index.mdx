@@ -16,7 +16,7 @@ Running one server is a single point of failure and a hard limit on capacity. Ru
 - **routes around failures**, so a crashed or overloaded server stops receiving traffic;
 - gives clients **one stable address** while servers come and go during deployments and autoscaling.
 
-That something is a **load balancer**. It can be a managed cloud service (AWS Application and Network Load Balancers, Azure Load Balancer and Application Gateway, Google Cloud Load Balancing), software you run (Nginx, HAProxy, Envoy, Traefik), or built into a platform (Kubernetes Services and Ingress, in the infrastructure part of this course).
+That something is a **load balancer**. It can be a managed cloud service (AWS Application and Network Load Balancers, Azure Load Balancer and Application Gateway, Google Cloud Load Balancing), software you run (Nginx, HAProxy, Envoy, Traefik), or built into a platform (Kubernetes Services and Ingress, <Ref to="m-kubernetes" />).
 
 ## Layer 4 and layer 7
 
@@ -94,7 +94,7 @@ A balancer must know which servers can take traffic:
 
 Design health endpoints carefully. A **liveness** check answers "is this process alive?" and should be trivial (failing it restarts the process). A **readiness** check answers "can this instance serve traffic right now?" (warmed up, connected to its database) and removes it from the balancer without restarting it. A readiness check that fails whenever a shared dependency is slow can remove *every* server at once and turn a slowdown into a total outage, so check only what this instance needs, and prefer degrading over going unready.
 
-When a server is being removed (a deployment, scaling in), **connection draining** stops sending it new requests but lets in-flight requests finish, up to a timeout. Your application should handle the shutdown signal gracefully: stop accepting new work, finish what is in progress, then exit. Together these make **rolling deployments** invisible to users.
+When a server is being removed (a deployment, scaling in), **connection draining** stops sending it new requests but lets in-flight requests finish, up to a timeout. Your application should handle the shutdown signal gracefully: stop accepting new work, finish what is in progress, then exit. Together these make **rolling deployments** invisible to users (<Ref to="m-delivery" />).
 
 ## Sticky sessions
 

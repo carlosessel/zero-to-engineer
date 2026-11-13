@@ -1,0 +1,292 @@
+---
+title: "Observability: logs, metrics and traces"
+summary: "Structured logging, metrics (RED and USE), distributed tracing, OpenTelemetry, dashboards and alerts."
+prerequisites: [m-distributed-basics]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will instrument services so that, when something goes wrong in production, you can find out what and why without guessing or shipping new code: structured logs with correlation ids, metrics chosen with the RED and USE methods, distributed traces that follow a request across services, OpenTelemetry to produce all three in a standard way, and dashboards and alerts that point at real user pain. In a system of many services (<Ref to="m-distributed-basics" />), observability is the difference between a ten-minute diagnosis and a ten-hour one.
+
+## Monitoring and observability
+
+**Monitoring** watches for known failure modes: is the CPU high, is the service up, is the error rate above 1%? **Observability** is the ability to understand *any* state of the system from the data it emits, including failures nobody predicted: "why are checkouts slow only for customers paying in euros on the mobile app?". The data comes from three main **signals**:
+
+- **Logs**: timestamped records of discrete events, rich in detail.
+- **Metrics**: numbers aggregated over time, cheap to store and fast to query, ideal for dashboards and alerts.
+- **Traces**: the path of one request through many services, with timings for each step.
+
+A fourth, **continuous profiling** (where CPU and memory go in production over time, <Ref to="m-performance" />), is increasingly common.
+
+## Logs
+
+### Structured logging
+
+Free-text log lines (`User 17 placed order 7 for £54`) are easy to write and hard to search at scale. **Structured logs** write each event as key-value fields, usually JSON, so tools can filter, group and aggregate by any field:
+
+```python
+import contextvars
+import json
+import logging
+import sys
+import uuid
+
+request_id = contextvars.ContextVar("request_id", default="-")
+
+
+class JsonFormatter(logging.Formatter):
+    def format(self, record):
+        entry = {
+            "level": record.levelname.lower(),
+            "logger": record.name,
+            "message": record.getMessage(),
+            "request_id": request_id.get(),
+        }
+        entry.update(getattr(record, "fields", {}))
+        if record.exc_info:
+            entry["error"] = repr(record.exc_info[1])
+        return json.dumps(entry)
+
+
+handler = logging.StreamHandler(sys.stdout)
+handler.setFormatter(JsonFormatter())
+log = logging.getLogger("orders")
+log.handlers = [handler]
+log.setLevel(logging.INFO)
+log.propagate = False
+
+
+def place_order(customer_id, pence):
+    request_id.set(str(uuid.UUID(int=7)))
+    log.info("order placed", extra={"fields": {"customer_id": customer_id, "pence": pence}})
+    try:
+        raise TimeoutError("payment provider did not answer in 2s")
+    except TimeoutError:
+        log.error("payment failed", exc_info=True, extra={"fields": {"customer_id": customer_id, "provider": "cardco"}})
+    log.debug("this is below the INFO level, so it is not written")
+
+
+place_order("c-17", 5400)
+```
+
+It prints two JSON lines: `{"level": "info", "logger": "orders", "message": "order placed", "request_id": "00000000-0000-0000-0000-000000000007", "customer_id": "c-17", "pence": 5400}` and the error event with the same `request_id`, the provider, and `"error": "TimeoutError('payment provider did not answer in 2s')"`. The debug line is not written. (A real service generates a random id per request or takes it from the incoming trace context; a fixed one keeps the example's output stable.) Java's Logback and Log4j 2 with JSON encoders, .NET's `ILogger` with structured message templates or Serilog, and Node's pino do the same.
+
+Good logging practice:
+
+- **Log events, with context**: what happened, to which entity, with which outcome. Include a **correlation id** (request or trace id) on every line, so all lines for one request can be found together across services.
+- **Levels**: `error` for failures needing attention, `warn` for unexpected but handled situations, `info` for significant business events, `debug` for detail you switch on when investigating. Production usually runs at `info`.
+- **Write to standard output** and let the platform ship logs to a central store (Elasticsearch or OpenSearch, Loki, Splunk, Datadog, CloudWatch, Azure Monitor) (<Ref to="m-cloud-patterns" />).
+- **Log an error once**, where it is handled, with its stack trace and cause (<Ref to="m-errors" />).
+- **Never log secrets or sensitive personal data**: passwords, tokens, card numbers, full addresses, health data. Log ids instead (`customer_id`), and redact in the logging layer as a safety net. Logs are copied widely and kept for a long time, so a password in a log is a breach (the privacy and ethics chapter covers the law).
+- **Mind the volume and cost**: logging every request body at `info` can cost more than the service itself. Sample high-volume debug logs.
+
+## Metrics
+
+A **metric** is a numeric measurement with a name, a timestamp and labels (dimensions): `http_requests_total{service="orders", route="/orders", status="500"}`. Three basic types:
+
+- **Counter**: only goes up (requests served, errors, bytes sent). You query its **rate** of increase.
+- **Gauge**: goes up and down (queue length, memory in use, active connections).
+- **Histogram**: counts observations into buckets (request durations), so you can compute percentiles and averages later.
+
+**Prometheus**, the most widely used open-source metrics system, scrapes metrics from services' `/metrics` endpoints and stores them as time series; **Grafana** draws dashboards from it. Cloud providers and vendors offer managed equivalents.
+
+### What to measure: RED and USE
+
+Two simple methods decide which metrics matter:
+
+- **RED** (Tom Wilkie), for every **service** or endpoint: **R**ate (requests per second), **E**rrors (failed requests per second, or the error ratio), **D**uration (latency distribution: p50, p95, p99, <Ref to="m-performance" />).
+- **USE** (Brendan Gregg), for every **resource** (CPU, memory, disks, network, connection pools, queues): **U**tilisation (how busy), **S**aturation (how much work is waiting), **E**rrors.
+
+Google's **four golden signals** (latency, traffic, errors, saturation) combine the two.
+
+```ts
+type RequestRecord = { route: string; status: number; ms: number };
+
+const buckets = [50, 100, 250, 500, 1000, 2500, Infinity];
+
+function red(requests: RequestRecord[], windowSeconds: number) {
+  const counts = new Array(buckets.length).fill(0);
+  for (const r of requests) counts[buckets.findIndex((b) => r.ms <= b)]++;
+  const percentile = (p: number) => {
+    const target = Math.ceil((p / 100) * requests.length);
+    let seen = 0;
+    for (let i = 0; i < buckets.length; i++) {
+      seen += counts[i];
+      if (seen >= target) return buckets[i] === Infinity ? "> 2500 ms" : `<= ${buckets[i]} ms`;
+    }
+  };
+  const errors = requests.filter((r) => r.status >= 500).length;
+  return {
+    ratePerSecond: requests.length / windowSeconds,
+    errorRatio: `${((errors / requests.length) * 100).toFixed(1)}%`,
+    p50: percentile(50),
+    p99: percentile(99),
+    histogram: Object.fromEntries(buckets.map((b, i) => [b === Infinity ? "+Inf" : b, counts[i]])),
+  };
+}
+
+const requests: RequestRecord[] = Array.from({ length: 600 }, (_, i) => ({
+  route: "/orders",
+  status: i % 100 === 0 ? 503 : 200,
+  ms: i % 50 === 0 ? 1800 : 40 + (i % 7) * 20,
+}));
+console.log(red(requests, 60));
+```
+
+It prints `ratePerSecond: 10`, `errorRatio: "1.0%"`, `p50: "<= 100 ms"`, `p99: "<= 2500 ms"` and the histogram's bucket counts (mostly under 250 ms, with 12 requests in the 1,000 to 2,500 ms bucket). Histograms store only counts per bucket, so percentiles are estimates within a bucket's range, but they can be added up across servers, which averages and individual percentiles cannot. Choose bucket boundaries around your latency targets.
+
+In Prometheus's query language (PromQL), the same RED signals for the orders service look like this:
+
+```text
+sum(rate(http_requests_total{service="orders"}[5m]))
+sum(rate(http_requests_total{service="orders", status=~"5.."}[5m])) / sum(rate(http_requests_total{service="orders"}[5m]))
+histogram_quantile(0.99, sum by (le) (rate(http_request_duration_seconds_bucket{service="orders"}[5m])))
+```
+
+Requests per second, the error ratio, and the p99 latency, each over the last five minutes.
+
+### Cardinality
+
+Every distinct combination of label values is a separate time series. Labels with few values (service, route template, status class, region) are fine; labels with unbounded values (user id, order id, full URL with ids in it, error message text) create millions of series, which makes the metrics system slow and expensive or simply fail. Put high-cardinality detail in logs and traces, not in metric labels.
+
+## Distributed tracing
+
+In a system of many services, one slow request might have passed through a gateway, four services, two databases and a queue. Logs from each are separate, and metrics are averages. A **trace** records the whole journey: each unit of work is a **span** (with a name, start time, duration, attributes and status), spans have parent-child relationships, and all spans of one request share a **trace id**. A trace viewer (Jaeger, Grafana Tempo, Zipkin, or a vendor) shows them as a timeline, so the slow step is obvious.
+
+The key mechanism is **context propagation**: each service passes the trace id and its span id to the next in a header. The W3C **Trace Context** standard defines it: `traceparent: 00-<trace-id>-<parent-span-id>-<flags>`.
+
+```ts
+type Span = { traceId: string; spanId: string; parentId?: string; name: string; startMs: number; endMs: number };
+
+const spans: Span[] = [];
+let nextSpan = 1;
+const hex = (n: number, width: number) => n.toString(16).padStart(width, "0");
+const traceId = hex(0x4bf92f35, 32);
+
+function startSpan(name: string, startMs: number, parent?: Span): Span {
+  const span = { traceId: parent?.traceId ?? traceId, spanId: hex(nextSpan++, 16), parentId: parent?.spanId, name, startMs, endMs: startMs };
+  spans.push(span);
+  return span;
+}
+
+const traceparent = (span: Span) => `00-${span.traceId}-${span.spanId}-01`;
+
+const gateway = startSpan("GET /checkout", 0);
+const orders = startSpan("orders: place order", 2, gateway);
+console.log("header sent to the orders service:", traceparent(gateway));
+const db = startSpan("postgres: INSERT orders", 5, orders);
+db.endMs = 9;
+const payments = startSpan("payments: charge card", 10, orders);
+console.log("header sent to the payments service:", traceparent(orders));
+const provider = startSpan("cardco: POST /charges", 12, payments);
+provider.endMs = 1712;
+payments.endMs = 1715;
+orders.endMs = 1718;
+gateway.endMs = 1720;
+
+const depth = (s: Span): number => (s.parentId ? 1 + depth(spans.find((p) => p.spanId === s.parentId)!) : 0);
+for (const s of spans) console.log(`${"  ".repeat(depth(s))}${s.name} ${s.endMs - s.startMs} ms`);
+```
+
+It prints the two `traceparent` headers (the same 32-character trace id, with the caller's span id) and then the span tree:
+
+```text
+GET /checkout 1720 ms
+  orders: place order 1716 ms
+    postgres: INSERT orders 4 ms
+    payments: charge card 1705 ms
+      cardco: POST /charges 1700 ms
+```
+
+The 1.7-second checkout is almost entirely the external card provider: no amount of database tuning would have helped. Traces also show calls made in sequence that could run in parallel, unexpected repeated calls (the N+1 problem across services), and retries.
+
+Tracing every request is expensive at high volume, so traces are **sampled**: head sampling decides at the start (keep 5%), tail sampling decides after the request finishes (keep all errors and slow requests, plus a sample of the rest). **Exemplars** link a point on a latency metric to a trace that produced it.
+
+## OpenTelemetry
+
+**OpenTelemetry** (OTel), a CNCF project, is the vendor-neutral standard for producing telemetry: one API and SDK per language (Java, .NET, JavaScript, Python, Go and more) for traces, metrics and logs; **automatic instrumentation** for common frameworks and libraries (HTTP servers and clients, database drivers, messaging), so most spans appear without code changes; the **OTLP** protocol; and the **Collector**, a service that receives, processes (batching, sampling, redacting) and exports telemetry to any backend. Instrument once with OpenTelemetry and you can change vendors without touching the code. .NET's `System.Diagnostics.Activity` and `Meter` APIs are OpenTelemetry-compatible natively; Java has a zero-code agent; Node.js and Python have auto-instrumentation packages.
+
+Add your own spans and attributes for business steps ("reserve stock", `order.id`, `customer.tier`), so traces speak the language of the domain (<Ref to="m-ddd" />).
+
+## Dashboards and alerts
+
+**Dashboards** should answer questions quickly during an incident: for each service, RED on one row and its key dependencies and resources (USE) below, all on the same time axis. Fewer, well-designed dashboards beat hundreds that nobody maintains.
+
+**Alerts** wake people up, so each must be **urgent, actionable and real**:
+
+- **Alert on symptoms users feel** (error rate, latency, failed checkouts), not on every cause (CPU at 80% is not a problem if users are fine). Causes belong on dashboards.
+- **Alert on SLO burn rate**: how fast you are using up the error budget (<Ref to="m-reliability" />). This catches both sudden outages and slow degradations while ignoring brief blips.
+- Every alert has a **runbook**: what it means, how to check, how to mitigate.
+- Review alerts regularly: an alert that fires and is ignored trains people to ignore alerts. **Alert fatigue** is dangerous.
+
+## Common mistakes
+
+- **Unstructured logs** without correlation ids.
+- **Logging secrets or personal data.**
+- **Averages instead of percentiles** for latency.
+- **High-cardinality metric labels** (user ids, raw URLs).
+- **No trace context propagation**, so traces stop at the first service boundary, especially across message queues (propagate the context in message headers too).
+- **Alerting on causes** and thresholds that fire constantly.
+- **Dashboards nobody looks at**, and none for the questions incidents actually ask.
+- **Instrumenting only after an incident.**
+
+## Practice
+
+**1. (warm-up)** Name the three main signals, and say what each is best at.
+
+<Solution>
+
+Logs: detailed records of individual events, best for the specifics of what happened. Metrics: cheap numeric aggregates over time, best for dashboards, trends and alerts. Traces: the path and timing of one request across services, best for finding where time goes and which service failed.
+
+</Solution>
+
+**2. (warm-up)** Apply RED and USE: which would you use for an HTTP API, and which for a database connection pool?
+
+<Solution>
+
+RED (rate, errors, duration) for the HTTP API, a service handling requests. USE (utilisation, saturation, errors) for the connection pool, a resource: how many connections are in use, how many requests are waiting for one, and how many fail to get one.
+
+</Solution>
+
+**3. (warm-up)** Why is `customer_id` a bad metric label but a good log field?
+
+<Solution>
+
+Each distinct label value creates a separate time series; with millions of customers, the metrics system would hold millions of series, becoming slow and expensive. Logs and traces store each event individually, so a customer id there costs nothing extra and lets you find everything about one customer.
+
+</Solution>
+
+**4. (standard)** A message is published by the orders service and consumed by the email service. How do you keep both in one trace?
+
+<Solution>
+
+When publishing, inject the current trace context (the `traceparent` value) into the message's headers or metadata; when consuming, extract it and start the consumer's span as a child (or linked span) of the producer's span. OpenTelemetry's instrumentation for Kafka, RabbitMQ and cloud queues does this; for custom transports, use its propagator API.
+
+</Solution>
+
+**5. (stretch)** The on-call engineer gets 40 alerts a week, mostly "CPU above 80%" and "disk above 70%", and recently missed a real outage. Redesign the alerting.
+
+<Solution>
+
+Remove or downgrade cause-based alerts (CPU and disk thresholds) to dashboards and tickets, unless they predict real user impact (a disk that will be full within hours is worth a ticket, or a page if very soon). Define SLOs for the user journeys that matter (successful checkouts, latency of key endpoints) and page only on fast error-budget burn, with slower burn creating a ticket. Give every remaining alert a runbook and an owner. Review every page weekly: was it real, was it actionable, should it change? The goal is few pages, each one meaningful.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Observability** means understanding any state of a system from its telemetry: **logs**, **metrics** and **traces** (plus profiles).
+- **Structured logs** (JSON) with levels and **correlation ids**; write to standard output; never log secrets or sensitive personal data.
+- **Metrics**: counters, gauges and **histograms**; measure services with **RED** and resources with **USE**; keep label **cardinality** low.
+- **Traces** of **spans** sharing a trace id, linked by **context propagation** (W3C `traceparent`), sampled at head or tail.
+- **OpenTelemetry** standardises instrumentation, the OTLP protocol and the Collector across languages and vendors.
+- Dashboards for diagnosis; **alerts** only on user-visible symptoms and **SLO burn**, each with a runbook.
+
+## Go deeper
+
+- [OpenTelemetry documentation](https://opentelemetry.io/docs/), the OpenTelemetry authors. Concepts, language guides and the Collector.
+- [W3C Trace Context](https://www.w3.org/TR/trace-context/), the W3C. The `traceparent` header standard.
+- [Prometheus: overview](https://prometheus.io/docs/introduction/overview/), the Prometheus authors. Metric types, scraping and PromQL.
+- [The USE method](https://www.brendangregg.com/usemethod.html), Brendan Gregg. Utilisation, saturation and errors for every resource.
+- [Monitoring distributed systems](https://sre.google/sre-book/monitoring-distributed-systems/), Rob Ewaschuk (Google SRE book). The four golden signals and symptom-based alerting.

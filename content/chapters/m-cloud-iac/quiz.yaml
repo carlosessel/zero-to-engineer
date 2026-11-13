@@ -1,0 +1,36 @@
+- question: Under shared responsibility, who must keep a storage bucket private?
+  options:
+  - The customer
+  - The cloud provider
+  answer: 0
+  explanation: Most breaches are customer configuration mistakes.
+- question: Where should a database live in a VPC?
+  options:
+  - A private subnet, reachable only from the app's security group
+  - A public subnet
+  answer: 0
+  explanation: No route from the internet at all.
+- question: How does cloud IAM evaluate a request?
+  options:
+  - Denied by default; an explicit allow grants; an explicit deny always wins
+  - Allowed by default
+  answer: 0
+  explanation: This is the same on every cloud.
+- question: How should workloads and CI get cloud credentials?
+  options:
+  - Roles with short-lived credentials, and OIDC federation for CI
+  - Long-lived access keys
+  answer: 0
+  explanation: No stored secrets to leak.
+- question: What does terraform plan show?
+  options:
+  - Exactly what will be created, changed or destroyed
+  - The cloud bill
+  answer: 0
+  explanation: Read it, especially the destroys.
+- question: Why use remote Terraform state with locking?
+  options:
+  - So two people cannot apply at once and state is shared and protected
+  - It is faster
+  answer: 0
+  explanation: State can also contain secrets.

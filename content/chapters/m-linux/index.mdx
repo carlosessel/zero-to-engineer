@@ -1,0 +1,268 @@
+---
+title: "Linux for engineers"
+summary: "Processes, permissions, the file system, networking tools and debugging a live machine."
+prerequisites: [m-operating-systems]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will be comfortable on a Linux server: finding your way around the file system, reading and setting permissions, managing processes and signals, answering questions from logs with a few text tools, checking networking, and working through a short checklist when a production machine misbehaves. Almost every back end runs on Linux, usually inside containers (<Ref to="m-containers" />), and the commands here are the same whether you are on a virtual machine, a container or your own laptop's terminal. The web course introduced the terminal; this chapter is about using Linux the way operations work demands.
+
+## The file system
+
+Everything on Linux lives in one tree starting at `/`. The directories you will meet most:
+
+- `/etc`: system configuration (`/etc/hosts`, `/etc/nginx/`, `/etc/systemd/`).
+- `/var`: data that changes: `/var/log` for logs, `/var/lib` for databases and service data.
+- `/home/<user>` and `/root`: users' home directories.
+- `/usr/bin`, `/bin`: programs; `/usr/local` and `/opt`: software installed by hand.
+- `/tmp`: temporary files, often cleared on reboot.
+- `/proc` and `/sys`: not real files but windows into the kernel. `/proc/<pid>/` describes each running process (its command line, open files, memory); `/proc/meminfo` and `/proc/loadavg` describe the machine.
+
+"Everything is a file" is the Linux idea that devices, processes and network sockets can be read and written like files, which is why simple text tools go so far.
+
+Useful commands: `ls -la` (list with details and hidden files), `cd`, `pwd`, `find /var/log -name "*.log" -mtime -1` (files changed in the last day), `du -sh *` (space used per item), `df -h` (free space per disk), `less` (page through a file), `tail -f` (follow a growing log), `head`, `cat`, `cp`, `mv`, `rm` (there is no undo), `ln -s` (symbolic links).
+
+A full disk is one of the most common causes of outages: databases stop writing, logs stop, deployments fail. `df -h` shows which file system is full; `du -sh /var/* | sort -h` finds what is using it (usually logs or old releases). Also check `df -i`: running out of **inodes** (the records for files) fills a disk with millions of tiny files even when space remains.
+
+## Users and permissions
+
+Every file has an **owner**, a **group**, and permission bits for three classes: the owner (**u**), the group (**g**) and **others** (**o**). Each class can **read** (r = 4), **write** (w = 2) and **execute** (x = 1). For directories, "execute" means "may enter", and "write" means "may create and delete files inside".
+
+```bash
+umask 022
+echo "DATABASE_URL=postgres://orders-db/orders" > app.env
+echo 'echo "deploying"' > deploy.sh
+mkdir releases
+ls -ld app.env deploy.sh releases | cut -c1-10
+
+chmod 600 app.env
+chmod u+x deploy.sh
+chmod 750 releases
+ls -ld app.env deploy.sh releases | cut -c1-10
+./deploy.sh
+```
+
+It prints the permissions before and after:
+
+```text
+-rw-r--r--
+-rw-r--r--
+drwxr-xr-x
+-rw-------
+-rwxr--r--
+drwxr-x---
+deploying
+```
+
+New files start as `rw-r--r--` (644) and directories as `rwxr-xr-x` (755), because the **umask** 022 removes write permission for group and others. Then `600` makes the file of secrets readable only by its owner, `u+x` lets the owner run the script, and `750` lets the group into the directory while shutting everyone else out. The digits add up per class: 7 = rwx, 6 = rw-, 5 = r-x, 4 = r--, 0 = nothing.
+
+Principles that matter on servers:
+
+- **Run services as their own unprivileged user**, never as `root`. If the service is compromised, the attacker gets only what that user can touch.
+- **Least privilege**: give the service user ownership of only its own files (`chown -R orders:orders /var/lib/orders`).
+- **`sudo`** runs one command as root, logged; prefer it to logging in as root.
+- **Secrets files** at `600`, owned by the service user; never world-readable, never committed (<Ref to="m-static-quality" />).
+- `chmod 777` "to make it work" is almost always the wrong fix: find out which user needs which access.
+
+## Processes and signals
+
+A **process** is a running program with a process id (**PID**), a parent, an owner, its memory and its open files (<Ref to="m-operating-systems" />). Tools to see them: `ps aux` (all processes), `top` or `htop` (live, sorted by CPU or memory), `pgrep -a java` (find by name), and `ls /proc/<pid>/`.
+
+Processes are controlled with **signals**, small messages from the kernel:
+
+- **SIGTERM** (15): "please stop". A well-behaved program finishes in-flight work, closes connections and exits. This is what `kill <pid>`, `docker stop` and Kubernetes send first.
+- **SIGKILL** (9): stop immediately. Cannot be caught or ignored; nothing is cleaned up. Sent when SIGTERM was ignored for too long.
+- **SIGINT** (2): what Ctrl+C sends. **SIGHUP** (1): often "reload your configuration" (Nginx does this).
+
+Graceful shutdown on SIGTERM is what makes deployments safe (<Ref to="m-load-balancing" />). A script can **trap** the signal:
+
+```bash
+cat > worker.sh <<'SCRIPT'
+#!/usr/bin/env bash
+trap 'echo "worker: got SIGTERM, finishing the current job"; sleep 0.2; echo "worker: done, exiting"; exit 0' TERM
+echo "worker: started"
+while true; do sleep 0.1; done
+SCRIPT
+chmod +x worker.sh
+
+./worker.sh > worker.log &
+pid=$!
+until grep -q started worker.log; do sleep 0.1; done
+kill -0 "$pid" && echo "worker is running"
+kill -TERM "$pid"
+wait "$pid" && echo "worker exit status: $?"
+cat worker.log
+
+sleep 30 &
+stubborn=$!
+kill -KILL "$stubborn"
+wait "$stubborn" 2>/dev/null || echo "sleep killed by SIGKILL, exit status: $?"
+```
+
+It prints `worker is running`, `worker exit status: 0`, the worker's three log lines (started, got SIGTERM and finishing the current job, done and exiting), and finally `sleep killed by SIGKILL, exit status: 137`. The worker handled SIGTERM, finished its job and exited cleanly with status 0; the `sleep` had no chance, and its exit status of 137 (128 + 9) is the signature of a SIGKILL. When a container keeps exiting with 137, it is being killed: often by the kernel's **out-of-memory killer** because it exceeded its memory limit (`dmesg` or the container runtime's events will say so).
+
+Two other process facts worth knowing: a **zombie** is a finished child whose parent has not yet read its exit status (harmless in small numbers, a bug in the parent if they pile up); and the **load average** (in `uptime` and `top`) is the average number of processes running or waiting to run over 1, 5 and 15 minutes; compare it with the number of CPU cores.
+
+## Services and logs with systemd
+
+On most distributions, **systemd** starts and supervises services. A unit file describes how to run one:
+
+```text
+[Unit]
+Description=Orders API
+After=network-online.target
+
+[Service]
+User=orders
+WorkingDirectory=/opt/orders
+EnvironmentFile=/etc/orders/orders.env
+ExecStart=/opt/orders/bin/orders-api
+Restart=on-failure
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Saved as `/etc/systemd/system/orders.service`, it runs the API as the unprivileged `orders` user, loads configuration from an environment file (<Ref to="m-cloud-patterns" />), restarts it if it crashes, and gives it 30 seconds after SIGTERM before sending SIGKILL. Commands: `systemctl start|stop|restart|status orders`, `systemctl enable orders` (start at boot), and `journalctl -u orders -f` to follow its logs (`--since "10 min ago"` to look back). In containers, the container runtime and Kubernetes play systemd's role (<Ref to="m-kubernetes" />).
+
+## Text tools: answering questions from logs
+
+A handful of small tools, joined with pipes (`|`), answer most questions about logs and data without writing a program: `grep` (find lines), `awk` (pick and compute on columns), `sort`, `uniq`, `cut`, `head`, `tail`, `wc`, `sed` (substitute), and `jq` for JSON logs.
+
+```bash
+cat > access.log <<'LOG'
+10.0.0.4 - - [13/Nov/2026:09:00:01 +0000] "GET /orders/7 HTTP/1.1" 200 512 0.031
+10.0.0.9 - - [13/Nov/2026:09:00:02 +0000] "POST /orders HTTP/1.1" 201 128 0.120
+10.0.0.4 - - [13/Nov/2026:09:00:02 +0000] "GET /orders/8 HTTP/1.1" 500 64 2.410
+10.0.0.7 - - [13/Nov/2026:09:00:03 +0000] "GET /menu HTTP/1.1" 200 2048 0.008
+10.0.0.9 - - [13/Nov/2026:09:00:04 +0000] "GET /orders/9 HTTP/1.1" 500 64 2.380
+10.0.0.4 - - [13/Nov/2026:09:00:05 +0000] "GET /menu HTTP/1.1" 200 2048 0.009
+LOG
+
+echo "requests per status:"
+awk '{count[$9]++} END {for (s in count) print s, count[s]}' access.log | sort
+
+echo "server errors:"
+grep '" 5[0-9][0-9] ' access.log | awk '{print $7, $NF "s"}'
+
+echo "slowest request:"
+sort -k11 -n -r access.log | head -1 | awk '{print $7, $NF "s"}'
+```
+
+It prints `200 3`, `201 1` and `500 2` as the status counts, then the two server errors (`/orders/8 2.410s` and `/orders/9 2.380s`), then the slowest request (`/orders/8 2.410s`). Fields are numbered by whitespace: `$9` is the status code, `$7` the path, `$NF` the last field (the response time). With JSON logs (<Ref to="m-observability" />), `jq` does the same: `jq -r 'select(.status >= 500) | .path' app.log`.
+
+## Networking tools
+
+When a service cannot reach another, work from the bottom up:
+
+- **Name resolution**: `dig api.example.com` or `nslookup` shows what a name resolves to; `/etc/hosts` and `/etc/resolv.conf` control resolution.
+- **Reachability**: `ping` (often blocked by firewalls, so not conclusive), `nc -zv host 5432` (can I open a TCP connection to this port?).
+- **HTTP**: `curl -v https://api.example.com/health` shows the DNS lookup, TLS handshake, request and response headers; `curl -w '%{time_total}\n' -o /dev/null -s URL` times a request (<Ref to="m-networking" />).
+- **What is listening**: `ss -tlnp` (TCP listeners and their processes; `netstat` on older systems), `lsof -i :8080` (who has port 8080).
+- **Connections**: `ss -tn state established` counts open connections; thousands in `TIME-WAIT` or `CLOSE-WAIT` point at connection handling bugs.
+- **Packets**: `tcpdump -i any port 5432` captures traffic when nothing else explains a problem.
+- **Firewalls**: `iptables`/`nftables` on the host, and security groups in the cloud (<Ref to="m-cloud-iac" />), are common reasons a port "works locally" but not from elsewhere.
+
+## Debugging a live machine
+
+When a server is slow or unhealthy, a quick checklist (inspired by Brendan Gregg's "Linux performance analysis in 60 seconds") finds most problems within minutes:
+
+1. `uptime`: load averages. Rising and higher than the core count means more work than CPU.
+2. `dmesg -T | tail`: kernel messages, including out-of-memory kills and disk errors.
+3. `top` or `htop`: which processes use CPU and memory; `wa` (I/O wait) high means waiting on disk.
+4. `free -m`: memory; little "available" memory and swap in use means memory pressure.
+5. `df -h` and `df -i`: full disks.
+6. `vmstat 1` and `iostat -x 1`: CPU, memory, disk activity over time.
+7. `ss -s` and `ss -tlnp`: connection counts and listeners.
+8. `journalctl -u <service> --since "15 min ago"` and the application's own logs.
+
+For one misbehaving process: `ls -l /proc/<pid>/fd | wc -l` counts its open files (against its limit, `ulimit -n`; "too many open files" errors mean a leak or a limit too low); a thread dump shows what it is doing (`jstack`, `dotnet-dump`, <Ref to="m-threads-locks" />); `strace -p <pid>` shows its system calls live; a profiler shows where its CPU goes (<Ref to="m-performance" />).
+
+Record what you find and what you change: during an incident, notes become the timeline for the postmortem (<Ref to="m-reliability" />).
+
+## Connecting to servers
+
+You reach remote machines with **SSH**: `ssh deploy@10.0.1.11`. Use **key pairs**, never passwords: `ssh-keygen -t ed25519` creates a private key (keep it private, protected with a passphrase) and a public key (put it in the server's `~/.ssh/authorized_keys`). `scp` and `rsync` copy files over SSH; `~/.ssh/config` stores host aliases. Many organisations now avoid opening SSH to servers at all, using short-lived certificates, bastion hosts or cloud session managers (AWS Systems Manager, Azure Bastion), and treat servers as replaceable rather than logged into and changed by hand (<Ref to="m-cloud-iac" />).
+
+## Common mistakes
+
+- **Running services as root.**
+- **`chmod 777`** to fix a permission problem.
+- **`kill -9` first**, skipping graceful shutdown and corrupting in-progress work.
+- **Ignoring disk space and inode limits** until writes fail.
+- **Changing servers by hand** in production, so no two are alike and changes are lost on rebuild.
+- **Secrets in world-readable files** or in shell history.
+- **Debugging by guessing** instead of checking load, memory, disk, network and logs in order.
+
+## Practice
+
+**1. (warm-up)** What permissions does `chmod 640 report.csv` give, in letters, and who can read the file?
+
+<Solution>
+
+`rw-r-----`: the owner can read and write, the group can read, others have no access. So the owner and members of the file's group can read it.
+
+</Solution>
+
+**2. (warm-up)** A container keeps exiting with status 137. What does that suggest, and where do you look?
+
+<Solution>
+
+137 is 128 + 9: the process was killed with SIGKILL. In containers this is very often the out-of-memory killer, because the process exceeded its memory limit. Check the container runtime's or Kubernetes' events (`OOMKilled`), `dmesg` on the host, and the process's memory use against its limit; it can also mean a stop timeout expired after SIGTERM was ignored.
+
+</Solution>
+
+**3. (standard)** Using the access log from this chapter, write a pipeline that prints the average response time for `/menu` requests.
+
+<Solution>
+
+```bash
+cat > access.log <<'LOG'
+10.0.0.4 - - [13/Nov/2026:09:00:01 +0000] "GET /orders/7 HTTP/1.1" 200 512 0.031
+10.0.0.7 - - [13/Nov/2026:09:00:03 +0000] "GET /menu HTTP/1.1" 200 2048 0.008
+10.0.0.4 - - [13/Nov/2026:09:00:05 +0000] "GET /menu HTTP/1.1" 200 2048 0.009
+LOG
+awk '$7 == "/menu" {sum += $NF; n++} END {printf "%.4f s over %d requests\n", sum / n, n}' access.log
+```
+
+It prints **0.0085 s over 2 requests**: `awk` filters on the path field, sums the last field and divides at the end.
+
+</Solution>
+
+**4. (standard)** Users report that the API on one server is returning errors. Walk through your first five commands and what each would tell you.
+
+<Solution>
+
+`systemctl status orders` (is the service running, did it restart recently?); `journalctl -u orders --since "15 min ago"` (what errors is it logging?); `df -h` (is the disk full, stopping writes?); `free -m` and `top` (is memory or CPU exhausted, is something else hogging it?); `ss -tlnp` and `curl -v localhost:8080/health` (is it listening and answering locally?), then checking its dependencies with `nc -zv db-host 5432`. Each narrows whether the problem is the process, the machine or a dependency.
+
+</Solution>
+
+**5. (stretch)** Why does graceful shutdown on SIGTERM matter for zero-downtime deployments, and what should a web service do when it receives it?
+
+<Solution>
+
+During a deployment, old instances are stopped while new ones take over (<Ref to="m-load-balancing" />). If an instance dies instantly, every request it was handling fails. On SIGTERM a web service should: report itself not ready (so the load balancer stops sending new requests), stop accepting new connections, finish in-flight requests within a deadline, stop background workers after their current job (or hand the job back to the queue), flush logs and close database connections, then exit with status 0. The platform's stop timeout (systemd's `TimeoutStopSec`, Kubernetes' `terminationGracePeriodSeconds`) must be longer than this takes, or SIGKILL cuts it short.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Linux is one tree from `/`: configuration in `/etc`, changing data in `/var`, kernel views in `/proc`. Watch disk space and inodes.
+- **Permissions**: owner, group and others, each with read, write and execute; `chmod` with digits (644, 600, 750) or letters; the **umask** sets defaults. Run services as unprivileged users with least privilege.
+- **Processes** have PIDs and respond to **signals**: SIGTERM asks politely (handle it for graceful shutdown), SIGKILL cannot be caught; exit status 137 means killed.
+- **systemd** runs and restarts services; `journalctl` reads their logs.
+- `grep`, `awk`, `sort`, `uniq` and `jq` answer most log questions with a pipeline.
+- Debug networking bottom up (DNS, TCP, HTTP, listeners) and machines with a checklist (load, kernel messages, CPU, memory, disk, I/O, connections, logs).
+- Use SSH keys or short-lived access, and treat servers as replaceable rather than hand-edited.
+
+## Go deeper
+
+- [The Linux command line](https://linuxcommand.org/tlcl.php), William Shotts. A free book from first commands to shell scripting.
+- [Linux performance](https://www.brendangregg.com/linuxperf.html), Brendan Gregg. Tools, checklists and diagrams for finding performance problems on Linux, including the 60-second analysis.
+- [systemd.service manual](https://www.freedesktop.org/software/systemd/man/latest/systemd.service.html), the systemd project. Every option of a service unit.
+- [signal(7) manual page](https://man7.org/linux/man-pages/man7/signal.7.html), Michael Kerrisk. Every Linux signal and its default action.
+- [The Art of Command Line](https://github.com/jlevy/the-art-of-command-line), Joshua Levy and contributors. A dense, practical guide to the command line.

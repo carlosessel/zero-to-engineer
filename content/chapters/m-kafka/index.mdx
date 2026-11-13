@@ -287,7 +287,7 @@ Publish tier changes to a compacted topic keyed by customer id. Compaction keeps
 ## Summary
 
 - Kafka is a replicated, durable **log**; producers append **records**, consumers read in order and keep their own **offsets**.
-- **Topics** split into **partitions**: the unit of parallelism, ordering and scale. **Keys** choose partitions; order holds per partition only.
+- **Topics** split into **partitions**: the unit of parallelism, ordering and scale. Keys choose partitions; order holds per partition only.
 - **Consumer groups** share partitions, one consumer per partition; more consumers than partitions sit idle; membership changes cause **rebalances**.
 - **Commit offsets after processing** for at-least-once; make consumers idempotent; monitor **consumer lag**; reset offsets to **replay**.
 - Durability: replication factor 3, `min.insync.replicas=2`, `acks=all`, idempotent producers. KRaft replaced ZooKeeper.

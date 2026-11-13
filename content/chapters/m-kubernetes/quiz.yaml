@@ -1,0 +1,36 @@
+- question: How does Kubernetes keep things running?
+  options:
+  - Controllers continuously reconcile actual state with desired state
+  - It runs a script once at deploy time
+  answer: 0
+  explanation: Failures are just differences to correct.
+- question: What does a Service provide?
+  options:
+  - A stable address and load balancing across ready pods
+  - Persistent storage
+  answer: 0
+  explanation: Pods come and go; services stay.
+- question: What happens if a container exceeds its memory limit?
+  options:
+  - It is killed (OOMKilled)
+  - It is slowed down
+  answer: 0
+  explanation: Exceeding a CPU limit throttles instead.
+- question: 'What does maxUnavailable: 0 guarantee during a rolling update?'
+  options:
+  - The number of ready pods never drops below the replica count
+  - The update is instant
+  answer: 0
+  explanation: New pods must be ready before old ones go.
+- question: A pod is in CrashLoopBackOff. What do you read first?
+  options:
+  - kubectl logs --previous
+  - The node's disk usage
+  answer: 0
+  explanation: It shows why the last attempt exited.
+- question: How does the HPA choose a replica count?
+  options:
+  - ceil(current × currentMetric ÷ target), within min and max
+  - It doubles every minute
+  answer: 0
+  explanation: Small deviations are tolerated.

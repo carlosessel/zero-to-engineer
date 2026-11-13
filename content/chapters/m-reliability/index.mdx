@@ -1,0 +1,228 @@
+---
+title: "Reliability engineering"
+summary: "SLIs, SLOs and error budgets, on-call, incident response and blameless postmortems."
+prerequisites: [m-observability]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know how teams decide how reliable a service needs to be and hold themselves to it: service level indicators and objectives, error budgets that balance reliability against shipping features, alerts based on how fast the budget is burning, healthy on-call, a calm process for handling incidents, blameless postmortems that actually prevent repeats, and backups and disaster recovery that work when needed. Much of this comes from Google's **site reliability engineering** (SRE) practice, now used well beyond Google.
+
+## How reliable is reliable enough?
+
+100% reliability is the wrong goal. It is impossibly expensive, users cannot tell the difference beyond a point (their own Wi-Fi and phone fail more often than your service), and every effort spent on the last fraction of a percent is not spent on features. The right target is **as reliable as users need, and no more**, and it should be explicit.
+
+### SLIs and SLOs
+
+- A **service level indicator** (SLI) is a measurement of a behaviour users care about, usually as the proportion of good events: the share of requests that succeed, the share served within 300 ms, the share of orders processed within five minutes.
+- A **service level objective** (SLO) is a target for an SLI over a period: "99.9% of checkout requests succeed, measured over 28 days".
+- A **service level agreement** (SLA) is a contract with customers, with penalties if missed. SLAs should be looser than internal SLOs, so you notice and react before you owe anyone money.
+
+Choose SLIs from the user's point of view (<Ref to="m-observability" />): success and latency of the key journeys (search, add to basket, check out), measured as close to the user as practical (at the load balancer rather than inside one service).
+
+The number of nines translates into allowed unreliability:
+
+```ts
+const minutesIn30Days = 30 * 24 * 60;
+
+for (const slo of [99, 99.5, 99.9, 99.95, 99.99]) {
+  const badShare = (100 - slo) / 100;
+  const minutes = minutesIn30Days * badShare;
+  const human = minutes >= 60 ? `${(minutes / 60).toFixed(1)} hours` : `${minutes.toFixed(1)} minutes`;
+  console.log(`${slo}%: ${human} of full downtime per 30 days, or ${Math.round(badShare * 1_000_000)} failures per million requests`);
+}
+```
+
+It prints `99%: 7.2 hours`, `99.5%: 3.6 hours`, `99.9%: 43.2 minutes`, `99.95%: 21.6 minutes` and `99.99%: 4.3 minutes` of full downtime per 30 days, with 10,000, 5,000, 1,000, 500 and 100 failures per million requests. Each extra nine is ten times stricter, and usually far more than ten times more expensive: 99.99% leaves no time for a human to even notice a problem, so it requires automatic failover everywhere. Remember too that a service can be no more available than the dependencies it needs on every request: five dependencies at 99.9% each give at most about 99.5%.
+
+## Error budgets
+
+If the SLO is 99.9%, then 0.1% of requests are **allowed** to fail: that is the **error budget**. It turns reliability from an argument into arithmetic:
+
+- While budget remains, ship features, run experiments, take sensible risks.
+- When it is used up, the team's agreed **error budget policy** applies: slow down or freeze risky releases and spend the time on reliability work until the service is back within its SLO.
+
+```ts
+function budget(sloPercent: number, total: number, failed: number, daysElapsed: number, windowDays: number) {
+  const allowed = total * (1 - sloPercent / 100);
+  const used = failed / allowed;
+  const expectedUse = daysElapsed / windowDays;
+  return {
+    allowedFailures: Math.round(allowed),
+    failed,
+    budgetUsed: `${Math.round(used * 100)}%`,
+    onTrack: used <= expectedUse ? "yes" : `no: ${Math.round(used * 100)}% used after ${Math.round(expectedUse * 100)}% of the window`,
+  };
+}
+
+console.log(budget(99.9, 12_000_000, 4_200, 14, 28));
+console.log(budget(99.9, 12_000_000, 9_100, 14, 28));
+```
+
+It prints, for 12 million requests so far, `allowedFailures: 12000` in both cases; with 4,200 failures `budgetUsed: "35%"` and `onTrack: "yes"`; with 9,100 failures `budgetUsed: "76%"` and `onTrack: "no: 76% used after 50% of the window"`. Halfway through the window the second team has spent three-quarters of its budget: time to look at what is failing before it runs out.
+
+## Alerting on burn rate
+
+Error budgets also make the best alerts (<Ref to="m-observability" />). The **burn rate** is how fast the budget is being spent relative to the rate that would use exactly all of it by the end of the window: a burn rate of 1 uses it exactly; 14.4 would use a 30-day budget in about two days.
+
+Google's recommended approach pages on a **fast burn** (a high rate over a short window, such as 14.4 over the last hour, confirmed over the last five minutes so the alert stops promptly when the problem does), and opens a ticket on a **slow burn** (a lower rate over days). Brief blips do not page; real outages page within minutes; slow leaks are caught before the budget is gone.
+
+```ts
+function burnRate(errorRatio: number, sloPercent: number) {
+  return errorRatio / (1 - sloPercent / 100);
+}
+
+function decide(lastHour: number, last5Min: number, last3Days: number, slo = 99.9): string {
+  const fast = burnRate(lastHour, slo) >= 14.4 && burnRate(last5Min, slo) >= 14.4;
+  const slow = burnRate(last3Days, slo) >= 1;
+  return fast ? "PAGE: fast burn" : slow ? "TICKET: slow burn" : "ok";
+}
+
+console.log(decide(0.0002, 0.0001, 0.0004));
+console.log(decide(0.02, 0.03, 0.002));
+console.log(decide(0.02, 0.0005, 0.0012));
+console.log(decide(0.0008, 0.0006, 0.0013));
+```
+
+It prints `ok` (well within budget), `PAGE: fast burn` (2% errors is a burn rate of 20, still happening now), `TICKET: slow burn` (there was a bad hour, but it has stopped, so no page; the three-day burn rate of 1.2 still deserves a ticket) and `TICKET: slow burn` again (a steady 0.13% error rate that would exhaust the budget early).
+
+## On-call
+
+Someone must respond when production breaks. Healthy **on-call**:
+
+- a **rotation** of enough people (six to eight per rotation is a common minimum) that each is on call rarely, with a secondary as backup, and handovers that pass on what is in progress;
+- **few, meaningful pages** (a common target is at most two incidents per shift); every page is reviewed, and noisy alerts are fixed;
+- **runbooks** for each alert and access already set up, so the responder is not hunting for permissions at 3 a.m.;
+- the people who build a service share its on-call (**you build it, you run it**), which creates the incentive to make it reliable;
+- compensation or time off for out-of-hours work, and no expectation of heroics.
+
+## Incident response
+
+An **incident** is an unplanned disruption to a service. A good response is calm and structured:
+
+1. **Detect**: an alert, a customer report, a colleague noticing.
+2. **Declare**: open an incident early, with a severity (for example, SEV1 for a major outage). Declaring something that turns out minor is cheap; declaring late is expensive.
+3. **Roles**: an **incident commander** coordinates and decides (they do not debug); **operations** responders investigate and act; a **communications** lead updates stakeholders and the status page. In small teams one person may hold several roles, but the commander role is always clear.
+4. **Mitigate first**: restore service before finding the root cause. Roll back the last deployment, switch off a feature flag (<Ref to="m-delivery" />), fail over, add capacity, shed load (<Ref to="m-resilience" />). The diagnosis can continue after users are happy again.
+5. **Communicate** on a regular schedule, internally and to customers, even when there is no news.
+6. **Keep a timeline** in the incident channel: what was seen, what was tried, when.
+7. **Resolve**, then hold a **postmortem**.
+
+## Blameless postmortems
+
+A **postmortem** (incident review) is written after significant incidents to learn and to prevent repeats. It is **blameless**: it assumes people acted reasonably given what they knew at the time, and asks what in the system (tooling, processes, missing safeguards, confusing interfaces) allowed a reasonable action to cause harm. Blame makes people hide information, and the same weakness then trips the next person.
+
+```text
+Incident 2026-11-04: checkout failures for 38 minutes (SEV2)
+
+Summary
+  14:02 to 14:40 UTC, 31% of checkout attempts failed. About 2,900 customers affected.
+
+Impact
+  2,900 failed checkouts; 1,100 retried successfully; error budget for the month: 64% used.
+
+Timeline (UTC)
+  13:58  Deploy of payments v2.14 (new card provider client) begins, canary skipped by a config error
+  14:02  Error rate on /checkout rises to 31%; fast-burn alert pages the on-call engineer at 14:06
+  14:11  Incident declared; incident commander assigned
+  14:24  Errors correlated with v2.14 in traces: provider client times out after 500 ms
+  14:31  Rollback to v2.13 started; 14:40 error rate back to baseline
+
+Contributing factors
+  - The new client's default timeout (500 ms) was shorter than the provider's p99 (900 ms)
+  - The canary step was skipped because the pipeline treated an empty canary list as "no canary needed"
+  - The dashboard did not break errors down by version, slowing diagnosis by about 10 minutes
+
+Action items (owner, due date)
+  - Set explicit timeouts from measured provider latency (payments team, 11 Nov)
+  - Fail the pipeline when the canary configuration is empty (platform team, 14 Nov)
+  - Add version as a dimension on the checkout dashboard (payments team, 12 Nov)
+```
+
+A good postmortem has a clear summary, the **impact** in user terms, a factual **timeline**, **contributing factors** (usually several, not one "root cause"), and **action items** that are specific, owned and dated, preferring fixes that make the mistake impossible over "be more careful". Share them widely and review whether action items actually get done.
+
+## Toil
+
+**Toil** is manual, repetitive operational work that scales with the service and has no lasting value: restarting a stuck process by hand, copying data for a support request, rotating certificates manually. A little is inevitable; a lot crowds out improvement and burns people out. SRE teams cap toil (Google's guideline is under 50% of time) and automate the most frequent tasks away.
+
+## Backups and disaster recovery
+
+Reliability also means surviving the rare catastrophe: a deleted table, ransomware, a region outage, a bad migration.
+
+- **Recovery point objective** (RPO): how much data you can afford to lose (the time since the last usable backup or replica).
+- **Recovery time objective** (RTO): how long you can be down while recovering.
+
+Replication protects against machine and zone failures but **not** against mistakes: a deleted table is deleted on every replica (<Ref to="m-replication-partitioning" />). You also need **backups**, including **point-in-time recovery** (continuous archiving of the database's log), stored in another account or region and protected from deletion, so an attacker or a mistake cannot remove them too. An untested backup is a hope, not a backup: **restore regularly** into a test environment and time it. For critical systems, rehearse failover to another region (game days, <Ref to="m-resilience" />).
+
+## Common mistakes
+
+- **Aiming for 100%**, or SLOs nobody uses for decisions.
+- **SLIs measured from the server's point of view** (CPU, uptime of one process) instead of the user's.
+- **Alerts on every cause**, paging people for things users never notice.
+- **Too few people on call**, or on-call with no runbooks or access.
+- **Debugging before mitigating** during an outage.
+- **Blame**, and postmortems whose only action item is "be more careful".
+- **Action items that are never done.**
+- **Backups that have never been restored**, or stored where the same mistake can delete them.
+
+## Practice
+
+**1. (warm-up)** What are the SLI, SLO and SLA in this sentence: "We promise customers 99.5% monthly availability, aim internally for 99.9% of API requests succeeding over 28 days, and measure the share of non-5xx responses at the load balancer"?
+
+<Solution>
+
+SLI: the share of non-5xx responses measured at the load balancer. SLO: 99.9% of API requests succeeding over 28 days. SLA: the 99.5% monthly availability promised to customers (looser than the SLO, as it should be).
+
+</Solution>
+
+**2. (warm-up)** A service handles 50 million requests a month with a 99.95% SLO. How many failed requests does its error budget allow?
+
+<Solution>
+
+0.05% of 50 million = 25,000 failed requests per month.
+
+</Solution>
+
+**3. (standard)** Using the burn-rate function, what error ratio over the last hour corresponds to a burn rate of 14.4 for a 99.9% SLO, and how long would that take to use a 30-day budget?
+
+<Solution>
+
+Burn rate = error ratio ÷ 0.001, so 14.4 × 0.001 = 1.44% errors. At that rate the 30-day budget lasts 30 ÷ 14.4 ≈ 2.1 days (about 50 hours), which is why it is worth paging for.
+
+</Solution>
+
+**4. (standard)** During an outage, an engineer wants to find the root cause before acting, because "a rollback might not fix it". What should the incident commander say?
+
+<Solution>
+
+Mitigate first: if the outage started with a recent deployment, rolling back is fast, low-risk and reversible, and it will either restore service (then investigate calmly) or rule the deployment out (then try the next mitigation, such as switching off a flag or failing over). Every minute spent diagnosing while users are affected burns error budget and trust. Keep investigating in parallel and record everything in the timeline.
+
+</Solution>
+
+**5. (stretch)** A postmortem's only action item is "Engineers must double-check configuration before deploying." Critique it and propose better ones for an incident caused by a misconfigured timeout.
+
+<Solution>
+
+It relies on people never making mistakes, so the same incident will happen again; it is not specific, owned or verifiable, and it implicitly blames the engineer. Better action items make the error impossible or caught automatically: validate configuration at startup and in CI with sensible bounds (<Ref to="m-cloud-patterns" />); derive timeouts from measured dependency latency; require canary releases that compare error rates and roll back automatically (<Ref to="m-delivery" />); add the configuration value and version to dashboards so diagnosis is faster. Each with an owner and a date.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Aim for **as reliable as users need**: define **SLIs** from the user's view and **SLOs** as targets; keep **SLAs** looser. Each extra nine is ten times stricter.
+- The **error budget** (100% minus the SLO) balances features and reliability, with an agreed policy when it runs out.
+- **Alert on burn rate**: page on fast burn confirmed by a short window, ticket on slow burn.
+- Healthy **on-call**: enough people, few meaningful pages, runbooks, shared ownership.
+- **Incidents**: declare early, clear roles with an **incident commander**, **mitigate first**, communicate, keep a timeline.
+- **Blameless postmortems**: impact, timeline, contributing factors, specific owned action items that change systems, not people.
+- Reduce **toil**; set **RPO** and **RTO**, keep protected backups with point-in-time recovery, and test restores.
+
+## Go deeper
+
+- [Site Reliability Engineering](https://sre.google/sre-book/table-of-contents/), Google. The SRE book, free online.
+- [The Site Reliability Workbook: alerting on SLOs](https://sre.google/workbook/alerting-on-slos/), Google. Burn rates and multi-window alerts in detail.
+- [Postmortem culture: learning from failure](https://sre.google/sre-book/postmortem-culture/), Google SRE book. Blameless postmortems and how to run them.
+- [Incident management guide](https://response.pagerduty.com/), PagerDuty. Roles, severities and process for incident response.
+- [Implementing SLOs](https://sre.google/workbook/implementing-slos/), Steven Thurgood and David Ferguson (Google SRE workbook). Choosing SLIs, setting SLOs and writing an error budget policy.

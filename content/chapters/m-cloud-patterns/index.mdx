@@ -20,8 +20,8 @@ The **twelve-factor app** (written by Adam Wiggins and colleagues at Heroku in 2
 - **Stateless processes**: keep no state in memory or on local disk that must survive the process; sessions and uploads go to backing services. Any instance can serve any request, and instances can be added or killed freely (<Ref to="m-load-balancing" />).
 - **Port binding** and **concurrency**: the service is self-contained and scales by running more processes.
 - **Disposability**: start fast and **shut down gracefully** on a termination signal (finish in-flight work, release resources), so scaling and deployments are safe.
-- **Dev/prod parity**: keep development, staging and production as similar as possible (same database engine, same versions; containers help, as the infrastructure part of this course shows).
-- **Logs as event streams**: write logs to standard output; the platform collects and routes them (the observability chapter covers what to log).
+- **Dev/prod parity**: keep development, staging and production as similar as possible (same database engine, same versions; containers help, <Ref to="m-containers" />).
+- **Logs as event streams**: write logs to standard output; the platform collects and routes them (<Ref to="m-observability" /> covers what to log).
 - **Admin processes** (migrations, one-off scripts) run as one-off processes from the same release.
 
 Reading configuration well means **validating it at startup** and failing fast with a clear message, rather than discovering a missing setting at 3 a.m. on the first request that needs it (<Ref to="m-errors" />):

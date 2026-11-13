@@ -1,0 +1,34 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  verify: |
+    lines = out.split()
+    assert lines == ['-rw-r--r--', '-rw-r--r--', 'drwxr-xr-x', '-rw-------', '-rwxr--r--', 'drwxr-x---', 'deploying'], out
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of block 1, which its check confirms line for line.
+- block: 3
+  lang: bash
+  check: shell
+  note: The shell may also print a 'Killed' job message for the sleep; the check looks for the lines the chapter describes, in order.
+  verify: |
+    import re
+    wanted = ['worker is running', 'worker exit status: 0', 'worker: started', 'worker: got SIGTERM, finishing the current job', 'worker: done, exiting', 'sleep killed by SIGKILL, exit status: 137']
+    pos = [out.find(w) for w in wanted]
+    assert all(p >= 0 for p in pos) and pos == sorted(pos), out
+- block: 4
+  lang: text
+  check: illustration
+  note: A systemd unit file; it needs systemd and root access to install, so it is explained line by line instead.
+- block: 5
+  lang: bash
+  check: shell
+  verify: |
+    assert out.split('\n')[:9] == ['requests per status:', '200 3', '201 1', '500 2', 'server errors:', '/orders/8 2.410s', '/orders/9 2.380s', 'slowest request:', '/orders/8 2.410s'], out
+- block: 6
+  lang: bash
+  check: shell
+  output_contains:
+  - 0.0085 s over 2 requests

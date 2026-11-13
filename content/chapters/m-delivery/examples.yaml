@@ -1,0 +1,34 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: yaml
+  check: illustration
+  note: A GitHub Actions workflow; it runs only on GitHub. The check parses it and confirms the job order the text describes.
+  verify: |
+    import yaml
+    w = yaml.safe_load(block)
+    jobs = w['jobs']
+    assert list(jobs) == ['test', 'image', 'deploy-staging', 'deploy-production']
+    assert jobs['image']['needs'] == 'test' and jobs['deploy-production']['needs'] == ['image', 'deploy-staging']
+    assert jobs['deploy-production']['environment'] == 'production' and w['permissions']['id-token'] == 'write'
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    10% rollout: 0.1002
+    same answer twice: true
+    staff: true
+    everyone on at 10% is still on at 50%: true
+    kill switch: 0
+- block: 3
+  lang: ts
+  check: ts
+  output: |
+    wait: not enough canary traffic yet
+    promote to the next step
+    roll back: error rate 1.20% vs 0.20%
+    roll back: p99 410 ms vs 240 ms
+- block: 4
+  lang: ts
+  check: ts
+  output: |
+    { deploysPerDay: 1.6, medianLeadTimeHours: 3.5, changeFailureRate: "25%", medianRestoreMinutes: 28.5 }

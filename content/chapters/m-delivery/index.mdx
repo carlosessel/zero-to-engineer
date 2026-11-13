@@ -1,0 +1,289 @@
+---
+title: "Continuous delivery"
+summary: "Pipelines, trunk-based development, feature flags, blue-green and canary releases, and rollbacks."
+prerequisites: [m-containers, m-testing]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know how high-performing teams get code from a commit to production many times a day, safely: deployment pipelines that build once and promote the same artefact, trunk-based development with small changes, feature flags that separate deploying from releasing, rolling, blue-green and canary deployments, rollbacks, and the four metrics that show how well it is all working. Delivery speed and stability are not a trade-off: research consistently finds that teams that deploy more often also break things less.
+
+## Continuous integration, delivery and deployment
+
+- **Continuous integration** (CI): everyone merges small changes into the main branch at least daily, and every change is automatically built and tested. Integration problems surface within minutes instead of in a painful merge weeks later.
+- **Continuous delivery** (CD): every change that passes the pipeline is **releasable**: it could go to production at the push of a button.
+- **Continuous deployment**: every change that passes the pipeline **does** go to production automatically, with no human step.
+
+The point of all three is **small batches**. A deployment of one small change is easy to review, test, understand and roll back; a quarterly release of 400 changes is none of those things.
+
+## The deployment pipeline
+
+A **pipeline** is the automated path from commit to production, a series of stages that each increase confidence:
+
+1. **Build and fast checks**: compile, format and lint, unit tests, static analysis, dependency and secret scans (<Ref to="m-static-quality" />). A few minutes at most; fail fast.
+2. **Package once**: build the artefact (a container image tagged with the commit hash, <Ref to="m-containers" />) and store it in a registry. **The same artefact** is promoted through every later stage; never rebuild per environment.
+3. **Integration and contract tests** against real dependencies (<Ref to="m-testing" />).
+4. **Deploy to staging** and run smoke and end-to-end tests.
+5. **Deploy to production** gradually (below), watching health and metrics.
+
+```yaml
+name: orders-api
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+  id-token: write
+  packages: write
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+
+  image:
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.meta.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: meta
+        run: echo "tag=ghcr.io/example/orders-api:${{ github.sha }}" >> "$GITHUB_OUTPUT"
+      - run: docker build -t ${{ steps.meta.outputs.tag }} .
+      - run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+      - run: docker push ${{ steps.meta.outputs.tag }}
+
+  deploy-staging:
+    needs: image
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - run: ./deploy.sh staging ${{ needs.image.outputs.tag }}
+
+  deploy-production:
+    needs: [image, deploy-staging]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - run: ./deploy.sh production ${{ needs.image.outputs.tag }}
+```
+
+Pull requests run only the tests; every merge to `main` builds one image tagged with the commit, deploys it to staging, and then the same image to production. The `environment` settings let GitHub require approvals or wait timers for production and hold environment-specific credentials, and `id-token: write` allows OIDC federation to the cloud instead of stored keys (<Ref to="m-cloud-iac" />). GitLab CI, Azure Pipelines and Jenkins express the same stages.
+
+Pipeline principles:
+
+- **Keep it fast** (under ten minutes to a releasable artefact is a good target); slow pipelines lead to bigger, riskier batches.
+- **Keep it green**: a broken main branch is everyone's top priority. Fix or revert at once.
+- **Fix flaky tests** immediately (<Ref to="m-testing" />), or nobody trusts a red build.
+- **Everything as code**: pipelines, infrastructure (<Ref to="m-cloud-iac" />) and configuration in the repository, reviewed like any change.
+- **Secure the pipeline**: it can deploy to production, so protect it like production (least-privilege credentials, pinned third-party actions, protected branches, signed artefacts; the security part of the course covers supply-chain attacks).
+
+## Trunk-based development
+
+**Trunk-based development** means everyone integrates into one main branch (the trunk) frequently, through short-lived branches merged within a day or two, or directly. Long-lived feature branches that live for weeks cause painful merges, delay integration problems, and make continuous delivery impossible. Unfinished work is merged anyway, kept **dark** behind a feature flag or not yet wired into the user interface, so the trunk is always releasable.
+
+It depends on the practices from earlier chapters: small, reviewable pull requests (<Ref to="m-code-review" />), good automated tests, and refactoring in small steps (<Ref to="m-refactoring" />).
+
+## Feature flags: deploy is not release
+
+A **feature flag** (or toggle) is a condition in the code, controlled by configuration at run time, that turns a feature on or off without deploying. This separates **deployment** (code is on the servers) from **release** (users see the feature), which enables:
+
+- merging unfinished work safely;
+- **gradual rollouts**: 1% of users, then 10%, then everyone;
+- **targeting**: staff first, one country, beta customers;
+- **kill switches**: switch off a misbehaving feature in seconds during an incident (<Ref to="m-resilience" />);
+- **experiments** (A/B tests).
+
+Percentage rollouts must be **sticky**: the same user should get the same answer every time, so hash the user id rather than choosing randomly per request:
+
+```ts
+function fnv1a(text: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+type Flag = { name: string; enabled: boolean; percentage: number; alwaysOn: string[] };
+
+function isOn(flag: Flag, userId: string): boolean {
+  if (!flag.enabled) return false;
+  if (flag.alwaysOn.includes(userId)) return true;
+  return fnv1a(`${flag.name}:${userId}`) % 100 < flag.percentage;
+}
+
+const newCheckout: Flag = { name: "new-checkout", enabled: true, percentage: 10, alwaysOn: ["staff-ama"] };
+const users = Array.from({ length: 10_000 }, (_, i) => `user-${i}`);
+
+const share = (f: Flag) => users.filter((u) => isOn(f, u)).length / users.length;
+console.log("10% rollout:", share(newCheckout));
+console.log("same answer twice:", users.every((u) => isOn(newCheckout, u) === isOn(newCheckout, u)));
+console.log("staff:", isOn(newCheckout, "staff-ama"));
+const widened = { ...newCheckout, percentage: 50 };
+console.log("everyone on at 10% is still on at 50%:", users.filter((u) => isOn(newCheckout, u)).every((u) => isOn(widened, u)));
+console.log("kill switch:", share({ ...widened, enabled: false }));
+```
+
+It prints `10% rollout: 0.1002`, `same answer twice: true`, `staff: true`, `everyone on at 10% is still on at 50%: true` and `kill switch: 0`. Hashing the flag name with the user id gives each user a stable bucket from 0 to 99, so raising the percentage only adds users (nobody who had the feature loses it), and different flags put users in different buckets. Flag services (LaunchDarkly, Unleash, Flagsmith, cloud app-configuration services) and the vendor-neutral **OpenFeature** API provide this with targeting rules, audit logs and instant updates.
+
+Flags are **technical debt**: every flag doubles the paths through the code. Give each one an owner and an expiry date, and delete release flags once the feature is fully launched.
+
+## Deployment strategies
+
+How do you replace the running version?
+
+- **Recreate**: stop the old, start the new. Simple, with downtime; acceptable only for internal tools or batch jobs.
+- **Rolling**: replace instances a few at a time (the Kubernetes default, <Ref to="m-kubernetes" />). No downtime; both versions run side by side for a while, so they must be compatible with each other and with the database (<Ref to="m-schema-design" />).
+- **Blue-green**: run the new version (green) alongside the old (blue) at full size, test it, then switch all traffic at the load balancer. Instant switch and instant rollback (switch back), at the cost of double capacity during the release.
+- **Canary**: send a small share of real traffic (1%, then 5%, then 25%…) to the new version, compare its error rate and latency with the old version's, and continue only while it is healthy. The safest strategy for user-facing services. Tools such as Argo Rollouts and Flagger automate the analysis.
+- **Shadow** (dark launch): copy real traffic to the new version without returning its responses to users, to test it under production load.
+
+```ts
+type Stats = { requests: number; errors: number; p99Ms: number };
+
+function canaryVerdict(baseline: Stats, canary: Stats): string {
+  const baselineErrorRate = baseline.errors / baseline.requests;
+  const canaryErrorRate = canary.errors / canary.requests;
+  if (canary.requests < 500) return "wait: not enough canary traffic yet";
+  if (canaryErrorRate > baselineErrorRate * 1.5 + 0.001) return `roll back: error rate ${(canaryErrorRate * 100).toFixed(2)}% vs ${(baselineErrorRate * 100).toFixed(2)}%`;
+  if (canary.p99Ms > baseline.p99Ms * 1.2) return `roll back: p99 ${canary.p99Ms} ms vs ${baseline.p99Ms} ms`;
+  return "promote to the next step";
+}
+
+const baseline = { requests: 95_000, errors: 190, p99Ms: 240 };
+console.log(canaryVerdict(baseline, { requests: 300, errors: 0, p99Ms: 230 }));
+console.log(canaryVerdict(baseline, { requests: 5_000, errors: 11, p99Ms: 250 }));
+console.log(canaryVerdict(baseline, { requests: 5_000, errors: 60, p99Ms: 245 }));
+console.log(canaryVerdict(baseline, { requests: 5_000, errors: 9, p99Ms: 410 }));
+```
+
+It prints `wait: not enough canary traffic yet`, then `promote to the next step` (0.22% errors against a 0.20% baseline is within tolerance), then `roll back: error rate 1.20% vs 0.20%`, and `roll back: p99 410 ms vs 240 ms`. Comparing against the **current version at the same time**, not against a fixed number, cancels out daily traffic patterns. Real canary analysis uses statistics over several metrics and minimum sample sizes; the principle is the same.
+
+## Rollback and roll forward
+
+When a release goes wrong, the first goal is to **restore service**, not to find the bug. **Roll back** to the previous artefact (another reason to keep artefacts immutable and deploys automated), or turn off the feature flag. **Roll forward** (deploy a fix) only when the fix is small and certain, or when rolling back is impossible. What makes rollback impossible is usually the database: a migration that dropped a column the old version still needs. This is why schema changes use **expand and contract** and ship separately from the code that relies on them (<Ref to="m-schema-design" />).
+
+## Measuring delivery: the DORA metrics
+
+Google's DORA research programme (DevOps Research and Assessment), described in the book *Accelerate*, found four metrics that predict both delivery performance and organisational outcomes:
+
+- **Deployment frequency**: how often you deploy to production.
+- **Lead time for changes**: from commit to running in production.
+- **Change failure rate**: the share of deployments that cause a failure needing a fix or rollback.
+- **Time to restore service** (failed deployment recovery time): how long it takes to recover from a failed deployment.
+
+```ts
+type Deploy = { day: number; commitAgeHours: number; failed: boolean; restoreMinutes?: number };
+
+const deploys: Deploy[] = [
+  { day: 1, commitAgeHours: 3, failed: false },
+  { day: 1, commitAgeHours: 5, failed: false },
+  { day: 2, commitAgeHours: 2, failed: true, restoreMinutes: 12 },
+  { day: 3, commitAgeHours: 26, failed: false },
+  { day: 4, commitAgeHours: 4, failed: false },
+  { day: 4, commitAgeHours: 1, failed: false },
+  { day: 5, commitAgeHours: 6, failed: true, restoreMinutes: 45 },
+  { day: 5, commitAgeHours: 3, failed: false },
+];
+
+const median = (xs: number[]) => {
+  const s = [...xs].sort((a, b) => a - b);
+  return s.length % 2 ? s[(s.length - 1) / 2] : (s[s.length / 2 - 1] + s[s.length / 2]) / 2;
+};
+const failures = deploys.filter((d) => d.failed);
+console.log({
+  deploysPerDay: deploys.length / 5,
+  medianLeadTimeHours: median(deploys.map((d) => d.commitAgeHours)),
+  changeFailureRate: `${Math.round((failures.length / deploys.length) * 100)}%`,
+  medianRestoreMinutes: median(failures.map((d) => d.restoreMinutes!)),
+});
+```
+
+It prints `{ deploysPerDay: 1.6, medianLeadTimeHours: 3.5, changeFailureRate: "25%", medianRestoreMinutes: 28.5 }`. Use these to see trends in your own team and to find bottlenecks (a long lead time often means slow reviews or a slow pipeline), never to compare individuals or teams against each other, and never as targets to game.
+
+## Common mistakes
+
+- **Rebuilding the artefact for each environment**, so production runs something never tested.
+- **Long-lived branches** and big-bang merges.
+- **A slow, flaky pipeline** that people bypass or ignore.
+- **Releasing by deploying**, with no flags or gradual rollout, so every deployment is all-or-nothing.
+- **Flags never removed.**
+- **Migrations and code changes in one step**, making rollback impossible.
+- **Manual deployments** from someone's laptop.
+- **Using the DORA metrics as targets** for individuals.
+
+## Practice
+
+**1. (warm-up)** What is the difference between continuous delivery and continuous deployment?
+
+<Solution>
+
+With continuous delivery, every change that passes the pipeline is ready to release and could be deployed at the push of a button, but a person decides when. With continuous deployment, every change that passes the pipeline is deployed to production automatically.
+
+</Solution>
+
+**2. (warm-up)** Why build the artefact once and promote it, instead of building it again for production?
+
+<Solution>
+
+So production runs exactly the bytes that were tested in earlier stages. Rebuilding can pick up different dependency versions, base images or build settings, making the earlier testing meaningless; it also wastes time.
+
+</Solution>
+
+**3. (standard)** Why must percentage rollouts hash the user id rather than pick randomly per request? What would users notice otherwise?
+
+<Solution>
+
+Random selection per request would show the same user the new feature on one page load and the old one on the next, which is confusing and can break flows that span several requests (a checkout started in one version and finished in another). Hashing gives each user a stable bucket, so their experience is consistent, and raising the percentage only adds users.
+
+</Solution>
+
+**4. (standard)** A release adds a `loyalty_points` column and code that reads it. Plan the steps so that a rollback is always possible.
+
+<Solution>
+
+Deploy 1: a migration adds `loyalty_points` as nullable (or with a default); no code uses it yet, and old code ignores it. Deploy 2: code that writes it and reads it only if present, behind a flag; backfill existing rows in batches. Turn the flag on gradually. Deploy 3, once stable: make the column required if needed and remove fallback code. At each step, rolling back the code leaves a database that the previous version still works with (expand and contract).
+
+</Solution>
+
+**5. (stretch)** Your team deploys once a fortnight, each release takes a day of manual testing, and a third of releases need a hotfix. Propose changes, in order.
+
+<Solution>
+
+Start with automation and batch size: automate the most valuable manual tests and put them in the pipeline; build one artefact per commit and automate deployment to staging and production. Move to trunk-based development with feature flags so changes are merged and deployed in small pieces, keeping unfinished work dark. Then deploy more often (weekly, then daily), with canary releases and automated rollback on health metrics. Separate schema changes into expand-and-contract steps. Measure the DORA metrics to see whether lead time, failure rate and recovery time improve. Smaller, more frequent releases make each one less risky and easier to fix.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **CI** integrates and tests every change; **continuous delivery** keeps every change releasable; **continuous deployment** releases automatically. All rely on **small batches**.
+- A **pipeline** runs fast checks, **builds one artefact** and promotes it through environments, with everything as code and the pipeline itself secured.
+- **Trunk-based development**: short-lived branches, always-releasable main, unfinished work kept dark.
+- **Feature flags** separate deploy from release: sticky percentage rollouts, targeting, kill switches. Remove them when done.
+- Deploy with **rolling**, **blue-green** or **canary** strategies, comparing the canary with the current version; keep versions and schemas compatible.
+- **Roll back** first to restore service; expand-and-contract migrations keep rollback possible.
+- Track the **DORA metrics** (deployment frequency, lead time, change failure rate, time to restore) to improve, not to judge people.
+
+## Go deeper
+
+- [DORA research](https://dora.dev/research/), Google Cloud. The research programme behind the four key metrics.
+- [Trunk-based development](https://trunkbaseddevelopment.com/), Paul Hammant and contributors. The practice explained in depth.
+- [Feature toggles (aka feature flags)](https://martinfowler.com/articles/feature-toggles.html), Pete Hodgson. Kinds of flags and how to manage them.
+- [OpenFeature](https://openfeature.dev/), the CNCF. A vendor-neutral API for feature flags.
+- [Argo Rollouts](https://argoproj.github.io/rollouts/), the Argo project. Blue-green and canary deployments with automated analysis on Kubernetes.

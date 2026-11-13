@@ -1,0 +1,28 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    ["cached  FROM node:24-slim", "REBUILD COPY . .", "REBUILD RUN npm ci", "REBUILD RUN npm run build"]
+    ["cached  FROM node:24-slim", "cached  COPY package.json package-lock.json ./", "cached  RUN npm ci", "REBUILD COPY . .", "REBUILD RUN npm run build"]
+- block: 2
+  lang: dockerfile
+  check: not-run
+  reason: Building it needs a Node.js project with a build script and a health-check file, and a running Docker daemon; each instruction is explained in the text, and the caching behaviour is simulated in block 1.
+- block: 3
+  lang: bash
+  check: not-run
+  reason: These commands build and run a container from the image above; they need a running Docker daemon and the project.
+- block: 4
+  lang: yaml
+  check: docker
+  script: |
+    cp "$BLOCK" compose.yaml
+    touch Dockerfile
+    docker compose -f compose.yaml config --quiet
+  note: Validates the Compose file with docker compose config, which needs the Docker CLI but no running daemon; it was run and passed when this chapter was checked.
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    ["cached  FROM node:24-slim", "REBUILD COPY package.json package-lock.json ./", "REBUILD RUN npm ci", "REBUILD COPY . .", "REBUILD RUN npm run build"]

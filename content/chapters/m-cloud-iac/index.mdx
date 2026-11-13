@@ -1,0 +1,305 @@
+---
+title: "Cloud and infrastructure as code"
+summary: "Compute, storage, networks and identity in the cloud, and Terraform."
+prerequisites: [m-containers]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will understand the building blocks every cloud provides (compute, storage, managed databases, networks and identity), how they fit together for a typical web service, how to keep access and costs under control, and how to define all of it as code with Terraform so that environments are reproducible, reviewed and never changed by hand. The examples use generic names and mention AWS, Azure and Google Cloud equivalents; the concepts are the same on all three.
+
+## What the cloud gives you
+
+A **cloud provider** rents computing resources on demand through an API: you create a database in minutes, pay for what you use, and give it back when done. The main models, from most to least control:
+
+- **Infrastructure as a service** (IaaS): virtual machines, disks and networks. You manage the operating system and everything above it.
+- **Platform as a service** (PaaS) and managed services: managed databases, container platforms, queues. The provider runs the servers, patches and backups; you configure and use them.
+- **Serverless**: functions and fully managed services billed per request (<Ref to="m-architecture" />).
+
+Under the **shared responsibility model**, the provider secures the hardware, data centres and the services themselves; you are responsible for how you configure and use them: who has access, what is exposed to the internet, encryption settings, your code and your data. Most cloud breaches are configuration mistakes on the customer's side (a public storage bucket, an over-powerful key).
+
+### Regions and availability zones
+
+A **region** is a geographic area (London, Frankfurt, Virginia) containing several **availability zones** (AZs): separate data centres with independent power and networking, a few kilometres apart and connected by fast links. Spreading instances and database replicas across zones survives a data-centre failure with little latency cost; spreading across regions survives a regional outage, at the cost of complexity and cross-region latency and consistency (<Ref to="m-replication-partitioning" />). Choose regions for latency to users, data residency law (covered in the privacy and ethics chapter) and cost.
+
+## The building blocks
+
+**Compute**: virtual machines (EC2, Azure Virtual Machines, Compute Engine), usually in **auto-scaling groups** that keep a number of identical machines running; managed container platforms (ECS, EKS, AKS, GKE, Cloud Run, Azure Container Apps, <Ref to="m-kubernetes" />); and functions (Lambda, Azure Functions, Cloud Run functions).
+
+**Storage**:
+
+- **Object storage** (S3, Azure Blob Storage, Cloud Storage): files of any size addressed by key, extremely durable (designed for eleven nines), cheap, accessed over HTTP. For uploads, backups, static sites, data lakes. Not a file system and not a database. Grant access with pre-signed URLs (<Ref to="m-cloud-patterns" />), and keep buckets private by default.
+- **Block storage** (EBS, managed disks, persistent disks): virtual disks attached to one machine, for databases and file systems.
+- **File storage** (EFS, Azure Files, Filestore): network file systems shared by several machines.
+
+**Managed databases** (RDS and Aurora, Azure SQL and Azure Database for PostgreSQL, Cloud SQL, DynamoDB, Cosmos DB): the provider handles installation, patching, backups, point-in-time recovery, replicas and failover across zones. For most teams this is the right default; running your own database well is a full-time skill.
+
+**Messaging and caching**: managed queues and logs (SQS, SNS, Service Bus, Pub/Sub, managed Kafka) and managed Redis (<Ref to="m-messaging" />, <Ref to="m-caching" />).
+
+## Networks
+
+Your resources live in a private network: a **VPC** (virtual private cloud; a **VNet** in Azure) with an IP address range, divided into **subnets**, each in one availability zone.
+
+- **Public subnets** have a route to the internet through an internet gateway; only load balancers and a few edge components belong there.
+- **Private subnets** have no direct inbound route from the internet; application servers and databases live here. Outbound internet access (for updates and external APIs) goes through a **NAT gateway**.
+- **Security groups** (network security groups in Azure) are stateful firewalls on each resource: allow port 443 to the load balancer from anywhere, port 8080 to the app only from the load balancer's security group, port 5432 to the database only from the app's.
+- **Private endpoints** let you reach managed services (storage, databases) without traffic crossing the public internet.
+
+Planning address ranges is simple arithmetic, and Python's `ipaddress` module does it:
+
+```python
+import ipaddress
+
+vpc = ipaddress.ip_network("10.20.0.0/16")
+subnets = list(vpc.subnets(new_prefix=20))
+print(f"VPC {vpc}: {vpc.num_addresses} addresses, {len(subnets)} subnets of {subnets[0].num_addresses}")
+
+layout = {
+    "public-a": subnets[0], "public-b": subnets[1], "public-c": subnets[2],
+    "app-a": subnets[4], "app-b": subnets[5], "app-c": subnets[6],
+    "data-a": subnets[8], "data-b": subnets[9], "data-c": subnets[10],
+}
+for name in ("public-a", "app-b", "data-c"):
+    print(name, layout[name])
+
+app_server = ipaddress.ip_address("10.20.81.17")
+print(app_server, "is in", [n for n, s in layout.items() if app_server in s])
+```
+
+It prints `VPC 10.20.0.0/16: 65536 addresses, 16 subnets of 4096`, then `public-a 10.20.0.0/20`, `app-b 10.20.80.0/20` and `data-c 10.20.160.0/20`, and finally `10.20.81.17 is in ['app-b']`. A `/16` gives room for sixteen `/20` subnets: three tiers in three zones, with gaps left for growth. Choose ranges that do not overlap with other networks you may need to connect to (offices, other VPCs), because overlapping ranges cannot be peered.
+
+## Identity and access
+
+Cloud **identity and access management** (IAM) decides who may do what to which resource. The pieces:
+
+- **Principals**: users (people), **roles** or **service accounts** (workloads), and groups.
+- **Policies**: documents that allow or deny **actions** (`s3:GetObject`, `dynamodb:PutItem`) on **resources** (one bucket, one table), sometimes under **conditions** (from this network, with MFA).
+- **Evaluation**: by default everything is denied; an explicit allow grants access; an explicit deny always wins.
+
+```ts
+type Statement = { effect: "Allow" | "Deny"; actions: string[]; resources: string[] };
+
+const matches = (pattern: string, value: string) =>
+  pattern === "*" || (pattern.endsWith("*") ? value.startsWith(pattern.slice(0, -1)) : pattern === value);
+
+function decide(policy: Statement[], action: string, resource: string): string {
+  const applicable = policy.filter((s) => s.actions.some((a) => matches(a, action)) && s.resources.some((r) => matches(r, resource)));
+  if (applicable.some((s) => s.effect === "Deny")) return "DENY (explicit)";
+  if (applicable.some((s) => s.effect === "Allow")) return "ALLOW";
+  return "DENY (implicit)";
+}
+
+const ordersService: Statement[] = [
+  { effect: "Allow", actions: ["s3:GetObject", "s3:PutObject"], resources: ["arn:aws:s3:::shop-invoices/*"] },
+  { effect: "Allow", actions: ["sqs:SendMessage"], resources: ["arn:aws:sqs:eu-west-2:123456789012:order-events"] },
+  { effect: "Deny", actions: ["s3:*"], resources: ["arn:aws:s3:::shop-invoices/archive/*"] },
+];
+
+for (const [action, resource] of [
+  ["s3:PutObject", "arn:aws:s3:::shop-invoices/2026/inv-7.pdf"],
+  ["s3:PutObject", "arn:aws:s3:::shop-invoices/archive/inv-1.pdf"],
+  ["s3:DeleteObject", "arn:aws:s3:::shop-invoices/2026/inv-7.pdf"],
+  ["sqs:SendMessage", "arn:aws:sqs:eu-west-2:123456789012:order-events"],
+]) {
+  console.log(action, resource.split(":").at(-1), "->", decide(ordersService, action, resource));
+}
+```
+
+It prints `ALLOW` for writing an invoice, `DENY (explicit)` for touching the archive, `DENY (implicit)` for deleting (never granted) and `ALLOW` for sending order events. Real IAM adds many more rules (resource policies, permission boundaries, organisation-wide guardrails), but this core logic, where nothing is allowed unless granted and deny beats allow, is the same everywhere.
+
+Rules of thumb:
+
+- **Least privilege**: grant each workload exactly the actions on exactly the resources it needs. Start narrow; widen when something fails, not "just in case".
+- **No long-lived access keys** for workloads. Give them **roles** that the platform supplies short-lived credentials for (instance profiles, EKS pod identity, Azure managed identities, GCP workload identity). For CI pipelines, use **OIDC federation** so GitHub Actions or GitLab exchange a short-lived token for cloud credentials without stored secrets (<Ref to="m-delivery" />).
+- **People**: single sign-on, MFA, no shared accounts, no day-to-day use of the root account; elevated access requested when needed and time-limited.
+- **Separate accounts or subscriptions** per environment (development, staging, production), so a mistake in one cannot touch the others.
+
+## Cost
+
+Cloud bills surprise teams that do not watch them. The usual culprits: oversized instances, resources nobody deleted, data transfer (traffic out to the internet and between zones and regions is charged), NAT gateway traffic, logs kept forever, and managed services left on in test environments. Tag every resource with an owner and environment, set **budgets and alerts**, right-size from measured usage, scale down or stop non-production environments outside working hours, and use commitments (reserved instances, savings plans) or spot capacity for steady or interruptible workloads. **FinOps** is the practice of making engineers aware of and responsible for what their designs cost.
+
+## Infrastructure as code
+
+Clicking through a cloud console is fine for learning and disastrous for real systems: nobody knows exactly how production was set up, staging differs from it in unknown ways, changes are not reviewed, and rebuilding after an accident is guesswork. **Infrastructure as code** (IaC) describes infrastructure in files kept in Git, reviewed in pull requests and applied by tools, just like application code.
+
+**Terraform** (by HashiCorp; **OpenTofu** is its open-source fork with the same language) is the most widely used tool. You declare resources in HCL; **providers** translate them into API calls for AWS, Azure, Google Cloud, Kubernetes, GitHub and hundreds of other services.
+
+```hcl
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+  backend "s3" {
+    bucket       = "shop-terraform-state"
+    key          = "orders/production.tfstate"
+    region       = "eu-west-2"
+    use_lockfile = true
+  }
+}
+
+variable "environment" {
+  type = string
+}
+
+resource "aws_s3_bucket" "invoices" {
+  bucket = "shop-invoices-${var.environment}"
+  tags = {
+    owner       = "orders-team"
+    environment = var.environment
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "invoices" {
+  bucket                  = aws_s3_bucket.invoices.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
+}
+
+output "invoices_bucket" {
+  value = aws_s3_bucket.invoices.bucket
+}
+```
+
+This declares an invoices bucket per environment, tagged with its owner, with all public access blocked, and outputs its name for other configuration to use. The workflow:
+
+1. `terraform init` downloads providers and connects to the **state** backend.
+2. `terraform plan` compares the code with the **state** (Terraform's record of what it manages) and the real resources, and shows exactly what it will create, change or destroy.
+3. A person (or a policy check) reviews the plan.
+4. `terraform apply` makes the changes and updates the state.
+
+That plan step is the core idea, and a few lines show it:
+
+```ts
+type Resource = Record<string, string>;
+
+function plan(desired: Record<string, Resource>, actual: Record<string, Resource>): string[] {
+  const steps: string[] = [];
+  for (const [name, wanted] of Object.entries(desired)) {
+    const current = actual[name];
+    if (!current) steps.push(`+ create ${name}`);
+    else {
+      const changes = Object.keys(wanted).filter((k) => wanted[k] !== current[k]).map((k) => `${k}: ${current[k] ?? "(none)"} -> ${wanted[k]}`);
+      if (changes.length) steps.push(`~ update ${name} (${changes.join(", ")})`);
+    }
+  }
+  for (const name of Object.keys(actual)) if (!desired[name]) steps.push(`- destroy ${name}`);
+  return steps.length ? steps : ["no changes"];
+}
+
+const actual = {
+  "aws_s3_bucket.invoices": { bucket: "shop-invoices-prod", owner: "orders-team" },
+  "aws_instance.old_worker": { type: "t3.large" },
+};
+const desired = {
+  "aws_s3_bucket.invoices": { bucket: "shop-invoices-prod", owner: "billing-team" },
+  "aws_sqs_queue.order_events": { name: "order-events" },
+};
+console.log(plan(desired, actual));
+console.log(plan(desired, desired));
+```
+
+It prints `~ update aws_s3_bucket.invoices (owner: orders-team -> billing-team)`, `+ create aws_sqs_queue.order_events` and `- destroy aws_instance.old_worker`, then `no changes` when the code and reality agree. Applying the same code twice changes nothing: IaC is **declarative and idempotent**.
+
+Practices that keep IaC safe:
+
+- **Remote state with locking** (an S3 bucket, Azure storage or Terraform Cloud), never local files, so two people cannot apply at once. State can contain secrets, so restrict and encrypt it.
+- **Plan in CI on every pull request** and apply from the pipeline after review, not from laptops.
+- **Read every plan**, especially the destroys: renaming a resource in code can mean "destroy and recreate" a database. Use `prevent_destroy` lifecycle rules on precious resources, and `moved` blocks when refactoring.
+- Modules for reusable pieces (a standard service, a standard bucket), and the same code for every environment with different variables.
+- **Detect drift**: changes made by hand in the console show up as differences in the next plan; fix the code or revert the change.
+- **Policy as code** (Open Policy Agent, Checkov, tfsec) fails plans that create public buckets, unencrypted disks or overly broad permissions.
+
+Alternatives: **Pulumi** and the **AWS CDK** define infrastructure in general-purpose languages (TypeScript, C#, Java, Python); **CloudFormation** (AWS) and **Bicep** (Azure) are each provider's native option; **Crossplane** manages cloud resources from Kubernetes. The principles are identical.
+
+## Common mistakes
+
+- **Clicking in the console** for anything that matters, then not knowing how to recreate it.
+- **Public storage buckets** and databases with public addresses.
+- **Long-lived access keys** in code, CI variables or laptops; one key with administrator rights used everywhere.
+- **One account for all environments.**
+- **Everything in one availability zone.**
+- **Applying Terraform from laptops** with local state, or without reading the plan.
+- **No tags, budgets or cost alerts.**
+- **Overlapping network ranges** that later prevent connecting networks.
+
+## Practice
+
+**1. (warm-up)** In the shared responsibility model, which of these are the customer's job? Patching the hypervisor; making a storage bucket private; encrypting a database's backups (with the option the provider offers); physical security of the data centre; deciding who can read production data.
+
+<Solution>
+
+Making the bucket private, enabling encryption of the backups, and deciding who can read production data are the customer's job. Patching the hypervisor and physical security are the provider's.
+
+</Solution>
+
+**2. (warm-up)** Why should a database live in a private subnet, and how do the application servers reach it?
+
+<Solution>
+
+So it has no route from the internet at all: even with a leaked password, an attacker on the internet cannot connect. Application servers in private subnets of the same VPC reach it over the private network, and the database's security group allows its port only from the application servers' security group.
+
+</Solution>
+
+**3. (standard)** Using the policy evaluator, write a policy for a reporting job that may read any object under `shop-invoices/2026/` and nothing else, and show it allowing a read and denying a write.
+
+<Solution>
+
+```ts
+type Statement = { effect: "Allow" | "Deny"; actions: string[]; resources: string[] };
+const matches = (p: string, v: string) => p === "*" || (p.endsWith("*") ? v.startsWith(p.slice(0, -1)) : p === v);
+function decide(policy: Statement[], action: string, resource: string): string {
+  const hits = policy.filter((s) => s.actions.some((a) => matches(a, action)) && s.resources.some((r) => matches(r, resource)));
+  if (hits.some((s) => s.effect === "Deny")) return "DENY (explicit)";
+  return hits.some((s) => s.effect === "Allow") ? "ALLOW" : "DENY (implicit)";
+}
+
+const reporting: Statement[] = [{ effect: "Allow", actions: ["s3:GetObject"], resources: ["arn:aws:s3:::shop-invoices/2026/*"] }];
+console.log(decide(reporting, "s3:GetObject", "arn:aws:s3:::shop-invoices/2026/inv-7.pdf"));
+console.log(decide(reporting, "s3:PutObject", "arn:aws:s3:::shop-invoices/2026/inv-7.pdf"));
+console.log(decide(reporting, "s3:GetObject", "arn:aws:s3:::shop-invoices/2025/inv-1.pdf"));
+```
+
+It prints **ALLOW**, **DENY (implicit)** and **DENY (implicit)**: one narrow statement grants exactly the reads needed, and everything else is denied by default.
+
+</Solution>
+
+**4. (standard)** A `terraform plan` for a small change shows `-/+ destroy and then create replacement` for the production database. What might have caused it, and what do you do?
+
+<Solution>
+
+A change to an attribute that cannot be updated in place (an engine version jump, a changed identifier or subnet group, a renamed resource in code without a `moved` block). Do not apply. Read which attribute forces replacement, then either revert it, use a `moved` block for a rename, or plan a proper migration (a snapshot and restore, or a replica promotion) during a maintenance window. Protect the database with `prevent_destroy` so such plans fail outright.
+
+</Solution>
+
+**5. (stretch)** Your CI pipeline deploys to AWS using an access key stored as a repository secret, with administrator permissions. Describe a safer setup.
+
+<Solution>
+
+Replace the stored key with OIDC federation: configure the cloud to trust the CI provider's identity tokens, so each pipeline run exchanges a short-lived token for temporary credentials of a specific role, restricted to that repository, branch and environment (only the main branch may assume the production role). Give that role only the permissions deployment needs (push images to one registry, update one service, read and write the Terraform state bucket), not administrator. Use separate roles and accounts for staging and production, require approval for production deployments, and delete the old key after rotating anything it could have touched.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Clouds offer **IaaS**, managed services and **serverless**; under **shared responsibility**, you secure your configuration, access and data.
+- Use **regions** and **availability zones** for latency and resilience; spread across zones by default.
+- Building blocks: compute, **object**, block and file **storage**, **managed databases**, messaging and caches.
+- Networks: a **VPC** with public and private **subnets**, NAT for outbound, **security groups** between tiers, private endpoints; plan non-overlapping address ranges.
+- **IAM**: deny by default, explicit deny wins; least privilege, roles with short-lived credentials, OIDC for CI, separate accounts per environment.
+- Watch **cost** with tags, budgets and right-sizing.
+- **Infrastructure as code** (Terraform or OpenTofu, Pulumi, CDK, Bicep): declarative, reviewed, planned and applied from CI, with remote locked state, protected resources, drift detection and policy checks.
+
+## Go deeper
+
+- [Terraform tutorials](https://developer.hashicorp.com/terraform/tutorials), HashiCorp. Getting started with Terraform on each major cloud.
+- [OpenTofu documentation](https://opentofu.org/docs/), the OpenTofu project. The open-source fork of Terraform.
+- [AWS Well-Architected Framework](https://docs.aws.amazon.com/wellarchitected/latest/framework/welcome.html), Amazon Web Services. Security, reliability, cost and operations principles that apply to any cloud.
+- [Security best practices in IAM](https://docs.aws.amazon.com/IAM/latest/UserGuide/best-practices.html), Amazon Web Services. Least privilege, roles and temporary credentials.
+- [Azure Architecture Center](https://learn.microsoft.com/en-us/azure/architecture/), Microsoft. Reference architectures and guides for Azure.
