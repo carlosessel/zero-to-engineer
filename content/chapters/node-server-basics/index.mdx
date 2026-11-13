@@ -1,0 +1,397 @@
+---
+title: "Node.js: JavaScript on the server"
+summary: "Running scripts, files, streams, the event loop, environment variables, and testing with Vitest."
+prerequisites: [typescript-basics]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will write TypeScript programs that run on a server with **Node.js**: reading arguments and environment variables, working with files and streams, understanding the **event loop** that lets one Node process serve thousands of requests, answering HTTP requests with Node's built-in server, and testing your code with Vitest. The earlier chapters of this track taught JavaScript and TypeScript in the browser; the language is the same on the server, but the surroundings are different: no web page, no `document`, and instead files, processes, networks and secrets. You need Node.js from <Ref to="be-setup" />.
+
+## Running TypeScript with Node
+
+Save this as `hello.ts`:
+
+```ts
+const name: string = process.argv[2] ?? "world";
+const started = new Date("2026-11-13T07:00:00Z");
+
+console.log(`Hello, ${name}!`);
+console.log(`Running on Node ${process.version.split(".")[0]}`);
+console.log(`Bakery opened at ${started.toISOString()}`);
+```
+
+Run it with `node hello.ts Ama`. It prints `Hello, Ama!`, `Running on Node` with your Node major version (such as `v24`), and `Bakery opened at 2026-11-13T07:00:00.000Z`.
+
+- Current Node.js runs TypeScript files directly by **stripping the types**: it deletes the type annotations and runs the JavaScript that is left. It does not check the types; run `npx tsc --noEmit` (or let your editor and CI do it) for that. Only "erasable" TypeScript works this way, so avoid `enum` and use unions of strings instead (<Ref to="typescript-basics" />).
+- **`process`** is a global object describing the running program: `process.argv` holds the command-line arguments (the first two are the paths of `node` and the script), `process.env` the environment variables, `process.exit(code)` ends the program.
+- Node has no `document` or `window`. Instead it has **built-in modules** for the server's world, imported with the `node:` prefix: `node:fs` (files), `node:path`, `node:http`, `node:crypto`, `node:test` and more.
+
+## Environment variables and configuration
+
+Settings that differ between your laptop, the test environment and production (database addresses, API keys, ports) come from **environment variables**, never from the code itself (<Ref to="m-delivery" />):
+
+```ts
+const port = Number(process.env.PORT ?? "3000");
+const databaseUrl = process.env.DATABASE_URL;
+
+if (!databaseUrl) {
+  console.error("DATABASE_URL is not set");
+  process.exitCode = 1;
+} else {
+  console.log(`Listening on port ${port}`);
+  console.log(`Database host: ${new URL(databaseUrl).host}`);
+}
+```
+
+Run `PORT=8080 DATABASE_URL=postgres://app@db.internal:5432/bakery node config.ts` and it prints `Listening on port 8080` and `Database host: db.internal:5432`. Without `DATABASE_URL` it prints the error and exits with code 1. Fail fast like this: a service that starts with missing settings fails later in confusing ways.
+
+For local development, keep settings in a `.env` file and load it with `node --env-file=.env config.ts`. **Never commit `.env` files that hold secrets**; add them to `.gitignore` and commit a `.env.example` with placeholder values instead (<Ref to="m-appsec" />).
+
+## Files
+
+`node:fs/promises` reads and writes files asynchronously, returning promises you `await`:
+
+```ts
+import { mkdir, readFile, writeFile, readdir, rm } from "node:fs/promises";
+import path from "node:path";
+
+const dir = path.join(".", "orders");
+await mkdir(dir, { recursive: true });
+
+const order = { id: "o-1", customer: "Ama", items: [{ sku: "RYE-400", quantity: 2 }] };
+await writeFile(path.join(dir, "o-1.json"), JSON.stringify(order, null, 2));
+
+const text = await readFile(path.join(dir, "o-1.json"), "utf8");
+const loaded = JSON.parse(text) as typeof order;
+console.log(loaded.customer, loaded.items.length);
+console.log(await readdir(dir));
+
+try {
+  await readFile(path.join(dir, "missing.json"), "utf8");
+} catch (error) {
+  console.log("Not found:", (error as NodeJS.ErrnoException).code);
+}
+
+await rm(dir, { recursive: true });
+```
+
+It prints `Ama 1`, `[ 'o-1.json' ]` and `Not found: ENOENT`. Notes:
+
+- `await` works at the top level of a module, so scripts can use it directly.
+- **`path.join`** builds paths with the right separator for the operating system; never glue paths together with `+ "/" +`.
+- Errors from the file system have a `code`: `ENOENT` (no such file), `EACCES` (permission denied), `EEXIST` (already exists).
+- `JSON.parse` returns `any`; the `as` only tells TypeScript what you expect. Data from files and requests should be **validated** before use, as the HTTP part of this course shows.
+
+## Streams
+
+Reading a whole file into memory is fine for small files. For large ones (logs, exports, uploads), use a **stream**, which processes the data in chunks so memory use stays small however big the file is:
+
+```ts
+import { createReadStream } from "node:fs";
+import { writeFile, rm } from "node:fs/promises";
+import { createInterface } from "node:readline";
+
+const lines = ["timestamp,sku,quantity"];
+for (let i = 0; i < 100_000; i++) {
+  lines.push(`2026-11-13T07:${String(i % 60).padStart(2, "0")}:00Z,${i % 3 === 0 ? "RYE-400" : "BAG-250"},${(i % 4) + 1}`);
+}
+await writeFile("sales.csv", lines.join("\n"));
+
+const totals = new Map<string, number>();
+const reader = createInterface({ input: createReadStream("sales.csv"), crlfDelay: Infinity });
+let header = true;
+for await (const line of reader) {
+  if (header) {
+    header = false;
+    continue;
+  }
+  const [, sku, quantity] = line.split(",");
+  totals.set(sku, (totals.get(sku) ?? 0) + Number(quantity));
+}
+
+console.log(Object.fromEntries([...totals].sort()));
+await rm("sales.csv");
+```
+
+It prints `{ 'BAG-250': 166665, 'RYE-400': 83335 }`. `for await` reads the lines one at a time as chunks arrive. Streams are everywhere in Node: HTTP requests and responses are streams too, and `pipeline` from `node:stream/promises` connects streams safely (for example, a file through gzip to a response).
+
+## The event loop
+
+A Node process runs your JavaScript on **one thread**. It can still handle many requests at once because nearly all waiting (for files, networks, timers, databases) happens outside JavaScript, and the **event loop** runs the callback for each finished operation when it comes back. While one request waits for the database, others run:
+
+```ts
+console.log("1: start");
+
+setTimeout(() => console.log("5: timer callback"), 0);
+Promise.resolve().then(() => console.log("3: promise callback"));
+queueMicrotask(() => console.log("4: microtask"));
+
+async function handle(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 10));
+  console.log("6: request finished after waiting");
+}
+void handle();
+
+console.log("2: end of script");
+```
+
+It prints the lines in the numbered order. The script runs to the end first; then promise callbacks and microtasks; then timers and finished I/O, round after round. This is the same model as in the browser (<Ref to="js-async-fetch" />, <Ref to="m-async" />).
+
+The catch: **never block the event loop**. While your code computes something slow, nothing else runs, so every other request waits:
+
+```ts
+function busyWork(ms: number): void {
+  const end = Date.now() + ms;
+  while (Date.now() < end) {
+    // a tight loop, standing in for heavy computation
+  }
+}
+
+const started = Date.now();
+setTimeout(() => {
+  const late = Date.now() - started - 10;
+  console.log(late >= 190 ? "the 10 ms timer ran about 200 ms late" : "on time");
+}, 10);
+
+busyWork(200);
+```
+
+It prints `the 10 ms timer ran about 200 ms late`: the timer was ready after 10 ms, but the loop was busy. In a server this looks like every request suddenly slowing down. Avoid synchronous file functions (`readFileSync`) in request handlers, big synchronous loops and slow regular expressions; move heavy CPU work to **worker threads** (`node:worker_threads`), a separate process, or a background job (<Ref to="m-performance" />).
+
+## An HTTP server
+
+Node can answer HTTP requests with its built-in `node:http` module. Real services use a framework, as the API part of this course does, but seeing the raw version shows what frameworks do for you:
+
+```ts
+import { createServer } from "node:http";
+
+const menu = [
+  { sku: "RYE-400", name: "Rye loaf", pricePence: 450 },
+  { sku: "BAG-250", name: "Bagel", pricePence: 120 },
+];
+
+const server = createServer((req, res) => {
+  if (req.method === "GET" && req.url === "/menu") {
+    res.writeHead(200, { "content-type": "application/json" });
+    res.end(JSON.stringify(menu));
+    return;
+  }
+  res.writeHead(404, { "content-type": "application/json" });
+  res.end(JSON.stringify({ error: "Not found" }));
+});
+
+server.listen(0, async () => {
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+
+  const ok = await fetch(`http://localhost:${port}/menu`);
+  console.log(ok.status, ok.headers.get("content-type"), (await ok.json()).length);
+
+  const missing = await fetch(`http://localhost:${port}/cakes`);
+  console.log(missing.status, await missing.text());
+
+  server.close();
+});
+```
+
+It prints `200 application/json 2` and `404 {"error":"Not found"}`. The callback runs once per request with a **request** (`req`: method, URL, headers, body stream) and a **response** (`res`: status, headers, body). Listening on port `0` asks the operating system for any free port, handy in tests; the script then calls itself with the built-in `fetch`. Frameworks add routing, body parsing, validation, error handling and middleware on top of exactly this.
+
+## Testing with Vitest
+
+**Vitest** is a fast, popular test runner for JavaScript and TypeScript, the same one used in <Ref to="js-testing" />. Install it in a project with `npm install --save-dev vitest`. Put the code in `src/price.ts`:
+
+```ts
+export type Line = { sku: string; unitPence: number; quantity: number };
+
+export const FREE_DELIVERY_FROM_PENCE = 3000;
+export const DELIVERY_PENCE = 350;
+
+export function subtotal(lines: Line[]): number {
+  return lines.reduce((sum, l) => sum + l.unitPence * l.quantity, 0);
+}
+
+export function total(lines: Line[]): number {
+  if (lines.length === 0) throw new Error("A basket needs at least one line");
+  const sub = subtotal(lines);
+  return sub >= FREE_DELIVERY_FROM_PENCE ? sub : sub + DELIVERY_PENCE;
+}
+```
+
+and the tests in `src/price.test.ts`:
+
+```ts
+import { describe, expect, it } from "vitest";
+import { total } from "./price.ts";
+
+describe("total", () => {
+  it("adds delivery below the free delivery threshold", () => {
+    expect(total([{ sku: "RYE-400", unitPence: 450, quantity: 2 }])).toBe(900 + 350);
+  });
+
+  it.each([
+    [2999, 3349],
+    [3000, 3000],
+    [4500, 4500],
+  ])("a subtotal of %i costs %i", (sub, expected) => {
+    expect(total([{ sku: "CAKE", unitPence: sub, quantity: 1 }])).toBe(expected);
+  });
+
+  it("refuses an empty basket", () => {
+    expect(() => total([])).toThrow("at least one line");
+  });
+});
+```
+
+Run `npx vitest run`. It reports `src/price.test.ts (5 tests)` and `Tests  5 passed (5)`. As in every track: arrange, act, assert; names that describe behaviour; boundary values; and watch each test fail once by breaking the code (<Ref to="m-testing" />). Node also has a built-in runner, `node:test`, run with `node --test`, which needs no installation; Vitest is more common in projects.
+
+## Common mistakes
+
+- **Secrets in code or in committed `.env` files.**
+- **Blocking the event loop** with synchronous file calls or heavy computation in request handlers.
+- **Reading huge files into memory** instead of streaming them.
+- **Building paths with string concatenation** instead of `path.join`.
+- **Trusting `JSON.parse` output** without validating it.
+- **Forgetting that `node file.ts` does not type-check**; run `tsc --noEmit` in CI.
+- **Unhandled promise rejections**: a promise that fails with nobody awaiting it crashes the process in current Node. Always `await` or `.catch`.
+
+## Practice
+
+**1. (warm-up)** Write a script that prints the sum of the numbers passed on the command line, so `node sum.ts 4 5 6` prints `15`.
+
+<Solution>
+
+```ts
+const numbers = process.argv.slice(2).map(Number);
+if (numbers.some(Number.isNaN)) {
+  console.error("Usage: node sum.ts NUMBER...");
+  process.exitCode = 1;
+} else {
+  console.log(numbers.reduce((a, b) => a + b, 0));
+}
+```
+
+`process.argv.slice(2)` skips the paths of `node` and the script. With `4 5 6` it prints **15**.
+
+</Solution>
+
+**2. (warm-up)** Why does the event loop let one Node process serve many requests, and what breaks that?
+
+<Solution>
+
+While a request waits for I/O (a database, a file, another service), its JavaScript is not running; the waiting happens in the operating system or Node's internal threads, and the event loop runs other requests' callbacks meanwhile. Anything that keeps JavaScript busy for a long time (a big synchronous loop, `readFileSync` on a large file, heavy computation) stops the loop, so every request waits.
+
+</Solution>
+
+**3. (standard)** Write a script that reads a JSON file of orders (each with a `customer` and `totalPence`), and writes `report.json` with the total per customer. Handle a missing file with a clear message.
+
+<Solution>
+
+```ts
+import { readFile, writeFile, rm } from "node:fs/promises";
+
+type Order = { customer: string; totalPence: number };
+
+await writeFile("orders.json", JSON.stringify([
+  { customer: "Ama", totalPence: 450 },
+  { customer: "Kofi", totalPence: 1200 },
+  { customer: "Ama", totalPence: 900 },
+]));
+
+async function report(file: string): Promise<void> {
+  let orders: Order[];
+  try {
+    orders = JSON.parse(await readFile(file, "utf8")) as Order[];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      console.error(`No such file: ${file}`);
+      return;
+    }
+    throw error;
+  }
+  const totals: Record<string, number> = {};
+  for (const o of orders) totals[o.customer] = (totals[o.customer] ?? 0) + o.totalPence;
+  await writeFile("report.json", JSON.stringify(totals));
+  console.log(await readFile("report.json", "utf8"));
+}
+
+await report("orders.json");
+await report("missing.json");
+await rm("orders.json");
+await rm("report.json");
+```
+
+It prints `{"Ama":1350,"Kofi":1200}` and then **No such file: missing.json** on the error output. Only the "not found" error is handled; any other error (bad JSON, permissions) is rethrown rather than hidden. The first lines just create a sample file to work on.
+
+</Solution>
+
+**4. (standard)** Add a `GET /health` route to the HTTP server above that returns status 200 and `{"status":"ok"}`, and check it with `fetch`.
+
+<Solution>
+
+```ts
+import { createServer } from "node:http";
+
+const server = createServer((req, res) => {
+  res.setHeader("content-type", "application/json");
+  if (req.method === "GET" && req.url === "/health") {
+    res.writeHead(200).end(JSON.stringify({ status: "ok" }));
+  } else {
+    res.writeHead(404).end(JSON.stringify({ error: "Not found" }));
+  }
+});
+
+server.listen(0, async () => {
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  const response = await fetch(`http://localhost:${port}/health`);
+  console.log(response.status, await response.text());
+  server.close();
+});
+```
+
+It prints `200 {"status":"ok"}`. Health endpoints let load balancers and orchestrators check that an instance is alive (<Ref to="m-load-balancing" />).
+
+</Solution>
+
+**5. (stretch)** Write a test file for `subtotal` from `src/price.ts`: an empty basket gives 0, and a basket of two lines (450p × 2 and 380p × 1) gives 1280.
+
+<Solution>
+
+```ts
+import { expect, it } from "vitest";
+import { subtotal } from "./price.ts";
+
+it("gives 0 for an empty basket", () => {
+  expect(subtotal([])).toBe(0);
+});
+
+it("adds every line", () => {
+  expect(subtotal([
+    { sku: "RYE-400", unitPence: 450, quantity: 2 },
+    { sku: "JAM", unitPence: 380, quantity: 1 },
+  ])).toBe(1280);
+});
+```
+
+Save it as `src/subtotal.test.ts`; `npx vitest run` then reports both files and seven passing tests.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Node.js** runs JavaScript, and TypeScript with its types stripped, on the server. It has `process` (arguments, environment, exit codes) and built-in `node:` modules instead of `document` and `window`.
+- Configuration comes from **environment variables**; fail fast when they are missing; never commit secrets.
+- `node:fs/promises` reads and writes files; `path.join` builds paths; **streams** process big data in small chunks.
+- The **event loop** runs one thread of JavaScript and serves many requests by never waiting in JavaScript. **Never block it.**
+- `node:http` answers requests with a request and a response; frameworks build on it.
+- Test with **Vitest** (`npx vitest run`) or the built-in `node --test`.
+
+## Go deeper
+
+- [Node.js: introduction](https://nodejs.org/en/learn/getting-started/introduction-to-nodejs), the Node.js project. What Node.js is and how it differs from the browser.
+- [Running TypeScript natively](https://nodejs.org/en/learn/typescript/run-natively), the Node.js project. How type stripping works and its limits.
+- [Don't block the event loop](https://nodejs.org/en/learn/asynchronous-work/dont-block-the-event-loop), the Node.js project. Why and how to keep a server responsive.
+- [Vitest: getting started](https://vitest.dev/guide/), the Vitest team. Installing and running Vitest.

@@ -1,0 +1,141 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: shell
+  script: |
+    mkdir b1 && cd b1
+    cp "$BLOCK" x.ts
+    node x.ts Ama
+  output_contains:
+  - 'Hello, Ama!
+
+    Running on Node v'
+  - Bakery opened at 2026-11-13T07:00:00.000Z
+- block: 2
+  lang: ts
+  check: shell
+  script: |
+    mkdir b2 && cd b2
+    cp "$BLOCK" x.ts
+    node x.ts 2>/dev/null || echo "exit $? without settings"
+    PORT=8080 DATABASE_URL=postgres://app@db.internal:5432/bakery node x.ts
+  output_contains:
+  - exit 1 without settings
+  - 'Listening on port 8080
+
+    Database host: db.internal:5432'
+- block: 3
+  lang: ts
+  check: shell
+  script: |
+    mkdir b3 && cd b3
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - 'Ama 1
+
+    [ ''o-1.json'' ]
+
+    Not found: ENOENT'
+- block: 4
+  lang: ts
+  check: shell
+  script: |
+    mkdir b4 && cd b4
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '{ ''BAG-250'': 166665, ''RYE-400'': 83335 }'
+- block: 5
+  lang: ts
+  check: shell
+  script: |
+    mkdir b5 && cd b5
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '1: start
+
+    2: end of script
+
+    3: promise callback
+
+    4: microtask
+
+    5: timer callback
+
+    6: request finished after waiting'
+- block: 6
+  lang: ts
+  check: shell
+  script: |
+    mkdir b6 && cd b6
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - the 10 ms timer ran about 200 ms late
+- block: 7
+  lang: ts
+  check: shell
+  script: |
+    mkdir b7 && cd b7
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '200 application/json 2
+
+    404 {"error":"Not found"}'
+- block: 8
+  lang: ts
+  check: vitest-run
+  files:
+    src/price.ts: 8
+    src/price.test.ts: 9
+  passed: 5
+- block: 9
+  lang: ts
+  check: vitest-run
+  files:
+    src/price.ts: 8
+    src/price.test.ts: 9
+  passed: 5
+  output_contains:
+  - src/price.test.ts (5 tests)
+  - Tests  5 passed (5)
+- block: 10
+  lang: ts
+  check: shell
+  script: |
+    mkdir b10 && cd b10
+    cp "$BLOCK" x.ts
+    node x.ts 4 5 6
+  output_contains:
+  - '15
+
+    '
+- block: 11
+  lang: ts
+  check: shell
+  script: |
+    mkdir b11 && cd b11
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - '{"Ama":1350,"Kofi":1200}'
+- block: 12
+  lang: ts
+  check: shell
+  script: |
+    mkdir b12 && cd b12
+    cp "$BLOCK" x.ts
+    node x.ts
+  output_contains:
+  - 200 {"status":"ok"}
+- block: 13
+  lang: ts
+  check: vitest-run
+  files:
+    src/price.ts: 8
+    src/price.test.ts: 9
+    src/subtotal.test.ts: 13
+  passed: 7

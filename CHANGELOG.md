@@ -4,6 +4,19 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 4 (Node.js and TypeScript track)
+
+Added
+- A chapter on Node.js as a server platform: running TypeScript with type stripping, arguments and environment variables, files and streams, the event loop and how blocking it delays every request, Node's built-in HTTP server, and testing with Vitest. The part also reuses the web course's six JavaScript and TypeScript chapters.
+- Every example runs with Node in the example checks (the event-loop ordering, the 200 ms block, and the HTTP server answering `fetch`), and the Vitest files run with Vitest.
+- 2 glossary terms, and the course added to the existing terms the reused chapters use.
+
+Fixed
+- The glossary entries "Element" and "Key" now also give the meaning the JavaScript chapters use (an item in an array; the name a value is stored under in an object or map), which the web course was missing too; "Chaining" has a meaning for this course.
+
+Not verified
+- No person has reviewed this chapter. The checks ran on Node 24, not the Node 26 that the setup chapter recommends.
+
 ### 2026-11-13: Zero to Backend Engineer, part 3 (Java track)
 
 Added
