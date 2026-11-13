@@ -4,6 +4,15 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 14 (Reference): the course is complete
+
+Added
+- The library: 39 free (or, where marked, paid) courses, books and documentation sets grouped by part and by track, from Pro Git and the twelve-factor app to the official .NET, Spring and Node learning paths, OWASP's top tens and Google's SRE books, each opened and checked.
+- The course glossary page, listing every term the course uses.
+
+Changed
+- Chapters written before the chapters they mention now link to them: the Node basics chapter to HTTP and the Node API chapter; the Java build chapter to the Spring API chapter; the API, dependency injection and LINQ chapters to the data, security and background work chapters; and the authentication chapter to integration testing.
+
 ### 2026-11-13: Zero to Backend Engineer, part 13 (The job)
 
 Added

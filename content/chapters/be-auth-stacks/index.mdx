@@ -600,7 +600,7 @@ In Node, for example: `JSON.parse(Buffer.from(token.split(".")[1], "base64url").
 
 In ASP.NET Core: `app.MapDelete("/orders/{id}", (string id) => orders.Remove(id) ? Results.NoContent() : Results.NotFound()).RequireAuthorization("staff");`. In Spring: a `@DeleteMapping("/orders/{id}")` method with `@PreAuthorize("hasRole('staff')")`. In Express: `app.delete("/orders/:id", authenticate, requireRole("staff"), handler)`.
 
-Tests: no token gives 401; a tampered or expired token gives 401; a customer token gives 403, even for their own order; a staff token for an existing order gives 204 and the order is gone; a staff token for a missing order gives 404; and deleting twice gives 204 then 404. Authorisation tests like these belong in your integration tests, covered in the testing part of this course, because they are the ones that stop a refactoring from silently opening an endpoint.
+Tests: no token gives 401; a tampered or expired token gives 401; a customer token gives 403, even for their own order; a staff token for an existing order gives 204 and the order is gone; a staff token for a missing order gives 404; and deleting twice gives 204 then 404. Authorisation tests like these belong in your integration tests (<Ref to="be-integration-tests" />), because they are the ones that stop a refactoring from silently opening an endpoint.
 
 </Solution>
 

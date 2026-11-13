@@ -81,7 +81,7 @@ It prints `Ama 1`, `[ 'o-1.json' ]` and `Not found: ENOENT`. Notes:
 - `await` works at the top level of a module, so scripts can use it directly.
 - **`path.join`** builds paths with the right separator for the operating system; never glue paths together with `+ "/" +`.
 - Errors from the file system have a `code`: `ENOENT` (no such file), `EACCES` (permission denied), `EEXIST` (already exists).
-- `JSON.parse` returns `any`; the `as` only tells TypeScript what you expect. Data from files and requests should be **validated** before use, as the HTTP part of this course shows.
+- `JSON.parse` returns `any`; the `as` only tells TypeScript what you expect. Data from files and requests should be **validated** before use; <Ref to="be-http" /> shows how.
 
 ## Streams
 
@@ -161,7 +161,7 @@ It prints `the 10 ms timer ran about 200 ms late`: the timer was ready after 10 
 
 ## An HTTP server
 
-Node can answer HTTP requests with its built-in `node:http` module. Real services use a framework, as the API part of this course does, but seeing the raw version shows what frameworks do for you:
+Node can answer HTTP requests with its built-in `node:http` module. Real services use a framework (<Ref to="be-api-node" /> uses one), but seeing the raw version shows what frameworks do for you:
 
 ```ts
 import { createServer } from "node:http";

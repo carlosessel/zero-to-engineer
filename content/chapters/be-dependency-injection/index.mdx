@@ -128,7 +128,7 @@ transient gives a new formatter each time: True
 The three **lifetimes**:
 
 - **Singleton**: one instance for the whole application. For stateless helpers, caches, clients designed to be shared (such as `HttpClient` factories) and configuration. Must be thread-safe.
-- **Scoped**: one instance per **scope**, which in ASP.NET Core means **per request**. The usual choice for services and repositories, and required for Entity Framework's `DbContext` (covered in the data part of this course), which is not thread-safe.
+- **Scoped**: one instance per **scope**, which in ASP.NET Core means **per request**. The usual choice for services and repositories, and required for Entity Framework's `DbContext` (<Ref to="be-data-efcore" />), which is not thread-safe.
 - **Transient**: a new instance every time it is asked for. For lightweight, stateless objects.
 
 In an ASP.NET Core app you write `builder.Services.AddScoped<...>()` instead of creating a `ServiceCollection`, and the framework creates a scope for each request. Constructors list what they need; ASP.NET Core supplies it to endpoints, controllers and other services.
@@ -454,7 +454,7 @@ class ReportService(IServiceScopeFactory scopes)
 }
 ```
 
-Each call gets its own repository, disposed with the scope. Background services use exactly this pattern (covered in the background work part of this course).
+Each call gets its own repository, disposed with the scope. Background services use exactly this pattern (<Ref to="be-background-jobs" />).
 
 </Solution>
 

@@ -256,7 +256,7 @@ Console.WriteLine(await http.GetStringAsync("/menu"));
 await app.StopAsync();
 ```
 
-It prints the timing middleware's lines around each request: the first is stopped by the key check with `401`, the second reaches the endpoint and returns `rye, bagel`. The timing middleware sees both because it runs first. A hand-written key check like this is only for illustration; real services use ASP.NET Core's authentication and authorisation middleware (covered in the security part of this course). The usual order is: exception handler, HTTPS redirection, CORS, authentication, authorisation, then your endpoints.
+It prints the timing middleware's lines around each request: the first is stopped by the key check with `401`, the second reaches the endpoint and returns `rye, bagel`. The timing middleware sees both because it runs first. A hand-written key check like this is only for illustration; real services use ASP.NET Core's authentication and authorisation middleware (<Ref to="be-auth-stacks" />). The usual order is: exception handler, HTTPS redirection, CORS, authentication, authorisation, then your endpoints.
 
 ## Services in handlers
 
@@ -317,7 +317,7 @@ class InMemoryOrderStore : IOrderStore
 }
 ```
 
-It prints `201 /orders/o-1` and `{"id":"o-1","customer":"Ama","totalPence":1250}`. Because the handlers depend on the `IOrderStore` interface, the in-memory store can later be swapped for a database one (covered in the data part of this course) without touching them. The store is a **singleton** shared by all requests at once, so it uses thread-safe `ConcurrentDictionary` and `Interlocked` (<Ref to="cs-errors-async" />).
+It prints `201 /orders/o-1` and `{"id":"o-1","customer":"Ama","totalPence":1250}`. Because the handlers depend on the `IOrderStore` interface, the in-memory store can later be swapped for a database one (<Ref to="be-data-efcore" />) without touching them. The store is a **singleton** shared by all requests at once, so it uses thread-safe `ConcurrentDictionary` and `Interlocked` (<Ref to="cs-errors-async" />).
 
 ## OpenAPI
 
