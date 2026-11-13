@@ -1,0 +1,36 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    shipping: complexity 7  <- consider splitting
+    vat: complexity 1
+- block: 2
+  lang: ts
+  check: ts
+  note: A function with a suppression comment; the check confirms it compiles in strict mode (ESLint itself is not installed here).
+- block: 3
+  lang: ts
+  check: ts
+  note: Compiles under strict mode alone, as the chapter says; the check type-checks it with the site's strict settings, which do not include noUncheckedIndexedAccess.
+- block: 4
+  lang: csharp
+  check: csharp
+  exit_code: 1
+  output_contains:
+  - 'error CS8602: Dereference of a possibly null reference.'
+  note: 'Fails to build on purpose: with warnings treated as errors, the nullable warning stops the build.'
+- block: 5
+  lang: yaml
+  check: illustration
+  note: A GitHub Actions workflow; it runs only on GitHub, and this repository's own CI (.github/workflows/ci.yml) runs the same kinds of check.
+- block: 6
+  lang: ts
+  check: ts
+  note: The function for practice 2; the check confirms it compiles.
+- block: 7
+  lang: ts
+  check: ts
+  output: |
+    1
+    Unknown product: croissant

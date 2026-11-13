@@ -1,0 +1,272 @@
+---
+title: "Linters, formatters and static analysis"
+summary: "Automated code quality, and gates that stop problems reaching production."
+prerequisites: [m-testing]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will know the tools that check code without running it (formatters, linters, type checkers, static analysers, dependency and secret scanners), how they work, how to bring them into a codebase that has never had them, and how to wire them into editors, commit hooks and continuous integration so problems are caught in seconds rather than in production. Machines are better than people at consistent, tireless checking; good teams let them do it, and save human review for design and meaning (<Ref to="m-code-review" />).
+
+## What static analysis is
+
+**Static analysis** examines source code without running it. (**Dynamic analysis**, such as tests and profilers, observes code while it runs.) Most tools work the same way: they **parse** the code into an **abstract syntax tree** (AST), a tree of the program's structure, and then walk the tree looking for patterns. Here is the idea in a few lines of Python, measuring **cyclomatic complexity**, the number of independent paths through a function (one plus the number of decision points):
+
+```python
+import ast
+
+SOURCE = '''
+def shipping(country, weight_kg, express, member):
+    if country == "UK":
+        cost = 350 if weight_kg <= 2 else 350 + (weight_kg - 2) * 100
+    elif country in ("FR", "DE"):
+        cost = 900
+    else:
+        cost = 1500
+    if express and not member:
+        cost *= 2
+    for _ in range(3):
+        pass
+    return cost
+
+def vat(pence):
+    return round(pence * 0.2)
+'''
+
+BRANCHES = (ast.If, ast.IfExp, ast.For, ast.While, ast.Try, ast.ExceptHandler, ast.match_case)
+
+
+def complexity(func: ast.FunctionDef) -> int:
+    score = 1
+    for node in ast.walk(func):
+        if isinstance(node, BRANCHES):
+            score += 1
+        elif isinstance(node, ast.BoolOp):
+            score += len(node.values) - 1
+    return score
+
+
+for node in ast.parse(SOURCE).body:
+    if isinstance(node, ast.FunctionDef):
+        c = complexity(node)
+        print(f"{node.name}: complexity {c}{'  <- consider splitting' if c > 5 else ''}")
+```
+
+It prints `shipping: complexity 7  <- consider splitting` and `vat: complexity 1`. The two `if`s, the `elif`, the conditional expression, the `and` and the loop each add a path. Real tools (ESLint's `complexity` rule, PMD, SonarQube) compute the same number with more care, and also **cognitive complexity**, which weights nested conditions more heavily because they are harder for people to follow. A complexity limit (often around 10 to 15) is a useful prompt to split a function (<Ref to="m-clean-code" />), not a law.
+
+## Formatters
+
+A **formatter** rewrites code into one consistent layout: indentation, line breaks, spacing, quotes, trailing commas. Examples: **Prettier** (JavaScript, TypeScript, CSS, JSON, Markdown), **dotnet format** (C#), **google-java-format** or **Spotless** (Java), Black or Ruff (Python), gofmt (Go).
+
+Use one, configure it once, and stop discussing layout. Formatting debates in code review disappear, diffs show only real changes, and nobody spends time aligning code by hand. Run the formatter on save in the editor and check it in CI (`prettier --check`, `dotnet format --verify-no-changes`). When adopting one in an existing codebase, reformat everything in a single, separate commit, and list that commit in a `.git-blame-ignore-revs` file so `git blame` skips it.
+
+## Linters
+
+A **linter** flags code that is legal but likely to be a bug, confusing, or against the team's conventions: unused variables, `==` instead of `===`, a missing `await`, a `switch` without a `default`, shadowed variables, unreachable code, a promise whose rejection nobody handles. Examples: **ESLint** with **typescript-eslint** (TypeScript), **Checkstyle** and **PMD** (Java), the **Roslyn analyzers** built into the .NET SDK and StyleCop (C#), Ruff (Python).
+
+Linters are configured with **rules**, each set to off, warn or error. Start from a recommended preset (`eslint:recommended` plus `typescript-eslint`'s recommended type-checked rules, for example), then add rules when the team agrees they catch real problems. Rules that catch bugs (floating promises, unsafe `any`, missing `await`) are worth far more than taste-only rules.
+
+When a rule must be broken in one place, **suppress it locally with a reason**:
+
+```ts
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- the payment SDK's callback is untyped
+function onPaymentEvent(event: any) {
+  return event?.type ?? "unknown";
+}
+```
+
+A suppression with a reason is a decision someone can review; a blanket `/* eslint-disable */` at the top of a file is a problem hidden.
+
+## The type checker is your most powerful analyser
+
+In TypeScript, Java and C#, the **compiler's type checker** catches more bugs than any linter, if you let it. Turn on the strictest settings you can:
+
+- **TypeScript**: `"strict": true` (which includes `strictNullChecks` and `noImplicitAny`), plus `noUncheckedIndexedAccess`, `noFallthroughCasesInSwitch` and `exactOptionalPropertyTypes` where the team can manage them.
+- **C#**: nullable reference types (`<Nullable>enable</Nullable>`) and `<TreatWarningsAsErrors>true</TreatWarningsAsErrors>`, so warnings cannot pile up unseen.
+- **Java**: compile with `-Xlint:all -Werror`, and add Error Prone or NullAway for stronger checks.
+
+With TypeScript's `strict` mode on, but nothing more, this compiles:
+
+```ts
+const stock: Record<string, number> = { "rye loaf": 3 };
+
+function reserve(product: string, qty: number): number {
+  const left = stock[product];
+  return left - qty;
+}
+```
+
+It should not, and the option most teams forget is the fix: without `noUncheckedIndexedAccess`, TypeScript assumes `stock["croissant"]` is a `number`, and `reserve("croissant", 1)` returns `NaN`. With the option, `left` has type `number | undefined` and the subtraction is an error until the missing product is handled. C# does the same for nulls when warnings are errors:
+
+```csharp
+#:property TreatWarningsAsErrors=true
+#:property PublishAot=false
+
+var prices = new Dictionary<string, decimal> { ["rye loaf"] = 4.50m };
+Console.WriteLine(Describe(prices, "croissant"));
+
+static string Describe(Dictionary<string, decimal> prices, string product)
+{
+    string? label = prices.ContainsKey(product) ? product.ToUpper() : null;
+    return label.Trim() + " costs " + prices.GetValueOrDefault(product);
+}
+```
+
+The build fails with `error CS8602: Dereference of a possibly null reference.`, pointing at `label.Trim()`: the program never runs, so the `NullReferenceException` it would have thrown for a croissant never reaches a customer.
+
+## Deeper static analysis
+
+Beyond linters are tools that follow data and control flow across functions and files:
+
+- **Bug finders**: SpotBugs and Error Prone (Java), the .NET code-quality analyzers (the `CA` rules), and typescript-eslint's type-aware rules find null dereferences, resource leaks, broken `equals`/`hashCode` pairs, thread-safety mistakes and misuse of APIs.
+- **Security analysis (SAST)**: CodeQL, Semgrep and SonarQube track untrusted input from where it enters to dangerous places (a SQL string, a shell command, an HTML page) and report injection risks. The security part of the course goes deeper.
+- **Quality platforms** such as SonarQube and SonarCloud combine many analysers, track issues over time, and report on **new code** separately from old.
+
+Every analyser produces **false positives** (warnings about code that is fine) and misses some real problems (**false negatives**). Tune rules that are noisy for your codebase; a tool whose warnings everybody ignores is worse than no tool.
+
+## Scanning dependencies and secrets
+
+Much of the code you ship is other people's. **Software composition analysis** tools check your dependencies against databases of known vulnerabilities: `npm audit`, `dotnet list package --vulnerable`, OWASP Dependency-Check, GitHub's **Dependabot** (which also opens pull requests to update them), Renovate and Snyk. Keep dependencies current in small, regular steps; one huge upgrade every two years is far riskier.
+
+**Secret scanning** (gitleaks, GitHub secret scanning and push protection) catches API keys, passwords and tokens before they are committed. A secret that reaches a repository must be treated as leaked and **rotated**, even if the commit is removed, because history and forks keep copies.
+
+## Where the checks run
+
+The same checks should run at several points, each faster and earlier than the last:
+
+1. **In the editor**, as you type: formatter on save, linter and type errors inline. The cheapest possible moment to fix a problem.
+2. **Before commit**, with **Git hooks**: tools such as Husky with lint-staged (JavaScript), the pre-commit framework (any language) or Lefthook run the formatter and linter on the files being committed. Keep hooks fast (seconds) or people will skip them with `--no-verify`.
+3. **In continuous integration**, on every pull request: formatting check, lint, type check, tests, dependency and secret scans. These are the **quality gates**: a pull request cannot merge until they pass (enforced with branch protection rules). CI is the only place the checks are guaranteed to run.
+
+```yaml
+name: quality
+on: [pull_request]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx prettier --check .
+      - run: npx eslint . --max-warnings 0
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: npm audit --audit-level=high
+```
+
+`--max-warnings 0` turns warnings into a failed build, so they cannot accumulate. The order puts the fastest checks first, so a formatting mistake fails in seconds.
+
+## Adopting tools in an existing codebase
+
+Turning on a strict linter in a large old codebase may report ten thousand problems, and nobody will fix them all before the next release. Practical approaches:
+
+- **Format first**, in one commit, since it is automatic.
+- **Ratchet**: fail the build only on **new** problems. Many tools support a **baseline** file of existing issues (SonarQube's "clean as you code", ESLint's bulk suppressions, Roslyn's per-rule severities), or run the strict check only on changed files.
+- **Fix by category**: turn on one rule at a time, fix its findings (often automatically, with `--fix`), then make it an error.
+- **Tighten the compiler gradually**, one project or folder at a time (TypeScript's `strict` per tsconfig, C#'s `#nullable enable` per file).
+
+## Common mistakes
+
+- **Arguing about formatting** in code review instead of adopting a formatter.
+- **Warnings that never fail the build**, so they grow until nobody reads them.
+- **Blanket suppressions** without reasons.
+- **Strict modes switched off** (`strict: false`, nullable warnings ignored), losing the best analyser you have.
+- **Slow pre-commit hooks** that people bypass.
+- **Checks that run only locally**, never enforced in CI.
+- **Turning on every rule at once** in an old codebase, then turning the tool off in frustration.
+- **Ignoring dependency alerts** until a large, risky upgrade is forced.
+
+## Practice
+
+**1. (warm-up)** What is the difference between a formatter and a linter?
+
+<Solution>
+
+A formatter changes code layout (spacing, line breaks, quotes) automatically and never changes meaning. A linter reports code that is legal but likely to be wrong or against conventions (unused variables, missing awaits, `==`), and fixes only some of it automatically.
+
+</Solution>
+
+**2. (warm-up)** What is the cyclomatic complexity of this function?
+
+```ts
+function label(stock: number, discontinued: boolean): string {
+  if (discontinued) return "discontinued";
+  if (stock === 0) return "out of stock";
+  if (stock < 5 && stock > 0) return "low stock";
+  return "in stock";
+}
+```
+
+<Solution>
+
+5: one, plus three `if` statements, plus one for the `&&`.
+
+</Solution>
+
+**3. (warm-up)** An API key was committed and the commit was deleted an hour later. What must you do?
+
+<Solution>
+
+Rotate the key (revoke it and issue a new one) immediately: anyone who fetched the repository, or any fork or cache, may still have it. Then check the provider's logs for misuse, add secret scanning with push protection, and move the key into a secrets manager or environment configuration.
+
+</Solution>
+
+**4. (standard)** Your team wants to adopt ESLint with type-aware rules in a 300,000-line TypeScript codebase. It reports 6,000 problems. Propose a plan.
+
+<Solution>
+
+Run Prettier first in one commit (listed in `.git-blame-ignore-revs`). Enable the recommended rule set but record existing problems as a baseline (bulk suppressions) or run the strict check only on changed files, so CI fails only on new problems from day one. Then work by rule: pick the rules that catch real bugs (floating promises, unsafe `any`), auto-fix what `--fix` can, fix the rest a folder at a time, and promote each rule to an error once its count reaches zero. Track the remaining count so progress is visible.
+
+</Solution>
+
+**5. (stretch)** Explain why `noUncheckedIndexedAccess` makes `stock[product] - qty` an error, and write a version of `reserve` that compiles with it and refuses unknown products.
+
+<Solution>
+
+Without the option, indexing a `Record<string, number>` is assumed to give a `number`, even for keys that do not exist. With it, the result is `number | undefined`, and subtracting from a possibly undefined value is a type error, forcing the missing case to be handled.
+
+```ts
+const stock: Record<string, number> = { "rye loaf": 3 };
+
+function reserve(product: string, qty: number): number {
+  const left = stock[product];
+  if (left === undefined) throw new Error(`Unknown product: ${product}`);
+  if (qty > left) throw new Error(`Only ${left} ${product} left`);
+  stock[product] = left - qty;
+  return stock[product];
+}
+
+console.log(reserve("rye loaf", 2));
+try {
+  reserve("croissant", 1);
+} catch (e) {
+  console.log((e as Error).message);
+}
+```
+
+It prints **1** and then **Unknown product: croissant**.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Static analysis** checks code without running it, usually by walking its **abstract syntax tree**.
+- **Formatters** end layout debates; **linters** catch likely bugs and enforce conventions; suppress rules locally, with a reason.
+- The **type checker** is the strongest analyser: use strict settings and treat warnings as errors.
+- Deeper tools find bugs and security problems across files (SpotBugs, CodeQL, Semgrep, SonarQube); tune false positives.
+- Scan **dependencies** for vulnerabilities and **secrets** before they are committed; rotate any leaked secret.
+- Run checks in the **editor**, in **Git hooks** and, enforced, as **CI quality gates**.
+- Adopt tools in old code with a **baseline** or ratchet, one rule at a time.
+
+## Go deeper
+
+- [typescript-eslint: getting started](https://typescript-eslint.io/getting-started/), the typescript-eslint team. Setting up ESLint with type-aware rules.
+- [Overview of .NET source code analysis](https://learn.microsoft.com/en-us/dotnet/fundamentals/code-analysis/overview), Microsoft. The built-in code-quality and style analyzers.
+- [Error Prone](https://errorprone.info/), Google. A Java compiler plugin that turns common mistakes into compile errors.
+- [Prettier: rationale](https://prettier.io/docs/rationale), the Prettier team. Why an opinionated formatter ends style debates.

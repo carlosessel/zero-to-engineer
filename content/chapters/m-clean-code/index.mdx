@@ -43,7 +43,7 @@ Guidelines that hold up:
 - **Variables and properties are nouns** (`invoiceTotal`, `activeUsers`); **functions are verbs** (`sendReceipt`, `calculateTax`); **booleans read as yes/no questions** (`isPaid`, `hasStock`, `canRefund`).
 - **Length matches scope.** A loop index used for two lines can be `i`; a value used across a module needs a full name.
 - **Include units and meaning where it is ambiguous**: `timeoutMs`, `priceInPence`, `createdAtUtc`. Many expensive bugs come from mixing seconds and milliseconds, or pounds and pence.
-- **Use one word per concept.** If it is a "customer" in one place, do not call it a "client" or "user" elsewhere for the same thing. Agree the vocabulary with the people who know the business (domain-driven design, later in this course, calls this a ubiquitous language).
+- **Use one word per concept.** If it is a "customer" in one place, do not call it a "client" or "user" elsewhere for the same thing. Agree the vocabulary with the people who know the business (<Ref to="m-ddd" /> calls this a ubiquitous language).
 - **Avoid noise words** (`data`, `info`, `manager`, `helper`, `processThing`) that could mean anything, and **avoid misleading names**: a `userList` that is a set, a `getUser` that creates one.
 - **Name the concept, not the type**: `customersByEmail`, not `customerMap`.
 
@@ -146,7 +146,7 @@ Comments that hurt:
 
 ## Structure and formatting
 
-- **Use a formatter** (Prettier, `dotnet format`, google-java-format, Black) and stop discussing style. Consistent formatting removes noise from reviews; the testing and quality part of this course covers these tools.
+- **Use a formatter** (Prettier, `dotnet format`, google-java-format, Black) and stop discussing style. Consistent formatting removes noise from reviews; <Ref to="m-static-quality" /> covers these tools.
 - **Keep related things together**: a function near the code that calls it, constants near where they are used, a feature's code in one place rather than spread across "controllers", "services" and "helpers" folders far apart.
 - **Order top-down**: high-level functions first, details below, so a file reads like a newspaper article: headline, summary, details.
 - **Limit nesting.** Deeply nested loops and conditions are hard to follow. Return early, extract functions, or use `continue`.

@@ -1,0 +1,61 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  file: basket.ts
+  note: A module tested by block 2; the check type-checks it, and block 2's check runs it.
+- block: 2
+  lang: ts
+  check: vitest-run
+  files:
+    src/basket.ts: 1
+    src/basket.test.ts: 2
+  passed: 4
+- block: 3
+  lang: java
+  check: not-run
+  reason: A JUnit 5 test class; it needs JUnit and a build tool (Maven or Gradle) plus the Basket and Line classes, which this course does not set up. Block 2 runs the same test in TypeScript.
+- block: 4
+  lang: ts
+  check: ts
+  file: reminders.ts
+  note: A module tested by block 5; the check type-checks it, and block 5's check runs it.
+- block: 5
+  lang: ts
+  check: vitest-run
+  files:
+    src/reminders.ts: 4
+    src/reminders.test.ts: 5
+  passed: 1
+- block: 6
+  lang: ts
+  check: not-run
+  reason: Needs Docker and the @testcontainers/postgresql and pg packages, which this repository does not install.
+- block: 7
+  lang: ts
+  check: ts
+  output: |
+    property failed: split(82176, 9) adds up to 82179
+- block: 8
+  lang: ts
+  check: ts
+  output: |
+    [9131, 9131, 9131, 9131, 9131, 9131, 9130, 9130, 9130] [1, 0]
+- block: 9
+  lang: ts
+  check: ts
+  output: |
+    true false
+    true true
+- block: 10
+  lang: ts
+  check: ts
+  file: tickets.ts
+  note: The function for practice 4; block 11's check runs its tests.
+- block: 11
+  lang: ts
+  check: vitest-run
+  files:
+    src/tickets.ts: 10
+    src/tickets.test.ts: 11
+  passed: 5

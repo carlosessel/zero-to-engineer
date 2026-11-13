@@ -1,0 +1,295 @@
+---
+title: "Performance: profiling, benchmarking and load testing"
+summary: "Measuring before optimising, CPU and memory profilers, benchmarks, load tests, and common performance anti-patterns."
+prerequisites: [m-testing, m-complexity]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will approach performance the way experienced engineers do: define what "fast enough" means, measure before changing anything, find the real bottleneck with a profiler, prove an improvement with a fair benchmark or load test, and recognise the handful of mistakes that cause most slow software. Guessing where time goes is wrong far more often than it is right; the tools in this chapter replace guessing with evidence.
+
+## Measure first
+
+Donald Knuth's warning against premature optimisation (<Ref to="m-anti-patterns" />) has a second half that matters just as much: do not pass up the critical few places where speed really matters. The way to find them is to measure. The working loop is:
+
+1. **Set a goal** in user terms: "the order page loads in under 300 ms for 99% of requests at 200 requests a second".
+2. **Measure** the current behaviour under realistic conditions.
+3. **Profile** to find where the time actually goes.
+4. **Change one thing**, the biggest bottleneck.
+5. **Measure again** to confirm it helped, and keep going only while you are short of the goal.
+
+Without a goal, performance work never ends; without measurement, it often makes things slower or more complex for no gain.
+
+## Latency, throughput and percentiles
+
+Two numbers describe most performance:
+
+- **Latency**: how long one operation takes (a request, a query, a page load).
+- **Throughput**: how many operations complete per unit of time (requests per second).
+
+They are linked by **Little's law**: the average number of requests in the system equals throughput times average latency (L = λW). A service handling 200 requests a second that each take 0.25 seconds has, on average, 50 requests in progress, so it needs at least 50 concurrent workers or connections. If latency doubles, so does the concurrency needed, which is how a slow database turns into an exhausted connection pool.
+
+Never describe latency with an **average** alone. Latency distributions have long tails: most requests are quick, a few are very slow, and users notice the slow ones. Use **percentiles**: p50 (the median) says what is typical; **p95** and **p99** say what the slowest 5% and 1% experience.
+
+```ts
+function percentile(sorted: number[], p: number): number {
+  const index = Math.ceil((p / 100) * sorted.length) - 1;
+  return sorted[Math.max(0, index)];
+}
+
+const latenciesMs = [
+  ...Array.from({ length: 940 }, (_, i) => 40 + (i % 20)),
+  ...Array.from({ length: 50 }, (_, i) => 200 + i * 4),
+  ...Array.from({ length: 10 }, (_, i) => 2000 + i * 300),
+];
+const sorted = latenciesMs.toSorted((a, b) => a - b);
+const mean = latenciesMs.reduce((a, b) => a + b, 0) / latenciesMs.length;
+
+console.log({ mean: Math.round(mean), p50: percentile(sorted, 50), p95: percentile(sorted, 95), p99: percentile(sorted, 99), max: sorted.at(-1) });
+```
+
+It prints `{ mean: 95, p50: 50, p95: 236, p99: 396, max: 4700 }`. The mean of 95 ms describes nobody: the typical request takes 50 ms, while one request in a hundred takes 400 ms or more, and the slowest nearly five seconds. A page that makes 20 backend calls hits the p99 of at least one of them on most loads, which is why tail latency matters so much in systems of many services.
+
+## Amdahl's law: speed up the right part
+
+**Amdahl's law** says the overall speed-up from improving one part is limited by how much of the total time that part takes. If a request spends 10% of its time in JSON serialisation, making serialisation infinitely fast saves at most 10%.
+
+```ts
+const overallSpeedup = (fraction: number, partSpeedup: number) => 1 / (1 - fraction + fraction / partSpeedup);
+
+console.log(overallSpeedup(0.1, 10).toFixed(2), overallSpeedup(0.1, 1e9).toFixed(2));
+console.log(overallSpeedup(0.7, 2).toFixed(2), overallSpeedup(0.7, 10).toFixed(2));
+```
+
+It prints `1.10 1.11` and then `1.54 2.70`. Making a 10% part ten times faster gains 10%; making a 70% part only twice as fast gains 54%. This is why you profile before you optimise: the work should go where the time is. The same law limits parallelism: if 5% of a job must run serially, no number of cores makes it more than 20 times faster.
+
+## Profiling
+
+A **profiler** shows where a running program spends its time or memory.
+
+**CPU profilers** come in two kinds. **Sampling profilers** record the call stack many times a second and report how often each function appears; the overhead is low, so they are safe even in production. **Instrumenting** profilers record every call precisely, with much more overhead that can distort the results. Start with sampling.
+
+The most useful view of a CPU profile is a **flame graph** (Brendan Gregg): each box is a function, its width is the share of samples it appears in, and boxes stack on their callers. You look for the **widest boxes near the top**: functions that use a lot of time themselves. A flat, wide "plateau" in a function you did not expect (a regular expression, JSON parsing, logging) is the classic discovery.
+
+Tools:
+
+- **Node.js and browsers**: the Chrome DevTools Performance panel; `node --cpu-prof` writes a profile DevTools can open; Clinic.js.
+- **Java**: **Java Flight Recorder** (JFR, built into the JDK, low overhead, safe in production) viewed in JDK Mission Control; async-profiler for flame graphs.
+- **.NET**: `dotnet-trace` and `dotnet-counters`, Visual Studio's profiler, PerfView, JetBrains dotTrace.
+
+**Memory profilers** show what is allocated and what is keeping objects alive. Take a **heap snapshot**, take another after the suspect operation, and compare: objects that keep growing and never go away point to a **memory leak** (usually something still referencing them: a cache without limits, an event listener never removed, a static collection, <Ref to="m-memory-gc" />). Watch **allocation rate** too: allocating heavily makes the garbage collector work harder and adds pauses, even without a leak.
+
+Profile under **realistic conditions**: production-sized data, a warmed-up runtime (JIT-compiled code behaves very differently from cold code, <Ref to="m-runtimes" />), and a realistic mix of requests. A profile of a toy input finds toy problems.
+
+## Benchmarking
+
+A **micro-benchmark** measures one small piece of code in isolation. They are easy to get wrong:
+
+- **Warm-up**: Java and .NET JIT-compile hot code after it has run for a while; JavaScript engines do the same. Early iterations measure the interpreter.
+- **Dead-code elimination**: if the result is never used, the compiler may remove the work entirely and the benchmark measures nothing.
+- **Noise**: garbage collection, other processes, CPU frequency scaling and caches all vary between runs. Run many iterations and report the spread, not one number.
+- **Unrealistic inputs**: benchmarking with tiny or perfectly sorted data.
+
+Use a harness that handles this: **JMH** (Java), **BenchmarkDotNet** (.NET), Tinybench or mitata (JavaScript). Even a rough measurement shows dramatic differences when the algorithm is wrong. Building a string with `+=` in a loop copies the whole string every time, which is quadratic (<Ref to="m-complexity" />), while a `StringBuilder` appends in place:
+
+```java
+public class Main {
+    static String withPlus(int n) {
+        String csv = "";
+        for (int i = 0; i < n; i++) csv += i + ",";
+        return csv;
+    }
+
+    static String withBuilder(int n) {
+        StringBuilder csv = new StringBuilder();
+        for (int i = 0; i < n; i++) csv.append(i).append(',');
+        return csv.toString();
+    }
+
+    static long timeMs(Runnable work) {
+        long start = System.nanoTime();
+        work.run();
+        return (System.nanoTime() - start) / 1_000_000;
+    }
+
+    public static void main(String[] args) {
+        for (int n : new int[] {10_000, 20_000, 40_000}) {
+            for (int warm = 0; warm < 3; warm++) { withPlus(n / 10); withBuilder(n / 10); }
+            long plus = timeMs(() -> withPlus(n));
+            long builder = timeMs(() -> withBuilder(n));
+            System.out.printf("n=%d: += %d ms, StringBuilder %d ms, same result: %b%n",
+                n, plus, builder, withPlus(n).equals(withBuilder(n)));
+        }
+    }
+}
+```
+
+On the machine this chapter was checked on it printed:
+
+```text
+n=10000: += 285 ms, StringBuilder 2 ms, same result: true
+n=20000: += 612 ms, StringBuilder 4 ms, same result: true
+n=40000: += 1996 ms, StringBuilder 3 ms, same result: true
+```
+
+Your numbers will differ, but the shape will not: doubling `n` roughly doubles to quadruples the `+=` time, while the builder stays in single milliseconds. (Java's compiler turns a *single* expression like `a + b + c` into efficient code; the problem is the loop.) C#'s `StringBuilder` and JavaScript's `array.join` are the equivalents.
+
+## Load testing
+
+A **load test** sends realistic traffic at a running system to see how it behaves as load rises: latency percentiles, error rate and resource use. Kinds of test:
+
+- **Load test**: expected peak traffic, for a sustained period.
+- **Stress test**: increase until something breaks, to find the limit and see *how* it fails.
+- **Soak test**: normal load for hours, to find leaks and slow degradation.
+- **Spike test**: a sudden jump, as when a marketing email goes out.
+
+Tools include **k6** (scripts in JavaScript), **Gatling** (Java, Scala or Kotlin), Apache **JMeter**, Locust (Python) and NBomber (.NET):
+
+```js
+import http from "k6/http";
+import { check, sleep } from "k6";
+
+export const options = {
+  scenarios: {
+    shoppers: {
+      executor: "constant-arrival-rate",
+      rate: 200,
+      timeUnit: "1s",
+      duration: "5m",
+      preAllocatedVUs: 100,
+    },
+  },
+  thresholds: {
+    http_req_duration: ["p(99)<300"],
+    http_req_failed: ["rate<0.01"],
+  },
+};
+
+export default function () {
+  const res = http.get("https://staging.example.com/api/orders?limit=20");
+  check(res, { "status is 200": (r) => r.status === 200 });
+  sleep(1);
+}
+```
+
+This runs `k6 run orders.js` against a staging environment at a fixed 200 requests per second for five minutes, and fails if the p99 exceeds 300 ms or more than 1% of requests fail, which turns the performance goal into an automated check.
+
+The `constant-arrival-rate` executor matters. In a **closed** model, each virtual user waits for its response before sending the next request, so when the system slows down, the test automatically sends less traffic and hides the problem. Real users do not wait for each other; an **open** model sends requests at a fixed rate regardless. Measuring only the requests that were sent, while the slow system held others back, is called **coordinated omission** (Gil Tene's term), and it can make p99 figures look many times better than reality.
+
+Load-test an environment that resembles production (same instance sizes, realistic data volumes, caches warm), and never point a load test at systems you do not own.
+
+## Common performance anti-patterns
+
+Most real slowness comes from a short list:
+
+- **N+1 queries**: one query for a list, then one per item (<Ref to="m-patterns-structural" />). Fetch related data in one query or a batch.
+- **Chatty remote calls**: many small calls to a service or database where one would do. Each round trip costs latency (<Ref to="m-networking" />).
+- **Missing indexes** and queries that scan whole tables. Read the query plan (the data part of the course covers this).
+- **Unbounded results**: loading or returning everything instead of paginating (<Ref to="m-api-design" />).
+- **The wrong algorithm**: quadratic loops over growing data, string building with `+=`, linear searches where a hash map would do (<Ref to="m-arrays-hashing" />).
+- **Blocking I/O on threads that should not block**, such as synchronous calls on Node.js's single event-loop thread or `.Result` on async code in .NET (the concurrency part of the course).
+- **Excessive allocation** in hot paths, adding garbage-collection pauses.
+- **Lock contention**: many threads waiting for one lock.
+- **Doing work too early or too often**: rebuilding something on every request that could be computed once and cached, or the opposite, caching without limits until memory runs out (the caching chapter).
+- **Catastrophic regex backtracking**: some regular expressions (such as `(a+)+$`) take exponential time on certain inputs, which attackers can exploit.
+
+```ts
+let queries = 0;
+const db = {
+  orders: () => { queries++; return [1, 2, 3, 4, 5].map((id) => ({ id, customerId: id % 3 })); },
+  customer: (id: number) => { queries++; return { id, name: `customer ${id}` }; },
+  customers: (ids: number[]) => { queries++; return ids.map((id) => ({ id, name: `customer ${id}` })); },
+};
+
+const nPlusOne = db.orders().map((o) => ({ ...o, customer: db.customer(o.customerId).name }));
+const nPlusOneQueries = queries;
+
+queries = 0;
+const orders = db.orders();
+const byId = new Map(db.customers([...new Set(orders.map((o) => o.customerId))]).map((c) => [c.id, c]));
+const batched = orders.map((o) => ({ ...o, customer: byId.get(o.customerId)!.name }));
+
+console.log(nPlusOneQueries, queries, JSON.stringify(nPlusOne) === JSON.stringify(batched));
+```
+
+It prints `6 2 true`: the same result with two queries instead of six. With 50 orders per page and 5 ms per round trip, that is the difference between 255 ms and 10 ms.
+
+## Common mistakes
+
+- **Optimising without measuring**, or optimising code that takes 2% of the time.
+- **Reporting averages** instead of percentiles.
+- **Micro-benchmarks without warm-up**, or whose results are thrown away and optimised out.
+- **Profiling with toy data** or a cold runtime.
+- **Closed-model load tests** that hide overload (coordinated omission).
+- **Load testing an environment unlike production.**
+- **Making code complex** for gains nobody can measure.
+
+## Practice
+
+**1. (warm-up)** A service's mean latency is 80 ms and its p99 is 1.2 s. What does each tell you, and which matters more for user experience?
+
+<Solution>
+
+The mean is pulled up by slow requests and describes no real request. The p99 says 1% of requests take 1.2 s or longer. For user experience the tail usually matters more: users remember slow pages, and a page that makes many backend calls hits the tail of at least one of them often.
+
+</Solution>
+
+**2. (warm-up)** A service handles 400 requests per second with an average latency of 50 ms. Using Little's law, how many requests are in progress on average? What happens if latency rises to 500 ms at the same rate?
+
+<Solution>
+
+400 × 0.05 = 20 requests in progress. At 500 ms it becomes 400 × 0.5 = 200, ten times as many concurrent requests, which can exhaust thread pools, connection pools or memory and make things slower still.
+
+</Solution>
+
+**3. (warm-up)** Image resizing takes 30% of a request's time. You make it three times faster. What is the overall speed-up?
+
+<Solution>
+
+1 / (0.7 + 0.3 / 3) = 1 / 0.8 = 1.25, so the request becomes 25% faster (it takes 80% of the time it did).
+
+</Solution>
+
+**4. (standard)** List three ways a naive micro-benchmark can mislead, and how a harness such as JMH or BenchmarkDotNet avoids each.
+
+<Solution>
+
+No warm-up (it measures interpreted or unoptimised code): harnesses run warm-up iterations first. Dead-code elimination (the result is unused, so the work is removed): harnesses consume results (JMH's `Blackhole`, BenchmarkDotNet's return values). Noise from one run (GC, other processes, CPU frequency): harnesses run many iterations in separate processes and report means, deviations and confidence intervals. Also: unrealistic inputs, which no harness fixes for you.
+
+</Solution>
+
+**5. (standard)** A page lists 40 orders with their customers' names and takes two seconds. The profiler shows most of the time waiting on the database. What do you suspect, how do you confirm it, and how do you fix it?
+
+<Solution>
+
+Suspect N+1 queries: one query for the orders and one per order for the customer. Confirm by logging the SQL (or using the ORM's query log or a tracing tool) for one page load and counting queries. Fix by loading customers in one query: a join, the ORM's eager loading (`Include` or `JOIN FETCH`), or a second query with `WHERE id IN (...)`. Then measure again.
+
+</Solution>
+
+**6. (stretch)** A load test of 100 virtual users, each sending a request and waiting for its response, shows p99 of 250 ms. In production at the same request rate, p99 is 3 s. Explain a likely reason.
+
+<Solution>
+
+The test uses a closed model: when the system slowed down, each virtual user waited, so fewer requests were sent and the slow periods were measured with fewer samples (coordinated omission). Real users keep arriving whatever the system is doing (an open model), so queues build up and latency soars. Rerun with a constant arrival rate (k6's `constant-arrival-rate`, Gatling's open injection profiles). Other reasons to check: smaller data or warmer caches in the test environment, and missing background load.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Set a goal, measure, profile, change one thing, measure again.**
+- **Latency** and **throughput** are linked by **Little's law**; report latency as **percentiles** (p50, p95, p99), never averages alone.
+- **Amdahl's law**: speed up the part that takes the most time.
+- **Profilers** (sampling first; **flame graphs**; heap snapshots for leaks) show where time and memory go. Profile realistic, warmed-up workloads.
+- **Micro-benchmarks** need warm-up, used results and many runs: use JMH, BenchmarkDotNet or Tinybench.
+- **Load tests** (load, stress, soak, spike) with an **open** arrival model avoid **coordinated omission**; encode goals as thresholds.
+- The usual culprits: N+1 queries, chatty calls, missing indexes, unbounded results, wrong algorithms, blocking I/O, allocation, contention and regex backtracking.
+
+## Go deeper
+
+- [Flame graphs](https://www.brendangregg.com/flamegraphs.html), Brendan Gregg. How to read and make flame graphs, from their inventor.
+- [k6 documentation](https://grafana.com/docs/k6/latest/), Grafana Labs. Scripting load tests, scenarios and thresholds.
+- [BenchmarkDotNet](https://benchmarkdotnet.org/), the .NET Foundation. Reliable micro-benchmarks for .NET.
+- [OpenJDK JMH](https://github.com/openjdk/jmh), OpenJDK. The Java micro-benchmark harness, with samples showing each pitfall.
+- [Profile Node.js performance with the Performance panel](https://developer.chrome.com/docs/devtools/performance/nodejs), Google. CPU profiling Node.js with DevTools.

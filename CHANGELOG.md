@@ -4,6 +4,20 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 5 (Testing and quality)
+
+Added
+- Three chapters: testing in depth (the pyramid, test doubles, TDD, Testcontainers, contract, property-based and mutation testing); linters, formatters and static analysis (type checkers, analysers, dependency and secret scanning, hooks and CI quality gates); and performance (percentiles, Little's and Amdahl's laws, profilers and flame graphs, benchmarking pitfalls, load testing and coordinated omission, common anti-patterns). About 6,750 words, 17 practice problems, 18 quiz questions, 14 checked resources.
+- The chapters' Vitest test files run for real (three projects, 10 tests). Other checks: a C# build that fails on a nullable warning as intended, a cyclomatic complexity analyser in Python's `ast`, a Java benchmark checked by the relationship it shows (quadratic `+=`, StringBuilder far faster), and TypeScript examples for percentiles, Amdahl's law, property testing, mutation testing and N+1 queries.
+- Earlier chapters (clean code, OOP, runtimes, memory, anti-patterns) now link to the new testing, static analysis, performance and domain-driven design chapters instead of saying "later in this course".
+- 34 glossary terms. "Mock" and "Type checker" now cover their meaning in this course too.
+
+Fixed (found by running the examples)
+- My drafted outputs for the percentile example (mean 95 and p95 236, not 105 and 220) and the property-based test's first counterexample were wrong until the code ran.
+
+Not verified
+- No person has reviewed these chapters. Problem counts are below the standard's 30 to 50. The JUnit, Testcontainers and k6 examples are not run: they need JUnit and a build tool, Docker, and the k6 tool.
+
 ### 2026-11-13: Software Engineering Mastery, part 4 (Design patterns and software design)
 
 Added

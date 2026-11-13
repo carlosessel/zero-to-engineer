@@ -1,0 +1,36 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    { mean: 95, p50: 50, p95: 236, p99: 396, max: 4700 }
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    1.10 1.11
+    1.54 2.70
+- block: 3
+  lang: java
+  check: java
+  note: Timings vary between machines; the check asserts the relationship the chapter describes, not exact numbers.
+  verify: |
+    import re
+    rows = [tuple(map(int, m)) for m in re.findall(r'n=(\d+): \+= (\d+) ms, StringBuilder (\d+) ms, same result: true', out)]
+    assert [r[0] for r in rows] == [10000, 20000, 40000], out
+    plus_10k, plus_40k = rows[0][1], rows[2][1]
+    assert plus_40k >= 2 * max(plus_10k, 1), rows
+    assert all(r[1] >= 10 * max(r[2], 1) for r in rows[1:]), rows
+- block: 4
+  lang: text
+  check: illustration
+  note: One run of block 3 on the machine this chapter was checked on; block 3's check confirms the shape (quadratic growth, StringBuilder far faster) wherever it runs.
+- block: 5
+  lang: js
+  check: not-run
+  reason: A k6 load-test script; it needs the k6 tool and a staging server, and must never be pointed at systems you do not own.
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    6 2 true
