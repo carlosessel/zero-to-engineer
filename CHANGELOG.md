@@ -4,6 +4,12 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 12 (AI in the back end)
+
+Added
+- The AI part, made of four existing chapters from the AI course: calling a language model, tools, structured output, and retrieval-augmented generation.
+- The course added to the glossary terms these chapters use.
+
 ### 2026-11-13: Zero to Backend Engineer, part 11 (Shipping and running)
 
 Added
