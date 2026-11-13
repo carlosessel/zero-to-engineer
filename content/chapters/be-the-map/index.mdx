@@ -1,0 +1,152 @@
+---
+title: "What a back-end engineer actually does"
+summary: "Services, APIs, data and operations; the three tracks in this course and how to choose one."
+prerequisites: []
+estimated_minutes: 45
+status: resources-verified
+---
+
+By the end of this chapter you will know what back-end engineers build and do all day, how a request travels through a back end, how this course is organised, and which of its three tracks (C# and .NET, Java and Spring, or Node.js and TypeScript) suits you. You need no programming experience to start: the course begins from zero and ends with you designing, building, securing, deploying and running real services.
+
+## Front end and back end
+
+When you use an app (ordering bread from a bakery's website, say), two kinds of software are working:
+
+- The **front end** is what runs on your device: the web page or mobile app you see and tap. The web course on this site teaches it.
+- The **back end** is what runs on servers you never see: it checks that you are signed in, works out prices and stock, takes the payment, saves the order, emails a receipt, tells the kitchen, and makes all of this work for thousands of customers at once without losing anything.
+
+Back-end engineers build and run that second half. Their work is mostly invisible when it goes well, and very visible when it does not.
+
+## What back-end engineers build
+
+- **APIs**: the doors through which front ends, mobile apps, partners and other services ask for things ("give me today's menu", "place this order"), usually over HTTP with JSON.
+- **Business logic**: the rules of the business, written as code: how prices, discounts, stock, permissions and refunds work.
+- **Data**: designing how information is stored in databases, reading and changing it correctly and quickly, and keeping it safe.
+- **Integrations**: talking to other systems: payment providers, email services, other teams' services, AI models.
+- **Background work**: jobs that happen outside a user's request: nightly reports, processing uploads, sending reminders, handling messages from queues.
+- **Operations**: making services run reliably in production: deploying them, watching their health through logs and metrics, and fixing problems when they happen.
+
+## The journey of a request
+
+When a customer presses "Place order" in the bakery's app, roughly this happens (each step is a chapter later in the course):
+
+1. The app sends an HTTP request over the internet to the bakery's address.
+2. A **load balancer** receives it and passes it to one of several copies of the **orders service**.
+3. The service checks who the customer is (**authentication**) and that they may do this (**authorisation**).
+4. It **validates** the request: are the quantities sensible, do the products exist?
+5. It applies the **business rules** (prices, discounts, delivery) and saves the order in a **database**, inside a transaction so it is all-or-nothing.
+6. It asks the **payment provider** to charge the card, carefully, so a retry never charges twice.
+7. It publishes an "order placed" **message** to a queue, so the kitchen, the email service and analytics can react without slowing the customer down.
+8. It returns a **response** (201 Created, with the order's details), usually within a few hundred milliseconds.
+9. Throughout, it writes **logs**, **metrics** and **traces** so engineers can see what happened if something goes wrong.
+
+Real systems vary, but almost every back end has these pieces.
+
+## A typical week
+
+Back-end engineers spend their time on a mix of:
+
+- designing and building features, usually as small changes reviewed by teammates;
+- reading and changing existing code (much more than writing new code);
+- writing tests so changes are safe;
+- reviewing others' code;
+- investigating bugs and performance problems;
+- talking with product managers, designers and other teams about what to build and how;
+- taking a turn **on call**, responding to problems in production.
+
+It suits people who like logic, solving puzzles, making things reliable and understanding how systems fit together.
+
+## The three tracks
+
+The concepts in back-end engineering (HTTP, APIs, databases, security, testing, messaging, deployment) are the same everywhere, and most of this course is shared. Where the code differs, the course has three **tracks**, each a complete, popular, well-paid way to build back ends. You need only one; you can learn another later much faster.
+
+| Aspect | C# and .NET | Java and Spring | Node.js and TypeScript |
+|---|---|---|---|
+| Language | C#, statically typed | Java (and Kotlin), statically typed | TypeScript (JavaScript with types) |
+| Main web framework | ASP.NET Core | Spring Boot | Express, Fastify, NestJS |
+| Runs on | the .NET runtime (Windows, Linux, macOS) | the Java Virtual Machine | Node.js (the V8 JavaScript engine) |
+| Widely used in | enterprises, finance, games back ends, Microsoft and Azure shops | large enterprises, banks, telecoms, Android-related back ends | start-ups, product companies, teams already using JavaScript on the front end |
+| Strengths | fast, modern language, excellent tooling, one coherent platform | huge ecosystem, very mature, many jobs, scales to very large systems | one language for front and back end, fast to start, huge package ecosystem |
+| Watch out for | fewer job openings than Java in some regions | more ceremony and older code in some codebases | weaker standard library; types are erased at run time |
+
+All three are fast enough for nearly everything, have good tooling and plenty of jobs. Choose by:
+
+1. **Your goal**: if you have a target employer or industry, look at its job adverts and pick what they use.
+2. **What you already know**: if you have done the web course, Node.js and TypeScript lets you reuse JavaScript; if you know some C# from games (Unity), choose .NET.
+3. **Taste**: read the first chapter of each track and continue with the one you enjoy.
+
+If you have no preference at all, any choice is fine; the shared chapters, which are most of the course, apply to all three.
+
+## How the course is organised
+
+1. **Start here**: this map, how computers work, the terminal, Git, how the internet works, and setting up your tools.
+2. **Your track**: programming from zero in C#, Java or TypeScript, ending with projects and tests.
+3. **HTTP and APIs**: how HTTP works in depth, API design, and building an API in your stack.
+4. **Data**: SQL, relational databases in depth, schema design, and data access in your stack; caching and NoSQL.
+5. **Security**: the OWASP Top 10, identity, and authentication in your stack.
+6. **Testing services**: testing in depth and integration tests against real databases.
+7. **Background work and messaging**: async programming, background jobs, messaging and Kafka.
+8. **Design and architecture**: SOLID, patterns, domain-driven design, architecture styles, resilience and system design.
+9. **Shipping and running**: containers, load balancing, deployment, delivery, observability, memory and performance, reliability.
+10. **AI in the back end**: calling language models, tools, structured output and retrieval.
+11. **The job**: teamwork, AI coding tools, a ladder of projects, and getting hired.
+12. **Reference**: a library of checked free materials and a glossary.
+
+Many chapters are shared with this site's other courses, especially *Software Engineering Mastery*, which goes deeper on the fundamentals. Work through the course in order; skip chapters you already know well, after checking with their quizzes.
+
+## How to learn from this course
+
+- **Type the code yourself**, run it, change it, break it. Reading code is not enough.
+- **Do the practice problems** before opening the solutions.
+- **Build the projects** in the job part: they turn knowledge into skill and into something to show employers.
+- **Expect it to take months**, not weeks. An hour or two most days beats a long session once a week.
+
+## Common mistakes
+
+- **Spending weeks choosing a language** instead of starting. All three tracks lead to the same place.
+- **Watching tutorials without building anything.**
+- **Skipping the fundamentals** (HTTP, SQL, Git) to get to frameworks; frameworks change, fundamentals last.
+- **Learning three stacks at once.** Learn one well first.
+
+## Practice
+
+**1. (warm-up)** List five things the bakery's back end does when a customer places an order.
+
+<Solution>
+
+Any five of: checks who the customer is and that they may order; validates the request; applies prices, discounts and delivery rules; saves the order in a database inside a transaction; charges the payment provider safely; publishes an "order placed" message for the kitchen and email services; returns a response; writes logs, metrics and traces.
+
+</Solution>
+
+**2. (warm-up)** What is an API, in one sentence?
+
+<Solution>
+
+An API is the set of operations one program offers for other programs to call, such as the bakery's HTTP endpoints for listing the menu and placing orders.
+
+</Solution>
+
+**3. (standard)** Look at five back-end job adverts in your area or a company you would like to work for. Which of the three tracks do they ask for, and what else appears in most of them?
+
+<Solution>
+
+Answers vary by place and company. Typically you will see one main language and framework (C# with ASP.NET Core, Java or Kotlin with Spring Boot, or TypeScript with Node.js), plus SQL and a relational database, cloud experience (AWS, Azure or Google Cloud), Docker and often Kubernetes, testing, CI/CD, and often messaging (Kafka, RabbitMQ) and REST API design. Nearly all of these are covered in this course.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The **back end** is the software on servers that handles accounts, business rules, data, payments, integrations and background work.
+- Back-end engineers build **APIs**, **business logic**, **data** access, **integrations** and **background jobs**, and **operate** services in production.
+- A request passes through a load balancer, a service with authentication, validation, business rules and a database transaction, calls to other systems, messages, and a response, with logs, metrics and traces throughout.
+- The course has three **tracks**: C# and .NET, Java and Spring, Node.js and TypeScript. Pick one by goal, background or taste; most of the course is shared.
+- Learn by typing, running and building, a little most days.
+
+## Go deeper
+
+- [roadmap.sh: back-end developer](https://roadmap.sh/backend), Kamran Ahmed and contributors. A visual map of back-end topics, useful for seeing the whole field.
+- [ASP.NET Core overview](https://learn.microsoft.com/en-us/aspnet/core/introduction-to-aspnet-core), Microsoft. What the .NET track builds with.
+- [Spring Boot](https://spring.io/projects/spring-boot), the Spring team. What the Java track builds with.
+- [Node.js: introduction](https://nodejs.org/en/learn/getting-started/introduction-to-nodejs), the Node.js project. What the Node.js track builds with.

@@ -4,6 +4,20 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 1 (Start here)
+
+Added
+- The Backend course, with its first part: what a back-end engineer does (the journey of a request, a typical week, and how to choose between the C# and .NET, Java and Spring, and Node.js and TypeScript tracks), and setting up your tools (the current LTS toolchains, .NET 10, Java 25 and Node.js 26, checked against each project's release pages; editors; Git; Docker; HTTP clients). The part also reuses four existing chapters: how computers work, the terminal, Git basics and how the internet works.
+- The first programs for all three tracks run in the example checks with the installed toolchain (C# as a single file with `dotnet run`, Java as a single source file, TypeScript with Node.js's built-in type stripping), each printing the version that actually ran.
+- 6 glossary terms, and the course added to 35 existing terms used in the reused chapters.
+
+Fixed
+- Three glossary entries with per-course meanings ("API", "JSON", "PATH") had no meaning for the new course, which would have broken its glossary page; each now has one, and every per-course entry was checked to cover every course that uses it.
+- Comparison tables with an empty top-left header cell fail the accessibility check (empty-table-header). The new track table was caught by the test; the same problem in seven published chapters (five Mastery, two Claude) that the test does not visit is fixed too, with a label for each first column.
+
+Not verified
+- No person has reviewed these chapters. The Docker check runs only where Docker checks are switched on.
+
 ### 2026-11-13: Software Engineering Mastery, part 12 (Reference): the course is complete
 
 Added

@@ -34,7 +34,7 @@ A **message queue** (RabbitMQ, ActiveMQ, Amazon SQS, Azure Service Bus) holds me
 
 A **log** (Apache Kafka, Amazon Kinesis, Azure Event Hubs, Redis Streams) is an append-only, ordered sequence of messages that is **kept** for a retention period whether or not anyone has read it. Each consumer group tracks its own position (**offset**) in the log, so many independent groups can read the same messages at their own pace, and a consumer can **replay** history by moving its offset back. Logs are ideal for **event streams** that several systems react to, and for rebuilding state (<Ref to="m-kafka" />).
 
-| | Queue | Log |
+| Aspect | Queue | Log |
 |---|---|---|
 | After consumption | deleted | kept until retention expires |
 | Several consumer groups | need a queue each (fan-out) | each reads independently |

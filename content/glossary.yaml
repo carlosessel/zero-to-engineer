@@ -1,3 +1,7 @@
+- term: ".NET SDK"
+  aliases: [".NET 10 SDK"]
+  definition: "The .NET software development kit: compiler, runtime and the dotnet command."
+  courses: [backend]
 - term: "75th percentile"
   definition: "The value that 75% of measurements are at or below; Core Web Vitals are judged at it."
   courses: [web]
@@ -98,7 +102,8 @@
     se: "A set of URLs or functions one program offers for other programs to call."
     web: "A set of addresses or functions one program offers for other programs to call, such as GitHub's API for user details."
     mastery: "A contract through which programs call each other, such as an HTTP API's resources and methods; once published, every behaviour is relied on."
-  courses: [ai, se, web, mastery]
+    backend: "The operations a service offers for other programs to call, usually HTTP endpoints exchanging JSON."
+  courses: [ai, se, web, mastery, backend]
 - term: "API gateway"
   definition: "A single entry point for APIs that handles routing, authentication and rate limiting."
   courses: [mastery]
@@ -165,10 +170,10 @@
   courses: [mastery]
 - term: "Authentication"
   definition: "Proving who a user is."
-  courses: [se, mastery]
+  courses: [se, mastery, backend]
 - term: "Authorisation"
   definition: "Deciding what a known user is allowed to do."
-  courses: [se, mastery]
+  courses: [se, mastery, backend]
 - term: "Auto memory"
   definition: "Notes Claude Code saves for itself about a project, such as corrections and preferences, kept on your machine and loaded each session."
   courses: [claude]
@@ -186,7 +191,7 @@
   courses: [mastery]
 - term: "Back end"
   definition: "The code that runs on a server: rules, data access and APIs."
-  courses: [se, web]
+  courses: [se, web, backend]
 - term: "Back-of-the-envelope estimate"
   aliases: ["back-of-the-envelope estimates"]
   definition: "A quick, rough calculation to check whether a design can possibly work before building it."
@@ -258,7 +263,7 @@
   courses: [mastery]
 - term: "Bit"
   definition: "The smallest unit of data: a 0 or a 1."
-  courses: [mastery, se, web]
+  courses: [mastery, se, web, backend]
 - term: "Blue-green deployment"
   aliases: ["blue-green"]
   definition: "Running the new version beside the old at full size and switching traffic at once."
@@ -323,9 +328,13 @@
   aliases: ["fast burn", "slow burn"]
   definition: "How fast the error budget is being spent relative to lasting the whole window."
   courses: [mastery]
+- term: "Business logic"
+  aliases: ["business rules"]
+  definition: "The rules of the business written as code, such as how prices, discounts and refunds work."
+  courses: [backend, se]
 - term: "Byte"
   definition: "Eight bits; it can hold 256 different values."
-  courses: [mastery, se, web]
+  courses: [mastery, se, web, backend]
 - term: "Bytecode"
   definition: "Compact instructions for a virtual machine rather than a real CPU, such as Java bytecode."
   courses: [mastery]
@@ -483,7 +492,7 @@
   courses: [web]
 - term: "Client"
   definition: "The program that makes a request, such as a browser or app."
-  courses: [se, web, claude, mastery]
+  courses: [se, web, claude, mastery, backend]
 - term: "Client credentials"
   definition: "The OAuth flow for a service calling an API with its own identity, with no user."
   courses: [mastery]
@@ -540,10 +549,10 @@
   courses: [web, ai, se, mastery]
 - term: "Commit"
   definition: "A saved snapshot of a project in Git."
-  courses: [se, web]
+  courses: [se, web, backend]
 - term: "Commit hash"
   definition: "The unique code, such as 3f2a9c1, that identifies one commit in Git."
-  courses: [web]
+  courses: [web, backend]
 - term: "Compaction"
   definition: "Replacing a long conversation with a summary of what matters, so work can continue in a smaller context."
   courses: [claude]
@@ -556,7 +565,7 @@
   courses: [mastery]
 - term: "Compiler"
   definition: "A program that translates source code into machine code ahead of time."
-  courses: [se, web, mastery]
+  courses: [se, web, mastery, backend]
 - term: "Complexity classes"
   definition: "Groups of problems sorted by how the time to solve them grows with input size, such as P and NP."
   courses: [mastery]
@@ -625,7 +634,7 @@
   courses: [mastery]
 - term: "Container"
   definition: "A package of an application with everything it needs to run the same anywhere."
-  courses: [se, mastery]
+  courses: [se, mastery, backend]
 - term: "Container image"
   definition: "A packaged file system and metadata from which containers run, built in layers."
   courses: [mastery]
@@ -809,7 +818,7 @@
   courses: [mastery]
 - term: "Database"
   definition: "Software that stores data safely and answers questions about it."
-  courses: [se, web]
+  courses: [se, web, backend]
 - term: "Datagram"
   definition: "A single self-contained message sent with UDP."
   courses: [mastery]
@@ -942,7 +951,7 @@
   courses: [mastery]
 - term: "DNS"
   definition: "The system that turns a domain name into a numeric address."
-  courses: [se, web, mastery]
+  courses: [se, web, mastery, backend]
 - term: "Docker Compose"
   definition: "A tool that runs several containers together from one file, for development and tests."
   courses: [mastery]
@@ -1265,7 +1274,7 @@
   courses: [mastery]
 - term: "Front end"
   definition: "The part of an application the user sees and touches."
-  courses: [se, web]
+  courses: [se, web, backend]
 - term: "Full stack"
   definition: "Working on both the front end and the back end of an application."
   courses: [web]
@@ -1304,14 +1313,14 @@
   courses: [web]
 - term: "Git"
   definition: "The standard tool for tracking changes to code."
-  courses: [se, ai, web]
+  courses: [se, ai, web, backend]
 - term: "Git hook"
   aliases: ["git hooks"]
   definition: "A script Git runs at a point such as before a commit, often used to format and lint."
   courses: [mastery]
 - term: "GitHub"
   definition: "A website that stores copies of Git repositories online, for backup, sharing and teamwork."
-  courses: [web]
+  courses: [web, backend]
 - term: "GitOps"
   definition: "Managing infrastructure and deployments by changing files in Git that tools apply automatically."
   courses: [mastery]
@@ -1384,7 +1393,7 @@
 - term: "Header"
   aliases: ["headers"]
   definition: "Extra information sent with an HTTP request or response, such as Content-Type."
-  courses: [web, se]
+  courses: [web, se, backend]
 - term: "Health check"
   aliases: ["active health checks", "passive health checks", "liveness", "readiness"]
   definition: "A test of whether an instance is alive (liveness) or able to serve traffic (readiness)."
@@ -1433,10 +1442,14 @@
   courses: [web]
 - term: "HTTP"
   definition: "The request and response protocol of the web."
-  courses: [se, web, mastery]
+  courses: [se, web, mastery, backend]
 - term: "HTTP Archive"
   definition: "A project that measures millions of websites every year and publishes the results, including the Web Almanac."
   courses: [web]
+- term: "HTTP client"
+  aliases: ["HTTP files", "curl", "Bruno", "Postman"]
+  definition: "A tool for sending HTTP requests to APIs, such as curl, .http files or Bruno."
+  courses: [backend]
 - term: "Hyrum's law"
   definition: "With enough users, every observable behaviour of a system will be depended on."
   courses: [mastery]
@@ -1553,7 +1566,7 @@
   courses: [mastery]
 - term: "Interpreter"
   definition: "A program that carries out another program's instructions step by step, without first compiling it to machine code."
-  courses: [mastery, se, web]
+  courses: [mastery, se, web, backend]
 - term: "Invariant"
   aliases: ["invariants"]
   definition: "A rule about an object's state that must always hold, such as a balance never going below zero."
@@ -1564,7 +1577,7 @@
   courses: [mastery]
 - term: "IP address"
   definition: "A machine's address on a network: 32 bits for IPv4, 128 for IPv6."
-  courses: [mastery, se, web]
+  courses: [mastery, se, web, backend]
 - term: "Isolation level"
   aliases: ["isolation levels"]
   definition: "How much concurrent transactions are shielded from each other: read committed, repeatable read, serializable."
@@ -1579,6 +1592,10 @@
 - term: "JavaScript"
   definition: "The programming language that runs in every browser and makes pages respond; with Node.js it also runs on servers."
   courses: [web, mastery]
+- term: "JDK"
+  aliases: ["JDK 25"]
+  definition: "The Java development kit: the compiler, runtime and tools for Java."
+  courses: [backend]
 - term: "Jest"
   definition: "An older JavaScript test runner, which Vitest closely copies."
   courses: [web]
@@ -1600,7 +1617,8 @@
     ai: "A text format for structured data, made of lists and key-value pairs."
     se: "A text format for exchanging structured data."
     web: "A text format for arrays and objects, used to send data between programs and to save it; JSON.stringify and JSON.parse convert to and from it."
-  courses: [ai, se, web]
+    backend: "A text format for structured data (objects, arrays, strings, numbers), the usual body of API requests and responses."
+  courses: [ai, se, web, backend]
 - term: "JSON Web Token"
   aliases: ["JWT", "JWTs"]
   definition: "A signed, base64url-encoded token carrying claims; readable by anyone holding it."
@@ -1764,7 +1782,7 @@
   courses: [mastery]
 - term: "Load balancer"
   definition: "A component that spreads requests across several servers."
-  courses: [se, mastery]
+  courses: [se, mastery, backend]
 - term: "Load factor"
   definition: "The number of entries in a hash table divided by its number of buckets."
   courses: [mastery]
@@ -1800,6 +1818,10 @@
 - term: "Long task"
   definition: "Work that occupies the main thread for more than 50 milliseconds, during which the page cannot respond."
   courses: [web]
+- term: "Long-term support"
+  aliases: ["LTS"]
+  definition: "A release supported with security fixes for several years, which companies run in production."
+  courses: [backend, web]
 - term: "Loop invariant"
   definition: "A statement that is true before a loop and after every iteration, used to argue the loop is correct."
   courses: [mastery]
@@ -1908,7 +1930,7 @@
 - term: "Method"
   aliases: ["methods"]
   definition: "Two meanings. In programming, a function that belongs to a value or object, called after a dot, such as text.toUpperCase(). In HTTP, the kind of request, such as GET to read or POST to create."
-  courses: [web, se, mastery]
+  courses: [web, se, mastery, backend]
 - term: "Metrics histogram"
   aliases: ["counter", "gauge"]
   definition: "A metric counting observations into buckets, from which percentiles are estimated; counters only rise and gauges go up and down."
@@ -2058,7 +2080,7 @@
   courses: [mastery]
 - term: "npm"
   definition: "The tool that comes with Node.js for installing JavaScript packages that other people wrote."
-  courses: [web, se]
+  courses: [web, se, backend]
 - term: "npm registry"
   definition: "The public collection of JavaScript packages that npm downloads from."
   courses: [web]
@@ -2126,7 +2148,7 @@
   courses: [mastery, claude]
 - term: "Operating system"
   definition: "The software that manages a computer's hardware and shares it between programs, such as Linux or Windows."
-  courses: [mastery, se, web]
+  courses: [mastery, se, web, backend]
 - term: "Optimistic concurrency"
   aliases: ["lost update"]
   definition: "Preventing lost updates by saving only if a row's version has not changed since it was read."
@@ -2225,7 +2247,8 @@
     ai: "The list of folders your computer searches when you type a program's name in the terminal."
     se: "The list of folders your computer searches when you type a program's name in the terminal."
     mastery: "Two meanings. In the terminal, PATH is the list of folders searched for programs. In a graph, a path is a sequence of edges from one vertex to another."
-  courses: [web, ai, se, mastery]
+    backend: "The list of folders your computer searches when you type a program's name in the terminal."
+  courses: [web, ai, se, mastery, backend]
 - term: "Path traversal"
   definition: "Using ../ or absolute paths in input to reach files outside an allowed folder."
   courses: [mastery]
@@ -2308,7 +2331,7 @@
   courses: [mastery]
 - term: "Port"
   definition: "A number from 0 to 65,535 identifying a program's endpoint on a machine."
-  courses: [mastery, se, web]
+  courses: [mastery, se, web, backend]
 - term: "Postmortem"
   aliases: ["postmortems"]
   definition: "A written review of an incident: what happened, why, and what will change; good ones are blameless."
@@ -2373,7 +2396,7 @@
   courses: [mastery]
 - term: "Prompt"
   definition: "Two meanings. In a terminal, the text (often ending in $ or >) that shows it is waiting for you to type a command. In AI, the text you send to a model: instructions, context and the question."
-  courses: [ai, se, web, claude]
+  courses: [ai, se, web, claude, backend]
 - term: "Prompt caching"
   definition: "Reusing the processed start of a prompt that many requests share, so that repeated input is much cheaper and faster."
   courses: [claude]
@@ -2540,7 +2563,7 @@
   courses: [se, mastery]
 - term: "Reference"
   definition: "A value that refers to an object on the heap, in effect its address."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Refresh token"
   aliases: ["refresh tokens"]
   definition: "A long-lived, revocable token used to obtain new short-lived access tokens."
@@ -2567,7 +2590,7 @@
   courses: [web]
 - term: "Remote"
   definition: "A copy of a Git repository kept somewhere else, usually on GitHub; the main one is usually called origin."
-  courses: [web]
+  courses: [web, backend]
 - term: "Remote Control"
   definition: "A Claude Code feature for steering a session running on your computer from your phone or another device."
   courses: [claude]
@@ -2588,7 +2611,7 @@
   courses: [mastery]
 - term: "Repository"
   definition: "Two meanings. In version control, a project’s folder together with its Git history. In application design, a collection-like interface for loading and saving domain objects, hiding the database."
-  courses: [se, web, mastery]
+  courses: [se, web, mastery, backend]
 - term: "Research"
   definition: "A mode in the Claude apps that searches and reads many sources and writes a report with citations."
   courses: [claude]
@@ -2751,7 +2774,7 @@
   courses: [mastery]
 - term: "Server"
   definition: "A computer or program that answers requests."
-  courses: [se, web, claude, mastery]
+  courses: [se, web, claude, mastery, backend]
 - term: "Server-sent events"
   aliases: ["SSE"]
   definition: "A one-way stream of text events from server to browser over one HTTP response."
@@ -2912,7 +2935,7 @@
   courses: [mastery]
 - term: "Staging area"
   definition: "In Git, the list of changes chosen to go into the next commit."
-  courses: [web]
+  courses: [web, backend]
 - term: "Standard error"
   definition: "A process's stream for error messages, file descriptor 2."
   courses: [mastery]
@@ -3376,7 +3399,11 @@
   courses: [ai, mastery]
 - term: "Version control"
   definition: "Keeping a recorded history of every change to a set of files, so you can compare and go back; Git does this."
-  courses: [web]
+  courses: [web, backend]
+- term: "Version manager"
+  aliases: ["fnm", "nvm", "SDKMAN!"]
+  definition: "A tool that installs several versions of a runtime and switches between them per project."
+  courses: [backend]
 - term: "Vertex"
   aliases: ["vertices"]
   definition: "One point of a graph; also called a node."
@@ -3475,7 +3502,7 @@
   courses: [claude, ai]
 - term: "Working folder"
   definition: "In Git, your project's files as they are on disk right now, including changes not yet committed."
-  courses: [web]
+  courses: [web, backend]
 - term: "Worktrees"
   definition: "Extra working copies of one Git repository, each in its own folder on its own branch, so parallel sessions cannot overwrite each other."
   courses: [claude]

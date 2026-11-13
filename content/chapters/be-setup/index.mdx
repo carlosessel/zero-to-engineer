@@ -1,0 +1,197 @@
+---
+title: "Set up your tools"
+summary: "Installing the .NET 10 SDK, Java 25 or Node.js 26 (the current long-term-support versions), an editor, Docker and an HTTP client."
+prerequisites: [terminal-files, git-basics]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will have a working back-end development setup: the toolchain for your track (the .NET 10 SDK, Java 25, or Node.js 26), an editor set up for it, Git, Docker for running databases and other services locally, and an HTTP client for calling APIs. You will also have run a first program in your track to prove everything works. Install only your own track's toolchain; the rest is the same for everyone.
+
+## Long-term support versions
+
+Each platform releases new versions regularly, and marks some as **long-term support** (LTS): supported with security fixes for several years, which is what companies run in production. Use the current LTS version:
+
+| Track | Current LTS | Released | Release rhythm |
+|---|---|---|---|
+| C# and .NET | .NET 10 | November 2025 | a new version every November; even numbers are LTS (3 years of support) |
+| Java | Java 25 | September 2025 | a new version every March and September; an LTS every two years |
+| Node.js | Node.js 26 | April 2026, LTS since October 2026 | a new major version every April and October; even numbers become LTS |
+
+Newer non-LTS versions exist (.NET 11, Java 26, Node.js 27) for trying new features, but courses, libraries and employers settle on LTS versions.
+
+## Install your track's toolchain
+
+### C# and .NET
+
+Install the **.NET 10 SDK** (software development kit: the compiler, runtime and `dotnet` command) from Microsoft's download page, or with a package manager: `winget install Microsoft.DotNet.SDK.10` on Windows, `brew install --cask dotnet-sdk` on macOS, or your Linux distribution's packages (see Microsoft's instructions).
+
+### Java
+
+Install a **JDK 25** (Java development kit). Java is open source and several organisations build it; **Eclipse Temurin** from Adoptium is a free, widely used build. Download it from Adoptium, or use a package manager (`winget install EclipseAdoptium.Temurin.25.JDK`, `brew install --cask temurin@25`), or a version manager such as **SDKMAN!** (`sdk install java 25-tem`), which makes switching versions easy. Build tools (Maven or Gradle) come later in your track.
+
+### Node.js and TypeScript
+
+Install **Node.js 26** through a **version manager**, so you can switch versions per project: **fnm** or **nvm** on macOS and Linux (`fnm install 26`), or fnm or nvm-windows on Windows. Installing from nodejs.org also works. Node.js includes **npm**, its package manager. Recent Node.js versions run TypeScript files directly by stripping the types, which the first track chapters use; full type checking comes with the TypeScript compiler, introduced in your track.
+
+## Check the installation
+
+Open a new terminal (so it picks up the new programs) and ask each tool for its version. Use only the line for your track, plus Git and Docker:
+
+```bash
+dotnet --version
+java --version
+node --version
+git --version
+docker --version
+```
+
+Each prints a version number: `10.0.something` for .NET, a first line starting `openjdk 25` for Java, `v26.something` for Node.js. If a command is "not found", the program is not installed or not on your **PATH** (the list of folders the terminal searches for programs, <Ref to="terminal-files" />); reopen the terminal, then reinstall following the official instructions for your operating system.
+
+## Your first program
+
+Prove the toolchain works by running a tiny program. Make a folder, create the file for your track, and run it.
+
+C#, in a file called `hello.cs`; .NET 10 can run a single C# file directly:
+
+```csharp
+var name = "back-end engineer";
+Console.WriteLine($"Hello, {name}! .NET {Environment.Version.Major} is working.");
+```
+
+Run it with `dotnet run hello.cs`. It prints `Hello, back-end engineer! .NET 10 is working.` (the first run takes a few seconds while .NET builds it).
+
+Java, in a file called `Hello.java`; Java can run a single source file directly:
+
+```java
+public class Hello {
+    public static void main(String[] args) {
+        String name = "back-end engineer";
+        System.out.println("Hello, " + name + "! Java " + Runtime.version().feature() + " is working.");
+    }
+}
+```
+
+Run it with `java Hello.java`. It prints `Hello, back-end engineer! Java 25 is working.`
+
+TypeScript, in a file called `hello.ts`; Node.js runs it directly:
+
+```ts
+const name: string = "back-end engineer";
+console.log(`Hello, ${name}! Node.js ${process.versions.node.split(".")[0]} is working.`);
+```
+
+Run it with `node hello.ts`. It prints `Hello, back-end engineer! Node.js 26 is working.`
+
+The number at the end tells you which version actually ran, which catches the common problem of an older version still being first on your PATH.
+
+## An editor
+
+Use an editor that understands your language: completion, errors as you type, navigation, refactoring and a debugger (<Ref to="m-debugging" />).
+
+- **Visual Studio Code** (free, all platforms) works for every track with the right extensions: the **C# Dev Kit** for .NET, the **Extension Pack for Java** for Java, and built-in TypeScript support for Node.js.
+- Full IDEs offer more for one language: **JetBrains Rider** (C#), **IntelliJ IDEA** (Java; the Community Edition is free), **Visual Studio** (C# on Windows; Community Edition free for individuals), **WebStorm** (TypeScript). JetBrains offers free licences for non-commercial and educational use.
+
+Whatever you choose, learn three things in it early: go to definition, find all references, and setting a breakpoint and stepping through code.
+
+## Git
+
+You installed Git in <Ref to="git-basics" />. Set your name and email if you have not already (`git config --global user.name "Your Name"` and `git config --global user.email you@example.com`, using the email you want on your commits; GitHub offers a private "noreply" address for this), and create a free GitHub account to store your projects.
+
+## Docker
+
+Back ends depend on databases, caches and message brokers. Rather than installing each one on your machine, run them in **containers** (<Ref to="m-containers" /> explains them in depth): **Docker Desktop** on Windows and macOS (free for personal use, education and small businesses; larger companies need a paid plan), or Docker Engine on Linux. **Podman** is a free alternative with compatible commands. Check it works:
+
+```bash
+docker run --rm hello-world
+docker run --rm -d --name try-postgres -e POSTGRES_PASSWORD=local-only -p 5432:5432 postgres:17
+docker ps
+docker stop try-postgres
+```
+
+The first command prints a "Hello from Docker!" message. The next starts a PostgreSQL database in the background, reachable on port 5432; `docker ps` shows it running; and `docker stop` stops it (and, because of `--rm`, removes it). You will use exactly this in the data part of the course. The password is only for a throwaway local database.
+
+## An HTTP client
+
+You will call APIs constantly: your own and other people's. Options:
+
+- **curl**, already on most systems: `curl -i https://api.github.com/repos/dotnet/runtime` shows the status line and headers, then the JSON body (<Ref to="internet" />).
+- **HTTP files** in your editor: the REST Client extension for Visual Studio Code, `.http` files in Visual Studio, Rider and IntelliJ IDEA. Requests live in text files you can keep in Git beside your code.
+- **Bruno** or **Postman**: graphical API clients. Bruno stores collections as plain files in your repository.
+
+```text
+### List repository details
+GET https://api.github.com/repos/dotnet/runtime
+Accept: application/json
+```
+
+Saved as `try.http` in an editor with HTTP file support, a "Send request" link appears above the request.
+
+## Keep your setup healthy
+
+- **Keep each project's versions pinned**: `global.json` (.NET), the build file's Java version (Java), and `.nvmrc` or the `engines` field in `package.json` (Node.js), so everyone, including CI, uses the same version.
+- **Update regularly**: install security updates for your runtime and tools; move to the next LTS within its first year.
+- **Never commit secrets**: local passwords and API keys go in files listed in `.gitignore` (<Ref to="m-static-quality" />).
+
+## Common mistakes
+
+- **Installing a non-LTS or very old version** because it was first in a search result.
+- **Several versions on the PATH**, with the wrong one first. Check the version the program reports, as the first programs above do.
+- **Installing databases directly** on your machine instead of running them in containers you can throw away.
+- **Not restarting the terminal** after installing, so the new program is not found.
+- **Committing local passwords or `.env` files.**
+
+## Practice
+
+**1. (warm-up)** Which version of your track's runtime should you install, and why that one?
+
+<Solution>
+
+The current LTS version: .NET 10, Java 25 or Node.js 26. LTS versions get security fixes for years and are what employers, libraries and courses settle on.
+
+</Solution>
+
+**2. (warm-up)** `node --version` prints `v18.19.0` although you installed Node.js 26. What is probably wrong, and how do you fix it?
+
+<Solution>
+
+An older Node.js is earlier on the PATH (often a previous installer or a system package). With a version manager, run `fnm use 26` (or `nvm use 26`) and set 26 as the default; otherwise remove the old installation or fix the PATH order, then open a new terminal and check again.
+
+</Solution>
+
+**3. (standard)** Change your first program so it also prints the current date and time, then run it.
+
+<Solution>
+
+C#: add `Console.WriteLine(DateTime.Now);`. Java: add `System.out.println(java.time.LocalDateTime.now());` inside `main`. TypeScript: add `console.log(new Date().toISOString());`. Each prints the current date and time after the greeting; the exact format differs between languages, which is your first glimpse of how much date and time handling varies (<Ref to="m-data-representation" />).
+
+</Solution>
+
+**4. (standard)** Start PostgreSQL in Docker, then connect to it with `docker exec -it try-postgres psql -U postgres` and run `SELECT version();`. What does it print, and how do you stop the container?
+
+<Solution>
+
+It prints the PostgreSQL version string (beginning `PostgreSQL 17.`). Type `\q` to leave psql, then `docker stop try-postgres` stops (and, with `--rm`, removes) the container.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Install the **current LTS** toolchain for your track: the **.NET 10 SDK**, **JDK 25** (for example Eclipse Temurin), or **Node.js 26** through a version manager.
+- Check installs with `--version`, and run a **first program** that reports the version actually in use.
+- Use an **editor** that understands your language: VS Code with the right extension, or Rider, IntelliJ IDEA, Visual Studio or WebStorm.
+- Configure **Git** and create a GitHub account.
+- Run databases and other services in **Docker** (or Podman) containers.
+- Use an **HTTP client**: curl, `.http` files in your editor, or Bruno or Postman.
+- Pin versions per project, update regularly, and keep secrets out of Git.
+
+## Go deeper
+
+- [Download .NET 10](https://dotnet.microsoft.com/en-us/download/dotnet/10.0), Microsoft. The SDK for every operating system.
+- [Eclipse Temurin releases](https://adoptium.net/temurin/releases/), the Eclipse Adoptium project. Free builds of Java 25.
+- [Node.js releases](https://nodejs.org/en/about/previous-releases), the Node.js project. Which versions are LTS and how long each is supported.
+- [Visual Studio Code](https://code.visualstudio.com/), Microsoft. A free editor for all three tracks.
+- [Get Docker](https://docs.docker.com/get-started/get-docker/), Docker. Installing Docker Desktop or Docker Engine.
+- [Bruno](https://www.usebruno.com/), the Bruno project. An open-source API client that stores requests as files.
