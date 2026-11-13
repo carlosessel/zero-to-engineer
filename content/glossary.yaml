@@ -37,7 +37,7 @@
 - term: "ACID"
   aliases: ["atomicity", "durability"]
   definition: "Atomicity, consistency, isolation and durability: what a database transaction guarantees."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Actor"
   aliases: ["actor model", "mailbox"]
   definition: "An object that owns its state and handles messages from its mailbox one at a time."
@@ -199,7 +199,7 @@
   courses: [web]
 - term: "B-tree"
   definition: "A balanced tree with many keys and children per node, designed so each node fills a disk page; used for database indexes."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Back end"
   definition: "The code that runs on a server: rules, data access and APIs."
   courses: [se, web, backend]
@@ -289,7 +289,7 @@
   courses: [mastery]
 - term: "BM25"
   definition: "The standard formula search engines use to rank documents by relevance."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Boolean blindness"
   definition: "Calls such as create(true, false, true) whose flags hide their meaning."
   courses: [mastery]
@@ -326,7 +326,7 @@
   courses: [mastery]
 - term: "Buffer pool"
   definition: "The database's in-memory cache of recently used pages."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Bug"
   definition: "A mistake that makes software behave wrongly."
   courses: [se, mastery]
@@ -370,14 +370,14 @@
   courses: [mastery]
 - term: "Cache"
   definition: "A fast store of results kept so that expensive work is not repeated."
-  courses: [se, web, mastery]
+  courses: [se, web, mastery, backend]
 - term: "Cache hit"
   definition: "Finding the data you need in a cache, so no slower layer has to be asked."
   courses: [mastery]
 - term: "Cache invalidation"
   aliases: ["invalidation"]
   definition: "Removing or updating cached copies when the source data changes."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Cache line"
   definition: "The fixed-size block of neighbouring memory (commonly 64 bytes) that a CPU cache loads at once."
   courses: [mastery]
@@ -387,11 +387,11 @@
 - term: "Cache stampede"
   aliases: ["request coalescing"]
   definition: "Many requests reloading the same expired entry at once; coalescing lets only one reload it."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Cache-aside"
   aliases: ["read-through", "write-through", "write-behind"]
   definition: "Loading data into the cache on a miss and deleting it on writes."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Cache-Control"
   definition: "An HTTP header telling browsers whether, and for how long, they may keep and reuse a file."
   courses: [web]
@@ -435,7 +435,7 @@
 - term: "CDN"
   aliases: ["content delivery network"]
   definition: "A network of servers worldwide that caches content close to users."
-  courses: [mastery, se]
+  courses: [mastery, se, backend]
 - term: "Certificate"
   definition: "A signed document that proves a server's identity for TLS."
   courses: [mastery]
@@ -454,10 +454,13 @@
   courses: [mastery, web, backend]
 - term: "Change data capture"
   definition: "Streaming a database's committed changes, from its log, to other systems."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Change tracker"
   definition: "The part of an ORM that records which loaded objects were added, changed or removed."
   courses: [mastery]
+- term: "Change tracking"
+  definition: "An ORM remembering which loaded entities changed, so it can save just the changes."
+  courses: [backend]
 - term: "Chaos engineering"
   definition: "Deliberately causing failures in controlled experiments to find weaknesses."
   courses: [mastery]
@@ -625,7 +628,7 @@
 - term: "Composite index"
   aliases: ["leftmost prefix"]
   definition: "An index on several columns in order, usable for filters on a leftmost prefix of them."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Composition over inheritance"
   definition: "Building objects from other objects they hold, rather than inheriting from a base class."
   courses: [mastery]
@@ -643,6 +646,9 @@
   aliases: ["parallelism"]
   definition: "Making progress on many things over the same period; parallelism is running several at the same instant on several cores."
   courses: [mastery, se]
+- term: "Concurrency token"
+  definition: "A column, such as a version number, that an ORM checks on update so a stale change fails instead of overwriting."
+  courses: [backend]
 - term: "Conditional breakpoint"
   definition: "A breakpoint that pauses the program only when a given expression is true."
   courses: [mastery, web]
@@ -658,7 +664,7 @@
   courses: [mastery]
 - term: "Connection pool"
   definition: "A set of open connections kept for reuse, so requests do not pay to open new ones."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Connectors"
   definition: "Links that let the Claude apps reach your other services, such as a drive, a tracker or a calendar, often built on MCP."
   courses: [claude]
@@ -785,7 +791,7 @@
   courses: [mastery]
 - term: "Covering index"
   definition: "An index containing every column a query needs, so the table is never read."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "CPU"
   definition: "The central processing unit, or processor: the part of a computer that runs instructions."
   courses: [mastery]
@@ -877,6 +883,9 @@
 - term: "Dataset"
   definition: "A collection of examples used to train or test a model."
   courses: [ai]
+- term: "DbContext"
+  definition: "In EF Core, a session with the database through which entities are queried, tracked and saved."
+  courses: [backend]
 - term: "De Morgan's laws"
   definition: "not (a and b) equals (not a) or (not b); not (a or b) equals (not a) and (not b)."
   courses: [mastery]
@@ -924,7 +933,7 @@
   courses: [mastery]
 - term: "Denormalisation"
   definition: "Deliberately storing duplicated or derived data for faster reads."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Deoptimisation"
   definition: "Discarding optimised machine code when the assumptions it was built on turn out false."
   courses: [mastery]
@@ -951,6 +960,10 @@
   aliases: ["derived"]
   definition: "A value that can be calculated from state or props, so it is worked out during render instead of being stored."
   courses: [web]
+- term: "Derived query"
+  aliases: ["derived queries"]
+  definition: "In Spring Data, a query generated from a repository method's name, such as findByEmail."
+  courses: [backend]
 - term: "Design document"
   definition: "A written proposal for building something significant, with goals, design, alternatives and risks."
   courses: [mastery]
@@ -979,9 +992,12 @@
 - term: "Dijkstra's algorithm"
   definition: "An algorithm for shortest paths in a weighted graph with no negative weights."
   courses: [mastery]
+- term: "Dirty checking"
+  definition: "Hibernate detecting changes to managed entities and writing them when the transaction commits."
+  courses: [backend]
 - term: "Dirty read"
   definition: "Reading another transaction's uncommitted change."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Discrete mathematics"
   definition: "The mathematics of separate, countable things: logic, sets, counting, probability and graphs."
   courses: [mastery]
@@ -1020,7 +1036,7 @@
   courses: [mastery]
 - term: "Document database"
   definition: "A database storing JSON-like documents, such as MongoDB."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "DOM"
   definition: "The browser’s tree of objects representing a page."
   courses: [se, web]
@@ -1054,6 +1070,10 @@
 - term: "Drift"
   definition: "Differences between infrastructure code and reality, usually from manual changes."
   courses: [mastery]
+- term: "Drizzle ORM"
+  aliases: ["Drizzle"]
+  definition: "A TypeScript query builder and ORM whose schema is written in TypeScript."
+  courses: [backend]
 - term: "DRY"
   definition: "Don't repeat yourself: each piece of knowledge should have one authoritative home in the code."
   courses: [mastery]
@@ -1096,7 +1116,7 @@
   courses: [web, se, backend]
 - term: "Embedding"
   definition: "A list of numbers that represents the meaning of a piece of text or an image."
-  courses: [ai, mastery]
+  courses: [ai, mastery, backend]
 - term: "Encapsulation"
   definition: "Keeping an object's state private and changing it only through methods that keep it valid."
   courses: [mastery, se, backend]
@@ -1109,8 +1129,12 @@
   courses: [web, se, mastery]
 - term: "Entity"
   aliases: ["entities"]
-  definition: "An object with an identity that stays the same while its details change, such as a customer."
-  courses: [mastery]
+  definition: "An object with an identity that stays the same while its details change, such as a customer. In an ORM, also a class mapped to a database table."
+  courses: [mastery, backend]
+- term: "Entity Framework Core"
+  aliases: ["EF Core"]
+  definition: "Microsoft's object-relational mapper for .NET."
+  courses: [backend]
 - term: "Enum"
   aliases: ["enums", "enumeration"]
   definition: "A type with a fixed set of named values, such as the statuses an order can have."
@@ -1145,7 +1169,7 @@
   courses: [claude]
 - term: "Event"
   definition: "Two meanings. On a web page, something that happens, such as a click, a key press or a form being submitted. In system design, a record of something that happened (an order was placed) that other components react to."
-  courses: [web, se, mastery]
+  courses: [web, se, mastery, backend]
 - term: "Event delegation"
   definition: "Handling events for many child elements with one listener on their parent, relying on events bubbling up."
   courses: [web]
@@ -1175,7 +1199,7 @@
 - term: "Eviction"
   aliases: ["LRU", "LFU"]
   definition: "Removing entries when a cache is full, for example the least recently used."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Eviction policy"
   definition: "The rule a cache uses to decide what to remove when full, such as least recently used."
   courses: [mastery]
@@ -1206,7 +1230,7 @@
 - term: "Expand and contract"
   aliases: ["parallel change"]
   definition: "Changing a schema without downtime: add the new, move code and data over, then remove the old."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Expected value"
   definition: "The long-run average of a quantity: each outcome times its probability, added up."
   courses: [mastery]
@@ -1219,7 +1243,7 @@
   courses: [web]
 - term: "Expression index"
   definition: "An index on the result of an expression, such as LOWER(email)."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Facade"
   definition: "A simple interface in front of a complicated subsystem."
   courses: [mastery]
@@ -1316,6 +1340,9 @@
 - term: "Floating point"
   definition: "Storing numbers as digits plus a movable point, in base 2; most decimal fractions cannot be stored exactly."
   courses: [mastery]
+- term: "Flyway"
+  definition: "A tool that applies versioned SQL migrations to a database in order."
+  courses: [backend]
 - term: "Flyweight"
   aliases: ["intrinsic state", "extrinsic state"]
   definition: "Sharing identical immutable objects to save memory, keeping varying (extrinsic) state outside them."
@@ -1358,7 +1385,7 @@
   courses: [web]
 - term: "Full table scan"
   definition: "Reading every row of a table to answer a query, because no index helps."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Function"
   definition: "A named, reusable piece of code that takes inputs and returns a result."
   courses: [ai, se, web, mastery, backend]
@@ -1431,10 +1458,10 @@
   courses: [ai]
 - term: "Graph"
   definition: "A set of vertices connected by edges."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Graph database"
   definition: "A database storing nodes and relationships for deep relationship queries, such as Neo4j."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "GraphQL"
   definition: "An API style with one endpoint where clients query exactly the fields they need from a typed schema."
   courses: [mastery, backend]
@@ -1501,6 +1528,9 @@
   aliases: ["ports and adapters", "ports"]
   definition: "Keeping the application core free of technology, with ports it defines and adapters that implement them."
   courses: [mastery]
+- term: "Hibernate"
+  definition: "The most used implementation of JPA, the ORM behind Spring Data JPA."
+  courses: [backend]
 - term: "Higher-order function"
   aliases: ["higher-order functions"]
   definition: "A function that takes a function as an argument or returns one, such as map."
@@ -1525,7 +1555,7 @@
 - term: "Hot spot"
   aliases: ["hot spots", "hot keys"]
   definition: "A partition or key receiving far more load than others."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "HTML"
   definition: "The language that says what is on a web page: headings, paragraphs, links, images and so on."
   courses: [web]
@@ -1667,14 +1697,14 @@
 - term: "Inverted index"
   aliases: ["postings"]
   definition: "For each word, the list of documents containing it: the core of search engines."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "IP address"
   definition: "A machine's address on a network: 32 bits for IPv4, 128 for IPv6."
   courses: [mastery, se, web, backend]
 - term: "Isolation level"
   aliases: ["isolation levels"]
   definition: "How much concurrent transactions are shielded from each other: read committed, repeatable read, serializable."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Iteration"
   definition: "One pass through a loop."
   courses: [web, backend]
@@ -1701,7 +1731,14 @@
   courses: [mastery, backend]
 - term: "Join table"
   definition: "A table linking two others in a many-to-many relationship."
-  courses: [mastery]
+  courses: [mastery, backend]
+- term: "JPA"
+  aliases: ["Jakarta Persistence"]
+  definition: "The standard Java API for mapping objects to relational tables."
+  courses: [backend]
+- term: "JPQL"
+  definition: "The query language of JPA, like SQL but over entities and their fields."
+  courses: [backend]
 - term: "jsdom"
   definition: "A pretend browser page written in JavaScript, used to test components without opening a browser."
   courses: [web]
@@ -1755,7 +1792,7 @@
   courses: [mastery]
 - term: "Key-value store"
   definition: "A database that maps keys to values, such as Redis or DynamoDB."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "KISS"
   definition: "Keep it simple: the simplest design that works is usually best."
   courses: [mastery]
@@ -1810,6 +1847,9 @@
   aliases: ["lazy", "deferred execution"]
   definition: "Producing results only when they are asked for, as Java streams and LINQ do."
   courses: [mastery]
+- term: "LazyInitializationException"
+  definition: "The Hibernate error raised when a lazy relationship is read after its session or transaction has closed."
+  courses: [backend]
 - term: "LCP"
   definition: "Largest Contentful Paint: how long until the largest image or text block in view appears. Good is 2.5 seconds or less."
   courses: [web]
@@ -1976,7 +2016,7 @@
   courses: [web]
 - term: "Materialised view"
   definition: "A stored query result, refreshed from its source tables."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Maven Central"
   definition: "The main public repository of Java libraries, used by Maven and Gradle."
   courses: [backend]
@@ -2055,7 +2095,7 @@
   courses: [mastery, backend]
 - term: "Migration"
   definition: "A versioned script that changes a database’s structure."
-  courses: [se, mastery]
+  courses: [se, mastery, backend]
 - term: "Millisecond"
   definition: "A thousandth of a second; a thousand microseconds."
   courses: [mastery]
@@ -2119,7 +2159,7 @@
 - term: "MVCC"
   aliases: ["multi-version concurrency control"]
   definition: "Keeping several versions of rows so each transaction reads a consistent snapshot and readers never block writers."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "N + 1 query problem"
   definition: "Making one query for a list and then one more for each item, instead of fetching them together."
   courses: [mastery]
@@ -2149,10 +2189,14 @@
 - term: "Native AOT"
   definition: "A .NET option that compiles a whole application ahead of time to a native executable with no JIT."
   courses: [mastery]
+- term: "Navigation property"
+  aliases: ["navigation properties"]
+  definition: "In an ORM, a property that refers to a related entity, such as an order's Customer."
+  courses: [backend]
 - term: "Negative caching"
   aliases: ["cache penetration"]
   definition: "Caching 'not found' results so repeated lookups of missing keys do not hit the database."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Network partition"
   aliases: ["network partitions"]
   definition: "A network failure that splits nodes into groups that cannot reach each other."
@@ -2162,7 +2206,7 @@
   courses: [ai]
 - term: "Node"
   definition: "One element of a linked structure such as a list, tree or graph."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Node.js"
   definition: "A program that runs JavaScript outside the browser, used for servers and for development tools."
   courses: [web, se, backend]
@@ -2178,7 +2222,7 @@
   courses: [mastery]
 - term: "Non-repeatable read"
   definition: "Reading a row twice in one transaction and getting different values."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Nonce"
   definition: "A number used once; reusing one with the same key breaks AES-GCM."
   courses: [mastery]
@@ -2188,7 +2232,7 @@
 - term: "Normalisation"
   aliases: ["normal forms"]
   definition: "Organising tables so each fact is stored once, preventing update, insertion and deletion anomalies."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "NP"
   definition: "The class of problems whose proposed answers can be checked in polynomial time."
   courses: [mastery]
@@ -2224,7 +2268,7 @@
 - term: "Object-relational mapper"
   aliases: ["ORM"]
   definition: "A library that maps objects to database tables, such as Hibernate, Entity Framework or TypeORM."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Observability"
   definition: "Understanding any state of a system from its logs, metrics and traces."
   courses: [mastery]
@@ -2272,7 +2316,7 @@
 - term: "Optimistic concurrency"
   aliases: ["lost update"]
   definition: "Preventing lost updates by saving only if a row's version has not changed since it was read."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Optional"
   definition: "In TypeScript, a property marked with ? that may be left out."
   courses: [web, backend]
@@ -2323,7 +2367,7 @@
   courses: [web]
 - term: "Page"
   definition: "A fixed-size block of memory, commonly 4 KB, that virtual memory maps."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Page cache"
   definition: "Memory the kernel uses to hold file data, including writes not yet on disk."
   courses: [mastery]
@@ -2350,11 +2394,11 @@
   courses: [mastery]
 - term: "Partial unique index"
   definition: "A uniqueness rule that applies only to rows matching a condition."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Partition key"
   aliases: ["sort key"]
   definition: "The key that decides which partition holds a record; a sort key orders records within it."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Partitioning"
   aliases: ["sharding", "shard", "partition", "range partitioning", "hash partitioning"]
   definition: "Splitting data so each node stores only part of it."
@@ -2398,10 +2442,13 @@
   courses: [mastery]
 - term: "Pessimistic locking"
   definition: "Locking rows when reading them (SELECT ... FOR UPDATE) so others wait."
-  courses: [mastery]
+  courses: [mastery, backend]
+- term: "PGlite"
+  definition: "PostgreSQL compiled to WebAssembly, running inside a Node.js or browser process."
+  courses: [backend]
 - term: "Phantom read"
   definition: "Running a query twice in one transaction and getting a different set of rows."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "PID"
   definition: "A process id: the number identifying a running process."
   courses: [mastery]
@@ -2448,7 +2495,7 @@
   courses: [mastery, backend]
 - term: "Polyglot persistence"
   definition: "Using several kinds of database in one system, each for what it does best."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Polymorphism"
   definition: "One call running different code depending on the actual object it is made on."
   courses: [mastery, se]
@@ -2603,7 +2650,7 @@
 - term: "Query planner"
   aliases: ["query plan"]
   definition: "The part of a database that chooses how to run a query; EXPLAIN shows its plan."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Queue"
   definition: "A collection where the first item added is the first removed (FIFO)."
   courses: [mastery, se]
@@ -2892,7 +2939,7 @@
 - term: "Search engine"
   aliases: ["search engines"]
   definition: "A system that finds and ranks documents relevant to a text query, such as Elasticsearch or OpenSearch."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Secret scanning"
   definition: "Detecting passwords, keys and tokens in code before or after they are committed."
   courses: [mastery]
@@ -3026,13 +3073,13 @@
   courses: [mastery]
 - term: "Snapshot"
   definition: "Two meanings. In React, the idea that state keeps the same value for the whole of one render, even after you ask to change it. In databases and concurrency, a consistent view of data as it was at one moment."
-  courses: [web, mastery]
+  courses: [web, mastery, backend]
 - term: "Socket"
   definition: "The operating system's interface for sending and receiving data over a network connection."
   courses: [mastery]
 - term: "Soft delete"
   definition: "Marking rows as deleted instead of removing them."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Software architecture"
   definition: "The decisions about a system that are expensive to change later, and their trade-offs."
   courses: [mastery]
@@ -3044,7 +3091,7 @@
   courses: [backend]
 - term: "Source of truth"
   definition: "The one store whose data is authoritative; other copies are derived from it."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Spike"
   definition: "A short, time-boxed experiment to answer an unknown before committing to a plan."
   courses: [mastery]
@@ -3059,12 +3106,15 @@
 - term: "Spring Boot"
   definition: "A layer over the Spring framework that configures it automatically and runs an application as one jar with an embedded server."
   courses: [backend]
+- term: "Spring Data JPA"
+  definition: "A Spring library that generates repository implementations, including queries from method names."
+  courses: [backend]
 - term: "Spy"
   definition: "A test double that records how it was called, for the test to check afterwards."
   courses: [mastery]
 - term: "SQL"
   definition: "The language for querying relational databases."
-  courses: [se]
+  courses: [se, backend]
 - term: "SSD"
   definition: "A solid-state drive: storage built from flash memory, much faster than a spinning disk but far slower than RAM."
   courses: [mastery]
@@ -3137,7 +3187,7 @@
   courses: [claude]
 - term: "Stemming"
   definition: "Reducing words to a common form, such as loaves to loaf, for searching."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Sticky sessions"
   definition: "Sending each user to the same server, usually to reach session data in its memory."
   courses: [mastery, backend]
@@ -3209,7 +3259,7 @@
 - term: "Surrogate key"
   aliases: ["natural key"]
   definition: "A meaningless system-generated identifier; a natural key is a real-world one such as an email."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Surrogate pair"
   definition: "Two UTF-16 units that together represent one character outside the basic range, such as most emoji."
   courses: [mastery]
@@ -3373,7 +3423,7 @@
   courses: [ai, claude]
 - term: "Transaction"
   definition: "A group of database changes that all succeed or all fail together."
-  courses: [se, mastery]
+  courses: [se, mastery, backend]
 - term: "Transaction script"
   definition: "Organising business logic as one procedure per use case."
   courses: [mastery]
@@ -3414,10 +3464,10 @@
   courses: [mastery, backend]
 - term: "TTL"
   definition: "Time to live: how long a DNS answer (or other cached value) may be kept."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Tunable consistency"
   definition: "Choosing per query how many replicas must respond, trading freshness for speed."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Twelve-factor app"
   definition: "A set of principles for cloud-ready services: config in the environment, stateless processes, and more."
   courses: [mastery]
@@ -3502,7 +3552,7 @@
 - term: "Update anomaly"
   aliases: ["insertion anomaly", "deletion anomaly"]
   definition: "Inconsistency caused by storing one fact in several rows and changing only some."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Updater function"
   aliases: ["updater functions"]
   definition: "A function passed to a state setter, such as (c) => c + 1, which React calls with the latest value."
@@ -3539,7 +3589,7 @@
   courses: [mastery]
 - term: "VACUUM"
   definition: "PostgreSQL's process that removes row versions no transaction can see any more."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Valet key"
   aliases: ["pre-signed URLs", "shared access signatures"]
   definition: "A short-lived, narrowly scoped token giving direct access to one stored object."
@@ -3567,10 +3617,10 @@
   courses: [mastery, ai]
 - term: "Vector"
   definition: "A list of numbers; a point in space."
-  courses: [ai, mastery]
+  courses: [ai, mastery, backend]
 - term: "Vector database"
   definition: "A store that finds the embeddings closest to a query embedding quickly."
-  courses: [ai, mastery]
+  courses: [ai, mastery, backend]
 - term: "Version control"
   definition: "Keeping a recorded history of every change to a set of files, so you can compare and go back; Git does this."
   courses: [web, backend]
@@ -3685,11 +3735,11 @@
   courses: [mastery]
 - term: "Write skew"
   definition: "Two transactions each reading shared data and writing different rows, together breaking a rule."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "Write-ahead log"
   aliases: ["WAL"]
   definition: "A log of changes written to disk before a commit is acknowledged, replayed after a crash."
-  courses: [mastery]
+  courses: [mastery, backend]
 - term: "XML tags"
   definition: "Labels in angle brackets, such as <document> and </document>, used in prompts to mark where each kind of content starts and ends."
   courses: [claude]

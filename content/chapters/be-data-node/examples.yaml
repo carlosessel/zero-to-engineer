@@ -1,0 +1,306 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    bash -e "$BLOCK" >/dev/null 2>&1
+    cd bakery-data
+    node -e "import('drizzle-orm').then(() => import('@electric-sql/pglite')).then(() => console.log('installed'))"
+    test -x node_modules/.bin/drizzle-kit && echo "drizzle-kit ready"
+  output_contains:
+  - 'installed
+
+    drizzle-kit ready'
+- block: 2
+  lang: ts
+  check: illustration
+  note: A project file; the checks of blocks 4, 7, 9 and 12 use it.
+- block: 3
+  lang: ts
+  check: illustration
+  note: A project file; block 4's check runs drizzle-kit with it.
+- block: 4
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund drizzle-orm@0.45.4 @electric-sql/pglite@0.5.16
+    npm install --silent --no-audit --no-fund --save-dev drizzle-kit@0.31.11
+    mkdir -p $(dirname src/schema.ts)
+    cat > src/schema.ts <<'SRC_EOF'
+    import { relations } from "drizzle-orm";
+    import { check, index, integer, pgTable, serial, text, varchar } from "drizzle-orm/pg-core";
+    import { sql } from "drizzle-orm";
+
+    export const customers = pgTable("customers", {
+      id: serial("id").primaryKey(),
+      name: varchar("name", { length: 100 }).notNull(),
+      email: varchar("email", { length: 254 }).notNull().unique(),
+    });
+
+    export const orders = pgTable("orders", {
+      id: serial("id").primaryKey(),
+      customerId: integer("customer_id").notNull().references(() => customers.id),
+      totalPence: integer("total_pence").notNull(),
+      status: text("status", { enum: ["placed", "paid", "delivered", "cancelled"] }).notNull().default("placed"),
+      version: integer("version").notNull().default(0),
+    }, (t) => [
+      index("ix_orders_customer_id").on(t.customerId),
+      check("total_not_negative", sql`${t.totalPence} >= 0`),
+    ]);
+
+    export const customerRelations = relations(customers, ({ many }) => ({ orders: many(orders) }));
+    export const orderRelations = relations(orders, ({ one }) => ({ customer: one(customers, { fields: [orders.customerId], references: [customers.id] }) }));
+    SRC_EOF
+    mkdir -p $(dirname drizzle.config.ts)
+    cat > drizzle.config.ts <<'SRC_EOF'
+    import { defineConfig } from "drizzle-kit";
+
+    export default defineConfig({
+      dialect: "postgresql",
+      schema: "./src/schema.ts",
+      out: "./drizzle",
+    });
+    SRC_EOF
+    bash -e "$BLOCK" >/dev/null
+    cat drizzle/0000_create_customers_and_orders.sql
+  output_contains:
+  - "CREATE TABLE \"customers\" (\n\t\"id\" serial PRIMARY KEY NOT NULL,\n\t\"name\" varchar(100) NOT NULL,\n\t\"email\" varchar(254) NOT NULL,\n\tCONSTRAINT \"customers_email_unique\" UNIQUE(\"email\")\n);\n--> statement-breakpoint\nCREATE TABLE \"orders\" (\n\t\"id\" serial PRIMARY KEY NOT NULL,\n\t\"customer_id\" integer NOT NULL,\n\t\"total_pence\" integer NOT NULL,\n\t\"status\" text DEFAULT 'placed' NOT NULL,\n\t\"version\" integer DEFAULT 0 NOT NULL,\n\tCONSTRAINT \"total_not_negative\" CHECK (\"orders\".\"total_pence\" >= 0)\n);\n--> statement-breakpoint\nALTER TABLE \"orders\" ADD CONSTRAINT \"orders_customer_id_customers_id_fk\" FOREIGN KEY (\"customer_id\") REFERENCES \"public\".\"customers\"(\"id\") ON DELETE no action ON UPDATE no action;--> statement-breakpoint\nCREATE INDEX \"ix_orders_customer_id\" ON \"orders\" USING btree (\"customer_id\");"
+- block: 5
+  lang: sql
+  check: illustration
+  note: The migration drizzle-kit generated; block 4's check generates it again and compares.
+- block: 6
+  lang: ts
+  check: illustration
+  note: A project file; the checks of blocks 7, 9 and 12 use it.
+- block: 7
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund drizzle-orm@0.45.4 @electric-sql/pglite@0.5.16
+    npm install --silent --no-audit --no-fund --save-dev drizzle-kit@0.31.11
+    mkdir -p $(dirname src/schema.ts)
+    cat > src/schema.ts <<'SRC_EOF'
+    import { relations } from "drizzle-orm";
+    import { check, index, integer, pgTable, serial, text, varchar } from "drizzle-orm/pg-core";
+    import { sql } from "drizzle-orm";
+
+    export const customers = pgTable("customers", {
+      id: serial("id").primaryKey(),
+      name: varchar("name", { length: 100 }).notNull(),
+      email: varchar("email", { length: 254 }).notNull().unique(),
+    });
+
+    export const orders = pgTable("orders", {
+      id: serial("id").primaryKey(),
+      customerId: integer("customer_id").notNull().references(() => customers.id),
+      totalPence: integer("total_pence").notNull(),
+      status: text("status", { enum: ["placed", "paid", "delivered", "cancelled"] }).notNull().default("placed"),
+      version: integer("version").notNull().default(0),
+    }, (t) => [
+      index("ix_orders_customer_id").on(t.customerId),
+      check("total_not_negative", sql`${t.totalPence} >= 0`),
+    ]);
+
+    export const customerRelations = relations(customers, ({ many }) => ({ orders: many(orders) }));
+    export const orderRelations = relations(orders, ({ one }) => ({ customer: one(customers, { fields: [orders.customerId], references: [customers.id] }) }));
+    SRC_EOF
+    mkdir -p $(dirname drizzle.config.ts)
+    cat > drizzle.config.ts <<'SRC_EOF'
+    import { defineConfig } from "drizzle-kit";
+
+    export default defineConfig({
+      dialect: "postgresql",
+      schema: "./src/schema.ts",
+      out: "./drizzle",
+    });
+    SRC_EOF
+    mkdir -p $(dirname src/db.ts)
+    cat > src/db.ts <<'SRC_EOF'
+    import { PGlite } from "@electric-sql/pglite";
+    import { drizzle } from "drizzle-orm/pglite";
+    import { migrate } from "drizzle-orm/pglite/migrator";
+    import * as schema from "./schema.ts";
+
+    export const queryLog: string[] = [];
+
+    export async function connect() {
+      const client = new PGlite();
+      const db = drizzle(client, { schema, logger: { logQuery: (query) => queryLog.push(query) } });
+      await migrate(db, { migrationsFolder: "./drizzle" });
+      queryLog.length = 0;
+      return { client, db };
+    }
+    SRC_EOF
+    npx drizzle-kit generate --name create_customers_and_orders >/dev/null
+    cp "$BLOCK" src/demo.ts
+    node src/demo.ts
+  output_contains:
+  - "[\n  { id: 2, customer: 'Ama', totalPence: 3100 },\n  { id: 1, customer: 'Ama', totalPence: 1250 }\n]\nselect \"orders\".\"id\", \"customers\".\"name\", \"orders\".\"total_pence\" from \"orders\" inner join \"customers\" on \"orders\".\"customer_id\" = \"customers\".\"id\" where (\"orders\".\"total_pence\" > $1 and \"orders\".\"status\" <> $2) order by \"orders\".\"total_pence\" desc\n[\n  { customer: 'Ama', orders: 2, revenue: 4350 },\n  { customer: 'Kofi', orders: 1, revenue: 450 }\n]\none query per customer: 3 queries, total 4800\nrelational query: 1 query, total 4800"
+- block: 8
+  lang: text
+  check: illustration
+  note: The output of src/demo.ts, which block 7's check compares.
+- block: 9
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund drizzle-orm@0.45.4 @electric-sql/pglite@0.5.16
+    npm install --silent --no-audit --no-fund --save-dev drizzle-kit@0.31.11
+    mkdir -p $(dirname src/schema.ts)
+    cat > src/schema.ts <<'SRC_EOF'
+    import { relations } from "drizzle-orm";
+    import { check, index, integer, pgTable, serial, text, varchar } from "drizzle-orm/pg-core";
+    import { sql } from "drizzle-orm";
+
+    export const customers = pgTable("customers", {
+      id: serial("id").primaryKey(),
+      name: varchar("name", { length: 100 }).notNull(),
+      email: varchar("email", { length: 254 }).notNull().unique(),
+    });
+
+    export const orders = pgTable("orders", {
+      id: serial("id").primaryKey(),
+      customerId: integer("customer_id").notNull().references(() => customers.id),
+      totalPence: integer("total_pence").notNull(),
+      status: text("status", { enum: ["placed", "paid", "delivered", "cancelled"] }).notNull().default("placed"),
+      version: integer("version").notNull().default(0),
+    }, (t) => [
+      index("ix_orders_customer_id").on(t.customerId),
+      check("total_not_negative", sql`${t.totalPence} >= 0`),
+    ]);
+
+    export const customerRelations = relations(customers, ({ many }) => ({ orders: many(orders) }));
+    export const orderRelations = relations(orders, ({ one }) => ({ customer: one(customers, { fields: [orders.customerId], references: [customers.id] }) }));
+    SRC_EOF
+    mkdir -p $(dirname drizzle.config.ts)
+    cat > drizzle.config.ts <<'SRC_EOF'
+    import { defineConfig } from "drizzle-kit";
+
+    export default defineConfig({
+      dialect: "postgresql",
+      schema: "./src/schema.ts",
+      out: "./drizzle",
+    });
+    SRC_EOF
+    mkdir -p $(dirname src/db.ts)
+    cat > src/db.ts <<'SRC_EOF'
+    import { PGlite } from "@electric-sql/pglite";
+    import { drizzle } from "drizzle-orm/pglite";
+    import { migrate } from "drizzle-orm/pglite/migrator";
+    import * as schema from "./schema.ts";
+
+    export const queryLog: string[] = [];
+
+    export async function connect() {
+      const client = new PGlite();
+      const db = drizzle(client, { schema, logger: { logQuery: (query) => queryLog.push(query) } });
+      await migrate(db, { migrationsFolder: "./drizzle" });
+      queryLog.length = 0;
+      return { client, db };
+    }
+    SRC_EOF
+    npx drizzle-kit generate --name create_customers_and_orders >/dev/null
+    cp "$BLOCK" src/transactions.ts
+    node src/transactions.ts
+  output_contains:
+  - 'rolled back: new row for relation "orders" violates check constraint "total_not_negative"
+
+    orders after the failed transaction: 0
+
+    cancelled
+
+    conflict
+
+    parameterised: 0 rows
+
+    concatenated: 1 rows'
+- block: 10
+  lang: text
+  check: illustration
+  note: The output of src/transactions.ts, which block 9's check compares.
+- block: 11
+  lang: ts
+  check: illustration
+  note: Production connection code; it needs the pg package and a PostgreSQL server at DATABASE_URL.
+- block: 12
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund drizzle-orm@0.45.4 @electric-sql/pglite@0.5.16
+    npm install --silent --no-audit --no-fund --save-dev drizzle-kit@0.31.11
+    mkdir -p $(dirname src/schema.ts)
+    cat > src/schema.ts <<'SRC_EOF'
+    import { relations } from "drizzle-orm";
+    import { check, index, integer, pgTable, serial, text, varchar } from "drizzle-orm/pg-core";
+    import { sql } from "drizzle-orm";
+
+    export const customers = pgTable("customers", {
+      id: serial("id").primaryKey(),
+      name: varchar("name", { length: 100 }).notNull(),
+      email: varchar("email", { length: 254 }).notNull().unique(),
+    });
+
+    export const orders = pgTable("orders", {
+      id: serial("id").primaryKey(),
+      customerId: integer("customer_id").notNull().references(() => customers.id),
+      totalPence: integer("total_pence").notNull(),
+      status: text("status", { enum: ["placed", "paid", "delivered", "cancelled"] }).notNull().default("placed"),
+      version: integer("version").notNull().default(0),
+    }, (t) => [
+      index("ix_orders_customer_id").on(t.customerId),
+      check("total_not_negative", sql`${t.totalPence} >= 0`),
+    ]);
+
+    export const customerRelations = relations(customers, ({ many }) => ({ orders: many(orders) }));
+    export const orderRelations = relations(orders, ({ one }) => ({ customer: one(customers, { fields: [orders.customerId], references: [customers.id] }) }));
+    SRC_EOF
+    mkdir -p $(dirname drizzle.config.ts)
+    cat > drizzle.config.ts <<'SRC_EOF'
+    import { defineConfig } from "drizzle-kit";
+
+    export default defineConfig({
+      dialect: "postgresql",
+      schema: "./src/schema.ts",
+      out: "./drizzle",
+    });
+    SRC_EOF
+    mkdir -p $(dirname src/db.ts)
+    cat > src/db.ts <<'SRC_EOF'
+    import { PGlite } from "@electric-sql/pglite";
+    import { drizzle } from "drizzle-orm/pglite";
+    import { migrate } from "drizzle-orm/pglite/migrator";
+    import * as schema from "./schema.ts";
+
+    export const queryLog: string[] = [];
+
+    export async function connect() {
+      const client = new PGlite();
+      const db = drizzle(client, { schema, logger: { logQuery: (query) => queryLog.push(query) } });
+      await migrate(db, { migrationsFolder: "./drizzle" });
+      queryLog.length = 0;
+      return { client, db };
+    }
+    SRC_EOF
+    npx drizzle-kit generate --name create_customers_and_orders >/dev/null
+    cp "$BLOCK" src/paging.ts
+    node src/paging.ts
+  output_contains:
+  - '[ { id: 3, totalPence: 300 }, { id: 2, totalPence: 200 } ]'

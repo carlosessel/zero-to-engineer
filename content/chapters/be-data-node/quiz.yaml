@@ -1,0 +1,36 @@
+- question: Why must values be passed as parameters ($1, $2) rather than pasted into SQL?
+  options:
+  - So input can never change the meaning of the query
+  - Because PostgreSQL is faster with strings
+  answer: 0
+  explanation: This makes SQL injection impossible.
+- question: What does drizzle-kit generate do?
+  options:
+  - Writes a numbered SQL migration for the difference between the schema and earlier migrations
+  - Applies the schema to the database directly
+  answer: 0
+  explanation: Read each migration before committing it.
+- question: Inside db.transaction(async (tx) => ...), which object must the queries use?
+  options:
+  - tx
+  - db
+  answer: 0
+  explanation: Queries through db run outside the transaction.
+- question: What does an update with where id = ? and version = ? achieve?
+  options:
+  - 'Optimistic concurrency: it fails if someone else changed the row first'
+  - It locks the table
+  answer: 0
+  explanation: Report a conflict when no row matched.
+- question: Why use a connection pool?
+  options:
+  - Opening a connection per query is slow; a pool reuses a few open connections
+  - It encrypts queries
+  answer: 0
+  explanation: Size it for every instance of the service together.
+- question: What is PGlite?
+  options:
+  - Real PostgreSQL compiled to WebAssembly, running inside the Node process
+  - A smaller SQL dialect
+  answer: 0
+  explanation: Useful for learning and tests.

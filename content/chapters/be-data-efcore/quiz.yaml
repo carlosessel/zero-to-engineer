@@ -1,0 +1,42 @@
+- question: What does a DbContext represent?
+  options:
+  - A session with the database, through which you query and save entities
+  - One table
+  answer: 0
+  explanation: DbSet properties represent the tables.
+- question: How can you see the SQL a LINQ query will run?
+  options:
+  - Call ToQueryString() on it
+  - Read the migration files
+  answer: 0
+  explanation: Logging the executed commands also works.
+- question: Why use AsNoTracking for read-only queries?
+  options:
+  - EF Core skips change tracking, which is faster and uses less memory
+  - It stops the query from using indexes
+  answer: 0
+  explanation: Tracking is only needed for entities you will change and save.
+- question: A loop loads 50 customers and then their orders one customer at a time. How many queries?
+  options:
+  - 51, the N+1 problem
+  - '1'
+  answer: 0
+  explanation: Use Include or a projection to load it in one query.
+- question: What lifetime should a DbContext have in ASP.NET Core?
+  options:
+  - Scoped, one per request
+  - Singleton
+  answer: 0
+  explanation: A DbContext is not thread-safe.
+- question: What does a concurrency token do?
+  options:
+  - Makes an update fail if someone else changed the row since it was loaded
+  - Locks the row until the transaction ends
+  answer: 0
+  explanation: This is optimistic concurrency.
+- question: Which is safe from SQL injection?
+  options:
+  - FromSql with an interpolated string
+  - FromSqlRaw with string concatenation
+  answer: 0
+  explanation: Interpolated values become parameters.

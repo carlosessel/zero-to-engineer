@@ -4,6 +4,19 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 6 (Data)
+
+Added
+- Three chapters on data access in each track: Entity Framework Core 10 (model, LINQ to SQL, change tracking, bulk updates, N+1, migrations, transactions and concurrency tokens); Spring Data JPA with Hibernate 7 and Flyway (entities, derived and JPQL queries, projections, `@Transactional`, N+1, `LazyInitializationException`, optimistic locking); and Node.js with Drizzle ORM on PostgreSQL (schema in TypeScript, generated migrations, typed queries, relational queries, transactions, optimistic concurrency, and a live SQL-injection comparison). The part also reuses the SQL, relational database, schema design, caching and NoSQL chapters.
+- The checks run every example against a real database: SQLite for EF Core, H2 for JPA (the Spring project is built with Gradle and run, and its printed output must match the chapter), and PGlite, PostgreSQL 18 compiled to WebAssembly, for Node, where the check also regenerates the migration with drizzle-kit and compares it with the chapter. Each chapter counts SQL statements to show the N+1 problem and its fix.
+- 15 glossary terms, and the course added to the existing terms the chapters use.
+
+Fixed
+- The glossary entry "Entity" now also gives the ORM meaning.
+
+Not verified
+- No person has reviewed these chapters. The checks download packages, so they run only where network checks are switched on; none ran against a PostgreSQL or SQL Server server.
+
 ### 2026-11-13: Zero to Backend Engineer, part 5 (HTTP and APIs)
 
 Added

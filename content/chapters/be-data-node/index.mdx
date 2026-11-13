@@ -1,0 +1,371 @@
+---
+title: "Data in Node.js with PostgreSQL"
+summary: "Parameterised queries, a query builder or ORM (Drizzle or Prisma), migrations and transactions."
+prerequisites: [m-schema-design, be-api-node]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will store and query PostgreSQL data from a Node.js service in TypeScript: a schema defined in code with **Drizzle ORM**, migrations generated from it, typed queries whose SQL you can see, related data without the N+1 problem, transactions, optimistic concurrency, and the parameterised queries that make SQL injection impossible. <Ref to="sql" />, <Ref to="m-relational" /> and <Ref to="m-schema-design" /> cover the database side; this chapter is how a Node service talks to it.
+
+## Choosing a library
+
+Node has several ways to reach PostgreSQL, from low-level to high-level:
+
+| Library | Style | Good for |
+|---|---|---|
+| `pg` (node-postgres) | Plain SQL strings with parameters | Full control; the foundation the others build on |
+| **Drizzle ORM** | A typed query builder close to SQL, schema in TypeScript | Type safety without hiding SQL; this chapter uses it |
+| Prisma | A schema file, a generated client, its own query API | Teams that want the most help and abstraction |
+| Kysely | A typed query builder, no schema definitions | SQL-minded teams with an existing database |
+
+All of them are fine choices; what matters is that queries are parameterised, the schema is migrated in versions, and you know what SQL runs.
+
+In production you connect to a PostgreSQL server. To run the examples with nothing to install, this chapter uses **PGlite**: real PostgreSQL compiled to WebAssembly, running inside the Node process. It is excellent for learning and tests; the queries are identical, and the last section shows the production connection.
+
+## Setting up
+
+```bash
+mkdir bakery-data && cd bakery-data
+npm init -y
+npm pkg set type=module
+npm install drizzle-orm@0.45 @electric-sql/pglite@0.5
+npm install --save-dev drizzle-kit@0.31
+mkdir src
+```
+
+## The schema in TypeScript
+
+Drizzle describes tables in TypeScript, which gives both the migrations and the types of every query result. `src/schema.ts`:
+
+```ts
+import { relations } from "drizzle-orm";
+import { check, index, integer, pgTable, serial, text, varchar } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
+  name: varchar("name", { length: 100 }).notNull(),
+  email: varchar("email", { length: 254 }).notNull().unique(),
+});
+
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  customerId: integer("customer_id").notNull().references(() => customers.id),
+  totalPence: integer("total_pence").notNull(),
+  status: text("status", { enum: ["placed", "paid", "delivered", "cancelled"] }).notNull().default("placed"),
+  version: integer("version").notNull().default(0),
+}, (t) => [
+  index("ix_orders_customer_id").on(t.customerId),
+  check("total_not_negative", sql`${t.totalPence} >= 0`),
+]);
+
+export const customerRelations = relations(customers, ({ many }) => ({ orders: many(orders) }));
+export const orderRelations = relations(orders, ({ one }) => ({ customer: one(customers, { fields: [orders.customerId], references: [customers.id] }) }));
+```
+
+- `pgTable` defines a table: column types (`serial`, `varchar`, `integer`, `text`), constraints (`notNull`, `unique`, `primaryKey`, `references` for a foreign key), defaults, an index and a check constraint.
+- `text` with `enum` restricts the TypeScript type to those values (the database still stores text; add a check constraint or a PostgreSQL enum if the database must enforce it too).
+- `relations` tells Drizzle how tables connect, for the relational queries below. It does not change the database.
+- Column names in the database are snake_case (`customer_id`); the TypeScript properties are camelCase (`customerId`).
+
+## Migrations
+
+**drizzle-kit** compares your schema with the previous migrations and writes the SQL for the difference. Its settings, `drizzle.config.ts`:
+
+```ts
+import { defineConfig } from "drizzle-kit";
+
+export default defineConfig({
+  dialect: "postgresql",
+  schema: "./src/schema.ts",
+  out: "./drizzle",
+});
+```
+
+Generate the first migration:
+
+```bash
+npx drizzle-kit generate --name create_customers_and_orders
+```
+
+It writes `drizzle/0000_create_customers_and_orders.sql`:
+
+```sql
+CREATE TABLE "customers" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"name" varchar(100) NOT NULL,
+	"email" varchar(254) NOT NULL,
+	CONSTRAINT "customers_email_unique" UNIQUE("email")
+);
+--> statement-breakpoint
+CREATE TABLE "orders" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"customer_id" integer NOT NULL,
+	"total_pence" integer NOT NULL,
+	"status" text DEFAULT 'placed' NOT NULL,
+	"version" integer DEFAULT 0 NOT NULL,
+	CONSTRAINT "total_not_negative" CHECK ("orders"."total_pence" >= 0)
+);
+--> statement-breakpoint
+ALTER TABLE "orders" ADD CONSTRAINT "orders_customer_id_customers_id_fk" FOREIGN KEY ("customer_id") REFERENCES "public"."customers"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+CREATE INDEX "ix_orders_customer_id" ON "orders" USING btree ("customer_id");
+```
+
+Read every generated migration before committing it, as you would any code. Each later schema change produces the next numbered file. Apply migrations in order with Drizzle's `migrate` function at start-up or, better for production, as a step in the deployment pipeline (`npx drizzle-kit migrate`), and design them so the version of the service still running keeps working (<Ref to="m-delivery" />).
+
+## Connecting
+
+`src/db.ts` creates the connection, applies the migrations and records each SQL statement so the examples can show and count them:
+
+```ts
+import { PGlite } from "@electric-sql/pglite";
+import { drizzle } from "drizzle-orm/pglite";
+import { migrate } from "drizzle-orm/pglite/migrator";
+import * as schema from "./schema.ts";
+
+export const queryLog: string[] = [];
+
+export async function connect() {
+  const client = new PGlite();
+  const db = drizzle(client, { schema, logger: { logQuery: (query) => queryLog.push(query) } });
+  await migrate(db, { migrationsFolder: "./drizzle" });
+  queryLog.length = 0;
+  return { client, db };
+}
+```
+
+## Queries
+
+`src/demo.ts` inserts some data, then queries it:
+
+```ts
+import { and, desc, eq, gt, ne, sql } from "drizzle-orm";
+import { connect, queryLog } from "./db.ts";
+import { customers, orders } from "./schema.ts";
+
+const { db } = await connect();
+
+const [ama, kofi] = await db.insert(customers).values([
+  { name: "Ama", email: "ama@example.com" },
+  { name: "Kofi", email: "kofi@example.com" },
+]).returning();
+await db.insert(orders).values([
+  { customerId: ama.id, totalPence: 1250 },
+  { customerId: ama.id, totalPence: 3100, status: "delivered" },
+  { customerId: kofi.id, totalPence: 450 },
+]);
+
+const big = await db
+  .select({ id: orders.id, customer: customers.name, totalPence: orders.totalPence })
+  .from(orders)
+  .innerJoin(customers, eq(orders.customerId, customers.id))
+  .where(and(gt(orders.totalPence, 1000), ne(orders.status, "cancelled")))
+  .orderBy(desc(orders.totalPence));
+console.log(big);
+console.log(queryLog.at(-1));
+
+const totals = await db
+  .select({ customer: customers.name, orders: sql<number>`count(*)::int`, revenue: sql<number>`sum(${orders.totalPence})::int` })
+  .from(orders)
+  .innerJoin(customers, eq(orders.customerId, customers.id))
+  .groupBy(customers.name)
+  .orderBy(customers.name);
+console.log(totals);
+
+queryLog.length = 0;
+let sum = 0;
+for (const c of await db.select().from(customers)) {
+  const rows = await db.select().from(orders).where(eq(orders.customerId, c.id));
+  sum += rows.reduce((s, o) => s + o.totalPence, 0);
+}
+console.log(`one query per customer: ${queryLog.length} queries, total ${sum}`);
+
+queryLog.length = 0;
+const withOrders = await db.query.customers.findMany({ with: { orders: true } });
+console.log(`relational query: ${queryLog.length} query, total ${withOrders.flatMap((c) => c.orders).reduce((s, o) => s + o.totalPence, 0)}`);
+```
+
+Run it with `node src/demo.ts`. It prints:
+
+```text
+[
+  { id: 2, customer: 'Ama', totalPence: 3100 },
+  { id: 1, customer: 'Ama', totalPence: 1250 }
+]
+select "orders"."id", "customers"."name", "orders"."total_pence" from "orders" inner join "customers" on "orders"."customer_id" = "customers"."id" where ("orders"."total_pence" > $1 and "orders"."status" <> $2) order by "orders"."total_pence" desc
+[
+  { customer: 'Ama', orders: 2, revenue: 4350 },
+  { customer: 'Kofi', orders: 1, revenue: 450 }
+]
+one query per customer: 3 queries, total 4800
+relational query: 1 query, total 4800
+```
+
+- **`insert(...).values(...).returning()`** inserts and returns the new rows, with their generated ids.
+- **`select({...}).from().innerJoin().where().orderBy()`** reads almost like SQL. Choosing columns in `select` is a **projection**: only what you need comes back, and the result type is exactly `{ id: number; customer: string; totalPence: number }[]`.
+- The logged SQL shows `$1` and `$2`: the values `1000` and `'cancelled'` were sent separately as **parameters**, never pasted into the SQL text.
+- For anything the builder lacks, the **`sql`** template inserts raw SQL fragments, still with parameters for values (`count(*)::int` casts PostgreSQL's 64-bit count to a JavaScript number).
+- **The N+1 problem**: a query per customer inside a loop costs one query plus one per customer (<Ref to="m-performance" />). Drizzle's **relational query** `db.query.customers.findMany({ with: { orders: true } })` loads customers with their orders in one SQL statement; a join, as in the first query, works too.
+
+## Transactions and concurrency
+
+`src/transactions.ts`:
+
+```ts
+import { and, eq, sql } from "drizzle-orm";
+import { connect } from "./db.ts";
+import { customers, orders } from "./schema.ts";
+
+const { db, client } = await connect();
+const [ama] = await db.insert(customers).values({ name: "Ama", email: "ama@example.com" }).returning();
+
+try {
+  await db.transaction(async (tx) => {
+    await tx.insert(orders).values({ customerId: ama.id, totalPence: 1250 });
+    await tx.insert(orders).values({ customerId: ama.id, totalPence: -5 });
+  });
+} catch (error) {
+  console.log("rolled back:", (error as { cause?: { message?: string } }).cause?.message ?? (error as Error).message);
+}
+console.log("orders after the failed transaction:", (await db.select().from(orders)).length);
+
+const [order] = await db.insert(orders).values({ customerId: ama.id, totalPence: 1250 }).returning();
+
+async function cancel(id: number, expectedVersion: number): Promise<"cancelled" | "conflict"> {
+  const updated = await db
+    .update(orders)
+    .set({ status: "cancelled", version: sql`${orders.version} + 1` })
+    .where(and(eq(orders.id, id), eq(orders.version, expectedVersion)))
+    .returning({ id: orders.id });
+  return updated.length === 1 ? "cancelled" : "conflict";
+}
+
+console.log(await cancel(order.id, 0));
+console.log(await cancel(order.id, 0));
+
+const email = "ama@example.com' OR '1'='1";
+const safe = await client.query("SELECT name FROM customers WHERE email = $1", [email]);
+console.log("parameterised:", safe.rows.length, "rows");
+const unsafe = await client.query(`SELECT name FROM customers WHERE email = '${email}'`);
+console.log("concatenated:", unsafe.rows.length, "rows");
+```
+
+It prints:
+
+```text
+rolled back: new row for relation "orders" violates check constraint "total_not_negative"
+orders after the failed transaction: 0
+cancelled
+conflict
+parameterised: 0 rows
+concatenated: 1 rows
+```
+
+- **`db.transaction`** runs the callback in a transaction: if it throws, everything in it is rolled back. The first order was inserted, the second broke the check constraint, and neither was kept. Use the `tx` object inside the callback, not `db`, or the query runs outside the transaction.
+- **Optimistic concurrency**: the update only matches if the `version` is still the one the caller read, and increments it. The second cancel, still expecting version 0, matched no row, so it reports a conflict instead of silently overwriting; an API returns 409 Conflict (<Ref to="be-http" />).
+- **SQL injection**: the email value contains `' OR '1'='1`. Passed as a parameter (`$1`), it is just an odd email that matches nobody. Pasted into the SQL string, it changes the query to "or true" and returns every customer. **Never build SQL by concatenating or interpolating values**; with Drizzle's builder and its `sql` template, values are always parameters (<Ref to="m-appsec" />).
+
+## In production
+
+With a real server, use the `pg` driver and a **connection pool**, which keeps a few connections open and lends them to queries, because opening a connection for every query is slow:
+
+```ts
+import { drizzle } from "drizzle-orm/node-postgres";
+import { Pool } from "pg";
+import * as schema from "./schema.ts";
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: 5_000,
+});
+
+export const db = drizzle(pool, { schema });
+
+process.on("SIGTERM", async () => {
+  await pool.end();
+});
+```
+
+`DATABASE_URL` (such as `postgres://bakery_app:...@db.internal:5432/bakery`) comes from the environment or a secret store. Size the pool to what the database can serve across every instance of your service: ten instances with `max: 10` means up to 100 connections (<Ref to="m-relational" />). Close the pool on shutdown so in-flight queries finish. Pass the `db` to your services through `createApp` as in <Ref to="be-dependency-injection" />, so tests can pass one backed by PGlite.
+
+## Common mistakes
+
+- **Building SQL with string concatenation or template literals** instead of parameters.
+- **N+1 queries** from loops.
+- **`select()` of whole rows** everywhere when a few columns would do.
+- **Using `db` inside a transaction callback** instead of `tx`.
+- **Editing applied migrations**, or not reading generated ones.
+- **A new connection per request** instead of a pool, or pools so large that the database runs out of connections.
+- **Credentials in code** or committed `.env` files.
+
+## Practice
+
+**1. (warm-up)** In the logged SQL `... where ("orders"."total_pence" > $1 and "orders"."status" <> $2)`, what are `$1` and `$2`, and why does it matter that the values are not in the SQL text?
+
+<Solution>
+
+They are **parameters**: placeholders whose values (`1000` and `'cancelled'`) are sent to PostgreSQL separately from the SQL. The database treats them only as values, so nothing inside them, however strange, can change the meaning of the query. That makes SQL injection impossible, and lets the database reuse the query plan.
+
+</Solution>
+
+**2. (standard)** Write a function `recentOrders(customerId: number, page: number, size: number)` that returns one page of a customer's orders, newest first, refusing pages below 1 and sizes above 50. Which Drizzle methods do you need?
+
+<Solution>
+
+```ts
+import { desc, eq } from "drizzle-orm";
+import { connect } from "./db.ts";
+import { customers, orders } from "./schema.ts";
+
+const { db } = await connect();
+
+async function recentOrders(customerId: number, page: number, size: number) {
+  if (!Number.isInteger(page) || page < 1) throw new Error("page starts at 1");
+  if (!Number.isInteger(size) || size < 1 || size > 50) throw new Error("size must be 1 to 50");
+  return db
+    .select({ id: orders.id, totalPence: orders.totalPence })
+    .from(orders)
+    .where(eq(orders.customerId, customerId))
+    .orderBy(desc(orders.id))
+    .limit(size)
+    .offset((page - 1) * size);
+}
+
+const [ama] = await db.insert(customers).values({ name: "Ama", email: "ama@example.com" }).returning();
+await db.insert(orders).values([1, 2, 3, 4, 5].map((n) => ({ customerId: ama.id, totalPence: n * 100 })));
+console.log(await recentOrders(ama.id, 2, 2));
+```
+
+Save it as `src/paging.ts` and run it: it prints `[ { id: 3, totalPence: 300 }, { id: 2, totalPence: 200 } ]`. You need `where`, `orderBy`, `limit` and `offset`. For very deep pages, **keyset pagination** (`where id < lastSeenId`) is faster than a large offset (<Ref to="m-api-design" />).
+
+</Solution>
+
+**3. (stretch)** Placing an order must reduce stock and insert the order together, and must fail if there is not enough stock, even when two customers order the last loaf at the same moment. Describe how you would write it.
+
+<Solution>
+
+Run both statements in one `db.transaction`. Reduce the stock with a **conditional update** that does the check and the change in one statement, `update stock set quantity = quantity - $1 where sku = $2 and quantity >= $1 returning quantity`; if it returns no row, throw, which rolls back the transaction, and report 409 (not enough stock). Then insert the order with the same `tx`. Two concurrent orders cannot both succeed, because PostgreSQL locks the stock row during the first update, and the second update re-checks `quantity >= $1` against the new value. Reading the stock first and updating it afterwards, in separate statements, would allow both to see "1 left" and both to sell it.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Node reaches PostgreSQL through **`pg`** and, on top of it, query builders and ORMs such as **Drizzle**, Prisma and Kysely. **PGlite** runs real PostgreSQL in-process for learning and tests.
+- Drizzle defines the **schema in TypeScript**; **drizzle-kit** generates numbered SQL **migrations** from it; read them and apply them in deployment.
+- Queries are typed and close to SQL: `select`, `insert`, `update`, joins, **projections**, and the `sql` template; the logger shows the SQL and its **parameters**.
+- Avoid **N+1** with joins or relational queries (`findMany({ with })`).
+- **`db.transaction`** rolls back on errors; a **version** column gives optimistic concurrency.
+- **Never concatenate values into SQL.** In production use a **connection pool** sized for the whole fleet, with credentials from the environment.
+
+## Go deeper
+
+- [Drizzle ORM: get started with PostgreSQL](https://orm.drizzle.team/docs/get-started/postgresql-new), the Drizzle team. Setting up Drizzle with node-postgres.
+- [Drizzle ORM: migrations](https://orm.drizzle.team/docs/migrations), the Drizzle team. Generating and applying migrations with drizzle-kit.
+- [node-postgres: queries](https://node-postgres.com/features/queries), Brian Carlson. Parameterised queries and why they matter.
+- [node-postgres: pooling](https://node-postgres.com/features/pooling), Brian Carlson. Connection pools and their settings.
+- [PGlite](https://pglite.dev/docs/), ElectricSQL. Embedded PostgreSQL for Node, browsers and tests.

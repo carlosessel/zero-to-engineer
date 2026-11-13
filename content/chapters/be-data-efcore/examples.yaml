@@ -1,0 +1,104 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - "CREATE TABLE \"Customers\" (\n    \"Id\" INTEGER NOT NULL CONSTRAINT \"PK_Customers\" PRIMARY KEY AUTOINCREMENT,\n    \"Name\" TEXT NOT NULL,\n    \"Email\" TEXT NOT NULL\n);\n\n\nCREATE TABLE \"Orders\" ("
+  - '    CONSTRAINT "FK_Orders_Customers_CustomerId" FOREIGN KEY ("CustomerId") REFERENCES "Customers" ("Id") ON DELETE CASCADE
+
+    );'
+  note: Fetches the package from NuGet, so it runs only with network access; restore warnings may come first, so the check looks for the lines the chapter shows.
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the example above, shown on its own.
+- block: 3
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - 'saved 5 rows
+
+    SELECT "o"."Id", "c"."Name" AS "Customer", "o"."TotalPence"
+
+    FROM "Orders" AS "o"
+
+    INNER JOIN "Customers" AS "c" ON "o"."CustomerId" = "c"."Id"
+
+    WHERE "o"."TotalPence" > 1000 AND "o"."Status" <> ''Cancelled''
+
+    ORDER BY "o"."TotalPence" DESC
+
+    { Id = 2, Customer = Ama, TotalPence = 3100 }
+
+    { Id = 1, Customer = Ama, TotalPence = 1250 }
+
+    { Customer = Ama, Orders = 2, Revenue = 4350 }
+
+    { Customer = Kofi, Orders = 1, Revenue = 450 }
+
+    kofi@example.com'
+  note: Fetches the package from NuGet, so it runs only with network access; restore warnings may come first, so the check looks for the lines the chapter shows.
+- block: 4
+  lang: text
+  check: illustration
+  note: The output of the example above, shown on its own.
+- block: 5
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - 'Modified
+
+    Unchanged
+
+    cancelled 2
+
+    deleted 2
+
+    1 paid'
+  note: Fetches the package from NuGet, so it runs only with network access; restore warnings may come first, so the check looks for the lines the chapter shows.
+- block: 6
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - 'one query per customer: 21 queries, total 22000
+
+    Include: 1 query, total 22000
+
+    projection: 1 query, total 22000'
+  note: Fetches the package from NuGet, so it runs only with network access; restore warnings may come first, so the check looks for the lines the chapter shows.
+- block: 7
+  lang: bash
+  check: illustration
+  note: EF Core tool commands; they need a project and the dotnet-ef tool. The commands are from the migrations overview linked below.
+- block: 8
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - 'committed: stock 3, orders 1
+
+    website: someone else changed the stock first; reload and try again
+
+    stock now 0'
+  note: Fetches the package from NuGet, so it runs only with network access; restore warnings may come first, so the check looks for the lines the chapter shows.
+- block: 9
+  lang: csharp
+  check: illustration
+  note: A fragment of an ASP.NET Core Program.cs; it needs the builder, the BakeryDb context and an OrderDto record.
+- block: 10
+  lang: csharp
+  check: illustration
+  note: A fragment; it needs a BakeryDb context with a Stock set.
+- block: 11
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - '{ Name = Ama, Big = 2 }
+
+    True'
+  note: Fetches the package from NuGet, so it runs only with network access; restore warnings may come first, so the check looks for the lines the chapter shows.

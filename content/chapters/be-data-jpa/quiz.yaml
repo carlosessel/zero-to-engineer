@@ -1,0 +1,42 @@
+- question: What does Spring Data JPA generate for you?
+  options:
+  - Repository implementations, including queries derived from method names
+  - The database tables
+  answer: 0
+  explanation: Tables come from migrations.
+- question: Why use Flyway with ddl-auto=validate instead of ddl-auto=update?
+  options:
+  - Migrations are reviewed, versioned and can move data; validate only checks the mapping
+  - update is slower
+  answer: 0
+  explanation: Never let the ORM change production on its own.
+- question: What is the default fetch type of @ManyToOne, and what should you use?
+  options:
+  - Eager by default; set it to LAZY
+  - Lazy by default; keep it
+  answer: 0
+  explanation: Eager loading fetches related rows whether you need them or not.
+- question: Why does @Enumerated(EnumType.STRING) matter?
+  options:
+  - The default stores positions, which break if the enum is reordered
+  - Strings are faster
+  answer: 0
+  explanation: Store names, not ordinals.
+- question: When does LazyInitializationException happen?
+  options:
+  - When a lazy relationship is touched after its transaction ended
+  - When an entity has no id
+  answer: 0
+  explanation: Load what you need inside the transaction.
+- question: In a @Transactional method, how are changes to a loaded entity saved?
+  options:
+  - Hibernate writes them at commit by dirty checking
+  - Only if you call save
+  answer: 0
+  explanation: Managed entities are tracked.
+- question: What does @Version give you?
+  options:
+  - 'Optimistic locking: a stale update fails instead of overwriting'
+  - A history of every change
+  answer: 0
+  explanation: Return 409 Conflict to the client.
