@@ -1,0 +1,251 @@
+---
+title: "Refactoring safely"
+summary: "Code smells, the core refactorings, working in small steps behind tests, and changing legacy code."
+prerequisites: [m-design-principles, m-functional]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will improve existing code without breaking it: recognising the smells that suggest a change, applying the standard refactorings in small, safe steps, protecting yourself with tests (including on legacy code that has none), and knowing when to refactor and when to leave code alone. Most of an engineer's working life is spent changing code that already exists, so this is one of the most valuable skills in the course.
+
+## What refactoring is
+
+**Refactoring** is changing the structure of code **without changing its behaviour**. Martin Fowler's definition stresses both halves: the outside behaviour stays exactly the same, and the change is made in small steps, each of which keeps the program working. Adding a feature, fixing a bug or improving performance are not refactoring; they change behaviour. Keeping the two separate (refactor, then change behaviour, in separate commits) makes each easy to review and easy to undo.
+
+Why bother? Because code that is easy to change is cheaper to change. Kent Beck's advice sums up the habit: "make the change easy (warning: this may be hard), then make the easy change". Before adding a feature to awkward code, first refactor it so the feature fits naturally (**preparatory refactoring**), then add the feature.
+
+## The safety net: tests
+
+You can only be sure behaviour has not changed if something checks it. Before refactoring, make sure tests cover the code you are about to change, and run them after **every small step**. If a test fails, the last step broke something, and it is small enough to undo or fix at once.
+
+If the code has no tests, write **characterisation tests** first (a term from Michael Feathers' *Working Effectively with Legacy Code*): tests that record what the code *currently* does, not what it should do. Run the code with representative inputs, note the outputs, and assert exactly those, including any odd behaviour. They are a net, not a specification.
+
+```ts
+function legacyShipping(country: string, weightKg: number, express: boolean): number {
+  let cost = 0;
+  if (country == "UK") {
+    if (weightKg <= 2) { cost = 350; } else { cost = 350 + Math.ceil(weightKg - 2) * 100; }
+    if (express) { cost = cost + 400; }
+  } else {
+    if (weightKg <= 2) { cost = 900; } else { cost = 900 + Math.ceil(weightKg - 2) * 250; }
+    if (express) { cost = cost * 2; }
+  }
+  return cost;
+}
+
+const cases: [string, number, boolean][] = [
+  ["UK", 1, false], ["UK", 2.5, false], ["UK", 5, true],
+  ["FR", 1, false], ["FR", 3.2, true], ["uk", 1, false],
+];
+for (const c of cases) console.log(c.join(" "), "->", legacyShipping(...c));
+```
+
+It prints one line per case: `UK 1 false -> 350`, `UK 2.5 false -> 450`, `UK 5 true -> 1050`, `FR 1 false -> 900`, `FR 3.2 true -> 2800` and `uk 1 false -> 900`. That last result is odd: a lowercase `"uk"` is charged the international rate. A characterisation test records it anyway; whether it is a bug is a separate decision, made deliberately and not slipped into a refactoring.
+
+## Code smells
+
+A **code smell** (Kent Beck and Martin Fowler's term) is a surface sign that the design might have a problem. Not every smell needs fixing, but each is worth a look:
+
+| Smell | What it looks like | Usual refactoring |
+|---|---|---|
+| Long function | You scroll, or need comments to mark sections | Extract function |
+| Large class | Many fields and unrelated methods | Extract class |
+| Duplicated code | The same knowledge in several places | Extract function, move to one home |
+| Long parameter list | `create(a, b, c, d, e, f)` | Introduce parameter object |
+| Data clumps | The same few values always travel together | Introduce a value object |
+| Primitive obsession | Strings and numbers for money, emails, ids | Replace primitive with object |
+| Feature envy | A method uses another object's data more than its own | Move function |
+| Repeated switches | The same `switch` on a type in many places | Replace conditional with polymorphism |
+| Shotgun surgery | One change needs edits in many files | Move function, combine into one module |
+| Divergent change | One class changes for many unrelated reasons | Split by responsibility |
+| Speculative generality | Hooks and parameters "for later" that nothing uses | Inline, remove |
+| Mysterious name | You cannot tell what it is from its name | Rename |
+| Comments as deodorant | A comment explains confusing code | Extract and name, then delete the comment |
+
+## The core refactorings
+
+A few refactorings do most of the work. Modern editors (VS Code, IntelliJ IDEA, Rider, Visual Studio) perform many of them automatically and safely: **rename**, **extract function or method**, **extract variable**, **inline**, **change signature**, **move**. Prefer the automated version where it exists; it updates every caller correctly, including ones you would miss by hand.
+
+### Extract function, step by step
+
+Here is `legacyShipping` refactored in small steps, with the characterisation cases run after each:
+
+1. **Extract the repeated weight rule** into `weightCost(base, perKg, weightKg)`, used by both branches. Run: same outputs.
+2. **Replace the nested if with a lookup** of each zone's base, per-kilogram rate and express rule. Run: same outputs.
+3. **Replace the temporary variable** `cost` with direct returns. Run: same outputs.
+
+```ts
+type Zone = { base: number; perKg: number; express: (cost: number) => number };
+
+const ZONES: Record<"UK" | "INTERNATIONAL", Zone> = {
+  UK: { base: 350, perKg: 100, express: (c) => c + 400 },
+  INTERNATIONAL: { base: 900, perKg: 250, express: (c) => c * 2 },
+};
+
+const FREE_KG = 2;
+
+function weightCost(zone: Zone, weightKg: number): number {
+  return zone.base + Math.max(0, Math.ceil(weightKg - FREE_KG)) * zone.perKg;
+}
+
+function shipping(country: string, weightKg: number, express: boolean): number {
+  const zone = country === "UK" ? ZONES.UK : ZONES.INTERNATIONAL;
+  const cost = weightCost(zone, weightKg);
+  return express ? zone.express(cost) : cost;
+}
+
+const cases: [string, number, boolean][] = [
+  ["UK", 1, false], ["UK", 2.5, false], ["UK", 5, true],
+  ["FR", 1, false], ["FR", 3.2, true], ["uk", 1, false],
+];
+for (const c of cases) console.log(c.join(" "), "->", shipping(...c));
+```
+
+It prints exactly the same six lines, including `uk 1 false -> 900`: behaviour preserved, odd case and all. The rules are now visible as data, and adding a "EU" zone is one line. Fixing the lowercase `"uk"` (with `country.toUpperCase()`) is now a separate, deliberate behaviour change with its own test and commit.
+
+### Introduce parameter object
+
+```ts
+type DateRange = { from: string; to: string };
+
+function contains(range: DateRange, isoDate: string): boolean {
+  return range.from <= isoDate && isoDate <= range.to;
+}
+
+// Before: salesTotal(sales, fromDate, toDate, ...) and refunds(fromDate, toDate, ...) everywhere.
+function salesTotal(sales: { on: string; pence: number }[], period: DateRange): number {
+  return sales.filter((s) => contains(period, s.on)).reduce((sum, s) => sum + s.pence, 0);
+}
+
+const november: DateRange = { from: "2026-11-01", to: "2026-11-30" };
+console.log(salesTotal([{ on: "2026-10-31", pence: 900 }, { on: "2026-11-02", pence: 450 }, { on: "2026-11-30", pence: 275 }], november));
+```
+
+It prints `725`. A pair of dates that always travelled together (a **data clump**) becomes a `DateRange`, and behaviour that belongs to it (`contains`) now has a home. Mixing up the order of two date arguments is no longer possible.
+
+## Refactoring legacy code
+
+**Legacy code**, in Feathers' definition, is simply code without tests. Changing it safely follows a recipe:
+
+1. **Identify the change point**: where the new behaviour must go.
+2. **Find a seam**: a place where you can change or observe behaviour without editing the code there, such as a parameter you can pass a fake through, or a function you can override.
+3. **Break dependencies** just enough to get the code into a test (pass in the database or the clock instead of creating it inside; <Ref to="m-solid" />). Use automated refactorings for these steps, since there are no tests yet.
+4. **Write characterisation tests.**
+5. **Make the change** and refactor, now protected.
+
+For replacing a large system or module gradually, the **strangler fig** pattern (named by Martin Fowler after a vine that slowly surrounds a tree) routes one piece of functionality at a time to new code, until the old code can be removed. It avoids the big rewrite.
+
+## Refactor or rewrite?
+
+The **big rewrite** (throwing the code away and starting again) is tempting and risky. The old code contains years of fixed bugs and handled edge cases that nobody wrote down, the business cannot stop while you rewrite, and the new system has to catch up with a moving target. Joel Spolsky called it "the single worst strategic mistake that any software company can make". Incremental refactoring, with the strangler fig for larger pieces, is almost always safer. Rewrites make sense for small, well-understood components, or when the platform itself is dead.
+
+## When to refactor
+
+- **Before a change**, to make the change easy (preparatory refactoring).
+- **While reading code**, to capture what you have just understood (rename the confusing variable).
+- **The boy scout rule**: leave the code a little cleaner than you found it.
+- **Not** in a separate "refactoring sprint" that the business must approve: refactoring is part of normal work.
+- **Not** code that works, rarely changes and nobody needs to read. Refactor where change happens.
+
+## Common mistakes
+
+- **Mixing refactoring with behaviour changes** in one commit, so neither can be reviewed or reverted on its own.
+- **Refactoring without tests**, or in steps too big to tell which one broke something.
+- **"Fixing" odd behaviour silently** during a refactoring; other code may depend on it.
+- **Doing by hand what the editor can do safely**, such as renaming across a codebase with find and replace.
+- **The big rewrite** when incremental change would work.
+- **Refactoring code nobody will change**, while the code that changes every week stays messy.
+
+## Practice
+
+**1. (warm-up)** Is each a refactoring? (a) Renaming `d` to `daysLate` everywhere. (b) Fixing an off-by-one in pagination. (c) Splitting a 200-line function into five functions with the same behaviour. (d) Making a slow query faster by adding an index.
+
+<Solution>
+
+(a) Yes. (b) No: it changes behaviour (a bug fix). (c) Yes. (d) No: it is a performance change, not a structural change to the code (even though the results are the same, it is not refactoring code structure).
+
+</Solution>
+
+**2. (warm-up)** Name the smell and a refactoring: `function createInvoice(customerName, customerEmail, street, town, postcode, country, ...)`.
+
+<Solution>
+
+Long parameter list, with data clumps (customer details; the address fields). Introduce parameter objects: `createInvoice(customer: Customer, address: Address, ...)`, with `Address` as a value object.
+
+</Solution>
+
+**3. (warm-up)** What is a characterisation test, and why does it assert the current output even when that output looks wrong?
+
+<Solution>
+
+A test that records what existing code currently does, used as a safety net before changing code that has no tests. It asserts current behaviour because the goal is to detect *any* change during refactoring; whether odd behaviour is a bug is a separate decision, and other code may rely on it.
+
+</Solution>
+
+**4. (standard)** Refactor this using "replace conditional with polymorphism" or a lookup, keeping the output identical:
+
+```ts
+function describeLoyalty(tier: string, points: number): string {
+  if (tier === "bronze") return `Bronze: ${points} points, 0% off`;
+  if (tier === "silver") return `Silver: ${points} points, 5% off`;
+  if (tier === "gold") return `Gold: ${points} points, 10% off`;
+  return `Unknown tier`;
+}
+
+console.log(["bronze", "gold", "platinum"].map((t) => describeLoyalty(t, 120)));
+```
+
+<Solution>
+
+```ts
+const TIERS: Record<string, { label: string; percentOff: number }> = {
+  bronze: { label: "Bronze", percentOff: 0 },
+  silver: { label: "Silver", percentOff: 5 },
+  gold: { label: "Gold", percentOff: 10 },
+};
+
+function describeLoyalty(tier: string, points: number): string {
+  const t = TIERS[tier];
+  return t ? `${t.label}: ${points} points, ${t.percentOff}% off` : "Unknown tier";
+}
+
+console.log(["bronze", "gold", "platinum"].map((t) => describeLoyalty(t, 120)));
+```
+
+Both versions print **["Bronze: 120 points, 0% off", "Gold: 120 points, 10% off", "Unknown tier"]**. Run the original and the refactored version on the same inputs and compare, as a quick characterisation check.
+
+</Solution>
+
+**5. (standard)** You must add a feature to a 2,000-line class with no tests that creates its own database connection inside its constructor. List your first steps.
+
+<Solution>
+
+Find where the change must go. Find a seam: use the editor's automated refactorings to change the constructor to receive the database connection (or an interface for the queries it makes), with the old constructor kept as a convenience that creates the real one. In a test, pass a fake. Write characterisation tests around the methods you will touch. Then refactor the area you need (extract the relevant method or class) and add the feature with new tests. Leave the rest of the class alone for now.
+
+</Solution>
+
+**6. (stretch)** Your team proposes rewriting a ten-year-old billing system from scratch over a year. What risks would you raise, and what would you suggest instead?
+
+<Solution>
+
+Risks: undocumented behaviour and edge cases (tax rules, rounding, special customers) that the old code handles and the new one will miss; the old system keeps changing during the year, so the rewrite chases a moving target; no value is delivered until the switch-over; the switch-over itself is a big, risky event. Suggest the strangler fig: put a routing layer in front, move one capability at a time (for example invoice rendering, then tax calculation) to new, tested code, compare old and new outputs on real data before switching each piece, and retire the old code piece by piece.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Refactoring** changes structure, never behaviour, in small steps; keep it separate from feature and bug-fix changes.
+- **Tests are the safety net**; for untested code, write **characterisation tests** that record current behaviour, odd parts included.
+- **Code smells** (long function, large class, duplication, long parameter lists, data clumps, primitive obsession, feature envy, repeated switches, shotgun surgery) point to the usual refactorings.
+- Use the editor's **automated refactorings** (rename, extract, inline, move, change signature).
+- For **legacy code**: find a seam, break dependencies, characterise, then change. For big replacements, use the **strangler fig**, not a big rewrite.
+- Refactor where change happens: before a change, while reading, and a little every time.
+
+## Go deeper
+
+- [Refactoring catalog](https://refactoring.com/catalog/), Martin Fowler. Every refactoring from the book, with short descriptions.
+- [Refactoring Guru: code smells](https://refactoring.guru/refactoring/smells), Alexander Shvets. Illustrated smells and the refactorings for each.
+- [StranglerFigApplication](https://martinfowler.com/bliki/StranglerFigApplication.html), Martin Fowler. Replacing a system gradually.
+- [Things You Should Never Do, Part I](https://www.joelonsoftware.com/2000/04/06/things-you-should-never-do-part-i/), Joel Spolsky. The classic argument against the big rewrite.

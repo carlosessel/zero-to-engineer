@@ -1,0 +1,36 @@
+- question: What should you do before changing any code to fix a bug?
+  options:
+  - Reproduce it reliably
+  - Add try/catch around the failing line
+  answer: 0
+  explanation: Without a reproduction you cannot tell whether a change fixed it.
+- question: Where in a stack trace is the failure itself?
+  options:
+  - The top frame, under the error message
+  - The last line
+  answer: 0
+  explanation: The frames below show the chain of calls that led there.
+- question: What does git bisect do?
+  options:
+  - A binary search over commits to find the first bad one
+  - Splits a commit in two
+  answer: 0
+  explanation: Each test halves the range of suspect commits.
+- question: What is a conditional breakpoint for?
+  options:
+  - Pausing only when an expression is true, such as on one item in a long loop
+  - Pausing only in production
+  answer: 0
+  explanation: It saves stepping through hundreds of iterations.
+- question: Why is "if price is undefined, return 0" a bad fix for a crash?
+  options:
+  - It hides the cause (missing data) and gives wrong results silently
+  - It is too slow
+  answer: 0
+  explanation: Fix the cause; fail clearly if the data is genuinely missing.
+- question: A test fails only sometimes. Which is a likely cause?
+  options:
+  - Shared state, timing or randomness that varies between runs
+  - A spelling mistake in a comment
+  answer: 0
+  explanation: Make time, order and randomness fixed to make it consistent.

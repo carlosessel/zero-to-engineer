@@ -1,0 +1,273 @@
+---
+title: "Design principles beyond SOLID"
+summary: "DRY, KISS, YAGNI, composition over inheritance, coupling and cohesion, and the Law of Demeter."
+prerequisites: [m-solid]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will know the other principles experienced engineers use every day (DRY, KISS, YAGNI, composition over inheritance, coupling and cohesion, separation of concerns, tell don't ask, the Law of Demeter and least astonishment) and, just as important, how they pull against each other. Good design is choosing the right balance for the situation, and these principles are the vocabulary for that choice.
+
+## Coupling and cohesion
+
+Two measures sit underneath almost every other principle.
+
+- **Coupling** is how much one module depends on the details of another. With **tight coupling**, a change in one forces changes in the other. **Loose coupling** means modules interact through small, stable interfaces and know little about each other's insides.
+- **Cohesion** is how closely related the things inside one module are. A **highly cohesive** module does one thing, and everything in it belongs together (all the pricing rules). A module with **low cohesion** is a grab bag (`Utils`, `Helpers`, `Manager`).
+
+The goal is **high cohesion and low coupling**: things that change together live together, and things that change separately are connected only loosely. Then a change usually touches one module, and that is the whole aim of design.
+
+## Separation of concerns
+
+**Separation of concerns** means dividing a program so that each part deals with one concern: presentation, business rules, data access, configuration, logging. HTML, CSS and JavaScript separate structure, style and behaviour; layered and hexagonal architectures (part 4) separate business rules from databases and web frameworks. The single responsibility principle (<Ref to="m-solid" />) is the same idea at the level of a class.
+
+## DRY: don't repeat yourself
+
+**DRY**, from *The Pragmatic Programmer*: "Every piece of knowledge must have a single, unambiguous, authoritative representation within a system." The point is **knowledge**, not text. If the VAT rate appears in five places, a rate change needs five edits and one will be missed.
+
+But two pieces of code that look the same are not always the same knowledge:
+
+```ts
+function validUsername(name: string): boolean {
+  return name.length >= 3 && name.length <= 20;
+}
+
+function validProductCode(code: string): boolean {
+  return code.length >= 3 && code.length <= 20;
+}
+
+console.log(validUsername("ama"), validProductCode("RYE-400G"));
+```
+
+It prints `true true`. The two checks are identical today by coincidence: usernames follow the sign-up rules, product codes follow the warehouse's rules, and they will change for different reasons. Merging them into one `validLength` function would couple two unrelated rules, and the first change to one would need a flag or a fork. This is **coincidental duplication**, and it is better left alone.
+
+A useful guide is the **rule of three**: tolerate duplication the second time, and extract a shared abstraction the third time, when you can see what really varies. "Duplication is far cheaper than the wrong abstraction" (Sandi Metz).
+
+## KISS: keep it simple
+
+**KISS** ("keep it simple, stupid") says the simplest design that works is usually best. Simple code has fewer bugs, is faster to read, and is easier to change later. Complexity should be justified by a real need. Signs of unnecessary complexity: layers that only pass calls through, configuration for things that never change, clever one-liners, and patterns used because they are patterns.
+
+## YAGNI: you aren't gonna need it
+
+**YAGNI**, from extreme programming: do not build something until you actually need it. Features and flexibility built "in case" cost time now, add code that must be maintained and tested, and are often wrong when the real need arrives, because the guess was made with less information. Build for today's requirements in a way that is easy to change, which is different from building for every imagined future.
+
+YAGNI does not mean ignoring things that are expensive to change later: security, data formats that will be stored, public APIs, and anything that would need a data migration deserve thought up front.
+
+## Composition over inheritance
+
+**Composition over inheritance** (from *Design Patterns*, 1994): prefer building objects out of other objects (**has a**) to inheriting from a base class (**is a**). Inheritance fixes a relationship at compile time and couples the subclass to the base class's internals (<Ref to="m-oop" />). Composition lets you combine behaviours freely and swap them at run time.
+
+Suppose some notifiers should retry and some should log. With inheritance you need `RetryingEmailNotifier`, `LoggingEmailNotifier`, `LoggingRetryingSmsNotifier` and so on: a class for every combination. With composition, each behaviour wraps any notifier:
+
+```ts
+interface Notifier {
+  send(message: string): string;
+}
+
+class EmailNotifier implements Notifier {
+  send(message: string) { return `email: ${message}`; }
+}
+
+class SmsNotifier implements Notifier {
+  send(message: string) { return `sms: ${message.slice(0, 22)}`; } // a tiny limit, to show it
+}
+
+class LoggingNotifier implements Notifier {
+  constructor(private inner: Notifier, private log: string[]) {}
+  send(message: string) {
+    this.log.push(`sending "${message}"`);
+    return this.inner.send(message);
+  }
+}
+
+class PrefixNotifier implements Notifier {
+  constructor(private inner: Notifier, private prefix: string) {}
+  send(message: string) { return this.inner.send(`${this.prefix} ${message}`); }
+}
+
+const log: string[] = [];
+const sms = new LoggingNotifier(new PrefixNotifier(new SmsNotifier(), "[Bakery]"), log);
+console.log(sms.send("Your order is ready for collection"));
+console.log(new PrefixNotifier(new EmailNotifier(), "[Bakery]").send("Receipt attached"));
+console.log(log);
+```
+
+It prints `sms: [Bakery] Your order is` (cut to the short limit), `email: [Bakery] Receipt attached` and `["sending \"Your order is ready for collection\""]`. Two wrappers combine with two channels in any order without a single subclass. This wrapping is the decorator pattern, one of the patterns in part 4.
+
+## Tell, don't ask
+
+**Tell, don't ask**: rather than asking an object for its data and making decisions about it outside, tell the object what to do and let it decide. Asking spreads an object's rules through its callers; telling keeps them inside (encapsulation, <Ref to="m-oop" />).
+
+```ts
+// Asking: the caller makes the decision.
+// if (account.balance >= amount && !account.frozen) { account.balance -= amount; }
+
+class Account {
+  constructor(private balance: number, private frozen = false) {}
+
+  withdraw(amount: number): boolean {
+    if (this.frozen || amount > this.balance) return false;
+    this.balance -= amount;
+    return true;
+  }
+
+  get current() { return this.balance; }
+}
+
+const account = new Account(5000);
+console.log(account.withdraw(1200), account.withdraw(9000), account.current);
+```
+
+It prints `true false 3800`. The rule about frozen accounts lives in one place, and no caller can forget it.
+
+## The Law of Demeter
+
+The **Law of Demeter** (the principle of least knowledge): a method should talk only to its immediate friends (its own fields, its parameters, objects it creates), not to strangers reached through them. The tell-tale sign of a violation is a chain of calls through other objects' internals:
+
+```ts
+type Address = { postcode: string };
+type Customer = { address: Address };
+type Order = { customer: Customer };
+
+const order: Order = { customer: { address: { postcode: "LS1 4AP" } } };
+
+// Reaches through three objects: depends on the whole structure.
+const postcodeArea = order.customer.address.postcode.split(" ")[0];
+
+// Better: ask the nearest object for what you need.
+function deliveryArea(o: Order): string {
+  return o.customer.address.postcode.split(" ")[0];
+}
+
+console.log(postcodeArea, deliveryArea(order));
+```
+
+It prints `LS1 LS1`. With the chain repeated across many callers, changing how customers store addresses breaks them all; with `deliveryArea` (ideally a method on `Order`), only one place knows the path. The law is about **behaviour** objects, not data: chaining through plain data records or fluent builders (`query.where(...).orderBy(...)`) is fine.
+
+## Least astonishment
+
+The **principle of least astonishment**: a component should behave the way its users expect. A function called `getUser` should not create a user when none exists; `save` should not also send emails; a method that looks like a cheap getter should not make a network call. Names, return types and side effects should all match what a reader would guess. When behaviour must be surprising, the name should say so (`getOrCreateUser`).
+
+## Principles in tension
+
+The principles pull against each other, and judgment is choosing between them:
+
+| Tension | How to decide |
+|---|---|
+| DRY versus loose coupling | Share code only when it is the same *knowledge*; duplicate when it merely looks alike. |
+| Open-closed versus YAGNI | Add extension points where change has happened, not where it might. |
+| Abstraction versus KISS | Each layer must earn its place by hiding real complexity or enabling a real need. |
+| Small functions versus readability | Extract until each function reads clearly, not until each is three lines. |
+
+The question that resolves most of them: **which design makes the changes we are actually likely to need cheapest, while staying easy to read today?**
+
+## Common mistakes
+
+- **Over-applying DRY**: merging coincidentally similar code into a shared function with flags for each caller.
+- **Building for imagined futures** (violating YAGNI): plugin systems, configuration and abstractions nobody uses.
+- **Deep inheritance hierarchies** where small composed objects would do.
+- **Train-wreck call chains** through other objects' internals.
+- **Getters plus external decisions** instead of telling an object what to do.
+- **Surprising side effects** hidden behind innocent names.
+- **Low cohesion**: utility classes that collect unrelated functions.
+
+## Practice
+
+**1. (warm-up)** Define coupling and cohesion, and say which you want high and which low.
+
+<Solution>
+
+Coupling: how much one module depends on another's details; you want it low. Cohesion: how closely related the contents of one module are; you want it high.
+
+</Solution>
+
+**2. (warm-up)** The delivery charge of £3.50 appears in the checkout, the basket page and the invoice email. Which principle does this break, and what is the fix?
+
+<Solution>
+
+DRY: the same piece of knowledge (the delivery charge) has three representations, so a price change needs three edits. Put it in one place (a pricing module or configuration) that all three read.
+
+</Solution>
+
+**3. (warm-up)** Rewrite this call chain so the caller does not know the structure: `invoice.getOrder().getCustomer().getEmail()`.
+
+<Solution>
+
+Give the nearest object a method for what the caller needs: `invoice.customerEmail()` (which can delegate internally), or pass the email into the code that needs it. Only `Invoice` then knows how to reach the email.
+
+</Solution>
+
+**4. (standard)** A colleague builds a configurable rule engine to calculate shipping, which today is a flat £3.50. Which principles does this break, and what would you suggest?
+
+<Solution>
+
+YAGNI and KISS: the flexibility is not needed yet and adds code to maintain. Suggest a simple function returning 350 pence, written so it is easy to change; if shipping rules multiply later, introduce rules behind an interface then (open-closed, applied when change actually arrives).
+
+</Solution>
+
+**5. (standard)** Using composition, add a `RetryingNotifier` that tries an inner notifier up to three times when it throws. Show it working with a notifier that fails twice and then succeeds.
+
+<Solution>
+
+```ts
+interface Notifier {
+  send(message: string): string;
+}
+
+class RetryingNotifier implements Notifier {
+  constructor(private inner: Notifier, private attempts = 3) {}
+  send(message: string): string {
+    let lastError: unknown;
+    for (let i = 1; i <= this.attempts; i++) {
+      try {
+        return this.inner.send(message);
+      } catch (e) {
+        lastError = e;
+      }
+    }
+    throw lastError;
+  }
+}
+
+let calls = 0;
+const flaky: Notifier = {
+  send(message) {
+    calls++;
+    if (calls < 3) throw new Error("network down");
+    return `sent on try ${calls}: ${message}`;
+  },
+};
+
+console.log(new RetryingNotifier(flaky).send("Order ready"));
+```
+
+It prints **sent on try 3: Order ready**. The retry behaviour wraps any notifier, so no subclass of each channel is needed. Real retries also wait between attempts (backoff), which the resilience chapter later in this course covers.
+
+</Solution>
+
+**6. (stretch)** A function `getPrice(productId)` sometimes writes a default price to the database when a product has none. Which principle does this break? What are two better designs?
+
+<Solution>
+
+Least astonishment (and command-query separation): a getter with a hidden write surprises callers, and can cause bugs such as writes during read-only reports. Better: keep `getPrice` read-only and return "no price" (null or a result) for the caller to handle; or, if creating a default is genuinely wanted, name it honestly (`getOrCreateDefaultPrice`) and call it only where that is intended. Fixing the missing data at its source is usually best.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Aim for **high cohesion and low coupling**; **separate concerns**.
+- **DRY** is about knowledge, not text: do not merge coincidental duplication; follow the **rule of three**.
+- **KISS** and **YAGNI**: the simplest design for today's real needs, easy to change, beats speculative flexibility.
+- **Composition over inheritance**: combine small objects (wrapping, delegation) instead of a subclass per combination.
+- **Tell, don't ask** keeps rules inside objects; the **Law of Demeter** avoids reaching through other objects' internals.
+- **Least astonishment**: names, results and side effects should match expectations.
+- The principles conflict; choose the design that makes likely changes cheap while staying readable.
+
+## Go deeper
+
+- [The Wrong Abstraction](https://sandimetz.com/blog/2016/1/20/the-wrong-abstraction), Sandi Metz. Why duplication can be cheaper than the wrong shared code.
+- [Yagni](https://martinfowler.com/bliki/Yagni.html), Martin Fowler. What YAGNI means, and what it does not.
+- [TellDontAsk](https://martinfowler.com/bliki/TellDontAsk.html), Martin Fowler. A short explanation with examples.
+- [Law of Demeter](https://en.wikipedia.org/wiki/Law_of_Demeter), Wikipedia. The origin, the rule's formal statement and its criticisms.

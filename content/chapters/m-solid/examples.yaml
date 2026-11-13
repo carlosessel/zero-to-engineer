@@ -1,0 +1,61 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    rye loaf: £4.50
+    croissant: £2.75
+    Total: £7.25
+    [{"item":"rye loaf","pence":450},{"item":"croissant","pence":275}]
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    rye loaf: £4.50
+    croissant: £2.75
+    Total: £7.25
+    [{"item":"rye loaf","pence":450},{"item":"croissant","pence":275}]
+- block: 3
+  lang: ts
+  check: ts
+  output: |
+    600 500 0
+    100
+- block: 4
+  lang: ts
+  check: ts
+  output: |
+    20 16
+- block: 5
+  lang: java
+  check: java
+  output: |
+    [bread, new]
+    UnsupportedOperationException
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    ["receipt: order 7"] ["printed invoice 3"]
+- block: 7
+  lang: ts
+  check: ts
+  output: |
+    ["ama@example.com | Order 7 confirmed: £54.00"]
+- block: 8
+  lang: csharp
+  check: csharp
+  needs: network
+  output_contains:
+  - 'to ama@example.com: Order 7 confirmed'
+  note: Fetches the package from NuGet, so it runs only with network access; restore warnings may come first, so the check looks for the line the chapter shows.
+- block: 9
+  lang: ts
+  check: ts
+  output: |
+    350 900
+- block: 10
+  lang: ts
+  check: ts
+  output: |
+    350 900 1050

@@ -1,0 +1,36 @@
+- question: Why must TypeScript code still validate JSON from an API?
+  options:
+  - Types are erased at compile time, so an annotation on outside data is only a promise
+  - JSON cannot hold numbers
+  answer: 0
+  explanation: Validate at the edge, then trust the types inside.
+- question: TypeScript accepts any object with the right properties where an interface is expected. What is this called?
+  options:
+  - Structural typing
+  - Nominal typing
+  answer: 0
+  explanation: Java and C# are nominal; types must be declared by name.
+- question: What does a discriminated union with an exhaustive switch give you?
+  options:
+  - Only valid states can be built, and a compile error if a new case is not handled
+  - Faster code at run time
+  answer: 0
+  explanation: That is making illegal states unrepresentable.
+- question: Which TypeScript type should hold a value you have not checked yet?
+  options:
+  - any
+  - unknown
+  answer: 1
+  explanation: unknown forces a check before use; any switches checking off.
+- question: Why does assigning an Integer into an Object[] that is really a String[] fail in Java?
+  options:
+  - Java arrays are covariant, so the mistake compiles and is caught only at run time
+  - Integers cannot be stored in arrays
+  answer: 0
+  explanation: Generics fixed this by making List<Object> and List<String> incompatible.
+- question: How does C# mark a reference that may be null?
+  options:
+  - string?
+  - Optional<string>
+  answer: 0
+  explanation: With nullable reference types on, plain string should never be null.

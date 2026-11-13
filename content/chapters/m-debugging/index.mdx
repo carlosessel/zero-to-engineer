@@ -1,0 +1,267 @@
+---
+title: "Debugging systematically"
+summary: "Reproduce, isolate, form a hypothesis, test it: debuggers, logs, bisecting and rubber ducks."
+prerequisites: [m-errors]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will debug methodically instead of by guesswork: reproduce the problem, read what the error is telling you, narrow down where it happens, form a hypothesis and test it, and fix the cause rather than the symptom. Engineers spend a large part of their time debugging, and the gap between a beginner and an expert is mostly method, not cleverness.
+
+## Debugging is the scientific method
+
+A **bug** is a difference between what the program does and what you expected. Debugging is finding out why, and the reliable way is the scientific method:
+
+1. **Reproduce** the bug, ideally with one command or a few clicks, every time.
+2. **Observe**: read the error, the logs and the actual output carefully.
+3. **Hypothesise** one specific cause ("the croissant has no price in the price list").
+4. **Test** the hypothesis with an experiment that could prove it wrong: a breakpoint, a log line, a smaller input.
+5. **Repeat** until the cause is confirmed, then **fix** it, and check that the original reproduction now passes.
+
+The most common mistake is skipping steps 3 and 4: changing code at random until the symptom goes away. That often hides the bug rather than fixing it, and teaches you nothing.
+
+## Reproduce first
+
+A bug you cannot reproduce is a bug you cannot be sure you fixed. Collect the exact input, the environment (versions, operating system, configuration, time zone, locale) and the steps. Then make the reproduction as **small** as possible: remove everything that does not matter until removing anything more makes the bug disappear. The result, a **minimal reproduction**, often makes the cause obvious, and it becomes the **regression test** that proves the fix and keeps the bug from returning.
+
+Bugs that appear only sometimes (**flaky** or **intermittent** bugs) usually depend on something not under your control: timing and concurrency, the order of a hash map, the current date, randomness, network delays, or data left over from a previous run. Make each of those fixed (a fixed clock, a fixed random seed, one thread) and see whether the bug becomes consistent.
+
+## Read the error
+
+Error messages and stack traces carry most of the answer, and beginners often skip them. This program crashes:
+
+```js
+function priceOf(basket, product) {
+  return basket.prices[product].pence;
+}
+
+function total(basket) {
+  return basket.items.reduce((sum, item) => sum + priceOf(basket, item.product) * item.quantity, 0);
+}
+
+const basket = {
+  prices: { "rye loaf": { pence: 450 } },
+  items: [{ product: "rye loaf", quantity: 2 }, { product: "croissant", quantity: 3 }],
+};
+console.log(total(basket));
+```
+
+Node.js prints (with the paths shortened):
+
+```text
+checkout.js:2
+  return basket.prices[product].pence;
+                                ^
+
+TypeError: Cannot read properties of undefined (reading 'pence')
+    at priceOf (checkout.js:2:33)
+    at checkout.js:6:51
+    at Array.reduce (<anonymous>)
+    at total (checkout.js:6:23)
+    at Object.<anonymous> (checkout.js:13:13)
+```
+
+Read it from the top:
+
+- **The type and message**: `TypeError`, something was `undefined` when the code read `.pence` from it.
+- **The first frame**: the failure is on line 2, column 33, in `priceOf`. So `basket.prices[product]` was `undefined`.
+- **The frames below** show who called whom: `priceOf` was called from the `reduce` callback inside `total`, called from line 13.
+
+Hypothesis: one product has no entry in `prices`. Test it by logging `product` just before the failing line, and it prints `croissant`. The cause is missing data, and the fix is a decision: should a missing price be a clear error ("No price for croissant") or a validation failure earlier (<Ref to="m-errors" />)? Either is better than a `TypeError` far from the cause.
+
+In Java and C#, read **caused by** (Java) and **inner exception** (C#) sections too: the bottom of the chain is usually the real cause.
+
+## Tools for looking inside
+
+### Print and log statements
+
+Adding a temporary `console.log` (or `System.out.println`, `Console.WriteLine`) to see a value is quick and works everywhere, including production through logs. Print **labels and values** together (`console.log("product", product, "prices", Object.keys(basket.prices))`), and remove the temporary lines afterwards.
+
+### Debuggers
+
+A **debugger** pauses a running program so you can look at everything. Every major editor has one (VS Code, IntelliJ IDEA, Rider, Visual Studio), and browsers have one in their developer tools.
+
+- A **breakpoint** pauses execution at a line. A **conditional breakpoint** pauses only when an expression is true (`product === "croissant"`), which is invaluable inside loops.
+- **Step over** runs the current line; **step into** goes inside the function it calls; **step out** finishes the current function.
+- The **call stack** panel shows how you got here, and you can click any frame to see its local variables.
+- **Watch expressions** show values that update as you step.
+- Many debuggers can **break on exceptions**, pausing exactly where an error is thrown, before the stack unwinds.
+
+A debugger is usually faster than print statements once you know it, because you can look at any value without editing and re-running.
+
+### Bisecting
+
+When something used to work and now does not, **bisecting** finds the change that broke it with a binary search over history (<Ref to="m-sorting-searching" />). `git bisect` does it for commits:
+
+```bash
+git bisect start
+git bisect bad              # the current commit has the bug
+git bisect good v2.3.0      # this release did not
+# git checks out a commit halfway between; test it, then:
+git bisect good             # or: git bisect bad
+# repeat until git names the first bad commit, then:
+git bisect reset
+```
+
+Each test halves the range, so even 1,000 commits take only about ten tests. If the test is a script that exits with 0 for good and non-zero for bad, `git bisect run ./test.sh` does the whole search unattended. The same halving idea works on data (half the input file), on configuration (half the settings) and on code (comment out half).
+
+```ts
+function firstBad(versions: number, isBad: (v: number) => boolean): [number, number] {
+  let low = 1;
+  let high = versions;
+  let tests = 0;
+  while (low < high) {
+    const mid = Math.floor((low + high) / 2);
+    tests++;
+    if (isBad(mid)) high = mid;
+    else low = mid + 1;
+  }
+  return [low, tests];
+}
+
+console.log(firstBad(1000, (v) => v >= 637));
+```
+
+It prints `[637, 10]`: the first bad version out of 1,000, found with 10 tests.
+
+### Explaining it out loud
+
+**Rubber duck debugging**: explain the code, line by line, to someone or something (traditionally a rubber duck). Explaining forces you to state the assumptions you were skipping over, and the bug is often in one of them. Writing a clear question for a colleague often has the same effect before you send it.
+
+## Common causes worth checking first
+
+- **Off-by-one errors**: `<` versus `<=`, starting at 0 or 1, the last page or last item missing.
+- **Shared mutable state**: two parts of the program changing the same object or array (a default value shared between calls, a cached object modified by a caller).
+- **Wrong assumptions about data**: null or missing values, empty lists, duplicates, unexpected case or whitespace, different time zones.
+- **Floating point** for money or comparisons (<Ref to="m-data-representation" />).
+- **Asynchronous timing**: a missing `await`, two requests racing, code running before data has loaded.
+- **The environment**: a different version, configuration value, feature flag or cached build than you think. "It works on my machine" is a clue, not a defence: list what differs.
+- **Stale caches**: the browser, a build cache or a CDN serving old code.
+
+## Fix the cause, then prevent it
+
+Once you understand the cause:
+
+- **Write a failing test** that reproduces the bug, then make it pass. The test proves the fix and keeps the bug from coming back.
+- **Fix the cause, not the symptom.** Adding `if (price === undefined) return 0` makes the crash disappear and silently gives away croissants.
+- **Look for the same bug elsewhere**: the same mistake is often repeated.
+- **Ask why it was possible**: could a type, a validation at the edge or a better name have prevented it?
+
+For production incidents, teams write a **postmortem** (incident review): what happened, the timeline, the cause and what will change. Good postmortems are **blameless**: they look for the weaknesses in systems and processes that allowed a reasonable person's mistake to cause harm. The reliability chapter later in this course covers them.
+
+## Common mistakes
+
+- **Changing code at random** until the symptom disappears.
+- **Not reading the error message** or stack trace, or reading only the last line.
+- **Assuming** what a value is instead of checking it.
+- **Fixing the symptom** (a null check that hides missing data) instead of the cause.
+- **Debugging a huge input** instead of shrinking it to a minimal reproduction.
+- **Not writing a regression test**, so the bug returns.
+- **Going too long alone.** If you are stuck for an hour, explain the problem to someone.
+
+## Practice
+
+**1. (warm-up)** List the five steps of debugging scientifically.
+
+<Solution>
+
+Reproduce, observe, form a hypothesis, test it with an experiment that could prove it wrong, repeat until confirmed, then fix and confirm with the reproduction.
+
+</Solution>
+
+**2. (warm-up)** A stack trace's top frame is in a library you did not write. Where should you look first?
+
+<Solution>
+
+At the first frame that is in *your* code, going down the trace: that is usually where you passed the library something it did not expect. Library bugs exist, but your call into it is far more often the cause.
+
+</Solution>
+
+**3. (warm-up)** About how many tests does bisecting take to find the first bad commit among 4,000?
+
+<Solution>
+
+About 12, because 2 to the power 12 is 4,096 and each test halves the range.
+
+</Solution>
+
+**4. (standard)** This prints something surprising. What does it print, and why?
+
+```ts
+const DEFAULT_TAGS: string[] = ["new"];
+
+function makeProduct(name: string, tags: string[] = DEFAULT_TAGS) {
+  return { name, tags };
+}
+
+const loaf = makeProduct("rye loaf");
+loaf.tags.push("bread");
+const croissant = makeProduct("croissant");
+console.log(croissant.tags);
+```
+
+<Solution>
+
+It prints **["new", "bread"]**. Both products share the same `DEFAULT_TAGS` array, so pushing to the loaf's tags changed the croissant's too: shared mutable state. Fix: give each product its own copy, for example `tags: string[] = [...DEFAULT_TAGS]`, or make the default immutable (`readonly string[]`, which turns the `push` into a type error).
+
+</Solution>
+
+**5. (standard)** A page shows orders 10 at a time, but customers with 25 orders cannot see the last 5. Find the bug and fix it.
+
+```ts
+function pageCount(total: number, pageSize: number): number {
+  return Math.floor(total / pageSize);
+}
+
+console.log(pageCount(25, 10), pageCount(20, 10), pageCount(0, 10));
+```
+
+<Solution>
+
+It prints **2 2 0**, but 25 orders need 3 pages: `Math.floor` drops the partial last page (an off-by-one). Use `Math.ceil(total / pageSize)`:
+
+```ts
+function pageCount(total: number, pageSize: number): number {
+  return Math.ceil(total / pageSize);
+}
+
+console.log(pageCount(25, 10), pageCount(20, 10), pageCount(0, 10));
+```
+
+It prints **3 2 0**. The test cases chosen (a partial page, an exact multiple, zero) are the edge cases worth checking for any paging code.
+
+</Solution>
+
+**6. (standard)** A test passes on your laptop and fails on the build server about one run in five. Name four things to investigate.
+
+<Solution>
+
+Any four of: timing and concurrency (tests running in parallel, a missing await, a timeout too short for a slower machine); test order and shared state between tests; the current date or time zone (the server may be in UTC); randomness without a fixed seed; differences in versions or configuration; network calls to real services; leftover data in a shared database.
+
+</Solution>
+
+**7. (stretch)** You find that a report shows yesterday's sales as zero for customers in New Zealand. Describe how you would debug it, step by step.
+
+<Solution>
+
+Reproduce: run the report for a New Zealand customer with known sales, and compare with the raw data. Observe: check the date range the query uses, in which time zone. Hypothesis: the report computes "yesterday" in the server's time zone (UTC), but New Zealand is 12 or 13 hours ahead, so the range misses most of their day. Test: run the query with the range computed in Pacific/Auckland time and see whether the sales appear. Fix: compute day boundaries in the customer's time zone (store timestamps in UTC, convert at the edges), add a test with a New Zealand customer, and check other reports for the same assumption.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Debug with the **scientific method**: reproduce, observe, hypothesise, test, repeat, then fix.
+- Shrink a bug to a **minimal reproduction**, and keep it as a **regression test**.
+- Read **error messages and stack traces** from the top; find the first frame in your own code, and read causes and inner exceptions.
+- Use **print statements**, a **debugger** (breakpoints, conditional breakpoints, stepping, the call stack) and **bisecting** (`git bisect`) to narrow things down.
+- Check the usual suspects: off-by-one, shared mutable state, bad assumptions about data, floating point, async timing, the environment, stale caches.
+- **Fix the cause, not the symptom**, look for the same bug elsewhere, and write blameless **postmortems** for incidents.
+
+## Go deeper
+
+- [Debugging in Visual Studio Code](https://code.visualstudio.com/docs/debugtest/debugging), Microsoft. Breakpoints, stepping and watch expressions in VS Code.
+- [git bisect](https://git-scm.com/docs/git-bisect), the Git project. Every option of the bisect command, including `bisect run`.
+- [Chrome DevTools: debug JavaScript](https://developer.chrome.com/docs/devtools/javascript), Google. A walkthrough of debugging in the browser.
+- [Debug your app (IntelliJ IDEA)](https://www.jetbrains.com/help/idea/debugging-code.html), JetBrains. Debugging Java in IntelliJ.

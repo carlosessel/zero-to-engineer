@@ -1,0 +1,37 @@
+- question: A database query times out. What kind of failure is it?
+  options:
+  - A bug
+  - A system failure, possibly worth retrying
+  - An expected business outcome
+  answer: 1
+  explanation: It comes from outside the code; a retry may succeed.
+- question: What is wrong with an empty catch block?
+  options:
+  - The failure disappears and the program carries on as if it succeeded
+  - It is slower than a full one
+  answer: 0
+  explanation: Catch only where you can act, and never swallow silently.
+- question: When does a finally block run?
+  options:
+  - Only when an exception was thrown
+  - Whether or not an exception was thrown
+  answer: 1
+  explanation: That is why it is the place for cleanup.
+- question: What does "parse, don't validate" mean?
+  options:
+  - Turn input into a type that can only hold valid values, once, at the edge
+  - Check every input again in every function
+  answer: 0
+  explanation: Code inside the system can then trust its inputs.
+- question: Which suits a result type best?
+  options:
+  - A null pointer bug
+  - An "email already registered" outcome the caller must handle
+  answer: 1
+  explanation: Expected outcomes belong in the signature; bugs should fail loudly.
+- question: Why pass the original exception as the cause when rethrowing?
+  options:
+  - So the stack trace shows both what failed underneath and the context added above it
+  - It makes the error message shorter
+  answer: 0
+  explanation: Losing the cause loses the real reason for the failure.

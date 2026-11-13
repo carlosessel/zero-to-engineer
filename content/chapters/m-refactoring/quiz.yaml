@@ -1,0 +1,36 @@
+- question: What makes a change a refactoring?
+  options:
+  - It changes the structure of code without changing its behaviour
+  - It makes the code faster
+  answer: 0
+  explanation: Bug fixes, features and performance work change behaviour; keep them separate.
+- question: Code has no tests and you must change it. What do you write first?
+  options:
+  - Characterisation tests that record what it currently does
+  - A complete specification of what it should do
+  answer: 0
+  explanation: They are a safety net that detects any change in behaviour.
+- question: The same three values (street, town, postcode) are passed together everywhere. What is the smell?
+  options:
+  - Data clumps
+  - Feature envy
+  answer: 0
+  explanation: Introduce a value object such as Address.
+- question: Why prefer the editor's automated rename to find and replace?
+  options:
+  - It understands the code and updates every real reference, and only those
+  - It is the only way to rename
+  answer: 0
+  explanation: Find and replace can change unrelated text and miss references.
+- question: What does the strangler fig pattern do?
+  options:
+  - Replaces a system gradually, one piece of functionality at a time
+  - Deletes unused code automatically
+  answer: 0
+  explanation: It avoids the risks of a big rewrite.
+- question: You notice odd behaviour while refactoring. What should you do?
+  options:
+  - Keep it during the refactoring, then fix it as a separate, deliberate change with its own test
+  - Fix it quietly in the same commit
+  answer: 0
+  explanation: Other code may depend on it, and mixed commits are hard to review and revert.

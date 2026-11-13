@@ -1,0 +1,366 @@
+---
+title: "Functional programming for working engineers"
+summary: "Pure functions, immutability, higher-order functions, composition, streams and LINQ, and a functional core with an imperative shell."
+prerequisites: [m-types]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will use the functional ideas that have become standard in TypeScript, Java and C#: pure functions, immutable data, higher-order functions such as `map`, `filter` and `reduce`, composition, and the "functional core, imperative shell" way of structuring a program. You do not need a functional language to benefit; these ideas make ordinary code easier to test, reason about and run concurrently.
+
+## Pure functions
+
+A **pure function**:
+
+1. returns the same output for the same inputs, every time, and
+2. has no **side effects**: it does not change anything outside itself (no changing its arguments, global variables, files, databases or the screen).
+
+```ts
+let discountPercent = 10;
+
+function impurePrice(pence: number): number {
+  return pence - (pence * discountPercent) / 100;
+}
+
+function purePrice(pence: number, percent: number): number {
+  return pence - (pence * percent) / 100;
+}
+
+console.log(impurePrice(500), purePrice(500, 10));
+discountPercent = 25;
+console.log(impurePrice(500), purePrice(500, 10));
+```
+
+It prints `450 450` and then `375 450`. The impure version's answer depends on a global that something else changed; the pure version depends only on its arguments. Pure functions are:
+
+- **easy to test**: no setup, no mocks, just inputs and expected outputs;
+- **easy to reason about**: you can understand a call by reading the function alone;
+- **safe to run in parallel**: nothing shared is changed (<Ref to="m-operating-systems" /> showed why shared state is hard);
+- **cacheable**: the same inputs always give the same result, so results can be memoised (<Ref to="m-recursion-dp" />).
+
+Programs must have side effects to be useful (saving orders, sending emails). The functional approach is not to avoid them but to **push them to the edges** and keep the logic in the middle pure.
+
+## Immutability
+
+**Immutable** data is never changed after it is created; to "change" it you make a new copy with the difference. This removes a whole family of bugs where one part of a program changes an object another part is still using (the shared default array in <Ref to="m-debugging" /> was one).
+
+```ts
+type Basket = { readonly items: readonly { product: string; quantity: number }[] };
+
+function addItem(basket: Basket, product: string): Basket {
+  return { items: [...basket.items, { product, quantity: 1 }] };
+}
+
+const empty: Basket = { items: [] };
+const one = addItem(empty, "rye loaf");
+const two = addItem(one, "croissant");
+console.log(empty.items.length, one.items.length, two.items.length);
+
+const frozen = Object.freeze({ name: "rye loaf", tags: ["bread"] });
+frozen.tags.push("rye");
+console.log(frozen.tags);
+```
+
+It prints `0 1 2`: every version still exists unchanged, which makes undo, history and comparisons ("has the basket changed?" is just `!==`) trivial. The second part is a warning: `Object.freeze` is **shallow**, so the array inside a frozen object can still be changed, and it prints `["bread", "rye"]`. TypeScript's `readonly` is a compile-time check only.
+
+In Java, **records** and `List.of` give immutable values; in C#, **records** with `with` expressions and the `System.Collections.Immutable` types. Copying sounds slow, but in practice it is rarely the bottleneck, and **persistent data structures** (used by Immutable.js, Clojure and Scala) share most of their structure between versions.
+
+## Functions as values
+
+In all three languages, functions are **first-class**: they can be stored in variables, passed as arguments and returned. A function that takes or returns a function is a **higher-order function**. A function that remembers variables from where it was created is a **closure**:
+
+```ts
+function percentOff(percent: number): (pence: number) => number {
+  return (pence) => Math.round(pence * (1 - percent / 100));
+}
+
+const tenOff = percentOff(10);
+const halfPrice = percentOff(50);
+console.log(tenOff(450), halfPrice(450), [450, 275, 180].map(tenOff));
+```
+
+It prints `405 225 [405, 248, 162]`. `percentOff` returns a new function that remembers its `percent`.
+
+## Map, filter, reduce
+
+Three higher-order functions replace most loops over collections:
+
+- **map** transforms every item: a list of orders into a list of totals.
+- **filter** keeps the items that pass a test.
+- **reduce** (or **fold**) combines all items into one value: a sum, a maximum, a map of groups.
+
+The same question in all three languages: what is the total value of paid orders over £20, in pence?
+
+```ts
+const orders = [
+  { id: 1, paid: true, pence: 5400 },
+  { id: 2, paid: false, pence: 9000 },
+  { id: 3, paid: true, pence: 1200 },
+  { id: 4, paid: true, pence: 2500 },
+];
+
+const total = orders
+  .filter((o) => o.paid && o.pence > 2000)
+  .map((o) => o.pence)
+  .reduce((sum, pence) => sum + pence, 0);
+
+console.log(total);
+```
+
+```java
+import java.util.List;
+
+public class Main {
+    record Order(int id, boolean paid, long pence) {}
+
+    public static void main(String[] args) {
+        List<Order> orders = List.of(
+            new Order(1, true, 5400), new Order(2, false, 9000),
+            new Order(3, true, 1200), new Order(4, true, 2500));
+
+        long total = orders.stream()
+            .filter(o -> o.paid() && o.pence() > 2000)
+            .mapToLong(Order::pence)
+            .sum();
+
+        System.out.println(total);
+    }
+}
+```
+
+```csharp
+var orders = new[]
+{
+    new Order(1, true, 5400), new Order(2, false, 9000),
+    new Order(3, true, 1200), new Order(4, true, 2500),
+};
+
+var total = orders
+    .Where(o => o.Paid && o.Pence > 2000)
+    .Select(o => o.Pence)
+    .Sum();
+
+Console.WriteLine(total);
+
+record Order(int Id, bool Paid, long Pence);
+```
+
+All three print `7900`. The pipeline reads as a description of *what* you want rather than *how* to loop, and each step is a small, testable function. The names differ: Java's **streams** use `filter`, `map` and `reduce`; C#'s **LINQ** (Language-Integrated Query) uses SQL-like names: `Where`, `Select` and `Aggregate`.
+
+A loop is still fine, and sometimes clearer, especially when you need to stop early or update several things at once. Do not write a three-line `reduce` that a reader has to decode when a `for` loop says it plainly.
+
+## Laziness
+
+Java streams and C# LINQ are **lazy**: nothing runs until a final operation (`sum`, `toList`, `ToList`, a `foreach`) asks for results, and then items flow through one at a time. That means you can work with very large, or even infinite, sequences and stop early. TypeScript arrays are **eager** (each step builds a whole new array), but **generators** give laziness:
+
+```ts
+function* naturals() {
+  let n = 1;
+  while (true) yield n++;
+}
+
+function* filterSeq<T>(items: Iterable<T>, keep: (x: T) => boolean) {
+  for (const x of items) if (keep(x)) yield x;
+}
+
+function take<T>(items: Iterable<T>, count: number): T[] {
+  const result: T[] = [];
+  for (const x of items) {
+    if (result.length === count) break;
+    result.push(x);
+  }
+  return result;
+}
+
+console.log(take(filterSeq(naturals(), (n) => n % 7 === 0), 5));
+```
+
+It prints `[7, 14, 21, 28, 35]`, from an infinite sequence, because each number is produced only when `take` asks for it.
+
+The trap with laziness is **deferred execution**: in C#, a LINQ query re-runs every time it is enumerated, so enumerating a query over a database twice runs two database queries. Call `ToList()` once when you need the results more than once.
+
+## Composition
+
+**Composition** builds a function from smaller ones, each feeding the next: `pipe(trim, toLowerCase, removeAccents)`. Functional languages have operators for it; in TypeScript a tiny helper does it:
+
+```ts
+const pipe = <T>(...fns: ((x: T) => T)[]) => (x: T): T => fns.reduce((acc, f) => f(acc), x);
+
+const normaliseEmail = pipe<string>(
+  (s) => s.trim(),
+  (s) => s.toLowerCase(),
+  (s) => s.replace(/\+[^@]*@/, "@"),
+);
+
+console.log(normaliseEmail("  Ama+Bakery@Example.COM "));
+```
+
+It prints `ama@example.com`. Each step is trivial to test alone, and the steps can be reordered or reused.
+
+## Functional core, imperative shell
+
+The most practical structural idea from functional programming: put the **decisions** in a **functional core** of pure functions, and keep the **side effects** (reading the database, the clock, sending email) in a thin **imperative shell** that gathers inputs, calls the core and acts on its result.
+
+```ts
+type Subscription = { email: string; renewsOn: string; reminded: boolean };
+
+// Functional core: pure, so it can be tested with plain values.
+function remindersDue(subs: readonly Subscription[], today: string): string[] {
+  return subs.filter((s) => !s.reminded && s.renewsOn <= addDays(today, 3)).map((s) => s.email);
+}
+
+function addDays(isoDate: string, days: number): string {
+  const d = new Date(isoDate + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+// Imperative shell: gathers inputs, calls the core, performs the effects.
+function runReminders(load: () => Subscription[], now: () => string, send: (to: string) => void) {
+  for (const email of remindersDue(load(), now())) send(email);
+}
+
+const sent: string[] = [];
+runReminders(
+  () => [
+    { email: "ama@example.com", renewsOn: "2026-11-15", reminded: false },
+    { email: "kofi@example.com", renewsOn: "2026-12-01", reminded: false },
+    { email: "esi@example.com", renewsOn: "2026-11-14", reminded: true },
+  ],
+  () => "2026-11-13",
+  (to) => sent.push(to),
+);
+console.log(sent);
+```
+
+It prints `["ama@example.com"]`. All the business rules (three days' notice, skip people already reminded) live in `remindersDue`, which needs no database, clock or email server to test. The shell is so thin it barely needs testing. Notice that even "today" is passed in: reading the clock is a side effect, and passing it in removes a common source of flaky tests.
+
+## Other functional ideas you will meet
+
+- **Option and Result types** (<Ref to="m-errors" />, <Ref to="m-types" />): returning absence and failure as values, with `map` and `flatMap` to chain steps that might fail.
+- **Recursion** instead of loops, common in functional languages (<Ref to="m-recursion-dp" />).
+- **Currying** and **partial application**: turning `price(percent, pence)` into `price(percent)(pence)`, as `percentOff` did.
+- **Algebraic data types**: the sum types (discriminated unions) and product types (records) of <Ref to="m-types" />.
+
+## Common mistakes
+
+- **Side effects hidden inside `map` or `filter`** callbacks (saving to a database inside a `map`): surprising and, with lazy streams, may not run at all, or may run twice.
+- **Mutating arguments** in a function that looks pure, such as sorting the caller's array in place with `sort`.
+- **Assuming `Object.freeze` or `readonly` is deep.**
+- **Enumerating a lazy query twice**, running expensive work (or a database query) twice.
+- **Unreadable chains**: a long `reduce` that a simple loop would express more clearly.
+- **Reading the clock, random numbers or configuration deep inside logic**, which makes it impure and hard to test.
+
+## Practice
+
+**1. (warm-up)** Is each function pure? (a) `(a, b) => a + b`; (b) `() => Date.now()`; (c) `(list) => list.sort()`; (d) `(list) => [...list].sort()`.
+
+<Solution>
+
+(a) Pure. (b) Impure: the result changes over time. (c) Impure: `sort` changes the caller's array in place. (d) Pure: it sorts a copy (assuming the default comparison, which is deterministic).
+
+</Solution>
+
+**2. (warm-up)** What does `[3, 1, 2].map((n) => n * 10).filter((n) => n > 15)` give?
+
+<Solution>
+
+`[30, 20]`: map gives `[30, 10, 20]`, and filter keeps the values over 15, in order.
+
+</Solution>
+
+**3. (standard)** Rewrite this loop as a `filter`/`map` pipeline that returns the names of out-of-stock products in alphabetical order, without changing `products`:
+
+```ts
+const products = [
+  { name: "sourdough", stock: 0 },
+  { name: "rye loaf", stock: 4 },
+  { name: "baguette", stock: 0 },
+];
+const names: string[] = [];
+for (const p of products) {
+  if (p.stock === 0) names.push(p.name);
+}
+names.sort();
+console.log(names);
+```
+
+<Solution>
+
+```ts
+const products = [
+  { name: "sourdough", stock: 0 },
+  { name: "rye loaf", stock: 4 },
+  { name: "baguette", stock: 0 },
+];
+
+const outOfStock = products
+  .filter((p) => p.stock === 0)
+  .map((p) => p.name)
+  .toSorted();
+
+console.log(outOfStock, products.length);
+```
+
+It prints **["baguette", "sourdough"] 3**. `toSorted` (ES2023) returns a sorted copy; `filter` and `map` already return new arrays, so `[...].sort()` would also be safe here.
+
+</Solution>
+
+**4. (standard)** Split this function into a pure core and a thin shell, and test the core with plain values:
+
+```ts
+function lateFeeJob(db: { overdue(): { id: number; daysLate: number }[]; charge(id: number, pence: number): void }) {
+  for (const loan of db.overdue()) {
+    const fee = Math.min(loan.daysLate * 20, 500);
+    if (fee > 0) db.charge(loan.id, fee);
+  }
+}
+```
+
+<Solution>
+
+```ts
+type Loan = { id: number; daysLate: number };
+
+function lateFees(loans: readonly Loan[]): { id: number; pence: number }[] {
+  return loans
+    .map((l) => ({ id: l.id, pence: Math.min(l.daysLate * 20, 500) }))
+    .filter((f) => f.pence > 0);
+}
+
+function lateFeeJob(db: { overdue(): Loan[]; charge(id: number, pence: number): void }) {
+  for (const fee of lateFees(db.overdue())) db.charge(fee.id, fee.pence);
+}
+
+console.log(lateFees([{ id: 1, daysLate: 3 }, { id: 2, daysLate: 0 }, { id: 3, daysLate: 40 }]));
+```
+
+It prints `[{ id: 1, pence: 60 }, { id: 3, pence: 500 }]`: the fee rules, including the £5 cap and skipping zero fees, are tested without a database.
+
+</Solution>
+
+**5. (stretch)** In C#, `var big = orders.Where(o => Expensive(o));` is followed by `big.Count()` and then `foreach (var o in big)`. How many times does `Expensive` run per order, and how do you fix it?
+
+<Solution>
+
+Twice per order: `big` is a lazy query, so `Count()` enumerates it once and the `foreach` enumerates it again, re-running the filter. Materialise it once with `var big = orders.Where(o => Expensive(o)).ToList();`, after which both uses read the list.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Pure functions** (same inputs, same output, no side effects) are easy to test, reason about, cache and run in parallel.
+- **Immutable** data removes shared-change bugs; `Object.freeze` and `readonly` are shallow; records help in Java and C#.
+- Functions are **first-class**; **higher-order functions** and **closures** let you build behaviour from small parts.
+- **map**, **filter** and **reduce** (Java streams, C# LINQ's `Select`, `Where`, `Aggregate`) replace most collection loops, but a plain loop is fine when clearer.
+- Java streams and LINQ are **lazy**; beware enumerating a query twice. Generators give laziness in TypeScript.
+- **Compose** small functions; structure programs as a **functional core** with an **imperative shell**, and pass in the clock and other effects.
+
+## Go deeper
+
+- [Functional Core, Imperative Shell](https://www.destroyallsoftware.com/screencasts/catalog/functional-core-imperative-shell), Gary Bernhardt. The screencast that named the idea.
+- [Stream API (Java)](https://docs.oracle.com/en/java/javase/25/docs/api/java.base/java/util/stream/package-summary.html), Oracle. How streams, laziness and terminal operations work.
+- [LINQ overview](https://learn.microsoft.com/en-us/dotnet/csharp/linq/), Microsoft. Query syntax, method syntax and deferred execution.
+- [Mostly adequate guide to functional programming](https://mostly-adequate.gitbook.io/mostly-adequate-guide/), Brian Lonsdorf. A free book on functional programming in JavaScript.

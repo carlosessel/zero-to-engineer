@@ -1,0 +1,217 @@
+---
+title: "Code review"
+summary: "Writing reviewable changes, what to look for, giving and receiving feedback, and keeping reviews fast."
+prerequisites: [m-refactoring]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will write changes that are easy to review, review other people's code for the things that matter, write comments that are clear and kind, receive feedback without taking it personally, and help a team keep reviews fast. Code review is where much of an engineering team's learning and quality control happens, and being good at it is one of the clearest marks of a senior engineer.
+
+## What code review is for
+
+In a **code review**, one or more engineers read a change before it is merged. On GitHub and GitLab, the change is a **pull request** (PR) or **merge request**; the reviewers comment on lines and finally **approve** it or **request changes**. Reviews do several jobs:
+
+- **Find defects** early, when they are cheapest to fix.
+- **Keep the design healthy**: catch changes that make the codebase harder to work with.
+- **Share knowledge**: at least two people understand every change, and juniors learn from seniors (and the other way round).
+- **Keep things consistent**: naming, structure and conventions.
+
+Google's engineering practices set the standard for approval well: approve a change once it **definitely improves the overall code health** of the system, even if it is not perfect. There is no perfect code, only better code; holding a change back for polish slows the whole team.
+
+## Writing a reviewable change
+
+Most of a review's quality is decided before the reviewer starts, by the author.
+
+- **Keep it small.** A change of a hundred or two hundred lines gets a careful review; a change of two thousand gets "looks good to me". Split large work into a series of small changes, each of which works on its own (refactoring first, then the feature, as in <Ref to="m-refactoring" />).
+- **Do one thing.** Do not mix a refactoring, a bug fix and a formatting change.
+- **Write a good description**: what changed, *why*, how you tested it, and anything the reviewer should look at closely. Link the issue. Add screenshots for visual changes.
+- **Review your own change first.** Read the diff as a reviewer would; you will catch leftover debug lines, missing tests and typos.
+- **Let the machines go first.** Formatting, linting, type checks and tests should run automatically in continuous integration, so humans spend their attention on what machines cannot judge.
+
+A description that helps a reviewer:
+
+```text
+Apply coupons case-insensitively and never below zero
+
+Customers typing "bread10" were told the code was invalid, because codes were
+compared case-sensitively. Coupons larger than the basket also produced
+negative totals.
+
+- Normalise codes to upper case when saving and when applying.
+- Clamp the discounted total at 0.
+- Added tests for lowercase codes, an expired coupon and a coupon larger
+  than the basket.
+
+Look closely at the migration in 0042: it upper-cases existing codes.
+Fixes #318
+```
+
+## What to look for
+
+Read the description first, then the tests (they show what the change is meant to do), then the code. Roughly in order of importance:
+
+1. **Correctness.** Does it do what the description says? What about empty inputs, nulls, very large values, concurrent requests, failures of the database or network, time zones? Are errors handled (<Ref to="m-errors" />)?
+2. **Design.** Does it belong here? Does it fit the existing architecture, or work around it? Is it more complex than it needs to be (<Ref to="m-design-principles" />)?
+3. **Tests.** Are the important cases tested, including failures? Would the tests fail if the code were broken?
+4. **Readability.** Can you understand it without the author explaining? Are names clear (<Ref to="m-clean-code" />)? If you had to ask, the code (or a comment) should answer the question for the next reader too.
+5. **Security.** Untrusted input validated; no secrets in code; queries parameterised; permission checks present. The security part of this course goes deeper.
+6. **Performance**, where it matters: queries in loops, unbounded lists, missing pagination.
+7. **Operability.** Will we know when it breaks? Useful logs and metrics, safe to deploy and to roll back, database migrations that work while the old version is still running.
+
+Here is a change to review:
+
+```ts
+type Coupon = { code: string; pence: number; expires: string };
+
+const coupons: Coupon[] = [{ code: "BREAD10", pence: 1000, expires: "2026-12-31" }];
+
+function applyCoupon(code: string, basketPence: number, today: string): number {
+  const coupon = coupons.find((c) => c.code == code)!;
+  if (coupon.expires < today) return basketPence;
+  return basketPence - coupon.pence;
+}
+
+console.log(applyCoupon("BREAD10", 4500, "2026-11-13"));
+console.log(applyCoupon("BREAD10", 700, "2026-11-13"));
+try {
+  console.log(applyCoupon("bread10", 4500, "2026-11-13"));
+} catch (e) {
+  console.log((e as Error).name);
+}
+```
+
+It prints `3500`, then `-300`, then `TypeError`. A careful reviewer finds all three problems before any customer does: a coupon larger than the basket gives a **negative total**; an unknown or lowercase code makes `find` return `undefined`, and the `!` (a **non-null assertion**, which tells the compiler "trust me") turns that into a crash instead of a clear "invalid code" result; and `==` should be `===`. The tests in the PR would also be worth checking: they evidently only tried a valid uppercase code on a large basket.
+
+## Writing review comments
+
+Review comments are read by a person who has put work into the change. Clear, kind comments get better results, faster:
+
+- **Comment on the code, not the person.** "This function can return a negative total when…" rather than "You forgot…".
+- **Be specific and explain why.** "This `!` will crash on an unknown code; returning a result type would let the caller show 'invalid code'" teaches; "this is wrong" does not.
+- **Ask questions when you are unsure.** "What happens if the coupon is larger than the basket?" Often the author has a reason; sometimes the question finds the bug.
+- **Mark how much each comment matters**, so the author knows what blocks approval. Many teams use prefixes, such as those from the Conventional Comments convention: `issue:` or `blocking:` for must-fix, `suggestion:` for improvements, `nit:` for small preferences, `question:` for questions, `praise:` for something done well.
+- **Offer a concrete alternative**, or use the platform's suggestion feature so the author can apply it with one click.
+- **Praise good work.** Pointing out a nicely designed abstraction or a thorough test is useful feedback too.
+- **Do not argue style** that a formatter or linter could settle; add the rule to the tool instead.
+- **Move long discussions to a conversation**: after two rounds of back-and-forth comments, talk (call or in person), then write the outcome in the PR.
+
+## Receiving feedback
+
+- **Assume good intent.** The reviewer is trying to improve the code, not judge you.
+- **Do not take it personally.** Comments are about the change; even senior engineers get many.
+- **Reply to every comment**: fixed, or why not. "Done" is enough for small things.
+- **Disagree with reasons**, and be willing to be persuaded. If you cannot agree, ask a third person or follow the team's conventions.
+- **If a reviewer misunderstood the code, improve the code** (a clearer name or a comment), not just the explanation in the PR: the next reader will misunderstand it too.
+
+## Keeping reviews fast
+
+Slow reviews cost more than they look: the author switches to other work, forgets the context, and changes pile up and conflict. Good teams treat reviews as a priority.
+
+- **Respond quickly.** Google's guidance is to respond within one business day at most; many teams aim for a few hours. You do not have to interrupt focused work, but review at your next natural break.
+- **Small changes** are reviewed faster and better (and authors who keep them small get faster reviews).
+- **Approve with comments** when the remaining points are small and you trust the author to address them.
+- **Use automation** for everything mechanical: formatting, linting, tests, security scanning, preview deployments.
+- **Pair programming** is a form of continuous review; changes written in a pair often need only a light review.
+
+## AI-assisted review
+
+Tools that use large language models (Claude, for example) can review a diff and point out likely bugs, missing tests and unclear code. They are useful as a first pass and can catch things humans skim over, but they can also be confidently wrong and do not know your team's context. Treat their comments like a junior reviewer's: check each one. The Claude course on this site covers using Claude Code for review.
+
+## Common mistakes
+
+- **Huge pull requests** that cannot be reviewed properly.
+- **Rubber-stamp approvals** ("LGTM") without reading.
+- **Blocking on personal preference**, or on perfection, instead of code health.
+- **Style debates** that a formatter should settle.
+- **Harsh or vague comments**, and comments about the person.
+- **Reviews left for days.**
+- **Authors who argue every comment**, or who fix the comment without fixing the confusing code.
+- **Reviewing only the lines shown** in the diff, and missing what the change breaks elsewhere (callers, configuration, migrations).
+
+## Practice
+
+**1. (warm-up)** By Google's standard, when should a reviewer approve a change?
+
+<Solution>
+
+When it definitely improves the overall health of the codebase, even if it is not perfect.
+
+</Solution>
+
+**2. (warm-up)** Rewrite this comment to be specific and kind: "This is wrong, why would you do it like this?"
+
+<Solution>
+
+For example: "issue: this loop runs a database query per order, so a page of 50 orders makes 50 queries. Could we load them with one query using `WHERE id IN (...)`? Happy to pair on it if useful."
+
+</Solution>
+
+**3. (warm-up)** Give three things that should be checked automatically rather than by a human reviewer.
+
+<Solution>
+
+Any three of: formatting, lint rules and style, type checking, tests passing, test coverage thresholds, dependency vulnerabilities and secret scanning, build success, bundle size.
+
+</Solution>
+
+**4. (standard)** Fix the coupon function from this chapter so that unknown codes, lowercase codes and coupons larger than the basket are all handled, and show the three cases.
+
+<Solution>
+
+```ts
+type Coupon = { code: string; pence: number; expires: string };
+type CouponResult = { ok: true; totalPence: number } | { ok: false; reason: "unknown-code" | "expired" };
+
+const coupons: Coupon[] = [{ code: "BREAD10", pence: 1000, expires: "2026-12-31" }];
+
+function applyCoupon(code: string, basketPence: number, today: string): CouponResult {
+  const coupon = coupons.find((c) => c.code === code.trim().toUpperCase());
+  if (!coupon) return { ok: false, reason: "unknown-code" };
+  if (coupon.expires < today) return { ok: false, reason: "expired" };
+  return { ok: true, totalPence: Math.max(0, basketPence - coupon.pence) };
+}
+
+console.log(applyCoupon("BREAD10", 4500, "2026-11-13"));
+console.log(applyCoupon("BREAD10", 700, "2026-11-13"));
+console.log(applyCoupon("bread10", 4500, "2026-11-13"));
+console.log(applyCoupon("CAKE5", 4500, "2026-11-13"));
+```
+
+It prints `{ ok: true, totalPence: 3500 }`, `{ ok: true, totalPence: 0 }`, `{ ok: true, totalPence: 3500 }` and `{ ok: false, reason: "unknown-code" }`. Expired and unknown codes are now results the checkout can show to the customer, rather than a silent full price or a crash.
+
+</Solution>
+
+**5. (standard)** A colleague opens a 3,000-line pull request that adds a feature, renames a module and reformats twenty files. What do you say?
+
+<Solution>
+
+Kindly ask for it to be split: the reformatting (ideally automated by a formatter, in its own PR), the rename (a pure refactoring, easy to review on its own), and the feature (which can then be reviewed carefully, possibly as a few smaller PRs). Explain that a 3,000-line mixed change cannot be reviewed properly and that small changes will be approved faster.
+
+</Solution>
+
+**6. (stretch)** Your team's reviews take three days on average. Suggest four changes.
+
+<Solution>
+
+Any four of: agree a target response time (for example same day) and make reviewing part of everyone's daily routine; keep PRs small and single-purpose; automate formatting, linting and tests so reviewers do not wait for or argue about them; label comments by severity so authors know what blocks; allow approving with minor comments; spread reviews across the team (code owners, rotation) rather than one bottleneck person; pair on complex changes; track review time so the team can see whether it improves.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Code review finds defects, protects design, shares knowledge and keeps code consistent. Approve changes that **improve code health**, not only perfect ones.
+- Authors: **small, single-purpose changes**, a description that explains **why** and how it was tested, a self-review first, and automation before humans.
+- Reviewers: check **correctness**, **design**, **tests**, **readability**, **security**, **performance** and **operability**, roughly in that order.
+- Comments: about the code, specific, with reasons; ask questions; label severity (`issue:`, `suggestion:`, `nit:`); praise good work.
+- Receive feedback with good intent; when a reviewer is confused, improve the code.
+- Keep reviews **fast**; use AI review as a first pass, checked by a person.
+
+## Go deeper
+
+- [Google engineering practices: code review](https://google.github.io/eng-practices/review/), Google. The reviewer's and the author's guides.
+- [Conventional Comments](https://conventionalcomments.org/), Paul Slaughter. Labels that make the weight of each comment clear.
+- [About pull request reviews](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/reviewing-changes-in-pull-requests/about-pull-request-reviews), GitHub. Comments, suggestions and approvals on GitHub.
+- [How to Make Your Code Reviewer Fall in Love with You](https://mtlynch.io/code-review-love/), Michael Lynch. Practical advice for authors.

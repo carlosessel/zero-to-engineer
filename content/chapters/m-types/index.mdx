@@ -1,0 +1,330 @@
+---
+title: "Type systems and modelling with types"
+summary: "Static and dynamic, structural and nominal typing, generics, null safety, and making illegal states unrepresentable."
+prerequisites: [m-oop]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will understand how type systems differ between TypeScript, Java and C#, and, more importantly, how to use types as a design tool: to make bugs impossible rather than merely unlikely. Good types are documentation the compiler checks, and the best engineers lean on them to catch whole categories of mistakes before the code runs.
+
+## What a type system does
+
+A **type** describes a set of values and the operations allowed on them: `number`, `string`, `Order`, `List<Product>`. A **type system** is the set of rules a language uses to check that values are used consistently. Type systems differ along a few axes:
+
+- **Static or dynamic.** **Static** typing checks types before the program runs (at compile time): Java, C#, TypeScript, Go, Rust. **Dynamic** typing checks them while it runs: JavaScript, Python, Ruby. Static checking catches mistakes earlier and powers editor features such as autocompletion and safe renaming; dynamic typing is quicker to write for small programs.
+- **Strong or weak.** These words are used loosely, but usually mean how much a language converts values implicitly. JavaScript's `"5" * 2` is `10` and `"5" + 2` is `"52"`: weak. Python raises an error for `"5" + 2`: stronger.
+- **Inferred or declared.** Modern languages **infer** many types from the code (`const total = 450` is a `number`; Java's `var` and C#'s `var` do the same for local variables), so you write types mainly at boundaries such as function parameters.
+
+TypeScript is a special case: its types exist only at compile time and are **erased** when it becomes JavaScript, so they cannot be checked at run time. Data from outside (JSON from an API) must be validated at the edge (<Ref to="m-errors" />), because a type annotation on it is only a promise.
+
+## Structural and nominal typing
+
+**Nominal** typing (Java, C#): a value has a type because it was declared with that name. A class is a `Notifier` only if it says `implements Notifier`.
+
+**Structural** typing (TypeScript, Go's interfaces): a value has a type if it has the right **shape**. Anything with the right properties fits:
+
+```ts
+interface Point {
+  x: number;
+  y: number;
+}
+
+function distanceFromOrigin(p: Point): number {
+  return Math.hypot(p.x, p.y);
+}
+
+const reading = { x: 3, y: 4, label: "sensor A" };
+console.log(distanceFromOrigin(reading));
+
+type CustomerId = string;
+type OrderId = string;
+const customer: CustomerId = "c-17";
+const order: OrderId = customer;
+console.log(order);
+```
+
+It prints `5` and `c-17`. `reading` was never declared a `Point` but has the right shape, which is convenient. The last lines show the cost: `CustomerId` and `OrderId` are both just `string`, so a customer id can be passed where an order id is expected without complaint. To get nominal-style safety in TypeScript, add a **brand**, as <Ref to="m-errors" /> did with `Quantity`:
+
+```ts
+type CustomerId = string & { readonly __brand: "CustomerId" };
+type OrderId = string & { readonly __brand: "OrderId" };
+
+const customerId = "c-17" as CustomerId;
+const orderId: OrderId = customerId;
+```
+
+The compiler now rejects the last line (error TS2322: the two types are not assignable to each other).
+
+## Generics
+
+**Generics** let one piece of code work with many types while staying type-safe: a `List<Product>` holds only products, and getting an item gives you a `Product`, not an `Object` you have to cast.
+
+```ts
+function maxBy<T>(items: readonly T[], score: (item: T) => number): T | undefined {
+  let best: T | undefined;
+  for (const item of items) {
+    if (best === undefined || score(item) > score(best)) best = item;
+  }
+  return best;
+}
+
+const loaves = [
+  { name: "rye", pence: 450 },
+  { name: "sourdough", pence: 520 },
+  { name: "white", pence: 180 },
+];
+console.log(maxBy(loaves, (l) => l.pence)?.name);
+console.log(maxBy(["fig", "banana", "kiwi"], (w) => w.length));
+console.log(maxBy([], (n: number) => n));
+```
+
+It prints `sourdough`, `banana` and `undefined`. `T` is a **type parameter**: TypeScript infers it as the loaf type in the first call and `string` in the second, so `.name` is checked against the real type. The return type `T | undefined` says honestly that an empty list has no maximum.
+
+Java and C# generics look the same but differ underneath. Java **erases** generic types at run time (a `List<String>` is just a `List` once compiled), which is why you cannot write `new T()` in Java; C# keeps them (**reified** generics), so `typeof(T)` works at run time.
+
+### Variance
+
+**Variance** answers: if a `Croissant` is a `Pastry`, is a list of croissants a list of pastries? For a **read-only** list, yes (that is **covariance**). For a list you can **add** to, no: someone could add a `Muffin` to what is really a list of croissants. Java arrays got this wrong in 1996, and it is still visible:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        Object[] things = new String[2];
+        things[0] = "rye loaf";
+        try {
+            things[1] = 42;
+        } catch (ArrayStoreException e) {
+            System.out.println("ArrayStoreException: " + e.getMessage());
+        }
+    }
+}
+```
+
+It compiles, then fails at run time with `ArrayStoreException: java.lang.Integer`. Generics fixed this: `List<Object> things = new ArrayList<String>()` does not compile. Java expresses variance with wildcards (`List<? extends Pastry>` to read, `List<? super Croissant>` to add), and C# with `out` and `in` on interfaces (`IEnumerable<out T>` is covariant). TypeScript's checks here are deliberately loose (arrays are treated as covariant even when written to), which is one reason to prefer `readonly` arrays.
+
+## Null safety
+
+Tony Hoare, who added the null reference to ALGOL in 1965, later called it his "billion-dollar mistake": any reference might be null, and forgetting to check crashes the program. Modern type systems make **nullability** part of the type:
+
+- **TypeScript** with `strictNullChecks` (part of `strict`): `string` never holds `null`; `string | null` might, and you must check before use.
+- **C#** with **nullable reference types** (on by default in new projects since .NET 6): `string` should not be null and `string?` may be; the compiler warns when you might dereference a null.
+- **Java** has no null-safe types in the language; `Optional<T>` is the convention for return values that may be missing, and annotations such as `@Nullable` let tools check the rest.
+
+```ts
+function findPrice(prices: Map<string, number>, product: string): number | undefined {
+  return prices.get(product);
+}
+
+const prices = new Map([["rye loaf", 450]]);
+const price = findPrice(prices, "croissant");
+console.log(price.toFixed(2));
+```
+
+The compiler rejects the last line (error TS18048: `price` is possibly `undefined`), and the fix is to handle the missing case, for example `console.log(price === undefined ? "no price" : price.toFixed(2))`. The bug from the debugging chapter (<Ref to="m-debugging" />) would have been caught before the program ran.
+
+## Making illegal states unrepresentable
+
+The most powerful use of types is to design them so that **invalid combinations cannot be expressed at all**. A common example is the state of a request:
+
+```ts
+type LooseState = {
+  loading: boolean;
+  data?: string[];
+  error?: string;
+};
+```
+
+This allows `loading: true` with an error *and* data at the same time, which makes no sense, and every piece of code that reads it must guess which fields to trust. A **discriminated union** (a **sum type**: exactly one of several shapes, told apart by a tag) allows only the real states:
+
+```ts
+type RequestState =
+  | { status: "loading" }
+  | { status: "loaded"; data: string[] }
+  | { status: "failed"; error: string };
+
+function describe(state: RequestState): string {
+  switch (state.status) {
+    case "loading":
+      return "Loading…";
+    case "loaded":
+      return `${state.data.length} products`;
+    case "failed":
+      return `Could not load: ${state.error}`;
+    default: {
+      const unreachable: never = state;
+      return unreachable;
+    }
+  }
+}
+
+console.log(describe({ status: "loading" }));
+console.log(describe({ status: "loaded", data: ["rye", "white"] }));
+console.log(describe({ status: "failed", error: "timeout" }));
+```
+
+It prints `Loading…`, `2 products` and `Could not load: timeout`. Inside each `case`, TypeScript **narrows** the type, so `state.data` exists only where it is loaded. The `default` branch assigns to `never`, a type with no values: if someone later adds a `{ status: "cancelled" }` state and forgets to handle it, that line becomes a compile error. This is an **exhaustiveness check**.
+
+Java (21 and later; sealed types arrived in 17) does the same with **sealed interfaces**, **records** and pattern-matching `switch`, which must cover every permitted case:
+
+```java
+public class Main {
+    sealed interface Payment permits Card, Voucher, Cash {}
+    record Card(String last4) implements Payment {}
+    record Voucher(String code, long balancePence) implements Payment {}
+    record Cash() implements Payment {}
+
+    static String describe(Payment p) {
+        return switch (p) {
+            case Card c -> "card ending " + c.last4();
+            case Voucher v -> "voucher " + v.code() + " with " + v.balancePence() + "p left";
+            case Cash c -> "cash";
+        };
+    }
+
+    public static void main(String[] args) {
+        System.out.println(describe(new Card("4242")));
+        System.out.println(describe(new Voucher("BREAD10", 750)));
+        System.out.println(describe(new Cash()));
+    }
+}
+```
+
+It prints `card ending 4242`, `voucher BREAD10 with 750p left` and `cash`. The `switch` needs no `default`: the compiler knows the three permitted types and refuses to compile if one is missing. C# has records and switch expressions too, and warns (rather than erroring) when a switch is not exhaustive.
+
+Polymorphism (<Ref to="m-oop" />) and sum types are two answers to the same problem. Polymorphism makes it easy to add **new types** (one new class); sum types make it easy to add **new operations** (one new function with a switch that the compiler checks). Choose the one that matches how your code is likely to change.
+
+## Other ways to use types well
+
+- **Avoid `any`** in TypeScript: it turns off checking. Use **`unknown`** for values of unknown type, which forces a check before use.
+- **Small domain types** (`Email`, `Money`, `OrderId`) instead of bare strings and numbers prevent mix-ups (<Ref to="m-oop" />).
+- **`readonly`** (TypeScript, C#) and `final` (Java) stop accidental changes.
+- **Use the type in the signature to tell the truth**: `T | undefined` if it can be missing, a result type if it can fail.
+
+## Common mistakes
+
+- **Trusting a type annotation on external data** in TypeScript without validating it.
+- **Using `any`** to silence the compiler.
+- **Boolean flags and optional fields** that allow impossible combinations, instead of a discriminated union.
+- **Bare strings for ids**, so different kinds of id get mixed up.
+- **Ignoring nullability warnings** or turning `strict` off.
+- **Casting** (`as`, `(Type)`) to force a type, which hides real mismatches.
+
+## Practice
+
+**1. (warm-up)** Is each language statically or dynamically typed, and is its typing structural or nominal for classes and interfaces? TypeScript; Java; C#.
+
+<Solution>
+
+All three are statically typed. TypeScript is structural (shape matters); Java and C# are nominal (declared names matter).
+
+</Solution>
+
+**2. (warm-up)** What is the difference between `any` and `unknown` in TypeScript?
+
+<Solution>
+
+Both can hold any value. `any` switches off type checking, so any operation compiles; `unknown` allows nothing until you narrow it (with `typeof`, `instanceof` or validation), so mistakes are caught.
+
+</Solution>
+
+**3. (warm-up)** Why can Java not create `new T()` inside a generic method, when C# can (with a constraint)?
+
+<Solution>
+
+Java erases generic type parameters at compile time, so at run time the method does not know what `T` is. C# keeps generic types at run time (reified generics), so with the `new()` constraint it can create a `T`.
+
+</Solution>
+
+**4. (standard)** Replace this type with one that cannot represent impossible states, and write a function that describes it:
+
+```ts
+type Delivery = {
+  dispatched: boolean;
+  delivered: boolean;
+  trackingNumber?: string;
+  deliveredAt?: string;
+};
+```
+
+<Solution>
+
+```ts
+type Delivery =
+  | { status: "preparing" }
+  | { status: "dispatched"; trackingNumber: string }
+  | { status: "delivered"; trackingNumber: string; deliveredAt: string };
+
+function describe(d: Delivery): string {
+  switch (d.status) {
+    case "preparing":
+      return "Being prepared";
+    case "dispatched":
+      return `On its way (${d.trackingNumber})`;
+    case "delivered":
+      return `Delivered at ${d.deliveredAt}`;
+  }
+}
+
+console.log(describe({ status: "dispatched", trackingNumber: "RB123" }));
+console.log(describe({ status: "delivered", trackingNumber: "RB123", deliveredAt: "14:05" }));
+```
+
+It prints **On its way (RB123)** and **Delivered at 14:05**. "Delivered but not dispatched" and "dispatched without a tracking number" can no longer be written. Because the function's return type is `string` and every case returns, TypeScript also reports an error if a new status is added and not handled.
+
+</Solution>
+
+**5. (standard)** Write a generic function `groupBy` that groups a list into a `Map` by a key function, and use it to group orders by customer.
+
+<Solution>
+
+```ts
+function groupBy<T, K>(items: readonly T[], key: (item: T) => K): Map<K, T[]> {
+  const groups = new Map<K, T[]>();
+  for (const item of items) {
+    const k = key(item);
+    const group = groups.get(k);
+    if (group) group.push(item);
+    else groups.set(k, [item]);
+  }
+  return groups;
+}
+
+const orders = [
+  { id: 1, customer: "c-17", pence: 900 },
+  { id: 2, customer: "c-4", pence: 450 },
+  { id: 3, customer: "c-17", pence: 275 },
+];
+const byCustomer = groupBy(orders, (o) => o.customer);
+console.log([...byCustomer].map(([c, os]) => `${c}: ${os.map((o) => o.id).join(",")}`));
+```
+
+It prints **["c-17: 1,3", "c-4: 2"]**. `T` and `K` are inferred, so the result is a `Map<string, order[]>` with full checking.
+
+</Solution>
+
+**6. (stretch)** Explain why a read-only list of croissants can safely be treated as a read-only list of pastries, but a mutable one cannot. How does C# express the safe case?
+
+<Solution>
+
+Reading a croissant from the list gives you something that is a pastry, so reading is always safe (covariance). Adding is not: code that thinks it has a list of pastries could add a muffin to what is really a list of croissants, breaking it. C# marks the type parameter of read-only interfaces with `out` (`IEnumerable<out T>`, `IReadOnlyList<out T>`), so an `IEnumerable<Croissant>` can be used as an `IEnumerable<Pastry>`, while `List<T>` (which allows adding) is invariant.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Static** typing checks before running; **dynamic** while running. TypeScript's types are **erased**, so validate external data.
+- **Nominal** (Java, C#) types match by name; **structural** (TypeScript) by shape. Use **branded types** for nominal-style ids in TypeScript.
+- **Generics** keep code reusable and type-safe; Java erases them, C# keeps them. **Variance** says when a container of subtypes can stand for a container of supertypes: safe for reading, not writing.
+- Make **nullability** part of the type: `strictNullChecks`, C# nullable reference types, Java's `Optional`.
+- **Make illegal states unrepresentable** with **discriminated unions** (TypeScript) or **sealed interfaces and records** (Java), and use **exhaustiveness checks**.
+- Avoid `any` and casts; use `unknown`, `readonly` and small domain types.
+
+## Go deeper
+
+- [TypeScript handbook: narrowing](https://www.typescriptlang.org/docs/handbook/2/narrowing.html), the TypeScript team. Discriminated unions, exhaustiveness and `never`.
+- [TypeScript handbook: generics](https://www.typescriptlang.org/docs/handbook/2/generics.html), the TypeScript team. Type parameters and constraints.
+- [Nullable reference types (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/nullable-references), Microsoft. How C# tracks nulls at compile time.
+- [Pattern matching for switch (JEP 441)](https://openjdk.org/jeps/441), OpenJDK. Sealed types and exhaustive switches in Java.

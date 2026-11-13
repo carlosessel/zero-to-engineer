@@ -1,0 +1,36 @@
+- question: Which combination should a good design aim for?
+  options:
+  - High cohesion, low coupling
+  - Low cohesion, high coupling
+  answer: 0
+  explanation: Things that change together live together; separate things connect loosely.
+- question: Two validation functions are identical today but follow rules owned by different teams. Should you merge them?
+  options:
+  - Yes, DRY says never repeat code
+  - No, it is coincidental duplication of different knowledge
+  answer: 1
+  explanation: DRY is about knowledge; merging would couple unrelated rules.
+- question: What does YAGNI warn against?
+  options:
+  - Building features and flexibility before they are needed
+  - Writing tests
+  answer: 0
+  explanation: Speculative code costs now and is often wrong later.
+- question: Which is a Law of Demeter violation?
+  options:
+  - order.customer().address().postcode() repeated across many callers
+  - order.total()
+  answer: 0
+  explanation: The caller depends on the whole chain of other objects' structure.
+- question: Why prefer composition to inheritance for adding logging and retries to notifiers?
+  options:
+  - Wrappers combine with any notifier, instead of a subclass per combination
+  - Inheritance is not allowed in TypeScript
+  answer: 0
+  explanation: That is the decorator idea.
+- question: A getUser function creates a user when none exists. Which principle does it break?
+  options:
+  - Least astonishment
+  - Separation of concerns only
+  answer: 0
+  explanation: The name hides a write; getOrCreateUser would be honest.

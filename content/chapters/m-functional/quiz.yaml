@@ -1,0 +1,36 @@
+- question: Which makes a function pure?
+  options:
+  - Same output for the same inputs, and no side effects
+  - It is short
+  answer: 0
+  explanation: Purity makes testing, caching and parallel running easy.
+- question: What does Object.freeze not protect?
+  options:
+  - Objects and arrays nested inside the frozen object
+  - The object's own top-level properties
+  answer: 0
+  explanation: It is shallow.
+- question: What is the LINQ name for filter?
+  options:
+  - Select
+  - Where
+  answer: 1
+  explanation: Select is map; Aggregate is reduce.
+- question: Why can enumerating a LINQ query twice be expensive?
+  options:
+  - The query is lazy and runs again each time it is enumerated
+  - LINQ copies the whole database
+  answer: 0
+  explanation: Call ToList once if you need the results more than once.
+- question: In "functional core, imperative shell", where do the business decisions live?
+  options:
+  - In pure functions in the core
+  - In the shell, next to the database calls
+  answer: 0
+  explanation: The shell only gathers inputs and performs effects.
+- question: Why pass "today" into a function instead of reading the clock inside it?
+  options:
+  - Reading the clock is a side effect; passing it in keeps the function pure and testable
+  - Clocks are slow
+  answer: 0
+  explanation: It also removes a common source of flaky tests.

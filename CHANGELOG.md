@@ -4,6 +4,22 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 3 (Writing excellent code)
+
+Added
+- Ten chapters: clean code; object-oriented programming in depth; handling errors well; debugging systematically; the SOLID principles; design principles beyond SOLID (DRY, KISS, YAGNI, composition, coupling and cohesion, Demeter); type systems and modelling with types; functional programming; refactoring safely; and code review. About 19,000 words, 64 practice problems, 60 quiz questions, 39 checked resources.
+- Every example runs with its output checked: 65 TypeScript, 6 Java, 4 C# and 1 JavaScript example (a real Node stack trace, checked frame by frame). Two TypeScript blocks are checked for the exact type error they are meant to show (TS2322 for mixed-up branded ids, TS18048 for a possibly undefined value).
+- The dependency injection example in C# uses a `#:package` line and runs only when network checks are on.
+- About 60 glossary terms. "Variance", "Assertion" and "Type" now give the meaning for each course that uses them.
+
+Fixed (found by running the examples)
+- The SMS example in the composition section cut its text at a different point from the one the prose showed; the prose now matches the output.
+- The clean code chapter's money practice prints 3.8000000000000007, not 3.8; the answer now says so and explains why.
+- Links to chapters that do not exist yet (part 4's patterns and domain-driven design, part 5's static analysis) are plain text.
+
+Not verified
+- No person has reviewed these chapters. Problem counts are below the standard's 30 to 50 for foundational chapters (5 to 8 each).
+
 ### 2026-11-13: Software Engineering Mastery, part 2 (Data structures and algorithms)
 
 Added

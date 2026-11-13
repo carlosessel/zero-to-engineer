@@ -1,0 +1,326 @@
+---
+title: "Handling errors well"
+summary: "Exceptions versus result values, failing fast, validation at the edges, and never hiding failures."
+prerequisites: [m-clean-code]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will handle errors the way reliable systems need: telling expected failures from bugs, choosing between exceptions and result values, failing fast and loudly, validating input once at the edge of the system, cleaning up properly, and never hiding a failure. A large share of real production incidents start with an error that was caught and ignored, or reported with too little information to diagnose.
+
+## Three kinds of failure
+
+Not all errors are alike, and the right handling depends on which kind you have:
+
+- **Expected failures** are part of normal operation: a user types an invalid email, a product is out of stock, a record is not found, a payment is declined. The program should handle them and tell the user something useful.
+- **Bugs** (programmer errors) are mistakes in the code: reading a property of `null`, an index out of range, a broken invariant. The program cannot sensibly recover; the right response is to stop that operation, log everything, and fix the code.
+- **System failures** come from outside: the network drops, the database times out, the disk fills up. Some are worth retrying (a timeout); some are not (a full disk).
+
+A common mistake is treating them all the same: catching every error everywhere and carrying on, which turns bugs into silent data corruption.
+
+## Exceptions
+
+An **exception** is an object that represents an error. **Throwing** it stops the current function immediately and passes the exception up the **call stack**, function by function (**unwinding**), until some code **catches** it. If nothing catches it, the program (or the request, in a server) fails with the exception's message and **stack trace**: the list of calls that led to it.
+
+```ts
+function parseQuantity(text: string): number {
+  const n = Number(text);
+  if (!Number.isInteger(n) || n < 1) {
+    throw new RangeError(`Quantity must be a whole number of at least 1, not "${text}"`);
+  }
+  return n;
+}
+
+for (const input of ["3", "two", "0"]) {
+  try {
+    console.log("ok", parseQuantity(input));
+  } catch (e) {
+    console.log("rejected:", (e as Error).message);
+  } finally {
+    console.log("checked", input);
+  }
+}
+```
+
+It prints `ok 3`, `checked 3`, then `rejected: Quantity must be a whole number of at least 1, not "two"`, `checked two`, and the same pair for `"0"`. The **finally** block runs whether or not an exception was thrown, which makes it the place for cleanup.
+
+### How the languages differ
+
+- **Java** has **checked exceptions**: a method must declare them (`throws IOException`) and callers must catch or declare them too; the compiler enforces it. **Unchecked exceptions** (subclasses of `RuntimeException`, such as `IllegalArgumentException` and `NullPointerException`) need no declaration. Checked exceptions make failures visible in signatures but tend to spread through every layer; modern Java code often wraps them in unchecked exceptions at a boundary.
+- **C#** has no checked exceptions: any method may throw anything, and documentation is the only signal. It adds **exception filters** (`catch (HttpRequestException e) when (e.StatusCode == HttpStatusCode.NotFound)`).
+- **TypeScript and JavaScript** let you throw any value, not only `Error` objects, so a caught value has type `unknown` and must be checked before use. Always throw `Error` objects (or subclasses), which carry a stack trace.
+
+### Cleaning up: try-with-resources and using
+
+Files, network connections, database connections and locks must be released even when something fails. Java's **try-with-resources** and C#'s **using** close them automatically, in reverse order of opening, even when an exception is thrown:
+
+```java
+public class Main {
+    static class Resource implements AutoCloseable {
+        private final String name;
+        Resource(String name) {
+            this.name = name;
+            System.out.println("open " + name);
+        }
+        @Override
+        public void close() {
+            System.out.println("close " + name);
+        }
+    }
+
+    public static void main(String[] args) {
+        try (Resource db = new Resource("database"); Resource file = new Resource("file")) {
+            System.out.println("working");
+            throw new IllegalStateException("disk full");
+        } catch (IllegalStateException e) {
+            System.out.println("caught: " + e.getMessage());
+        }
+    }
+}
+```
+
+It prints `open database`, `open file`, `working`, `close file`, `close database` and then `caught: disk full`: both resources are closed, in reverse order, *before* the catch block runs. C# does the same with `using var file = File.OpenRead(path);`, which disposes the file at the end of the enclosing block, and TypeScript 5.2 added `using` for the same purpose.
+
+## Result values
+
+The alternative to throwing is to **return** the failure as a value. A **result type** is either a success holding the value or a failure holding the error, and the type system makes the caller handle both. Rust (`Result`), Go (multiple return values) and functional languages work this way; in TypeScript a discriminated union does it (<Ref to="m-types" />):
+
+```ts
+type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
+
+type SignupError = "email-missing" | "email-invalid" | "email-taken";
+
+const taken = new Set(["ama@example.com"]);
+
+function checkEmail(raw: string): Result<string, SignupError> {
+  const email = raw.trim().toLowerCase();
+  if (email === "") return { ok: false, error: "email-missing" };
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return { ok: false, error: "email-invalid" };
+  if (taken.has(email)) return { ok: false, error: "email-taken" };
+  return { ok: true, value: email };
+}
+
+for (const raw of ["  Kofi@Example.com ", "", "not-an-email", "AMA@example.com"]) {
+  const result = checkEmail(raw);
+  console.log(result.ok ? `accepted ${result.value}` : `refused: ${result.error}`);
+}
+```
+
+It prints `accepted kofi@example.com`, `refused: email-missing`, `refused: email-invalid` and `refused: email-taken`. The caller cannot use `result.value` without first checking `result.ok`: the compiler will not allow it.
+
+### Which to use
+
+| | Exceptions | Result values |
+|---|---|---|
+| Good for | bugs and unexpected system failures | expected failures the caller must handle |
+| Visible in the signature | only Java's checked exceptions | always |
+| Cost of ignoring it | the program stops (loud) | the compiler complains (in typed languages) |
+| Passing it up many layers | automatic | each layer must pass it on |
+
+A sensible rule in TypeScript, Java and C#: use result values (or a clear return such as `Optional`) for **expected business outcomes** the caller must decide about, and exceptions for **bugs and failures** that most callers cannot handle and should pass up to a single place that logs them and responds (an error-handling middleware in a web server, for example). Do not use exceptions for normal control flow, such as ending a loop.
+
+## Fail fast
+
+**Failing fast** means detecting a problem as early as possible and stopping, rather than carrying on with bad data. A function that receives a negative quantity should throw immediately, not quietly treat it as zero and let a wrong invoice be sent three steps later, where the cause is much harder to find.
+
+- Check arguments at the start of public functions (**guard clauses**, <Ref to="m-clean-code" />).
+- Use **assertions** for things that can only be false if there is a bug.
+- Crash a process that is in a state it does not understand, and let the supervisor (a container orchestrator, for example) restart it, rather than continuing with corrupted state.
+
+Failing fast is not the same as failing *often*: it is about making failures visible near their cause.
+
+## Validate at the edges
+
+Data from outside the program (HTTP requests, files, message queues, environment variables, other services) can be anything. **Validate it once, at the edge**, where it enters, and turn it into a well-typed value; inside the system, code can then trust its inputs instead of checking everywhere. This idea is often summed up as **parse, don't validate**: rather than checking a string and passing the same string on, turn it into a type (`Email`, `Quantity`) that can only hold valid values.
+
+```ts
+type Quantity = number & { readonly brand: "Quantity" };
+
+function toQuantity(raw: unknown): Quantity {
+  if (typeof raw !== "number" || !Number.isInteger(raw) || raw < 1 || raw > 99) {
+    throw new RangeError(`Invalid quantity: ${JSON.stringify(raw)}`);
+  }
+  return raw as Quantity;
+}
+
+function lineTotal(pricePence: number, quantity: Quantity): number {
+  return pricePence * quantity;
+}
+
+const body: unknown = JSON.parse('{"product": "rye loaf", "quantity": 3}');
+const quantity = toQuantity((body as { quantity: unknown }).quantity);
+console.log(lineTotal(450, quantity));
+try {
+  toQuantity("3");
+} catch (e) {
+  console.log((e as Error).message);
+}
+```
+
+It prints `1350` and then `Invalid quantity: "3"` (a string is not a number). `lineTotal` cannot be called with an unchecked number, because only `toQuantity` produces a `Quantity`. Libraries such as Zod (TypeScript), Bean Validation (Java) and FluentValidation or data annotations (C#) do this for whole request bodies.
+
+## Never hide a failure
+
+The worst error handling is the empty catch block:
+
+```ts
+try {
+  chargeCard(order);
+} catch (e) {
+  // ignore
+}
+```
+
+The card charge failed, nobody knows, and the order ships unpaid. Rules that prevent this:
+
+- **Catch only where you can do something useful**: recover, retry, translate the error for the user, or add context. Otherwise let it propagate.
+- **Never swallow an exception silently.** If you must continue, log it with enough detail to diagnose.
+- **Catch specific exceptions**, not every exception. `catch (Exception e)` also catches bugs you did not anticipate.
+- **Add context when you rethrow**, and keep the original as the **cause**, so the stack trace shows both what went wrong and where:
+
+```ts
+function loadConfig(text: string): { port: number } {
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error("Could not read config.json", { cause: e });
+  }
+}
+
+try {
+  loadConfig("{ port: 8080 }");
+} catch (e) {
+  const err = e as Error;
+  console.log(err.message);
+  console.log("cause:", (err.cause as Error).name);
+}
+```
+
+It prints `Could not read config.json` and `cause: SyntaxError`. Java does the same with `new RuntimeException("Could not read config", e)` and C# with `new InvalidOperationException("Could not read config", e)`, which sets `InnerException`. Log the whole chain once, at the top, rather than logging and rethrowing at every layer (which fills the logs with the same error many times).
+
+## Messages for users and for engineers
+
+An error has two audiences. The **user** needs a short, polite message that says what to do next ("That email is already registered. Sign in instead?") and never exposes internals such as stack traces, SQL or file paths, which help attackers. The **engineer** needs everything: the message, the stack trace, the cause chain, and the context (which order, which request id). Log the detail; show the user the summary. The observability chapter later in this course covers structured logging.
+
+## Common mistakes
+
+- **Empty catch blocks** and `catch (Exception)` that hide failures.
+- **Logging and rethrowing at every layer**, so one failure appears ten times.
+- **Losing the cause** by throwing a new exception without passing the original.
+- **Returning null or -1** for failure, which callers forget to check. Use a result type, `Optional`, or an exception.
+- **Exceptions for normal control flow.**
+- **Validating the same input in every function** instead of once at the edge.
+- **Showing stack traces or database errors to users.**
+- **Forgetting cleanup** when an error happens: use `finally`, try-with-resources or `using`.
+
+## Practice
+
+**1. (warm-up)** Classify each as an expected failure, a bug or a system failure: a declined card; an `IndexOutOfBoundsException`; a database timeout; a user typing letters into a phone number field.
+
+<Solution>
+
+Declined card: expected failure. Index out of bounds: bug. Database timeout: system failure (worth retrying). Letters in a phone number: expected failure (validation).
+
+</Solution>
+
+**2. (warm-up)** What is wrong with this code, and what should it do instead?
+
+```ts
+function findUser(id: string) {
+  try {
+    return database.get(id);
+  } catch (e) {
+    return null;
+  }
+}
+```
+
+<Solution>
+
+It turns every failure (the database being down, a bug) into "user not found". Callers will tell users their account does not exist when the database is unreachable. It should let unexpected exceptions propagate, and return `null` (or a result) only for the genuine "no such user" case, which the database call should report distinctly.
+
+</Solution>
+
+**3. (warm-up)** In what order does Java close resources opened in one try-with-resources statement, and when does the catch block run?
+
+<Solution>
+
+In reverse order of opening, and before the catch block runs.
+
+</Solution>
+
+**4. (standard)** Rewrite this to use a result type instead of exceptions, and print a message for each case:
+
+```ts
+function withdraw(balance: number, amount: number): number {
+  if (amount <= 0) throw new Error("amount must be positive");
+  if (amount > balance) throw new Error("insufficient funds");
+  return balance - amount;
+}
+
+console.log(withdraw(5000, 1250));
+```
+
+<Solution>
+
+```ts
+type Result<T, E> = { ok: true; value: T } | { ok: false; error: E };
+
+function withdraw(balance: number, amount: number): Result<number, "not-positive" | "insufficient-funds"> {
+  if (amount <= 0) return { ok: false, error: "not-positive" };
+  if (amount > balance) return { ok: false, error: "insufficient-funds" };
+  return { ok: true, value: balance - amount };
+}
+
+for (const amount of [1250, -5, 9000]) {
+  const r = withdraw(5000, amount);
+  console.log(r.ok ? `new balance ${r.value}` : `refused: ${r.error}`);
+}
+```
+
+It prints **new balance 3750**, **refused: not-positive** and **refused: insufficient-funds**. Insufficient funds is an expected business outcome, so a result type that forces callers to handle it is a good fit. (A negative amount is arguably a bug in the caller, and many teams would still throw for it.)
+
+</Solution>
+
+**5. (standard)** Where should a web API validate the body of a "create order" request, and what should the rest of the code receive?
+
+<Solution>
+
+Once, at the edge: in the request handler (or a validation layer in front of it), before any business logic runs. Invalid requests get a 400 response with a clear message. The rest of the code receives a typed, already-valid value (a `CreateOrderCommand` with a `Quantity`, a `ProductId` and so on), so it does not repeat the checks.
+
+</Solution>
+
+**6. (standard)** Why is "log the error and rethrow it" in every layer a problem? What is the better pattern?
+
+<Solution>
+
+The same failure is logged once per layer, so logs are noisy and it looks like many errors happened. Better: add context as you rethrow (keeping the cause) where it helps, and log the complete chain once, at the top, in a single error handler.
+
+</Solution>
+
+**7. (stretch)** Java's checked exceptions force callers to deal with `IOException`. Give one advantage and one disadvantage, and say what C# and TypeScript do instead.
+
+<Solution>
+
+Advantage: failures are visible in the method signature and the compiler makes callers think about them. Disadvantage: they spread through every layer's signature (or get wrapped or swallowed just to satisfy the compiler), and they do not work well with lambdas and streams. C# and TypeScript have only unchecked exceptions; the possible failures are documented rather than enforced, and expected failures can be modelled as return values instead.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Tell apart **expected failures** (handle them), **bugs** (stop, log, fix) and **system failures** (some are worth retrying).
+- **Exceptions** unwind the stack until caught; `finally`, **try-with-resources** and **using** guarantee cleanup.
+- Java has **checked** and unchecked exceptions; C# and TypeScript have only unchecked. In TypeScript, a caught value is `unknown`.
+- **Result types** make expected failures part of the signature; exceptions suit bugs and failures most callers cannot handle.
+- **Fail fast** near the cause; **validate at the edges** and turn input into types that can only hold valid values.
+- Never swallow errors; catch specific exceptions only where you can act; keep the **cause** when adding context; log once at the top.
+- Show users a short, safe message and give engineers the full detail.
+
+## Go deeper
+
+- [Exceptions (Java tutorials)](https://docs.oracle.com/javase/tutorial/essential/exceptions/), Oracle. Checked and unchecked exceptions and try-with-resources.
+- [Best practices for exceptions](https://learn.microsoft.com/en-us/dotnet/standard/exceptions/best-practices-for-exceptions), Microsoft. When to throw, what to catch and how to keep the stack trace in .NET.
+- [Error: cause](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/Error/cause), MDN. Chaining errors in JavaScript.
+- [Parse, don't validate](https://lexi-lambda.github.io/blog/2019/11/05/parse-don-t-validate/), Alexis King. The classic essay on turning input into types at the edge.

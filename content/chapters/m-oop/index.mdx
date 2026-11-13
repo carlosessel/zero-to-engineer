@@ -1,0 +1,387 @@
+---
+title: "Object-oriented programming in depth"
+summary: "Encapsulation, abstraction, inheritance and polymorphism done well; interfaces versus abstract classes."
+prerequisites: [m-clean-code]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will use object-oriented programming the way experienced engineers do: objects that protect their own rules, interfaces that let parts of a system be swapped and tested, inheritance only where it truly fits, and a clear sense of when a plain function or a record is better than a class. Java and C# are built around these ideas, TypeScript supports them, and the SOLID principles and design patterns later in this part depend on them. <Ref to="oop" /> introduced classes and objects; this chapter goes deeper.
+
+## What an object is for
+
+An **object** bundles some **state** (data) with the **behaviour** (methods) that is allowed to change it. A **class** is the blueprint; each object is an **instance**. The value of the bundling is one idea: the object is responsible for keeping its own data valid, so the rest of the program does not have to.
+
+The four ideas usually listed as the pillars of object-oriented programming are encapsulation, abstraction, inheritance and polymorphism. The first two matter most, and the third is the one most often misused.
+
+## Encapsulation: objects that protect their rules
+
+**Encapsulation** means hiding an object's internal state and allowing changes only through methods that keep it valid. The rules that must always hold for an object are its **invariants**: an account's balance never goes below zero, an order's total always equals the sum of its lines, an email address is always well formed.
+
+```java
+public class Main {
+    static class Account {
+        private long balancePence;
+        private final String owner;
+
+        Account(String owner) {
+            this.owner = owner;
+        }
+
+        void deposit(long pence) {
+            if (pence <= 0) throw new IllegalArgumentException("Deposit must be positive");
+            balancePence += pence;
+        }
+
+        void withdraw(long pence) {
+            if (pence <= 0) throw new IllegalArgumentException("Withdrawal must be positive");
+            if (pence > balancePence) throw new IllegalStateException("Insufficient funds");
+            balancePence -= pence;
+        }
+
+        long balance() {
+            return balancePence;
+        }
+    }
+
+    public static void main(String[] args) {
+        Account account = new Account("Ama");
+        account.deposit(5_000);
+        account.withdraw(1_250);
+        System.out.println("Balance: " + account.balance());
+        try {
+            account.withdraw(10_000);
+        } catch (IllegalStateException e) {
+            System.out.println("Refused: " + e.getMessage());
+        }
+        System.out.println("Balance: " + account.balance());
+    }
+}
+```
+
+It prints `Balance: 3750`, `Refused: Insufficient funds`, `Balance: 3750`. The balance is `private`: no other code can set it to −£1,000,000. Every change goes through `deposit` or `withdraw`, which enforce the rules, so the invariant holds no matter who uses the class. When a rule changes (an overdraft limit), there is one place to change it.
+
+The common way to break encapsulation is the class with a getter and setter for every field, often generated automatically. `account.setBalance(account.getBalance() - amount)` scatters the rules across every caller, and nothing stops a caller forgetting them. Expose **behaviour** (`withdraw`) rather than raw state (`setBalance`), and expose state only as read-only where it is needed. "Tell, don't ask" is the slogan (<Ref to="m-design-principles" />).
+
+### Value objects and entities
+
+Two kinds of objects come up constantly in business code:
+
+- A **value object** is defined entirely by its values: money (£5.00 is £5.00), a date range, an email address, a postcode. It should be **immutable** and compared by value. Making these small types instead of passing raw strings and numbers catches whole classes of bugs (a `Money` cannot be added to a different currency by accident).
+- An **entity** has an identity that persists while its values change: a customer is the same customer after changing their address. Entities are compared by id.
+
+Java and C# **records** make value objects one line, with equality by value built in (<Ref to="m-arrays-hashing" /> showed why that matters for hash keys):
+
+```csharp
+Console.WriteLine(new Money(5, "GBP") == new Money(5, "GBP"));
+Console.WriteLine(new Money(5, "GBP") with { Amount = 7 });
+
+record Money(decimal Amount, string Currency);
+```
+
+It prints `True` and then `Money { Amount = 7, Currency = GBP }`: two separately created values are equal, and `with` makes a changed copy rather than changing the original.
+
+## Abstraction and interfaces
+
+**Abstraction** means depending on *what* something does rather than *how*. An **interface** declares a set of operations without implementing them; classes **implement** it. Code written against the interface works with any implementation.
+
+```csharp
+var shapes = new List<IShape> { new Circle(1), new Rectangle(2, 3), new Square(2) };
+foreach (var shape in shapes)
+{
+    Console.WriteLine($"{shape.Name}: {shape.Area():F2}");
+}
+
+interface IShape
+{
+    string Name { get; }
+    double Area();
+}
+
+record Circle(double Radius) : IShape
+{
+    public string Name => "circle";
+    public double Area() => Math.PI * Radius * Radius;
+}
+
+record Rectangle(double Width, double Height) : IShape
+{
+    public string Name => "rectangle";
+    public double Area() => Width * Height;
+}
+
+record Square(double Side) : IShape
+{
+    public string Name => "square";
+    public double Area() => Side * Side;
+}
+```
+
+It prints `circle: 3.14`, `rectangle: 6.00` and `square: 4.00`. The loop does not know or care which kind of shape it has.
+
+## Polymorphism
+
+That loop is **polymorphism**: the same call, `shape.Area()`, runs different code depending on the actual object. The runtime chooses the implementation (**dynamic dispatch**). Polymorphism replaces long `if`/`switch` chains on a "type" field:
+
+```ts
+interface PaymentMethod {
+  fee(amountPence: number): number;
+  describe(): string;
+}
+
+class Card implements PaymentMethod {
+  fee(amount: number) { return Math.round(amount * 0.015) + 20; }
+  describe() { return "card"; }
+}
+
+class BankTransfer implements PaymentMethod {
+  fee() { return 0; }
+  describe() { return "bank transfer"; }
+}
+
+class GiftVoucher implements PaymentMethod {
+  constructor(private balance: number) {}
+  fee() { return 0; }
+  describe() { return `gift voucher (balance ${this.balance}p)`; }
+}
+
+const methods: PaymentMethod[] = [new Card(), new BankTransfer(), new GiftVoucher(2500)];
+for (const m of methods) console.log(`${m.describe()}: fee ${m.fee(4000)}p`);
+```
+
+It prints `card: fee 80p`, `bank transfer: fee 0p` and `gift voucher (balance 2500p): fee 0p`. Adding a new payment method means adding a class, not finding every `switch (paymentType)` in the codebase. This is the open-closed principle in action (<Ref to="m-solid" />).
+
+Interfaces also make code **testable**: code that depends on an `EmailSender` interface can be tested with a fake that records messages instead of sending them (the testing chapter later in this course relies on this).
+
+## Inheritance
+
+**Inheritance** lets a class (the **subclass**) extend another (the **superclass** or base class), reusing its code and overriding parts of it. It is the most powerful of the four ideas and the most often misused.
+
+Use inheritance only for a genuine **"is a"** relationship where the subclass can be used anywhere the base class is expected without surprising anyone (the Liskov substitution principle, <Ref to="m-solid" />). A `SavingsAccount` is an `Account`. A `Stack` is *not* an `ArrayList`, even though it would be convenient to reuse its code: inheriting would expose `add(index, item)` and break the stack's rules.
+
+The problems with inheritance:
+
+- **Tight coupling.** Subclasses depend on the details of their base class, including its internal calls. A change to the base class can break subclasses that relied on how it worked inside: the **fragile base class** problem.
+- **Deep hierarchies** (`Vehicle` → `Car` → `ElectricCar` → `ElectricSportsCar`) are hard to understand and to change, and real-world categories rarely nest neatly.
+- **Single inheritance**: Java and C# classes can inherit from only one class, so using inheritance for code reuse uses up the one chance you have.
+
+For reusing code, **composition** is usually better: an object *has* another object and delegates to it, rather than *being* one (<Ref to="m-design-principles" />). Prefer shallow hierarchies, mark classes `final` (Java) or `sealed` (C#) unless they are designed to be extended, and inherit from an interface far more often than from a class.
+
+## Interfaces versus abstract classes
+
+An **abstract class** is a class that cannot be instantiated and may leave some methods unimplemented (abstract) for subclasses to fill in, while providing shared code and state for the rest.
+
+| | Interface | Abstract class |
+|---|---|---|
+| Says | what something can do | what something partly is, with shared implementation |
+| State (fields) | no (only constants) | yes |
+| Constructors | no | yes |
+| How many per class | many | one (single inheritance) |
+| Default method bodies | yes, in Java 8+ and C# 8+ | yes |
+| Typical use | a role or capability: `Comparable`, `IDisposable`, `PaymentMethod` | a family with a common skeleton, such as a template method |
+
+Default to **interfaces**. Reach for an abstract class when several closely related classes share real state and code, and a common algorithm whose steps differ (the template method pattern, in the behavioural patterns chapter of part 4).
+
+## Not everything should be an object
+
+Object-oriented languages tempt you to make everything a class. Often something simpler is better:
+
+- **Data that only carries values** (a request body, a row from a database, a message) is best as a **record** or plain object, without behaviour.
+- **Stateless logic** (a calculation, a conversion, validation) is often clearest as a plain function, or a static method.
+- **Classes named after a verb** (`OrderProcessor`, `PriceCalculator`, `DataManager`) are frequently a function in disguise, or a sign that the behaviour belongs on the data it operates on.
+
+<Ref to="m-functional" /> shows how functional ideas combine with objects in modern code.
+
+## Common mistakes
+
+- **Getters and setters for everything**, so the object enforces no rules and callers do the work.
+- **Public mutable fields**, and returning internal collections that callers can modify. Return copies or read-only views.
+- **Inheritance for code reuse** where there is no "is a" relationship; deep hierarchies.
+- **Switching on a type field** everywhere instead of using polymorphism.
+- **Primitive obsession**: raw strings and numbers for money, emails, ids and dates, instead of small value types.
+- **"Manager", "Processor" and "Helper" classes** that collect unrelated behaviour.
+- **Mutable value objects**, especially as hash keys.
+
+## Practice
+
+**1. (warm-up)** What is an invariant? Give one for a `Basket` class.
+
+<Solution>
+
+A rule about an object's state that must always be true. For a basket: every line's quantity is at least 1; the total always equals the sum of price × quantity over the lines; there is never more than one line per product.
+
+</Solution>
+
+**2. (warm-up)** Is each a value object or an entity? A postcode; a customer; an amount of money; an order; a date range.
+
+<Solution>
+
+Value objects: postcode, money, date range (defined by their values, best immutable). Entities: customer, order (have an identity that persists while their details change).
+
+</Solution>
+
+**3. (warm-up)** Why might `class Stack<T> extends ArrayList<T>` be a bad design?
+
+<Solution>
+
+A stack is not a list you can insert into anywhere: inheriting from `ArrayList` exposes methods such as `add(index, item)` and `remove(index)` that break the stack's last-in, first-out rule, and couples the stack to `ArrayList`'s internals. Better to have a private list inside the stack (composition) and expose only `push`, `pop` and `peek`.
+
+</Solution>
+
+**4. (standard)** Rewrite this TypeScript class so it protects its invariant (the quantity is always between 1 and 99):
+
+```ts
+class BasketLine {
+  constructor(public product: string, public quantity: number) {}
+}
+
+const line = new BasketLine("rye loaf", 2);
+line.quantity = -5;
+console.log(line.quantity);
+```
+
+<Solution>
+
+```ts
+class BasketLine {
+  private _quantity: number;
+
+  constructor(readonly product: string, quantity: number) {
+    this._quantity = BasketLine.checked(quantity);
+  }
+
+  get quantity() {
+    return this._quantity;
+  }
+
+  changeQuantity(quantity: number) {
+    this._quantity = BasketLine.checked(quantity);
+  }
+
+  private static checked(quantity: number): number {
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > 99) {
+      throw new RangeError(`Quantity must be a whole number from 1 to 99, not ${quantity}`);
+    }
+    return quantity;
+  }
+}
+
+const line = new BasketLine("rye loaf", 2);
+try {
+  line.changeQuantity(-5);
+} catch (e) {
+  console.log((e as Error).message);
+}
+console.log(line.quantity);
+```
+
+The quantity is private, readable through a getter, and can only change through `changeQuantity`, which enforces the rule; the constructor enforces it too. It prints the error message and then **2**.
+
+</Solution>
+
+**5. (standard)** Replace this switch with polymorphism:
+
+```ts
+type Notice = { kind: "email" | "sms"; to: string };
+
+function send(n: Notice, text: string): string {
+  switch (n.kind) {
+    case "email": return `email to ${n.to}: ${text}`;
+    case "sms": return `SMS to ${n.to}: ${text.slice(0, 160)}`;
+  }
+}
+
+console.log(send({ kind: "sms", to: "07700900000" }, "Your order is ready"));
+```
+
+<Solution>
+
+```ts
+interface Notifier {
+  send(text: string): string;
+}
+
+class EmailNotifier implements Notifier {
+  constructor(private to: string) {}
+  send(text: string) { return `email to ${this.to}: ${text}`; }
+}
+
+class SmsNotifier implements Notifier {
+  constructor(private to: string) {}
+  send(text: string) { return `SMS to ${this.to}: ${text.slice(0, 160)}`; }
+}
+
+const notifiers: Notifier[] = [new EmailNotifier("ama@example.com"), new SmsNotifier("07700900000")];
+for (const n of notifiers) console.log(n.send("Your order is ready"));
+```
+
+Each channel's rules live in its own class; adding a push notification means one new class, with no switch to update. (TypeScript's discriminated unions with an exhaustive switch are also a good design when the set of kinds is closed and stable; <Ref to="m-types" /> compares the two.)
+
+</Solution>
+
+**6. (standard)** Create a `Money` value object in TypeScript that refuses to add amounts in different currencies, stores pence as an integer, and is immutable.
+
+<Solution>
+
+```ts
+class Money {
+  private constructor(readonly pence: number, readonly currency: string) {}
+
+  static of(pence: number, currency: string): Money {
+    if (!Number.isInteger(pence)) throw new RangeError("Money is stored in whole minor units");
+    return new Money(pence, currency);
+  }
+
+  plus(other: Money): Money {
+    if (other.currency !== this.currency) throw new Error(`Cannot add ${other.currency} to ${this.currency}`);
+    return Money.of(this.pence + other.pence, this.currency);
+  }
+
+  equals(other: Money): boolean {
+    return this.pence === other.pence && this.currency === other.currency;
+  }
+
+  toString() {
+    return `${(this.pence / 100).toFixed(2)} ${this.currency}`;
+  }
+}
+
+const total = Money.of(450, "GBP").plus(Money.of(275, "GBP"));
+console.log(total.toString(), total.equals(Money.of(725, "GBP")));
+try {
+  total.plus(Money.of(100, "EUR"));
+} catch (e) {
+  console.log((e as Error).message);
+}
+```
+
+`plus` returns a new `Money` rather than changing the original. It prints **7.25 GBP true** and then **Cannot add EUR to GBP**.
+
+</Solution>
+
+**7. (stretch)** When would you choose an abstract class over an interface? Give a concrete example.
+
+<Solution>
+
+When closely related classes share real state and a common algorithm with varying steps. For example, a `ReportExporter` that always loads data, formats a header, writes rows and closes the file, where only the row and header formatting differ between CSV, Excel and PDF exporters: the abstract class implements `export()` once (the template method) and declares `formatHeader` and `formatRow` abstract. If the classes shared only a capability and no state or skeleton, an interface would be better.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- An **object** bundles state with the behaviour allowed to change it; a **class** is its blueprint.
+- **Encapsulation**: keep state private and enforce **invariants** in methods. Expose behaviour, not setters.
+- **Value objects** (immutable, compared by value, such as records) and **entities** (identity that persists) model business data; small value types beat primitive strings and numbers.
+- **Abstraction** through **interfaces** lets code depend on what, not how; **polymorphism** chooses the implementation at run time and replaces type switches. Interfaces also make code testable.
+- **Inheritance** is for genuine "is a" relationships only; it couples tightly (**fragile base class**). Prefer composition, shallow hierarchies, and `final`/`sealed` classes.
+- Default to interfaces; use **abstract classes** for families with shared state and a common skeleton.
+- Not everything needs a class: use records for data and functions for stateless logic.
+
+## Go deeper
+
+- [Java tutorials: interfaces and inheritance](https://docs.oracle.com/javase/tutorial/java/IandI/index.html), Oracle. The official lesson on interfaces, inheritance and abstract classes.
+- [Object-oriented programming (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/tutorials/oop), Microsoft. Encapsulation, inheritance and polymorphism in C#.
+- [Records (C#)](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/types/records), Microsoft. Value equality and `with` expressions.
+- [Refactoring Guru: SOLID and OOP](https://refactoring.guru/design-patterns), Alexander Shvets. Illustrated explanations of object-oriented design and patterns.

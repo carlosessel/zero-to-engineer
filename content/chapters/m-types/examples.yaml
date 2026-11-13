@@ -1,0 +1,65 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    5
+    c-17
+- block: 2
+  lang: ts
+  check: ts
+  errors:
+  - TS2322
+- block: 3
+  lang: ts
+  check: ts
+  output: |+
+    sourdough
+    banana
+    undefined
+
+- block: 4
+  lang: java
+  check: java
+  output: |
+    ArrayStoreException: java.lang.Integer
+- block: 5
+  lang: ts
+  check: ts
+  errors:
+  - TS18048
+  error_contains:
+  - '''price'' is possibly ''undefined'''
+- block: 6
+  lang: ts
+  check: ts
+  note: A type on its own, with nothing to print; the check confirms it compiles.
+- block: 7
+  lang: ts
+  check: ts
+  output: |
+    Loading…
+    2 products
+    Could not load: timeout
+- block: 8
+  lang: java
+  check: java
+  output: |
+    card ending 4242
+    voucher BREAD10 with 750p left
+    cash
+- block: 9
+  lang: ts
+  check: ts
+  note: A type on its own, with nothing to print; the check confirms it compiles.
+- block: 10
+  lang: ts
+  check: ts
+  output: |
+    On its way (RB123)
+    Delivered at 14:05
+- block: 11
+  lang: ts
+  check: ts
+  output: |
+    ["c-17: 1,3", "c-4: 2"]

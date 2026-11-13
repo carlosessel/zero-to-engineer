@@ -1,0 +1,56 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: java
+  check: java
+  output: |
+    Balance: 3750
+    Refused: Insufficient funds
+    Balance: 3750
+- block: 2
+  lang: csharp
+  check: csharp
+  output: |
+    True
+    Money { Amount = 7, Currency = GBP }
+- block: 3
+  lang: csharp
+  check: csharp
+  output: |
+    circle: 3.14
+    rectangle: 6.00
+    square: 4.00
+- block: 4
+  lang: ts
+  check: ts
+  output: |
+    card: fee 80p
+    bank transfer: fee 0p
+    gift voucher (balance 2500p): fee 0p
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    -5
+- block: 6
+  lang: ts
+  check: ts
+  output: |
+    Quantity must be a whole number from 1 to 99, not -5
+    2
+- block: 7
+  lang: ts
+  check: ts
+  output: |
+    SMS to 07700900000: Your order is ready
+- block: 8
+  lang: ts
+  check: ts
+  output: |
+    email to ama@example.com: Your order is ready
+    SMS to 07700900000: Your order is ready
+- block: 9
+  lang: ts
+  check: ts
+  output: |
+    7.25 GBP true
+    Cannot add EUR to GBP

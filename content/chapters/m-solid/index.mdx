@@ -1,0 +1,383 @@
+---
+title: "The SOLID principles"
+summary: "Single responsibility, open-closed, Liskov substitution, interface segregation and dependency inversion, with honest limits."
+prerequisites: [m-oop]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know the five SOLID principles well enough to apply them, to spot the problems they prevent, and to recognise when following one too literally makes code worse. SOLID is a set of guidelines, gathered by Robert C. Martin in the early 2000s, for object-oriented code that stays easy to change. They come up in nearly every design discussion and interview, and they underlie the design patterns in part 4.
+
+The five are:
+
+- **S**ingle responsibility
+- **O**pen-closed
+- **L**iskov substitution
+- **I**nterface segregation
+- **D**ependency inversion
+
+All five serve one goal: when requirements change, you should have to change as little code as possible, in as few places as possible, with the least risk of breaking something else.
+
+## Single responsibility principle
+
+The **single responsibility principle** (SRP): a module should have one reason to change. Martin later phrased it more precisely as "a module should be responsible to one, and only one, actor": one group of people whose requests change it.
+
+This class mixes three responsibilities:
+
+```ts
+class Invoice {
+  constructor(private lines: { item: string; pence: number }[]) {}
+
+  total(): number {
+    return this.lines.reduce((sum, l) => sum + l.pence, 0);
+  }
+
+  toText(): string {
+    return this.lines.map((l) => `${l.item}: £${(l.pence / 100).toFixed(2)}`).join("\n") + `\nTotal: £${(this.total() / 100).toFixed(2)}`;
+  }
+
+  save(db: Map<string, string>, id: string): void {
+    db.set(id, JSON.stringify(this.lines));
+  }
+}
+
+const db = new Map<string, string>();
+const invoice = new Invoice([{ item: "rye loaf", pence: 450 }, { item: "croissant", pence: 275 }]);
+console.log(invoice.toText());
+invoice.save(db, "inv-1");
+console.log(db.get("inv-1"));
+```
+
+It prints the two lines, `Total: £7.25`, and the saved JSON. It works, but three different people will ask for changes: the finance team (how totals and tax are calculated), the people who design invoices (the layout), and the engineers who run the database (how it is stored). Every change to one risks the others, and the class grows without limit. Splitting it gives each its own home:
+
+```ts
+type Line = { item: string; pence: number };
+
+class Invoice {
+  constructor(readonly lines: readonly Line[]) {}
+  total(): number {
+    return this.lines.reduce((sum, l) => sum + l.pence, 0);
+  }
+}
+
+class InvoiceTextFormatter {
+  format(invoice: Invoice): string {
+    const pounds = (p: number) => `£${(p / 100).toFixed(2)}`;
+    return [...invoice.lines.map((l) => `${l.item}: ${pounds(l.pence)}`), `Total: ${pounds(invoice.total())}`].join("\n");
+  }
+}
+
+class InvoiceRepository {
+  constructor(private db: Map<string, string>) {}
+  save(id: string, invoice: Invoice): void {
+    this.db.set(id, JSON.stringify(invoice.lines));
+  }
+}
+
+const db = new Map<string, string>();
+const invoice = new Invoice([{ item: "rye loaf", pence: 450 }, { item: "croissant", pence: 275 }]);
+console.log(new InvoiceTextFormatter().format(invoice));
+new InvoiceRepository(db).save("inv-1", invoice);
+console.log(db.get("inv-1"));
+```
+
+The output is the same. Now a PDF layout is a new formatter, and moving to a real database changes only the repository.
+
+**The limit:** "one reason to change" can be taken to an absurd extreme, with a class per line of code. Split when responsibilities really do change for different reasons, not on principle.
+
+## Open-closed principle
+
+The **open-closed principle** (OCP): software should be **open for extension** but **closed for modification**. You should be able to add new behaviour by adding new code, not by editing existing, tested code.
+
+A discount calculator with an `if` per promotion must be edited, and retested, for every new promotion. Instead, make each rule a separate object behind an interface:
+
+```ts
+interface DiscountRule {
+  discount(totalPence: number, items: number): number;
+}
+
+const bulk: DiscountRule = { discount: (total, items) => (items >= 10 ? Math.round(total * 0.1) : 0) };
+const bigSpender: DiscountRule = { discount: (total) => (total >= 5000 ? 500 : 0) };
+
+function bestDiscount(rules: DiscountRule[], totalPence: number, items: number): number {
+  return Math.max(0, ...rules.map((r) => r.discount(totalPence, items)));
+}
+
+const rules = [bulk, bigSpender];
+console.log(bestDiscount(rules, 6000, 12), bestDiscount(rules, 6000, 3), bestDiscount(rules, 2000, 3));
+
+const loyalty: DiscountRule = { discount: (total) => Math.round(total * 0.05) };
+console.log(bestDiscount([...rules, loyalty], 2000, 3));
+```
+
+It prints `600 500 0` and then `100`. The loyalty rule was added without touching `bestDiscount` or the existing rules. Polymorphism (<Ref to="m-oop" />) and the strategy pattern are the usual tools.
+
+**The limit:** you cannot make code open to every possible change. Add extension points where change has actually happened or is clearly coming; elsewhere, editing simple code is fine.
+
+## Liskov substitution principle
+
+The **Liskov substitution principle** (LSP), from Barbara Liskov: objects of a subtype must be usable anywhere the base type is expected, without the program behaving incorrectly. A subclass may do more, but must not break the promises (the **contract**) of the base class: it must not demand more of its inputs, deliver less in its outputs, or break the base class's invariants.
+
+The classic violation: a square is a rectangle in geometry, so make `Square` extend `Rectangle`:
+
+```ts
+class Rectangle {
+  constructor(protected w: number, protected h: number) {}
+  setWidth(w: number) { this.w = w; }
+  setHeight(h: number) { this.h = h; }
+  area() { return this.w * this.h; }
+}
+
+class Square extends Rectangle {
+  constructor(side: number) { super(side, side); }
+  setWidth(w: number) { this.w = w; this.h = w; }
+  setHeight(h: number) { this.w = h; this.h = h; }
+}
+
+function stretch(r: Rectangle): number {
+  r.setWidth(5);
+  r.setHeight(4);
+  return r.area();
+}
+
+console.log(stretch(new Rectangle(1, 1)), stretch(new Square(1)));
+```
+
+It prints `20 16`. Code written for rectangles reasonably expects that setting the height leaves the width alone; a square breaks that promise, so it is not substitutable. Being "a kind of" something in the real world does not make it a good subtype; behaving like it does.
+
+Real libraries have this problem too. Java's `List.of` returns a `List` that throws when you add to it:
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+
+public class Main {
+    static void addDefault(List<String> tags) {
+        tags.add("new");
+    }
+
+    public static void main(String[] args) {
+        List<String> mutable = new ArrayList<>(List.of("bread"));
+        addDefault(mutable);
+        System.out.println(mutable);
+        try {
+            addDefault(List.of("bread"));
+        } catch (UnsupportedOperationException e) {
+            System.out.println("UnsupportedOperationException");
+        }
+    }
+}
+```
+
+It prints `[bread, new]` and then `UnsupportedOperationException`. The `List` interface documents `add` as optional, so this is allowed, but every caller has to know which kind of list it has. C# and Kotlin separate read-only interfaces (`IReadOnlyList`) from mutable ones, so the type tells you; TypeScript has `readonly string[]`.
+
+**Signs of an LSP violation:** a subclass that throws "not supported" for a base method, overrides a method to do nothing, or code that checks `instanceof` to treat one subclass specially.
+
+## Interface segregation principle
+
+The **interface segregation principle** (ISP): clients should not be forced to depend on methods they do not use. Prefer several small, focused interfaces to one large one.
+
+```ts
+interface Printer {
+  print(doc: string): string;
+}
+
+interface Scanner {
+  scan(): string;
+}
+
+class OfficeMachine implements Printer, Scanner {
+  print(doc: string) { return `printed ${doc}`; }
+  scan() { return "scanned page"; }
+}
+
+class ReceiptPrinter implements Printer {
+  print(doc: string) { return `receipt: ${doc}`; }
+}
+
+function printAll(printer: Printer, docs: string[]) {
+  return docs.map((d) => printer.print(d));
+}
+
+console.log(printAll(new ReceiptPrinter(), ["order 7"]), printAll(new OfficeMachine(), ["invoice 3"]));
+```
+
+It prints `["receipt: order 7"] ["printed invoice 3"]`. With one big `Machine` interface (`print`, `scan`, `fax`, `staple`), the receipt printer would have to implement `scan` by throwing, which is an LSP violation, and every change to the fax method would touch code that only prints. Small interfaces also make **test fakes** small.
+
+## Dependency inversion principle
+
+The **dependency inversion principle** (DIP):
+
+1. High-level modules (business rules) should not depend on low-level modules (databases, email, HTTP). Both should depend on **abstractions**.
+2. Abstractions should not depend on details; details should depend on abstractions.
+
+In practice: the business code defines the interface it needs (`OrderRepository`, `Notifier`), and the infrastructure implements it. The dependency arrow points from the database code to the business code, not the other way round. **Dependency injection** (DI) is the usual mechanism: an object receives its dependencies (typically through its constructor) instead of creating them.
+
+```ts
+interface Notifier {
+  send(to: string, message: string): void;
+}
+
+class OrderService {
+  constructor(private notifier: Notifier) {}
+
+  place(customerEmail: string, orderId: number, totalPence: number): void {
+    if (totalPence <= 0) throw new Error("An order must cost something");
+    this.notifier.send(customerEmail, `Order ${orderId} confirmed: £${(totalPence / 100).toFixed(2)}`);
+  }
+}
+
+class FakeNotifier implements Notifier {
+  sent: string[] = [];
+  send(to: string, message: string) {
+    this.sent.push(`${to} | ${message}`);
+  }
+}
+
+const fake = new FakeNotifier();
+new OrderService(fake).place("ama@example.com", 7, 5400);
+console.log(fake.sent);
+```
+
+It prints `["ama@example.com | Order 7 confirmed: £54.00"]`. `OrderService` does not know whether messages go by email, SMS or a fake; a test gives it a fake, production gives it a real email sender. Without DIP, `OrderService` would create an `SmtpEmailSender` itself, and every test would send real email or need complex mocking.
+
+Java (Spring) and C# (ASP.NET Core's built-in container) have **dependency injection containers** that build these objects and pass dependencies automatically. In C#:
+
+```csharp
+#:package Microsoft.Extensions.DependencyInjection@10.0.0
+using Microsoft.Extensions.DependencyInjection;
+
+var services = new ServiceCollection();
+services.AddSingleton<INotifier, ConsoleNotifier>();
+services.AddTransient<OrderService>();
+using var provider = services.BuildServiceProvider();
+
+provider.GetRequiredService<OrderService>().Place("ama@example.com", 7);
+
+interface INotifier { void Send(string to, string message); }
+
+class ConsoleNotifier : INotifier
+{
+    public void Send(string to, string message) => Console.WriteLine($"to {to}: {message}");
+}
+
+class OrderService(INotifier notifier)
+{
+    public void Place(string email, int orderId) => notifier.Send(email, $"Order {orderId} confirmed");
+}
+```
+
+The `#:package` line on top tells `dotnet run app.cs` to fetch the `Microsoft.Extensions.DependencyInjection` package (ASP.NET Core projects already include it). The container sees that `OrderService` needs an `INotifier`, creates a `ConsoleNotifier`, and prints `to ama@example.com: Order 7 confirmed`. TypeScript projects usually pass dependencies by hand, as in the example above, or use a framework such as NestJS.
+
+**The limit:** not every class needs an interface. An interface with exactly one implementation that will never be swapped or faked (a small value calculator, say) is just extra code to read. Introduce abstractions at real boundaries: I/O, external services, things you need to fake in tests, and things that genuinely vary.
+
+## SOLID in perspective
+
+SOLID principles are heuristics, not laws. Applied with judgment, they produce code where changes are local and tests are easy. Applied mechanically, they produce many tiny classes and interfaces, layers of indirection, and code that is hard to follow. The other principles in <Ref to="m-design-principles" />, especially KISS and YAGNI, are the counterweight. A useful test: does this design make the *likely* next change easier? If not, it is not worth its cost.
+
+## Common mistakes
+
+- **God classes** that do everything (violating SRP), and the opposite: a class per tiny step.
+- **Editing a growing switch statement** for every new case instead of adding a class or rule (OCP).
+- **Subclasses that throw "not supported"** or ignore base methods (LSP).
+- **Fat interfaces** that force implementers to stub methods (ISP).
+- **Business code creating its own database or email clients** with `new` (DIP), which makes it untestable.
+- **An interface for every class**, with one implementation that will never change.
+
+## Practice
+
+**1. (warm-up)** Name the five SOLID principles in one line each.
+
+<Solution>
+
+Single responsibility: one reason (one actor) to change. Open-closed: add behaviour by adding code, not editing it. Liskov substitution: subtypes must work wherever the base type does. Interface segregation: small, focused interfaces. Dependency inversion: business code depends on abstractions; details implement them.
+
+</Solution>
+
+**2. (warm-up)** A `Bird` base class has a `fly()` method. `Penguin extends Bird` overrides `fly()` to throw. Which principle is broken, and what is a better design?
+
+<Solution>
+
+Liskov substitution: code that makes any bird fly breaks for penguins. Better: do not put `fly` on `Bird`; have a separate `FlyingBird` interface (or `Flyer`) for birds that can fly. That is interface segregation too.
+
+</Solution>
+
+**3. (warm-up)** Which principle makes a class easy to test with a fake, and how?
+
+<Solution>
+
+Dependency inversion (with dependency injection): the class depends on an interface it receives in its constructor, so a test can pass a fake implementation that records calls instead of doing real I/O.
+
+</Solution>
+
+**4. (standard)** Refactor this so a new shipping method can be added without editing `shippingCost`:
+
+```ts
+function shippingCost(method: string, weightKg: number): number {
+  if (method === "standard") return 350;
+  if (method === "express") return 600 + 100 * Math.ceil(weightKg);
+  throw new Error(`Unknown method ${method}`);
+}
+
+console.log(shippingCost("standard", 2), shippingCost("express", 2.5));
+```
+
+<Solution>
+
+```ts
+interface ShippingMethod {
+  cost(weightKg: number): number;
+}
+
+const methods: Record<string, ShippingMethod> = {
+  standard: { cost: () => 350 },
+  express: { cost: (kg) => 600 + 100 * Math.ceil(kg) },
+};
+
+function shippingCost(method: string, weightKg: number): number {
+  const m = methods[method];
+  if (!m) throw new Error(`Unknown method ${method}`);
+  return m.cost(weightKg);
+}
+
+methods.nextDay = { cost: (kg) => 900 + 150 * Math.ceil(kg) };
+console.log(shippingCost("standard", 2), shippingCost("express", 2.5), shippingCost("nextDay", 1));
+```
+
+It prints **350 900 1050**. New methods are registered without changing `shippingCost`.
+
+</Solution>
+
+**5. (standard)** A `ReportService` class loads data from the database, calculates statistics, renders HTML and emails the report. Which principles does it break, and how would you split it?
+
+<Solution>
+
+Single responsibility (four reasons to change: data access, the statistics rules, the layout and the delivery), and probably dependency inversion (it likely creates its own database and email clients). Split into a `SalesRepository` interface (data), a `SalesStatistics` calculation (pure logic), a `ReportRenderer` (HTML) and a `ReportSender` interface (email), with a small `ReportService` that receives the four through its constructor and coordinates them.
+
+</Solution>
+
+**6. (stretch)** Someone proposes adding an interface for every class in the codebase "to follow dependency inversion". What do you say?
+
+<Solution>
+
+Dependency inversion is about the direction of dependencies across real boundaries, not about interfaces everywhere. Interfaces are worth it where there are, or will be, several implementations, where you need fakes in tests (I/O, external services, the clock), or where a layer must not depend on another's details. For pure logic and value types with one implementation, an interface adds indirection with no benefit; extract one later if the need appears.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **SRP**: one reason (one actor) to change; split classes whose parts change for different reasons.
+- **OCP**: add new behaviour by adding code (new classes or rules), not by editing tested code.
+- **LSP**: a subtype must keep the base type's promises; throwing "not supported" or `instanceof` checks are warning signs.
+- **ISP**: many small interfaces beat one fat one.
+- **DIP**: business code defines the abstractions it needs; infrastructure implements them; **dependency injection** passes them in, which makes testing easy.
+- SOLID is a set of heuristics: apply it where change is real, and balance it against simplicity.
+
+## Go deeper
+
+- [The Single Responsibility Principle](https://blog.cleancoder.com/uncle-bob/2014/05/08/SingleReponsibilityPrinciple.html), Robert C. Martin. The author's own explanation of "one reason to change".
+- [Dependency injection in .NET](https://learn.microsoft.com/en-us/dotnet/core/extensions/dependency-injection), Microsoft. Service lifetimes and the built-in container.
+- [Dependency injection (Spring)](https://docs.spring.io/spring-framework/reference/core/beans/dependencies/factory-collaborators.html), the Spring team. Constructor injection in Java's most used framework.
+- [Inversion of Control Containers and the Dependency Injection pattern](https://martinfowler.com/articles/injection.html), Martin Fowler. The essay that named dependency injection.

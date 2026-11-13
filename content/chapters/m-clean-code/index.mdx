@@ -1,0 +1,331 @@
+---
+title: "Clean code: names, functions and structure"
+summary: "Code people can read and change: naming, small functions, comments that help, formatting."
+prerequisites: [m-problem-solving]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will write code that other people (including you, six months from now) can read quickly, change safely and trust. You will be able to name things precisely, shape functions so each does one thing, write comments that add what the code cannot say, and recognise the habits that make code hard to work with. <Ref to="clean-code" /> introduced the idea; this chapter is the practice.
+
+## Why readability is the job
+
+Code is read far more often than it is written: by reviewers, by teammates fixing bugs, by you when adding the next feature. Most of the cost of software is in changing it after it is written. So the most valuable property of code, after being correct, is being **easy to understand and change**. Clever code that saves three lines and costs every reader ten minutes is a bad trade.
+
+"Clean" is not about style rules for their own sake. It is about lowering the effort to understand: fewer things to hold in your head at once, names that say what things are, and structure that matches how people think about the problem.
+
+## Names
+
+Names are the main way code explains itself. Good names make most comments unnecessary; bad ones make correct code look wrong.
+
+**Say what it is or does, in the domain's words.** A reader should not need to decode anything.
+
+```ts
+// Hard to read
+function calc(d: number[], t: number): number[] {
+  const r: number[] = [];
+  for (const x of d) if (x > t) r.push(x);
+  return r;
+}
+
+// Easy to read
+function ordersAboveThreshold(orderTotals: number[], minimumTotal: number): number[] {
+  return orderTotals.filter((total) => total > minimumTotal);
+}
+
+console.log(calc([12, 45, 30], 20), ordersAboveThreshold([12, 45, 30], 20));
+```
+
+Both print `[45, 30]`. Only one tells you what it is for.
+
+Guidelines that hold up:
+
+- **Variables and properties are nouns** (`invoiceTotal`, `activeUsers`); **functions are verbs** (`sendReceipt`, `calculateTax`); **booleans read as yes/no questions** (`isPaid`, `hasStock`, `canRefund`).
+- **Length matches scope.** A loop index used for two lines can be `i`; a value used across a module needs a full name.
+- **Include units and meaning where it is ambiguous**: `timeoutMs`, `priceInPence`, `createdAtUtc`. Many expensive bugs come from mixing seconds and milliseconds, or pounds and pence.
+- **Use one word per concept.** If it is a "customer" in one place, do not call it a "client" or "user" elsewhere for the same thing. Agree the vocabulary with the people who know the business (domain-driven design, later in this course, calls this a ubiquitous language).
+- **Avoid noise words** (`data`, `info`, `manager`, `helper`, `processThing`) that could mean anything, and **avoid misleading names**: a `userList` that is a set, a `getUser` that creates one.
+- **Name the concept, not the type**: `customersByEmail`, not `customerMap`.
+
+## Functions
+
+**A function should do one thing**, at one level of detail. If you describe what it does and find yourself saying "and", it probably does two things. Short functions are a consequence, not the goal: a function that does one thing is usually short.
+
+Compare a function that mixes levels:
+
+```ts
+type Order = { id: number; items: { price: number; quantity: number }[]; customerEmail: string };
+const sent: string[] = [];
+
+function processOrder(order: Order): number {
+  let total = 0;
+  for (const item of order.items) {
+    total += item.price * item.quantity;
+  }
+  if (total > 50) total = total * 0.9;
+  total = Math.round(total * 100) / 100;
+  sent.push(`To ${order.customerEmail}: your order ${order.id} comes to £${total.toFixed(2)}`);
+  return total;
+}
+
+console.log(processOrder({ id: 7, items: [{ price: 30, quantity: 2 }], customerEmail: "ama@example.com" }), sent);
+```
+
+with one that reads like a summary, each step named:
+
+```ts
+type Order = { id: number; items: { price: number; quantity: number }[]; customerEmail: string };
+const sent: string[] = [];
+
+const BULK_DISCOUNT_THRESHOLD = 50;
+const BULK_DISCOUNT_RATE = 0.1;
+
+function subtotal(order: Order): number {
+  return order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+}
+
+function applyBulkDiscount(amount: number): number {
+  return amount > BULK_DISCOUNT_THRESHOLD ? amount * (1 - BULK_DISCOUNT_RATE) : amount;
+}
+
+function roundToPence(amount: number): number {
+  return Math.round(amount * 100) / 100;
+}
+
+function sendConfirmation(order: Order, total: number): void {
+  sent.push(`To ${order.customerEmail}: your order ${order.id} comes to £${total.toFixed(2)}`);
+}
+
+function processOrder(order: Order): number {
+  const total = roundToPence(applyBulkDiscount(subtotal(order)));
+  sendConfirmation(order, total);
+  return total;
+}
+
+console.log(processOrder({ id: 7, items: [{ price: 30, quantity: 2 }], customerEmail: "ama@example.com" }), sent);
+```
+
+Both print `54` and the same message. The second version's `processOrder` is three lines you can read at a glance; each detail lives in a function whose name says what it is, and can be tested on its own. The magic numbers 50 and 0.9 became **named constants** that say what they mean. (Money here uses floating point to keep the example short; <Ref to="m-data-representation" /> explains why real code should use pence.)
+
+More guidelines:
+
+- **Few parameters.** Three or more, especially of the same type, invite mixing them up (`createUser("Ama", "Mensah", "ama@example.com")`: which is which?). Group related ones into an object or type with named fields.
+- **No boolean flag parameters** that switch behaviour: `render(true)` says nothing at the call site. Split into two functions, or use a named option: `render({ includeHeader: true })`.
+- **Separate commands from queries.** A function that answers a question should not also change things; a function that changes things should usually not return data you need. A `getBalance()` that also deducts a fee is a trap.
+- **Avoid hidden side effects**: a `validateEmail` that also saves the user surprises everyone.
+- **Return early** to handle special cases first, so the main logic is not buried in nested `if`s:
+
+```ts
+function shippingCost(weightKg: number, country: string, isMember: boolean): number {
+  if (weightKg <= 0) throw new Error("Weight must be positive");
+  if (isMember) return 0;
+  if (country !== "GB") return 15;
+  return weightKg > 2 ? 6 : 3.5;
+}
+
+console.log(shippingCost(1, "GB", false), shippingCost(5, "GB", false), shippingCost(1, "FR", false), shippingCost(1, "GB", true));
+```
+
+It prints `3.5 6 15 0`. Each rule is a line, in order; the nested-`if` version of the same logic is much harder to check.
+
+## Comments
+
+The best comment is a better name or a clearer structure. When you feel the need to explain *what* code does, first try to make the code say it. Comments are for what the code **cannot** say:
+
+- **Why**: the reason behind a non-obvious choice. `// The payment provider rejects amounts with more than two decimal places.`
+- **Warnings and constraints**: `// Must run before migrations: the migration reads this table.`
+- **References**: a link to the specification, ticket or standard being implemented.
+- **Public interfaces**: what a function promises, its parameters and errors, for people using it without reading it (documentation comments such as Javadoc, XML docs or JSDoc).
+
+Comments that hurt:
+
+- comments that **repeat the code** (`i++ // increment i`);
+- comments that **are now wrong**, the worst kind, because readers believe them; update or delete comments when you change code;
+- **commented-out code**: delete it; version control remembers it (<Ref to="git-basics" />);
+- journal comments ("changed by Kofi on 3 March"): that is what Git history is for.
+
+## Structure and formatting
+
+- **Use a formatter** (Prettier, `dotnet format`, google-java-format, Black) and stop discussing style. Consistent formatting removes noise from reviews; the testing and quality part of this course covers these tools.
+- **Keep related things together**: a function near the code that calls it, constants near where they are used, a feature's code in one place rather than spread across "controllers", "services" and "helpers" folders far apart.
+- **Order top-down**: high-level functions first, details below, so a file reads like a newspaper article: headline, summary, details.
+- **Limit nesting.** Deeply nested loops and conditions are hard to follow. Return early, extract functions, or use `continue`.
+- **Declare variables close to their use**, in the smallest scope that works, and prefer `const` (or `final`, `readonly`) so readers know a value does not change.
+
+## Consistency and the team
+
+On a team, **consistency beats personal preference**. Follow the conventions of the codebase you are in, even where you would choose differently; propose changes to conventions openly, and apply them everywhere, rather than mixing styles. The goal is that any file looks as if one careful person wrote it.
+
+The **boy scout rule** is a good habit: leave the code a little cleaner than you found it: rename one confusing variable, extract one long condition, delete one dead comment, as part of the change you are making. Small improvements, always, compound. Large clean-ups belong in their own changes (<Ref to="m-refactoring" />), so they can be reviewed separately from behaviour changes.
+
+## When "clean" goes wrong
+
+Readability can be overdone too:
+
+- **Functions so small that the logic is scattered** across dozens of one-line functions in different files. Extract when it makes the caller clearer, not to hit a line count.
+- **Abstraction before need**: interfaces with one implementation, configurable everything, layers that only pass calls through (<Ref to="m-design-principles" /> calls this YAGNI).
+- **Rules followed blindly.** Every guideline here has exceptions. The test is always: is this easier for the next reader?
+
+## Common mistakes
+
+- **Vague or abbreviated names**: `d`, `tmp`, `data`, `mgr`, `handleStuff`.
+- **Units missing from names** (`timeout`, `delay`, `price`) where seconds versus milliseconds, or pounds versus pence, matter.
+- **Functions that do several things**, hiding a side effect behind an innocent name.
+- **Boolean flag parameters** and long parameter lists of the same type.
+- **Magic numbers** instead of named constants.
+- **Comments that restate the code**, or that have gone stale.
+- **Deep nesting** where early returns would read straight down.
+- **Mixing a clean-up with a behaviour change** in one commit.
+
+## Practice
+
+**1. (warm-up)** Suggest better names: `let d = 7;` (days until a subscription renews), `function chk(u)` (checks whether a user may see admin pages), `let flag = true;` (whether an email has been verified).
+
+<Solution>
+
+`daysUntilRenewal`; `canViewAdminPages(user)`; `isEmailVerified`.
+
+</Solution>
+
+**2. (warm-up)** What is wrong with `setTimeout(retry, timeout)` when `timeout` was read from a configuration file in seconds?
+
+<Solution>
+
+`setTimeout` expects milliseconds, so a 30-second timeout becomes 30 milliseconds. The name hides the unit. Name it `timeoutSeconds` (and convert: `timeoutSeconds * 1000`), or store it as `timeoutMs`.
+
+</Solution>
+
+**3. (warm-up)** Which of these comments are worth keeping? (a) `// loop over the orders` (b) `// The tax office rounds each line, not the total, so we must too (VAT guidance 2026, section 4).` (c) `// old version: total = total * 1.2;`
+
+<Solution>
+
+Only (b): it explains why, with a reference, which the code cannot say. (a) restates the code. (c) is commented-out code; delete it, Git keeps history.
+
+</Solution>
+
+**4. (standard)** Rewrite `createAccount("Ama", "Mensah", "ama@example.com", true, false)` so that a reader can tell what each argument means.
+
+<Solution>
+
+Pass one object with named fields, and replace the flags with meaningful options:
+
+```ts
+type NewAccount = { firstName: string; lastName: string; email: string; marketingEmails: boolean; isAdmin: boolean };
+
+function createAccount(details: NewAccount): string {
+  return `${details.firstName} ${details.lastName} <${details.email}>${details.isAdmin ? " (admin)" : ""}`;
+}
+
+console.log(createAccount({ firstName: "Ama", lastName: "Mensah", email: "ama@example.com", marketingEmails: true, isAdmin: false }));
+```
+
+Every value is labelled at the call site, the order no longer matters, and adding a field later does not break callers. It prints **Ama Mensah &lt;ama@example.com&gt;**.
+
+</Solution>
+
+**5. (standard)** Rewrite this with early returns so it reads top to bottom:
+
+```ts
+function canRefund(order: { paid: boolean; daysSincePurchase: number; refunded: boolean }): boolean {
+  if (order.paid) {
+    if (!order.refunded) {
+      if (order.daysSincePurchase <= 30) {
+        return true;
+      } else {
+        return false;
+      }
+    } else {
+      return false;
+    }
+  } else {
+    return false;
+  }
+}
+
+console.log(canRefund({ paid: true, daysSincePurchase: 10, refunded: false }));
+```
+
+<Solution>
+
+```ts
+function canRefund(order: { paid: boolean; daysSincePurchase: number; refunded: boolean }): boolean {
+  if (!order.paid) return false;
+  if (order.refunded) return false;
+  return order.daysSincePurchase <= 30;
+}
+
+console.log(canRefund({ paid: true, daysSincePurchase: 10, refunded: false }), canRefund({ paid: true, daysSincePurchase: 40, refunded: false }));
+```
+
+Each reason to refuse is one line; the remaining rule is the return value. It prints **true false**.
+
+</Solution>
+
+**6. (standard)** A function `getCustomer(id)` returns the customer, and also updates their "last seen" time in the database. What principle does it break, and why does it matter?
+
+<Solution>
+
+Command–query separation, and the principle of no hidden side effects. Callers who only want to read (a report, a test, a log statement) will unknowingly change data; calling it twice or in the "wrong" place changes results. Split it into `getCustomer(id)` and `recordCustomerSeen(id)`, and call the second where it is meant.
+
+</Solution>
+
+**7. (standard)** Extract named functions and constants from this, so the main function reads as a summary:
+
+```ts
+function price(base: number, isStudent: boolean, weekday: number): number {
+  let p = base;
+  if (isStudent) p = p * 0.8;
+  if (weekday === 1 || weekday === 2) p = p - 1;
+  return Math.max(p, 0);
+}
+
+console.log(price(6, true, 1));
+```
+
+<Solution>
+
+```ts
+const STUDENT_DISCOUNT = 0.2;
+const QUIET_DAY_REDUCTION = 1;
+const QUIET_DAYS = new Set([1, 2]); // Monday and Tuesday (getDay() numbering)
+
+const studentPrice = (amount: number) => amount * (1 - STUDENT_DISCOUNT);
+const isQuietDay = (weekday: number) => QUIET_DAYS.has(weekday);
+
+function ticketPrice(base: number, isStudent: boolean, weekday: number): number {
+  let amount = isStudent ? studentPrice(base) : base;
+  if (isQuietDay(weekday)) amount -= QUIET_DAY_REDUCTION;
+  return Math.max(amount, 0);
+}
+
+console.log(ticketPrice(6, true, 1));
+```
+
+Same behaviour, and the rules now have names and the magic numbers meanings. On paper, 6 × 0.8 = 4.8 and minus 1 gives 3.8, but it prints **3.8000000000000007**: 0.8 and 4.8 cannot be stored exactly in binary floating point (<Ref to="m-data-representation" />). A real price calculation should work in pence, which is exactly the kind of change that is easy once each rule is its own named function.
+
+</Solution>
+
+**8. (stretch)** A teammate's pull request renames 40 variables across the codebase *and* changes how discounts are calculated. What would you ask, and why?
+
+<Solution>
+
+Ask to split it into two pull requests: one with only the renames (no behaviour change, easy to review quickly and safe to merge), and one with only the discount change (small, so reviewers can focus on whether the new behaviour is right). Mixed together, the important behaviour change is hidden among dozens of mechanical edits, making a bug much more likely to slip through.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Readability is the job: code is read and changed far more than it is written.
+- **Names** say what things are or do, in the domain's words: nouns for values, verbs for functions, questions for booleans, units where ambiguous, one word per concept.
+- **Functions** do one thing at one level of detail; few parameters, no boolean flags, commands separate from queries, no hidden side effects, early returns, **named constants** instead of magic numbers.
+- **Comments** explain why, warn, and reference; they do not repeat code, and stale ones are worse than none. Delete commented-out code.
+- Use a **formatter**; keep related code together; read top-down; limit nesting; follow the codebase's conventions.
+- Leave code a little cleaner each time (the **boy scout rule**), but keep clean-ups separate from behaviour changes, and do not over-abstract.
+
+## Go deeper
+
+- [Clean Code JavaScript](https://github.com/ryanmcdermott/clean-code-javascript), Ryan McDermott. Readable-code principles with before and after examples, free on GitHub.
+- [Google Java Style Guide](https://google.github.io/styleguide/javaguide.html), Google. A complete, widely used style guide.
+- [C# coding conventions](https://learn.microsoft.com/en-us/dotnet/csharp/fundamentals/coding-style/coding-conventions), Microsoft. Naming and layout conventions for C#.
