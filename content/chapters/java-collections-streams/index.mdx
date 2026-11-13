@@ -1,0 +1,447 @@
+---
+title: "Java: collections, generics and streams"
+summary: "Lists, maps and sets, generics, and processing data with streams and lambdas."
+prerequisites: [java-objects]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will store groups of values in the right Java collection (list, map, set or queue), write your own generic types and methods, pass behaviour around with lambdas and method references, and filter, transform, group and summarise data with **streams**. Back-end code is mostly about moving collections of data around: orders, customers, rows from a database. <Ref to="data-structures" /> explains how these structures work inside and what each operation costs.
+
+## The collections framework
+
+Java's collections are interfaces with several implementations. You declare variables with the interface (`List`, `Map`, `Set`) and choose the implementation when you create them:
+
+| Interface | Common implementation | Use it for |
+|---|---|---|
+| `List<E>` | `ArrayList` | An ordered list that grows |
+| `Map<K, V>` | `HashMap` (or `LinkedHashMap` to keep insertion order, `TreeMap` to keep keys sorted) | Lookup by key |
+| `Set<E>` | `HashSet` (or `LinkedHashSet`, `TreeSet`) | Unique values, fast "contains" |
+| `Deque<E>` | `ArrayDeque` | A queue or a stack |
+| Shared between threads | `ConcurrentHashMap` and friends | Maps used by many threads at once |
+
+Collections hold objects only, so numbers are stored as `Integer`, `Long` and so on; Java converts automatically (**autoboxing**).
+
+## Lists
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) {
+        List<String> breads = new ArrayList<>(List.of("Sourdough", "Rye", "Baguette"));
+        breads.add("Focaccia");
+        breads.add(0, "Brioche");
+        breads.remove("Rye");
+
+        System.out.println(breads.size());
+        System.out.println(breads.get(0));
+        System.out.println(breads);
+        System.out.println(breads.contains("Rye"));
+        System.out.println(breads.indexOf("Baguette"));
+
+        breads.sort(null);
+        System.out.println(breads);
+
+        List<String> fixed = List.of("a", "b");
+        try {
+            fixed.add("c");
+        } catch (UnsupportedOperationException e) {
+            System.out.println("List.of lists cannot change");
+        }
+    }
+}
+```
+
+It prints `4`, `Brioche`, `[Brioche, Sourdough, Baguette, Focaccia]`, `false`, `2`, the sorted `[Baguette, Brioche, Focaccia, Sourdough]`, and `List.of lists cannot change`. The `<>` (the "diamond") lets Java infer the type from the variable. **`List.of`** makes an **unmodifiable** list, which is ideal for constants and return values; wrap it in `new ArrayList<>(...)` when you need to change it. `get(10)` on a shorter list throws `IndexOutOfBoundsException`.
+
+## Maps
+
+A **`Map<K, V>`** maps keys to values, with fast lookup by key (a hash table, <Ref to="data-structures" />):
+
+```java
+import java.util.HashMap;
+import java.util.Map;
+import java.util.TreeMap;
+
+public class Main {
+    public static void main(String[] args) {
+        Map<String, Integer> stock = new HashMap<>();
+        stock.put("RYE-400", 12);
+        stock.put("SOUR-800", 3);
+        stock.put("BAG-250", 20);
+        stock.merge("RYE-400", -2, Integer::sum);
+
+        System.out.println(stock.get("RYE-400"));
+        System.out.println(stock.get("CRO-90"));
+        System.out.println(stock.getOrDefault("CRO-90", 0));
+        System.out.println(stock.containsKey("SOUR-800"));
+
+        for (var entry : new TreeMap<>(stock).entrySet()) {
+            System.out.println(entry.getKey() + " = " + entry.getValue());
+        }
+
+        Map<String, Integer> counts = new HashMap<>();
+        for (String w : "rye bagel rye".split(" ")) {
+            counts.merge(w, 1, Integer::sum);
+        }
+        System.out.println(new TreeMap<>(counts));
+    }
+}
+```
+
+It prints `10`, `null`, `0`, `true`, then the entries in key order (`BAG-250 = 20`, `RYE-400 = 10`, `SOUR-800 = 3`), and `{bagel=1, rye=2}`. Unlike C#, `get` on a missing key returns **`null`** rather than throwing, so use `getOrDefault` or check `containsKey`. **`merge`** adds a value or combines it with the existing one, ideal for counting. A `HashMap` has no useful order; copying into a `TreeMap` sorts by key.
+
+## Sets
+
+```java
+import java.util.HashSet;
+import java.util.Set;
+
+public class Main {
+    public static void main(String[] args) {
+        Set<String> allergens = new HashSet<>(Set.of("gluten", "sesame"));
+        System.out.println(allergens.add("gluten"));
+        System.out.println(allergens.add("milk"));
+        System.out.println(allergens.size());
+
+        allergens.retainAll(Set.of("milk", "nuts"));
+        System.out.println(allergens);
+    }
+}
+```
+
+It prints `false` (already there), `true`, `3`, then `[milk]`: the allergens this product contains that the customer avoids. Objects in a `HashSet` or used as `HashMap` keys must have correct `equals` and `hashCode`; records do (<Ref to="java-objects" />).
+
+## Generics
+
+**Generics** let one class or method work with any type while staying type-safe. `List<E>` is generic; you can write your own:
+
+```java
+import java.util.ArrayDeque;
+import java.util.Collection;
+import java.util.Deque;
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) {
+        var latest = new RecentItems<String>(3);
+        for (String page : List.of("/menu", "/basket", "/checkout", "/pay")) latest.add(page);
+        System.out.println(latest.items());
+
+        System.out.println(largest(List.of(4, 9, 2)));
+        System.out.println(largest(List.of("pear", "apple", "fig")));
+    }
+
+    static <T extends Comparable<T>> T largest(Collection<T> items) {
+        T best = null;
+        for (T item : items) {
+            if (best == null || item.compareTo(best) > 0) best = item;
+        }
+        return best;
+    }
+}
+
+class RecentItems<T> {
+    private final int capacity;
+    private final Deque<T> items = new ArrayDeque<>();
+
+    RecentItems(int capacity) {
+        this.capacity = capacity;
+    }
+
+    void add(T item) {
+        items.addLast(item);
+        if (items.size() > capacity) items.removeFirst();
+    }
+
+    List<T> items() {
+        return List.copyOf(items);
+    }
+}
+```
+
+It prints `[/basket, /checkout, /pay]`, `9` and `pear`. The **bound** `<T extends Comparable<T>>` says `largest` only accepts types that can be compared. Java's generics are checked at compile time and then **erased**: at run time a `List<String>` is just a `List`, so you cannot write `new T()` or check `instanceof List<String>`.
+
+## Lambdas and method references
+
+A **lambda** is a small unnamed function written inline: `x -> x * 2`. Java stores lambdas in **functional interfaces**, interfaces with a single method, such as `Function<T, R>` (takes a T, returns an R), `Predicate<T>` (returns a boolean), `Consumer<T>` (returns nothing) and `Supplier<T>` (takes nothing):
+
+```java
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
+import java.util.function.UnaryOperator;
+
+public class Main {
+    public static void main(String[] args) {
+        Function<Integer, Integer> addVat = pence -> pence * 120 / 100;
+        Predicate<String> isLong = s -> s.length() > 5;
+        Consumer<String> shout = message -> System.out.println(message.toUpperCase());
+        Function<String, Integer> length = String::length;
+
+        System.out.println(addVat.apply(450));
+        System.out.println(isLong.test("Rye"));
+        shout.accept("fresh bread");
+        System.out.println(length.apply("Sourdough"));
+        System.out.println(applyTwice(p -> p * 120 / 100, 1000));
+    }
+
+    static int applyTwice(UnaryOperator<Integer> f, int x) {
+        return f.apply(f.apply(x));
+    }
+}
+```
+
+It prints `540`, `false`, `FRESH BREAD`, `9` and `1440`. `String::length` is a **method reference**, short for `s -> s.length()`. Lambdas can read local variables only if they are never reassigned ("effectively final").
+
+## Streams
+
+A **stream** is a pipeline over a collection: filter with `filter`, transform with `map`, sort with `sorted`, and finish with a **terminal operation** such as `toList`, `count`, `sum` or `collect`. Streams do not change the source collection.
+
+```java
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.stream.Collectors;
+
+public class Main {
+    enum Status { PAID, DELIVERED, CANCELLED }
+    record Order(String id, String customer, String city, int totalPence, Status status) {}
+
+    public static void main(String[] args) {
+        List<Order> orders = List.of(
+            new Order("o-1", "Ama", "Leeds", 1250, Status.DELIVERED),
+            new Order("o-2", "Kofi", "York", 450, Status.PAID),
+            new Order("o-3", "Ama", "Leeds", 3100, Status.DELIVERED),
+            new Order("o-4", "Esi", "Leeds", 980, Status.CANCELLED),
+            new Order("o-5", "Kofi", "York", 2200, Status.DELIVERED));
+
+        List<String> bigDelivered = orders.stream()
+            .filter(o -> o.status() == Status.DELIVERED && o.totalPence() >= 2000)
+            .sorted(Comparator.comparingInt(Order::totalPence).reversed())
+            .map(o -> o.id() + " " + o.customer() + " " + o.totalPence() + "p")
+            .toList();
+        System.out.println(bigDelivered);
+
+        System.out.println(orders.stream().filter(o -> o.status() != Status.CANCELLED).count());
+        System.out.println(orders.stream().filter(o -> o.status() != Status.CANCELLED).mapToInt(Order::totalPence).sum());
+        System.out.println(orders.stream().anyMatch(o -> o.customer().equals("Esi")));
+        System.out.println(orders.stream().filter(o -> o.customer().equals("Yaw")).findFirst().map(Order::id).orElse("none"));
+
+        Map<String, Integer> revenueByCity = orders.stream()
+            .filter(o -> o.status() != Status.CANCELLED)
+            .collect(Collectors.groupingBy(Order::city, TreeMap::new, Collectors.summingInt(Order::totalPence)));
+        System.out.println(revenueByCity);
+
+        Map<String, Long> ordersByCustomer = orders.stream()
+            .collect(Collectors.groupingBy(Order::customer, TreeMap::new, Collectors.counting()));
+        System.out.println(ordersByCustomer);
+
+        Map<String, Order> byId = orders.stream().collect(Collectors.toMap(Order::id, o -> o));
+        System.out.println(byId.get("o-3").customer());
+
+        System.out.println(orders.stream().map(Order::customer).distinct().sorted().collect(Collectors.joining(", ")));
+    }
+}
+```
+
+It prints:
+
+```text
+[o-3 Ama 3100p, o-5 Kofi 2200p]
+4
+7000
+true
+none
+{Leeds=4350, York=2650}
+{Ama=2, Esi=1, Kofi=2}
+Ama
+Ama, Esi, Kofi
+```
+
+Records and enums can be declared inside a class, as here. Other useful operations: `limit` and `skip` (paging), `flatMap` (flatten lists of lists), `min` and `max` with a `Comparator`, `allMatch` and `noneMatch`, and `IntStream.rangeClosed(1, 10)` for number ranges.
+
+### Streams are lazy and single-use
+
+Intermediate operations (`filter`, `map`, `sorted`) do nothing until a terminal operation runs, and a stream can be consumed only once:
+
+```java
+import java.util.List;
+import java.util.stream.Stream;
+
+public class Main {
+    public static void main(String[] args) {
+        Stream<Integer> evens = List.of(1, 2, 3, 4).stream()
+            .filter(n -> {
+                System.out.println("checking " + n);
+                return n % 2 == 0;
+            });
+        System.out.println("nothing checked yet");
+        System.out.println(evens.toList());
+        try {
+            evens.toList();
+        } catch (IllegalStateException e) {
+            System.out.println("a stream can be used only once");
+        }
+    }
+}
+```
+
+It prints `nothing checked yet`, the four `checking` lines, `[2, 4]`, and `a stream can be used only once`. Keep the collection, not the stream, and call `.stream()` again when you need another pass.
+
+Streams are not always better than loops: a plain `for` loop is clearer when you need to break out early, update several things, or handle checked exceptions. Use whichever reads best.
+
+## Common mistakes
+
+- **Calling `list.contains` inside a loop** over another big list instead of using a `HashSet`.
+- **Treating `map.get` returning `null`** as a real value; use `getOrDefault` or `containsKey`.
+- **Trying to change a `List.of` list**, which throws `UnsupportedOperationException`.
+- **Removing from a list while looping over it** with for-each, which throws `ConcurrentModificationException`; use `removeIf`.
+- **Reusing a stream**, or putting side effects (like adding to another list) inside `map` and `filter`.
+- **Mutable objects as map keys** whose `hashCode` changes after insertion.
+
+## Practice
+
+**1. (warm-up)** Count how many times each word appears in `"rye sourdough rye bagel rye bagel"` and print the counts in alphabetical order.
+
+<Solution>
+
+```java
+import java.util.Map;
+import java.util.TreeMap;
+
+public class Main {
+    public static void main(String[] args) {
+        Map<String, Integer> counts = new TreeMap<>();
+        for (String word : "rye sourdough rye bagel rye bagel".split(" ")) {
+            counts.merge(word, 1, Integer::sum);
+        }
+        System.out.println(counts);
+    }
+}
+```
+
+It prints `{bagel=2, rye=3, sourdough=1}`. A `TreeMap` keeps its keys sorted.
+
+</Solution>
+
+**2. (warm-up)** Given the scores 72, 95, 58, 88 and 64, use streams to print the average, the highest, and the scores of 70 or more in order.
+
+<Solution>
+
+```java
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) {
+        List<Integer> scores = List.of(72, 95, 58, 88, 64);
+        System.out.println(scores.stream().mapToInt(Integer::intValue).average().orElse(0));
+        System.out.println(scores.stream().mapToInt(Integer::intValue).max().orElse(0));
+        System.out.println(scores.stream().filter(s -> s >= 70).sorted().toList());
+    }
+}
+```
+
+It prints **75.4**, **95** and **[72, 88, 95]**. `average` and `max` return optional values because the list could be empty.
+
+</Solution>
+
+**3. (standard)** Given a list of sales records `Sale(String customer, int pence)`, print each customer's total, highest first.
+
+<Solution>
+
+```java
+import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
+
+public class Main {
+    record Sale(String customer, int pence) {}
+
+    public static void main(String[] args) {
+        List<Sale> sales = List.of(new Sale("Ama", 450), new Sale("Kofi", 1200), new Sale("Ama", 900), new Sale("Esi", 300), new Sale("Kofi", 100));
+        sales.stream()
+            .collect(Collectors.groupingBy(Sale::customer, Collectors.summingInt(Sale::pence)))
+            .entrySet().stream()
+            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed())
+            .forEach(e -> System.out.println(e.getKey() + ": " + e.getValue()));
+    }
+}
+```
+
+It prints **Ama: 1350**, **Kofi: 1300** and **Esi: 300**.
+
+</Solution>
+
+**4. (standard)** Write a generic method `<T> List<T> page(List<T> items, int page, int size)` that returns page `page` (starting at 1), refusing a page below 1. Show page 2 of the numbers 1 to 10 with a size of 3.
+
+<Solution>
+
+```java
+import java.util.List;
+import java.util.stream.IntStream;
+
+public class Main {
+    public static void main(String[] args) {
+        List<Integer> numbers = IntStream.rangeClosed(1, 10).boxed().toList();
+        System.out.println(page(numbers, 2, 3));
+        System.out.println(page(numbers, 4, 3));
+    }
+
+    static <T> List<T> page(List<T> items, int page, int size) {
+        if (page < 1 || size < 1) throw new IllegalArgumentException("page and size start at 1");
+        return items.stream().skip((long) (page - 1) * size).limit(size).toList();
+    }
+}
+```
+
+It prints **[4, 5, 6]** and **[10]**. A real API also caps `size` (<Ref to="m-api-design" />).
+
+</Solution>
+
+**5. (stretch)** You have 50,000 order ids and 200,000 payment order ids. Find the orders with no payment efficiently, and say why it is fast.
+
+<Solution>
+
+```java
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.IntStream;
+
+public class Main {
+    public static void main(String[] args) {
+        List<String> orderIds = IntStream.rangeClosed(1, 50_000).mapToObj(i -> "o-" + i).toList();
+        List<String> paymentOrderIds = IntStream.rangeClosed(1, 200_000).filter(i -> i % 7 != 0).mapToObj(i -> "o-" + i).toList();
+
+        Set<String> paid = new HashSet<>(paymentOrderIds);
+        List<String> unpaid = orderIds.stream().filter(id -> !paid.contains(id)).toList();
+        System.out.println(unpaid.size());
+        System.out.println(unpaid.get(0));
+    }
+}
+```
+
+It prints **7142** and **o-7**. Building the set is one pass over the payments, and each lookup is roughly constant time, so the work grows with the sum of the sizes. `paymentOrderIds.contains` inside the filter would compare up to 200,000 strings for each of 50,000 orders (<Ref to="m-complexity" />).
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Declare collections by interface (`List`, `Map`, `Set`, `Deque`) and choose an implementation (`ArrayList`, `HashMap`, `HashSet`, `ArrayDeque`). `List.of`, `Map.of` and `Set.of` make unmodifiable collections.
+- `Map.get` returns `null` for a missing key; use `getOrDefault`, `containsKey` and `merge`.
+- **Generics** with bounds (`<T extends Comparable<T>>`) are checked at compile time and erased at run time.
+- **Lambdas** and **method references** implement **functional interfaces** such as `Function`, `Predicate`, `Consumer` and `Supplier`.
+- **Streams**: `filter`, `map`, `sorted`, then `toList`, `count`, `sum` or `collect` with `groupingBy`, `counting`, `summingInt`, `toMap` and `joining`. They are lazy and single-use.
+
+## Go deeper
+
+- [Learn Java: the collections framework](https://dev.java/learn/api/collections-framework/), Oracle (dev.java). Lists, sets, maps and how to choose.
+- [Learn Java: generics](https://dev.java/learn/generics/), Oracle (dev.java). Generic types, methods and bounds.
+- [Learn Java: lambda expressions](https://dev.java/learn/lambdas/), Oracle (dev.java). Lambdas, functional interfaces and method references.
+- [Learn Java: the Stream API](https://dev.java/learn/api/streams/), Oracle (dev.java). Building and running stream pipelines, and collectors.

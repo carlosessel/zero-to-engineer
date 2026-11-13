@@ -4,6 +4,19 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 3 (Java track)
+
+Added
+- Five chapters teaching Java from zero: values, types, decisions, loops and methods; classes, records, enums, interfaces, sealed types and `Optional`; collections, generics, lambdas and streams; checked and unchecked exceptions, try-with-resources, executors, `CompletableFuture`, virtual threads and thread safety; and Gradle and Maven builds, Maven Central, wrappers and JUnit tests.
+- Every Java example runs as a single-file program in the example checks (on Java 21, the oldest version the chapters support). The build chapter's checks build the bakery project with Gradle, run its JUnit tests, and check that the practice test fails before the change and passes after it; the Maven `pom.xml` is checked for well-formed XML.
+- 15 glossary terms, and the course added to the existing terms the chapters use.
+
+Fixed
+- The glossary entries "Package", "Plugin", "Build tool" and "Stream" now give the meaning each course uses.
+
+Not verified
+- No person has reviewed these chapters. The Maven build was not run, because Maven is not installed where the checks ran; the Gradle checks download JUnit, so they run only where network checks are switched on, and they use an installed Gradle (8.14 here) rather than the current release.
+
 ### 2026-11-13: Zero to Backend Engineer, part 2 (C# and .NET track)
 
 Added

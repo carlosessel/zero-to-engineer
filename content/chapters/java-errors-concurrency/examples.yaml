@@ -1,0 +1,71 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: java
+  check: java
+  output: |
+    5
+    Caught: ArithmeticException: / by zero
+    Bad number: For input string: "ten"
+    finally always runs
+- block: 2
+  lang: java
+  check: java
+  output: |
+    Could not read: NoSuchFileException
+    Wrapped: NoSuchFileException
+- block: 3
+  lang: java
+  check: java
+  output: |
+    404: Order o-42 not found (o-42)
+- block: 4
+  lang: java
+  check: java
+  output: |
+    [orders] order o-1 placed
+    [orders] closed
+    Caught: something broke
+- block: 5
+  lang: java
+  check: java
+  output_contains:
+  - 'prices
+
+    stock
+
+    offers'
+- block: 6
+  lang: java
+  check: java
+  output: |
+    800
+    failed: negative amount
+- block: 7
+  lang: java
+  check: java
+  output_contains:
+  - 10000 tasks, sum 49995000
+- block: 8
+  lang: java
+  check: java
+  output_contains:
+  - 'atomic: 100000'
+  - 'synchronized: 100000'
+- block: 9
+  lang: java
+  check: java
+  output: |
+    3
+    Quantity must be a whole number from 1 to 99, not 'zero' (not a number)
+    Quantity must be a whole number from 1 to 99, not '0'
+    Quantity must be a whole number from 1 to 99, not '120'
+- block: 10
+  lang: java
+  check: java
+  output_contains:
+  - prices, stock, offers
+- block: 11
+  lang: java
+  check: java
+  output: |
+    {/basket=2500, /checkout=2500, /menu=5000}

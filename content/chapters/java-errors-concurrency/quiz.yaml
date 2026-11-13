@@ -1,0 +1,36 @@
+- question: What is a checked exception?
+  options:
+  - One the compiler forces you to catch or declare with throws
+  - One that is checked at run time only
+  answer: 0
+  explanation: IOException is checked; RuntimeException subclasses are not.
+- question: Why pass the original exception when wrapping it?
+  options:
+  - So the cause and its stack trace are kept for debugging
+  - Java requires two arguments
+  answer: 0
+  explanation: Losing the cause hides where the failure started.
+- question: What does try-with-resources guarantee?
+  options:
+  - close is called on each resource, even if an exception is thrown
+  - No exception can escape
+  answer: 0
+  explanation: Use it for streams, readers and database connections.
+- question: What should you do when catching InterruptedException?
+  options:
+  - Restore the interrupt flag with Thread.currentThread().interrupt() or rethrow
+  - Ignore it
+  answer: 0
+  explanation: Swallowing it hides a request to stop.
+- question: What are virtual threads good for?
+  options:
+  - Large numbers of tasks that mostly wait for I/O
+  - Making CPU-heavy calculations faster
+  answer: 0
+  explanation: They are cheap to create and park while waiting.
+- question: Several threads increment a shared int with count++. What can happen?
+  options:
+  - Updates are lost, because count++ is read, add and write
+  - Nothing; ++ is atomic
+  answer: 0
+  explanation: Use AtomicInteger or synchronisation.

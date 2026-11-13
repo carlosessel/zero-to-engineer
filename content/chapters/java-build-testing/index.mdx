@@ -1,0 +1,338 @@
+---
+title: "Java builds, dependencies and tests"
+summary: "Maven and Gradle, dependencies, and unit tests with JUnit."
+prerequisites: [java-errors-concurrency]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will lay out a real Java project the way teams do, build it with **Gradle** or **Maven**, add libraries from **Maven Central**, and write and run **unit tests** with JUnit. Until now you ran single files with `java Main.java`; services are built from projects with many files, packages and dependencies, and every change to them is checked by tests. <Ref to="m-testing" /> explains what to test and why; this chapter is the Java mechanics.
+
+## Build tools
+
+A **build tool** compiles your code, downloads the libraries it depends on, runs the tests, and packages the result (usually a `.jar` file) for deployment. Java has two in wide use:
+
+- **Maven**: configured in XML (`pom.xml`), with a fixed, conventional lifecycle. Very common in enterprises and in Spring examples.
+- **Gradle**: configured in code (`build.gradle.kts` in Kotlin, or `build.gradle` in Groovy), more flexible and usually faster. Standard for Android and common for new services.
+
+Both follow the same **standard layout**, so a project looks the same either way:
+
+```text
+bakery/
+  build.gradle.kts        (or pom.xml for Maven)
+  settings.gradle.kts
+  src/
+    main/java/com/bakery/PriceCalculator.java
+    test/java/com/bakery/PriceCalculatorTest.java
+```
+
+Code lives under `src/main/java`, tests under `src/test/java`, and the folders below follow the **package** name: the class `com.bakery.PriceCalculator` is in `com/bakery/PriceCalculator.java`. Package names start with a reversed domain you control, so they never clash with other people's code.
+
+Both tools fetch **dependencies** (libraries) from **Maven Central**, the main public repository of Java libraries. A dependency is named by three **coordinates**: group, artifact and version, written `org.junit.jupiter:junit-jupiter:6.1.3`.
+
+## A Gradle build
+
+Gradle needs two small files. `settings.gradle.kts` names the project:
+
+```kotlin
+rootProject.name = "bakery"
+```
+
+`build.gradle.kts` says how to build it:
+
+```kotlin
+plugins {
+    java
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    testImplementation(platform("org.junit:junit-bom:6.1.3"))
+    testImplementation("org.junit.jupiter:junit-jupiter")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "failed")
+    }
+}
+```
+
+- The `java` **plugin** adds tasks to compile, test and package Java code.
+- `mavenCentral()` is where dependencies come from.
+- Each dependency has a **configuration** that says where it is needed: `implementation` for code your program uses, `testImplementation` for code only the tests use, `testRuntimeOnly` for things needed only while tests run.
+- `platform("org.junit:junit-bom:6.1.3")` imports a **BOM** (bill of materials), which fixes the versions of a family of libraries so they match; the JUnit lines after it need no version. Spring Boot uses the same idea to keep hundreds of library versions consistent.
+
+## A Maven build
+
+The same project with Maven is one `pom.xml` file:
+
+```xml
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>com.bakery</groupId>
+  <artifactId>bakery</artifactId>
+  <version>1.0.0-SNAPSHOT</version>
+
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>org.junit</groupId>
+        <artifactId>junit-bom</artifactId>
+        <version>6.1.3</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.junit.jupiter</groupId>
+      <artifactId>junit-jupiter</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+</project>
+```
+
+Maven's scopes play the role of Gradle's configurations: the default `compile` scope for code your program uses, `test` for test-only libraries. `mvn test` compiles and runs the tests, and `mvn package` builds the `.jar`.
+
+## The code
+
+Add the business rule to `src/main/java/com/bakery/PriceCalculator.java`:
+
+```java
+package com.bakery;
+
+import java.util.List;
+
+public class PriceCalculator {
+    public static final int FREE_DELIVERY_FROM_PENCE = 3000;
+    public static final int DELIVERY_PENCE = 350;
+
+    public record Line(String sku, int unitPence, int quantity) {}
+
+    public int subtotal(List<Line> lines) {
+        return lines.stream().mapToInt(l -> l.unitPence() * l.quantity()).sum();
+    }
+
+    public int total(List<Line> lines) {
+        if (lines.isEmpty()) throw new IllegalArgumentException("A basket needs at least one line");
+        int subtotal = subtotal(lines);
+        return subtotal >= FREE_DELIVERY_FROM_PENCE ? subtotal : subtotal + DELIVERY_PENCE;
+    }
+}
+```
+
+`package com.bakery;` must match the folder. The class and its methods are `public` so other packages can use them.
+
+## Unit tests with JUnit
+
+**JUnit** is the standard Java test framework. A test is a method marked **`@Test`**; a **`@ParameterizedTest`** runs once for each row of data. Add `src/test/java/com/bakery/PriceCalculatorTest.java`:
+
+```java
+package com.bakery;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+
+import com.bakery.PriceCalculator.Line;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
+class PriceCalculatorTest {
+    private final PriceCalculator calculator = new PriceCalculator();
+
+    @Test
+    void addsDeliveryBelowTheFreeDeliveryThreshold() {
+        var lines = List.of(new Line("RYE-400", 450, 2));
+
+        int total = calculator.total(lines);
+
+        assertEquals(900 + 350, total);
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "2999, 3349", "3000, 3000", "4500, 4500" })
+    void deliveryIsFreeFromThirtyPounds(int subtotal, int expected) {
+        var lines = List.of(new Line("CAKE", subtotal, 1));
+
+        assertEquals(expected, calculator.total(lines));
+    }
+
+    @Test
+    void refusesAnEmptyBasket() {
+        var error = assertThrows(IllegalArgumentException.class, () -> calculator.total(List.of()));
+        assertEquals("A basket needs at least one line", error.getMessage());
+    }
+}
+```
+
+Run the tests from the project folder:
+
+```bash
+gradle test --console=plain
+```
+
+Each test is reported as `PASSED`, five in all (one row per line of the `@CsvSource`), then `BUILD SUCCESSFUL`. Things to notice:
+
+- Each test follows **arrange, act, assert**: set up the input, call the code, check the result.
+- Test names describe the **behaviour**, so a failure reads as a sentence.
+- The parameterized test checks the **boundary** (2999, 3000) where bugs hide (<Ref to="m-testing" />).
+- JUnit creates a **new instance of the test class for every test**, so the `calculator` field is never shared between tests.
+- `import static` lets you write `assertEquals` instead of `Assertions.assertEquals`. Other assertions: `assertTrue`, `assertNull`, `assertIterableEquals`, `assertAll` to check several things at once. Many teams use **AssertJ** for more readable assertions: `assertThat(total).isEqualTo(1250)`.
+- Test classes and methods do not need to be `public`.
+
+Break the rule on purpose (change `>=` to `>`) and run the tests again: the 3000 row fails, with the expected and actual values. Seeing a test fail for the right reason is how you know it tests something.
+
+## Wrappers
+
+Different projects need different versions of Gradle or Maven. A **wrapper** is a small script committed with the project that downloads and runs the right version, so everyone (and the CI server) builds the same way:
+
+```bash
+./gradlew test
+./gradlew build
+./mvnw test
+./mvnw package
+```
+
+Generate a Gradle wrapper with `gradle wrapper`, or a Maven one with `mvn wrapper:wrapper`; new projects from Spring Initializr, used in the API part of this course, come with one. Always build with the wrapper, and commit it with the code. Do not commit the build output folders (`build/` for Gradle, `target/` for Maven).
+
+## Choosing and checking dependencies
+
+Every dependency is code you trust, along with everything it depends on (its **transitive dependencies**). Before adding one, check it is maintained, widely used and licensed for your use. `./gradlew dependencies` and `mvn dependency:tree` show the whole tree. Keep versions current, and use a scanner (OWASP Dependency-Check, GitHub Dependabot, or your company's tool) to catch libraries with known vulnerabilities (<Ref to="m-appsec" />).
+
+## Common mistakes
+
+- **A folder path that doesn't match the package name**, which fails to compile.
+- **Test libraries in `implementation` or `compile` scope**, so they ship to production.
+- **Building with a globally installed Gradle or Maven** instead of the project's wrapper.
+- **Tests that depend on each other** or on shared static state.
+- **Committing `build/` or `target/`.**
+- **Adding dependencies casually** without checking maintenance, licence and vulnerabilities.
+
+## Practice
+
+**1. (warm-up)** In the standard layout, where do the class `com.bakery.orders.OrderService` and its test go?
+
+<Solution>
+
+`src/main/java/com/bakery/orders/OrderService.java` and `src/test/java/com/bakery/orders/OrderServiceTest.java`. The test is in the same package, so it can use package-private members if needed.
+
+</Solution>
+
+**2. (warm-up)** What is the difference between Gradle's `implementation` and `testImplementation`?
+
+<Solution>
+
+`implementation` dependencies are used by the main code and ship with the application. `testImplementation` dependencies are available only when compiling and running the tests, so test libraries such as JUnit never reach production.
+
+</Solution>
+
+**3. (standard)** Add tests for `subtotal`: an empty basket gives 0, and a basket of two lines (450p × 2 and 380p × 1) gives 1280.
+
+<Solution>
+
+```java
+package com.bakery;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.bakery.PriceCalculator.Line;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+
+class SubtotalTest {
+    private final PriceCalculator calculator = new PriceCalculator();
+
+    @Test
+    void emptyBasketHasZeroSubtotal() {
+        assertEquals(0, calculator.subtotal(List.of()));
+    }
+
+    @Test
+    void subtotalAddsEveryLine() {
+        var lines = List.of(new Line("RYE-400", 450, 2), new Line("JAM", 380, 1));
+
+        assertEquals(1280, calculator.subtotal(lines));
+    }
+}
+```
+
+Save it as `src/test/java/com/bakery/SubtotalTest.java`; the test run now reports seven passed.
+
+</Solution>
+
+**4. (stretch)** The bakery adds a rule: 10 or more of the same product get 10% off that line, rounded down to the nearest penny. Write the tests first, then change `subtotal` to make them pass.
+
+<Solution>
+
+The tests, including the boundary at 9 and 10:
+
+```java
+package com.bakery;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+
+import com.bakery.PriceCalculator.Line;
+import java.util.List;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+
+class BulkDiscountTest {
+    @ParameterizedTest
+    @CsvSource({ "9, 4050", "10, 4050", "12, 4860" })
+    void tenOrMoreOfOneProductGetTenPercentOff(int quantity, int expected) {
+        var lines = List.of(new Line("RYE-400", 450, quantity));
+
+        assertEquals(expected, new PriceCalculator().subtotal(lines));
+    }
+}
+```
+
+Nine loaves cost 4050p at full price; ten cost 4500p minus 450p, also 4050p; twelve cost 5400p minus 540p, 4860p. Run them and watch the 10 and 12 rows fail. Then change `subtotal`:
+
+```java
+    public int subtotal(List<Line> lines) {
+        return lines.stream().mapToInt(PriceCalculator::lineTotal).sum();
+    }
+
+    private static int lineTotal(Line line) {
+        int full = line.unitPence() * line.quantity();
+        return line.quantity() >= 10 ? full - full / 10 : full;
+    }
+```
+
+Integer division rounds the discount down. All the tests, old and new, now pass, which shows the change broke nothing.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Build tools** compile, fetch dependencies, test and package. **Maven** uses `pom.xml`; **Gradle** uses `build.gradle.kts`. Both use the standard layout: `src/main/java` and `src/test/java`, with folders matching packages.
+- Dependencies come from **Maven Central** by group, artifact and version; Gradle **configurations** and Maven scopes keep test libraries out of production; **BOMs** keep related versions in step.
+- **JUnit**: `@Test`, `@ParameterizedTest` with `@CsvSource`; arrange, act, assert; descriptive names; test boundaries; watch a test fail.
+- Always build with the project's **wrapper** (`./gradlew`, `./mvnw`), and check dependencies before trusting them.
+
+## Go deeper
+
+- [Building Java projects](https://docs.gradle.org/current/userguide/building_java_projects.html), Gradle. The Java plugin, source sets, dependencies and packaging.
+- [Maven in 5 minutes](https://maven.apache.org/guides/getting-started/maven-in-five-minutes.html), Apache Maven. Creating and building a first Maven project.
+- [JUnit user guide](https://docs.junit.org/current/user-guide/), the JUnit team. Tests, assertions, parameterized tests and more.
+- [Testing in Java projects](https://docs.gradle.org/current/userguide/java_testing.html), Gradle. Running JUnit tests with Gradle, filtering and reports.

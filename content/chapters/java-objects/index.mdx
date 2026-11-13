@@ -1,0 +1,501 @@
+---
+title: "Java: classes, interfaces and records"
+summary: "Object-oriented Java: classes, interfaces, records, inheritance, enums and Optional."
+prerequisites: [java-basics]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will model real things in Java: classes with fields, constructors and methods that protect their own rules, interfaces that let parts be swapped, records for simple values, enums for fixed sets of choices, inheritance where it fits, and `Optional` for values that may be missing. These are the building blocks of every Spring Boot service. <Ref to="m-oop" /> explains the design ideas in depth; this chapter is about writing them in Java.
+
+## Classes and objects
+
+A **class** describes a kind of thing: the data it holds (its **fields**) and what it can do (its **methods**). An **object** (or **instance**) is one particular thing made from the class with `new`.
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        var account = new Account("Ama");
+        account.deposit(5000);
+        account.withdraw(1250);
+        System.out.println(account.owner() + " has " + account.balancePence() + "p");
+
+        try {
+            account.withdraw(10_000);
+        } catch (IllegalStateException e) {
+            System.out.println("Refused: " + e.getMessage());
+        }
+        System.out.println("Still " + account.balancePence() + "p");
+    }
+}
+
+class Account {
+    private final String owner;
+    private long balancePence;
+
+    Account(String owner) {
+        this.owner = owner;
+    }
+
+    String owner() {
+        return owner;
+    }
+
+    long balancePence() {
+        return balancePence;
+    }
+
+    void deposit(long pence) {
+        if (pence <= 0) throw new IllegalArgumentException("Deposits must be positive");
+        balancePence += pence;
+    }
+
+    void withdraw(long pence) {
+        if (pence > balancePence) throw new IllegalStateException("Insufficient funds");
+        balancePence -= pence;
+    }
+}
+```
+
+It prints `Ama has 3750p`, then `Refused: Insufficient funds`, then `Still 3750p`. The pieces:
+
+- **Fields** (`owner`, `balancePence`) hold the object's data. They are `private`, so only the class's own code can touch them; `final` means `owner` is set once, in the constructor.
+- The **constructor** (`Account(String owner)`) runs when the object is created. `this.owner` means "this object's field", as opposed to the parameter of the same name.
+- **Methods** are the only way to change the balance, so the rule "never go below zero" is enforced in one place: **encapsulation**.
+- **Access modifiers**: `public` (everywhere), `private` (only this class), `protected` (this package and subclasses), and none at all, "package-private" (only classes in the same **package**).
+
+Many Java codebases name read methods `getOwner()` and change methods `setOwner(...)`, the **getter and setter** convention from older JavaBeans. Only add setters where changing a field is really allowed.
+
+## Records
+
+A **record** is a class for holding data, written in one line. Java generates the constructor, a read method for each component, value-based `equals` and `hashCode`, and a readable `toString`. Records are **immutable**: their fields cannot change.
+
+```java
+import java.util.Objects;
+
+public class Main {
+    public static void main(String[] args) {
+        var a = new Money(450, "GBP");
+        var b = new Money(450, "GBP");
+        System.out.println(a.equals(b));
+        System.out.println(a == b);
+        System.out.println(a);
+        System.out.println(a.add(new Money(500, "GBP")));
+        System.out.println(a.pence());
+
+        try {
+            new Money(-1, "GBP");
+        } catch (IllegalArgumentException e) {
+            System.out.println(e.getMessage());
+        }
+    }
+}
+
+record Money(long pence, String currency) {
+    Money {
+        if (pence < 0) throw new IllegalArgumentException("Money cannot be negative");
+        Objects.requireNonNull(currency);
+    }
+
+    Money add(Money other) {
+        if (!other.currency.equals(currency)) throw new IllegalArgumentException("Currencies differ");
+        return new Money(pence + other.pence, currency);
+    }
+}
+```
+
+It prints `true` (same values), `false` (different objects), `Money[pence=450, currency=GBP]`, `Money[pence=950, currency=GBP]`, `450` and `Money cannot be negative`. The block `Money { ... }` is a **compact constructor**: it checks the values before they are stored. Use records for value objects, DTOs (data sent to and from APIs) and messages (<Ref to="m-enterprise-patterns" />).
+
+### equals and hashCode
+
+For ordinary classes, `equals` by default means "the same object", like `==`. If two objects with the same values should count as equal (so they work as map keys and in sets), you must override both `equals` and `hashCode` together. Records do this for you, which is one reason to prefer them for data.
+
+## Enums
+
+An **enum** is a type with a fixed set of named values. Java enums are full classes: they can have fields and methods.
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        var status = OrderStatus.PAID;
+        System.out.println(status);
+        System.out.println(status.next());
+        System.out.println(OrderStatus.valueOf("SHIPPED").canCancel());
+        System.out.println(OrderStatus.values().length);
+    }
+}
+
+enum OrderStatus {
+    PLACED(true), PAID(true), SHIPPED(false), DELIVERED(false), CANCELLED(false);
+
+    private final boolean cancellable;
+
+    OrderStatus(boolean cancellable) {
+        this.cancellable = cancellable;
+    }
+
+    boolean canCancel() {
+        return cancellable;
+    }
+
+    OrderStatus next() {
+        return switch (this) {
+            case PLACED -> PAID;
+            case PAID -> SHIPPED;
+            case SHIPPED -> DELIVERED;
+            case DELIVERED, CANCELLED -> this;
+        };
+    }
+}
+```
+
+It prints `PAID`, `SHIPPED`, `false` and `5`. Because the `switch` covers every value, the compiler checks it: add a new status and it fails to compile until you handle it.
+
+## Interfaces
+
+An **interface** declares what something can do, without saying how. Any class that **implements** it can be used where the interface is expected, so code depends on abilities rather than concrete classes, and tests can use fakes (<Ref to="m-solid" />):
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) {
+        List<Notifier> notifiers = List.of(new EmailNotifier(), new SmsNotifier());
+        for (Notifier n : notifiers) {
+            System.out.println(n.send("Ama", "Your order is ready"));
+        }
+
+        var fake = new FakeNotifier();
+        placeOrder(fake, "Kofi");
+        System.out.println("Fake recorded: " + fake.sent);
+    }
+
+    static void placeOrder(Notifier notifier, String customer) {
+        notifier.send(customer, "Order placed");
+    }
+}
+
+interface Notifier {
+    String send(String to, String message);
+
+    default String sendAll(List<String> recipients, String message) {
+        recipients.forEach(r -> send(r, message));
+        return "sent to " + recipients.size();
+    }
+}
+
+class EmailNotifier implements Notifier {
+    @Override
+    public String send(String to, String message) {
+        return "email to " + to + ": " + message;
+    }
+}
+
+class SmsNotifier implements Notifier {
+    @Override
+    public String send(String to, String message) {
+        return "SMS to " + to + ": " + message;
+    }
+}
+
+class FakeNotifier implements Notifier {
+    final List<String> sent = new ArrayList<>();
+
+    @Override
+    public String send(String to, String message) {
+        sent.add(to + ": " + message);
+        return "recorded";
+    }
+}
+```
+
+It prints the email and SMS lines, then `Fake recorded: [Kofi: Order placed]`. Notes:
+
+- Interface methods are public; implementing methods must be `public` too.
+- **`@Override`** is an **annotation** asking the compiler to check you really are implementing or overriding a method; a typo in the name then fails to compile. Annotations are everywhere in Spring.
+- A **`default` method** has a body that implementing classes get for free.
+- A class can implement many interfaces.
+
+## Inheritance
+
+A class can **extend** one other class, inheriting its fields and methods and **overriding** some. An **abstract** class cannot be created directly and can leave methods for subclasses to define. A **final** class cannot be extended.
+
+```java
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) {
+        List<Delivery> deliveries = List.of(new StandardDelivery(), new ExpressDelivery());
+        for (Delivery d : deliveries) {
+            System.out.println(d.name() + ": " + d.costPence(2.5) + "p");
+        }
+    }
+}
+
+abstract class Delivery {
+    abstract String name();
+
+    protected abstract int baseChargePence();
+
+    int costPence(double weightKg) {
+        int extraKg = (int) Math.max(0, Math.ceil(weightKg) - 2);
+        return baseChargePence() + extraKg * 100;
+    }
+}
+
+final class StandardDelivery extends Delivery {
+    @Override String name() { return "Standard"; }
+    @Override protected int baseChargePence() { return 350; }
+}
+
+final class ExpressDelivery extends Delivery {
+    @Override String name() { return "Express"; }
+    @Override protected int baseChargePence() { return 600; }
+
+    @Override
+    int costPence(double weightKg) {
+        return super.costPence(weightKg) * 3 / 2;
+    }
+}
+```
+
+It prints `Standard: 450p` and `Express: 1050p`. `super.costPence` calls the parent's version. Every Java class ultimately extends **`Object`**, which is where `equals`, `hashCode` and `toString` come from. Use inheritance sparingly, for true "is a" relationships; prefer interfaces and composition (<Ref to="m-design-principles" />).
+
+### Sealed types and pattern matching
+
+A **sealed** interface lists exactly which types may implement it. With records and pattern matching in `switch`, the compiler can then check that every case is handled:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        Payment[] payments = { new Card("4242", 1250), new Voucher("BREAD10", 1000), new Cash(500) };
+        for (Payment p : payments) {
+            System.out.println(describe(p));
+        }
+    }
+
+    static String describe(Payment payment) {
+        return switch (payment) {
+            case Card c -> "card ending " + c.last4() + ": " + c.pence() + "p";
+            case Voucher v when v.pence() >= 1000 -> "large voucher " + v.code();
+            case Voucher v -> "voucher " + v.code();
+            case Cash c -> "cash: " + c.pence() + "p";
+        };
+    }
+}
+
+sealed interface Payment permits Card, Voucher, Cash {}
+record Card(String last4, long pence) implements Payment {}
+record Voucher(String code, long pence) implements Payment {}
+record Cash(long pence) implements Payment {}
+```
+
+It prints `card ending 4242: 1250p`, `large voucher BREAD10` and `cash: 500p`. `case Card c` both tests the type and names the value; `when` adds a condition. There is no `default`: the compiler knows these are the only three kinds of payment.
+
+## Null and Optional
+
+Any reference variable in Java can hold **`null`**, meaning "no object". Calling a method on `null` throws a `NullPointerException`, the most common Java crash. Defences:
+
+- Check arguments early with `Objects.requireNonNull`.
+- Return empty collections, never `null` collections.
+- For a single value that may be missing, return **`Optional<T>`**, which makes the caller deal with "not found":
+
+```java
+import java.util.Map;
+import java.util.Optional;
+
+public class Main {
+    static final Map<String, String> CUSTOMERS = Map.of("c-1", "Ama", "c-2", "Kofi");
+
+    public static void main(String[] args) {
+        System.out.println(findName("c-1").orElse("unknown"));
+        System.out.println(findName("c-9").orElse("unknown"));
+        System.out.println(findName("c-2").map(String::toUpperCase).orElse("unknown"));
+        findName("c-1").ifPresent(name -> System.out.println("Found " + name));
+        System.out.println(findName("c-9").isEmpty());
+    }
+
+    static Optional<String> findName(String id) {
+        return Optional.ofNullable(CUSTOMERS.get(id));
+    }
+}
+```
+
+It prints `Ama`, `unknown`, `KOFI`, `Found Ama` and `true`. `Map.get` returns `null` for a missing key, and `Optional.ofNullable` wraps that safely. Use `Optional` for return values only, not for fields or parameters, and never call `.get()` without checking (use `orElse`, `orElseThrow`, `map` or `ifPresent`). Spring Data repositories return `Optional` from `findById` (<Ref to="m-errors" />).
+
+## Packages
+
+A **package** groups related classes and gives them a full name, like `com.bakery.orders.Order`. The package is declared at the top of each file (`package com.bakery.orders;`), and the folder structure matches it (`com/bakery/orders/Order.java`). Classes from other packages are used with `import`. Single-file programs like the examples here use the unnamed default package; real projects always use packages (<Ref to="java-build-testing" />).
+
+## Common mistakes
+
+- **Public fields** or setters for everything, so any code can break an object's rules.
+- **Overriding `equals` without `hashCode`**, which breaks maps and sets. Use records.
+- **Returning `null`** for "not found" instead of `Optional`, or for empty lists instead of an empty list.
+- **Calling `Optional.get()`** without checking.
+- **Forgetting `@Override`**, so a misspelt method silently adds a new one instead of overriding.
+- **Deep inheritance hierarchies** where an interface would do.
+
+## Practice
+
+**1. (warm-up)** Write a record `Customer(String id, String email)` and show that two customers with the same values are equal, then print one.
+
+<Solution>
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        var a = new Customer("c-17", "ama@example.com");
+        var b = new Customer("c-17", "ama@example.com");
+        System.out.println(a.equals(b));
+        System.out.println(a);
+    }
+}
+
+record Customer(String id, String email) {}
+```
+
+It prints **true** and `Customer[id=c-17, email=ama@example.com]`.
+
+</Solution>
+
+**2. (warm-up)** Why are a class's fields usually `private`?
+
+<Solution>
+
+So that only the class's own methods can change them, and those methods can enforce the rules (a balance never negative, a quantity at least 1). If any code could change the fields, the rules could be broken anywhere, and finding the culprit would mean searching the whole codebase.
+
+</Solution>
+
+**3. (standard)** Write a `Basket` class that holds lines (a record of product, unit price in pence and quantity), refuses quantities below 1, and has a `totalPence()` method. Return the lines as an unmodifiable list.
+
+<Solution>
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) {
+        var basket = new Basket();
+        basket.add("Rye loaf", 450, 2);
+        basket.add("Jam", 380, 1);
+        System.out.println(basket.totalPence());
+        try {
+            basket.add("Croissant", 275, 0);
+        } catch (IllegalArgumentException e) {
+            System.out.println(e.getMessage());
+        }
+        try {
+            basket.lines().clear();
+        } catch (UnsupportedOperationException e) {
+            System.out.println("lines are read-only");
+        }
+    }
+}
+
+record Line(String product, int unitPence, int quantity) {}
+
+class Basket {
+    private final List<Line> lines = new ArrayList<>();
+
+    void add(String product, int unitPence, int quantity) {
+        if (quantity < 1) throw new IllegalArgumentException("quantity must be at least 1");
+        lines.add(new Line(product, unitPence, quantity));
+    }
+
+    int totalPence() {
+        int total = 0;
+        for (Line l : lines) total += l.unitPence() * l.quantity();
+        return total;
+    }
+
+    List<Line> lines() {
+        return List.copyOf(lines);
+    }
+}
+```
+
+It prints **1280**, **quantity must be at least 1** and **lines are read-only**. `List.copyOf` returns an unmodifiable copy, so callers cannot change the basket behind its back.
+
+</Solution>
+
+**4. (standard)** Define an interface `Discount` with `int apply(int pence)`, two implementations (10% off; £5 off orders over £50), and apply both to 6000 pence.
+
+<Solution>
+
+```java
+import java.util.List;
+
+public class Main {
+    public static void main(String[] args) {
+        List<Discount> discounts = List.of(new PercentOff(10), new FiverOverFifty());
+        for (Discount d : discounts) System.out.println(d.apply(6000));
+    }
+}
+
+interface Discount {
+    int apply(int pence);
+}
+
+record PercentOff(int percent) implements Discount {
+    public int apply(int pence) { return pence - pence * percent / 100; }
+}
+
+class FiverOverFifty implements Discount {
+    public int apply(int pence) { return pence > 5000 ? pence - 500 : pence; }
+}
+```
+
+It prints **5400** and **5500**. Records can implement interfaces too.
+
+</Solution>
+
+**5. (stretch)** Model a delivery result as a sealed interface with three records (`Delivered(String signedBy)`, `Failed(String reason)`, `Rescheduled(String newDate)`), and write a method that turns each into a customer message with an exhaustive `switch`.
+
+<Solution>
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        DeliveryResult[] results = { new Delivered("A. Mensah"), new Failed("No one home"), new Rescheduled("2026-11-20") };
+        for (DeliveryResult r : results) System.out.println(message(r));
+    }
+
+    static String message(DeliveryResult result) {
+        return switch (result) {
+            case Delivered d -> "Delivered, signed for by " + d.signedBy();
+            case Failed f -> "We could not deliver: " + f.reason();
+            case Rescheduled r -> "Your delivery is now on " + r.newDate();
+        };
+    }
+}
+
+sealed interface DeliveryResult permits Delivered, Failed, Rescheduled {}
+record Delivered(String signedBy) implements DeliveryResult {}
+record Failed(String reason) implements DeliveryResult {}
+record Rescheduled(String newDate) implements DeliveryResult {}
+```
+
+It prints the three messages. If someone later adds a fourth kind of result, `message` stops compiling until it is handled, which is exactly what you want.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **class** has private **fields**, **constructors** and **methods**; objects are made with `new`. **Access modifiers** and **encapsulation** keep objects valid.
+- **Records** are concise, immutable data classes with value-based `equals`, `hashCode` and `toString`; compact constructors validate them.
+- **Enums** are fixed sets of values that can carry fields and methods.
+- **Interfaces** declare abilities, with optional `default` methods; mark implementations with **`@Override`**.
+- **Inheritance** with `extends`, `abstract`, `super` and `final`; use it sparingly. **Sealed** types plus pattern-matching `switch` give exhaustive checks.
+- Avoid `null` surprises with `Objects.requireNonNull`, empty collections and **`Optional`** return values.
+
+## Go deeper
+
+- [Learn Java: classes and objects](https://dev.java/learn/classes-objects/), Oracle (dev.java). Classes, fields, constructors and methods.
+- [Learn Java: records](https://dev.java/learn/records/), Oracle (dev.java). Records and compact constructors.
+- [Learn Java: interfaces](https://dev.java/learn/interfaces/), Oracle (dev.java). Interfaces and default methods.
+- [JEP 441: pattern matching for switch](https://openjdk.org/jeps/441), OpenJDK. Type patterns, guards and exhaustive switches over sealed types.

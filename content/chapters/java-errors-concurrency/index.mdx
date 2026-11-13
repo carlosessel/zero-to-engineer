@@ -1,0 +1,445 @@
+---
+title: "Java: exceptions, threads and virtual threads"
+summary: "Checked and unchecked exceptions, try-with-resources, threads, executors, CompletableFuture and virtual threads."
+prerequisites: [java-collections-streams]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will handle failures in Java with exceptions (knowing checked from unchecked, catching only what you can handle, and cleaning up with try-with-resources), and run work **concurrently** with executors, `CompletableFuture` and **virtual threads**, while keeping shared data safe. A Spring Boot service handles many requests at once, each on its own thread, so this is everyday back-end Java. <Ref to="m-errors" /> covers error-handling design, and <Ref to="m-threads-locks" /> and <Ref to="m-async" /> explain what happens underneath.
+
+## Exceptions
+
+When something goes wrong that the current code cannot deal with, Java **throws** an **exception**: an object describing the problem. It travels up through the calling methods until a `catch` block handles it; if none does, the thread (or, in a web app, the request) fails.
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        try {
+            System.out.println(divide(10, 2));
+            System.out.println(divide(10, 0));
+        } catch (ArithmeticException e) {
+            System.out.println("Caught: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+
+        try {
+            Integer.parseInt("ten");
+        } catch (NumberFormatException e) {
+            System.out.println("Bad number: " + e.getMessage());
+        } finally {
+            System.out.println("finally always runs");
+        }
+    }
+
+    static int divide(int a, int b) {
+        return a / b;
+    }
+}
+```
+
+It prints `5`, `Caught: ArithmeticException: / by zero`, `Bad number: For input string: "ten"` and `finally always runs`. `try` wraps code that may fail; each `catch` handles one kind of exception (most specific first, or several at once with `catch (A | B e)`); `finally` runs either way.
+
+### Checked and unchecked exceptions
+
+Java has two kinds of exception:
+
+- **Unchecked** exceptions extend `RuntimeException`: `IllegalArgumentException`, `IllegalStateException`, `NullPointerException`, `ArithmeticException`. They usually mean a bug or invalid input, and the compiler does not force you to handle them.
+- **Checked** exceptions extend `Exception` but not `RuntimeException`: `IOException`, `SQLException`, `InterruptedException`. The compiler forces every method that might throw one to either catch it or declare it with `throws`.
+
+```java
+import java.io.IOException;
+import java.io.UncheckedIOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+public class Main {
+    public static void main(String[] args) {
+        try {
+            System.out.println(readPrices(Path.of("missing.csv")));
+        } catch (IOException e) {
+            System.out.println("Could not read: " + e.getClass().getSimpleName());
+        }
+
+        try {
+            loadMenu();
+        } catch (UncheckedIOException e) {
+            System.out.println("Wrapped: " + e.getCause().getClass().getSimpleName());
+        }
+    }
+
+    static String readPrices(Path file) throws IOException {
+        return Files.readString(file);
+    }
+
+    static void loadMenu() {
+        try {
+            Files.readString(Path.of("menu.json"));
+        } catch (IOException e) {
+            throw new UncheckedIOException("Menu could not be loaded", e);
+        }
+    }
+}
+```
+
+It prints `Could not read: NoSuchFileException` and `Wrapped: NoSuchFileException`. `readPrices` declares `throws IOException`, passing the decision to its caller. `loadMenu` **wraps** the checked exception in an unchecked one, keeping the original as the **cause**; modern frameworks such as Spring mostly use unchecked exceptions, and wrapping is common at their edges.
+
+### Your own exceptions
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        try {
+            cancel("o-42");
+        } catch (OrderNotFoundException e) {
+            System.out.println("404: " + e.getMessage() + " (" + e.orderId() + ")");
+        }
+    }
+
+    static void cancel(String orderId) {
+        throw new OrderNotFoundException(orderId);
+    }
+}
+
+class OrderNotFoundException extends RuntimeException {
+    private final String orderId;
+
+    OrderNotFoundException(String orderId) {
+        super("Order " + orderId + " not found");
+        this.orderId = orderId;
+    }
+
+    String orderId() {
+        return orderId;
+    }
+}
+```
+
+It prints `404: Order o-42 not found (o-42)`. In Spring, an exception handler maps exceptions like this to HTTP status codes (<Ref to="m-api-design" />).
+
+Rules: catch only what you can handle; never swallow exceptions with an empty `catch`; keep the cause when wrapping; and don't use exceptions for expected outcomes such as "is this input valid?".
+
+### try-with-resources
+
+Files, network connections and database connections must be closed. Classes that need closing implement **`AutoCloseable`**, and **try-with-resources** closes them automatically, even when an exception is thrown:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        try (var log = new AuditLog("orders")) {
+            log.write("order o-1 placed");
+            throw new IllegalStateException("something broke");
+        } catch (IllegalStateException e) {
+            System.out.println("Caught: " + e.getMessage());
+        }
+    }
+}
+
+class AuditLog implements AutoCloseable {
+    private final String name;
+
+    AuditLog(String name) {
+        this.name = name;
+    }
+
+    void write(String line) {
+        System.out.println("[" + name + "] " + line);
+    }
+
+    @Override
+    public void close() {
+        System.out.println("[" + name + "] closed");
+    }
+}
+```
+
+It prints `[orders] order o-1 placed`, `[orders] closed`, then `Caught: something broke`: the log was closed before the exception was handled. Always use try-with-resources for streams, readers, JDBC connections and statements.
+
+## Threads
+
+A **thread** is an independent path of execution; a Java program can run many at once. A web server handles each request on a thread, so many requests run concurrently. You rarely create threads by hand; instead you hand tasks to an **`ExecutorService`**, which manages a pool of threads:
+
+```java
+import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        long start = System.nanoTime();
+        try (ExecutorService pool = Executors.newFixedThreadPool(3)) {
+            List<Future<String>> results = List.of(
+                pool.submit(() -> fetch("prices", 300)),
+                pool.submit(() -> fetch("stock", 300)),
+                pool.submit(() -> fetch("offers", 300)));
+            for (Future<String> f : results) {
+                System.out.println(f.get());
+            }
+        }
+        System.out.println("about " + roundedMs(start) + " ms");
+    }
+
+    static String fetch(String what, int ms) throws InterruptedException {
+        Thread.sleep(ms);
+        return what;
+    }
+
+    static long roundedMs(long start) {
+        return ((System.nanoTime() - start) / 1_000_000 + 50) / 100 * 100;
+    }
+}
+```
+
+It prints `prices`, `stock`, `offers` and `about 300 ms`: three 300 ms tasks ran at the same time. `submit` returns a **`Future`**, a handle to a result that will arrive later; `get()` waits for it. Since Java 19 an `ExecutorService` can be used in try-with-resources, which waits for its tasks and shuts it down.
+
+## CompletableFuture
+
+**`CompletableFuture`** lets you chain and combine asynchronous steps without blocking at each one:
+
+```java
+import java.util.concurrent.CompletableFuture;
+
+public class Main {
+    public static void main(String[] args) {
+        CompletableFuture<Integer> price = CompletableFuture.supplyAsync(() -> slow(450));
+        CompletableFuture<Integer> delivery = CompletableFuture.supplyAsync(() -> slow(350));
+
+        int total = price.thenCombine(delivery, Integer::sum).join();
+        System.out.println(total);
+
+        String message = CompletableFuture.supplyAsync(() -> slow(-1))
+            .thenApply(p -> "charged " + p)
+            .exceptionally(e -> "failed: " + e.getCause().getMessage())
+            .join();
+        System.out.println(message);
+    }
+
+    static int slow(int pence) {
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+        if (pence < 0) throw new IllegalArgumentException("negative amount");
+        return pence;
+    }
+}
+```
+
+It prints `800` and `failed: negative amount`. `thenApply` transforms a result, `thenCombine` joins two, `exceptionally` recovers from a failure, and `join` waits for the final value. Note the handling of **`InterruptedException`**: restore the interrupt flag rather than swallowing it, so whoever asked the thread to stop still sees the request.
+
+## Virtual threads
+
+An ordinary (**platform**) thread is an operating-system thread, and each one costs about a megabyte of memory, so a server can only have a few thousand. While a thread waits for a database or another service it does nothing useful. **Virtual threads** (Java 21 and later) are very cheap threads managed by the JVM: when one waits, the JVM parks it and uses the real thread for other work. You can have millions, so you can write simple blocking code, one virtual thread per task, and still serve huge numbers of concurrent requests:
+
+```java
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        long start = System.nanoTime();
+        List<Future<Integer>> tasks = new ArrayList<>();
+        try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+            for (int i = 0; i < 10_000; i++) {
+                int n = i;
+                tasks.add(executor.submit(() -> {
+                    Thread.sleep(500);
+                    return n;
+                }));
+            }
+        }
+        long sum = 0;
+        for (Future<Integer> t : tasks) sum += t.get();
+        long ms = (System.nanoTime() - start) / 1_000_000;
+        System.out.println(tasks.size() + " tasks, sum " + sum);
+        System.out.println(ms < 5000 ? "finished in seconds, not 10,000 x 500 ms" : "slow");
+    }
+}
+```
+
+It prints `10000 tasks, sum 49995000` and `finished in seconds, not 10,000 x 500 ms`: ten thousand tasks that each wait half a second all finish in well under five seconds, without ten thousand operating-system threads. Spring Boot turns them on for request handling with one setting (`spring.threads.virtual.enabled=true`). Virtual threads help with **waiting** (I/O); they do not make CPU-heavy work faster (<Ref to="m-async" />).
+
+## Shared data
+
+When several threads change the same data at once, updates can be lost: `count++` is really "read, add one, write", and two threads can interleave those steps (a **race condition**, <Ref to="m-threads-locks" />):
+
+```java
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
+
+public class Main {
+    static int unsafeCount = 0;
+    static final AtomicInteger safeCount = new AtomicInteger();
+    static int lockedCount = 0;
+    static final Object lock = new Object();
+
+    public static void main(String[] args) {
+        try (var executor = Executors.newFixedThreadPool(8)) {
+            for (int i = 0; i < 100_000; i++) {
+                executor.submit(() -> {
+                    unsafeCount++;
+                    safeCount.incrementAndGet();
+                    synchronized (lock) {
+                        lockedCount++;
+                    }
+                });
+            }
+        }
+        System.out.println("unsafe lost updates: " + (unsafeCount < 100_000));
+        System.out.println("atomic: " + safeCount.get());
+        System.out.println("synchronized: " + lockedCount);
+    }
+}
+```
+
+It prints `atomic: 100000` and `synchronized: 100000`; the unsafe counter usually ends below 100,000, so the first line usually prints `true`, but because races depend on timing it can occasionally print `false`. The tools:
+
+- **Atomic classes** (`AtomicInteger`, `AtomicLong`) for single counters.
+- **`synchronized`** blocks (or `ReentrantLock`) so only one thread runs a section at a time.
+- **Concurrent collections** such as `ConcurrentHashMap` instead of `HashMap`.
+- Best of all, **don't share mutable state**: in a web service, keep request data in local variables and records, and shared data in the database.
+
+## Common mistakes
+
+- **Catching `Exception` and carrying on**, or an empty `catch`.
+- **Losing the cause** when wrapping: always pass the original exception.
+- **Forgetting try-with-resources**, leaking connections until the pool runs out.
+- **Swallowing `InterruptedException`.**
+- **Sharing a `HashMap` or counter between threads** without synchronisation.
+- **Expecting virtual threads to speed up CPU-bound work.**
+
+## Practice
+
+**1. (warm-up)** Is `IOException` checked or unchecked? And `IllegalArgumentException`? What difference does it make to your code?
+
+<Solution>
+
+`IOException` is checked: any method that may throw it must catch it or declare `throws IOException`, or the code will not compile. `IllegalArgumentException` is unchecked (it extends `RuntimeException`), so the compiler does not force you to handle it.
+
+</Solution>
+
+**2. (warm-up)** Write `parseQuantity(String text)` that returns the number, or throws `IllegalArgumentException` with a helpful message when the text is not a whole number from 1 to 99. Keep the original exception as the cause where there is one.
+
+<Solution>
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        System.out.println(parseQuantity("3"));
+        for (String bad : new String[] { "zero", "0", "120" }) {
+            try {
+                parseQuantity(bad);
+            } catch (IllegalArgumentException e) {
+                System.out.println(e.getMessage() + (e.getCause() != null ? " (not a number)" : ""));
+            }
+        }
+    }
+
+    static int parseQuantity(String text) {
+        int n;
+        try {
+            n = Integer.parseInt(text.trim());
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Quantity must be a whole number from 1 to 99, not '" + text + "'", e);
+        }
+        if (n < 1 || n > 99) throw new IllegalArgumentException("Quantity must be a whole number from 1 to 99, not '" + text + "'");
+        return n;
+    }
+}
+```
+
+It prints **3**, then the message for **zero** (marked "not a number", because it has a cause), **0** and **120**.
+
+</Solution>
+
+**3. (standard)** Three independent lookups take 200 ms, 300 ms and 100 ms. Run them concurrently with `CompletableFuture` and print all three results and the total time, rounded to 100 ms.
+
+<Solution>
+
+```java
+import java.util.concurrent.CompletableFuture;
+
+public class Main {
+    public static void main(String[] args) {
+        long start = System.nanoTime();
+        var prices = CompletableFuture.supplyAsync(() -> fetch("prices", 200));
+        var stock = CompletableFuture.supplyAsync(() -> fetch("stock", 300));
+        var offers = CompletableFuture.supplyAsync(() -> fetch("offers", 100));
+        CompletableFuture.allOf(prices, stock, offers).join();
+        System.out.println(prices.join() + ", " + stock.join() + ", " + offers.join());
+        System.out.println(((System.nanoTime() - start) / 1_000_000 + 50) / 100 * 100 + " ms");
+    }
+
+    static String fetch(String what, int ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException(e);
+        }
+        return what;
+    }
+}
+```
+
+It prints **prices, stock, offers** and **300 ms**: the time of the slowest lookup.
+
+</Solution>
+
+**4. (standard)** Several threads record page views in a shared map from page to count. Write it safely.
+
+<Solution>
+
+```java
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Executors;
+
+public class Main {
+    public static void main(String[] args) {
+        Map<String, Integer> views = new ConcurrentHashMap<>();
+        String[] pages = { "/menu", "/basket", "/menu", "/checkout" };
+        try (var executor = Executors.newFixedThreadPool(8)) {
+            for (int i = 0; i < 10_000; i++) {
+                String page = pages[i % pages.length];
+                executor.submit(() -> views.merge(page, 1, Integer::sum));
+            }
+        }
+        System.out.println(new TreeMap<>(views));
+    }
+}
+```
+
+It prints **`{/basket=2500, /checkout=2500, /menu=5000}`**. `ConcurrentHashMap.merge` updates each key atomically; with a plain `HashMap`, counts would be lost and the map could even be corrupted.
+
+</Solution>
+
+**5. (stretch)** A colleague's service creates a new fixed pool of 200 platform threads for each request to call three other services, and never shuts it down. What is wrong, and what would you do instead?
+
+<Solution>
+
+Creating a pool per request is expensive, and never shutting it down leaks threads until the process runs out of memory or thread limits. Two hundred threads for three calls is also wasteful. Instead: on Java 21 or later, use a virtual-thread-per-task executor in try-with-resources (cheap, and closed automatically), or one shared, properly sized executor for the whole application, or `CompletableFuture` with a shared executor. Also give each call a timeout so a slow service cannot hold the request forever (<Ref to="m-resilience" />).
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Exceptions**: `try`, `catch` (most specific first, or `A | B`), `finally`. **Checked** exceptions must be caught or declared with `throws`; **unchecked** ones extend `RuntimeException`. Wrap with the cause; never swallow.
+- **try-with-resources** closes `AutoCloseable` objects reliably.
+- Run tasks with an **`ExecutorService`**; get results through **`Future`**; chain and combine with **`CompletableFuture`**.
+- **Virtual threads** (Java 21 and later) make one-thread-per-task cheap for I/O-heavy work.
+- Protect shared data with **atomics**, **`synchronized`** or concurrent collections, or better, don't share mutable state.
+
+## Go deeper
+
+- [Learn Java: exceptions](https://dev.java/learn/exceptions/), Oracle (dev.java). Catching, throwing, checked and unchecked exceptions.
+- [The try-with-resources statement](https://docs.oracle.com/javase/tutorial/essential/exceptions/tryResourceClose.html), Oracle. Closing resources reliably.
+- [Virtual threads](https://docs.oracle.com/en/java/javase/21/core/virtual-threads.html), Oracle. What virtual threads are, and when to use them.
+- [JEP 444: virtual threads](https://openjdk.org/jeps/444), OpenJDK. The design and its reasoning.

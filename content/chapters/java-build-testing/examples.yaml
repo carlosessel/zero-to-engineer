@@ -1,0 +1,369 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: text
+  check: illustration
+  note: A folder layout; block 7's check creates it.
+- block: 2
+  lang: kotlin
+  check: illustration
+  note: A build file; block 7's check builds with it.
+- block: 3
+  lang: kotlin
+  check: illustration
+  note: A build file; block 7's check builds with it.
+- block: 4
+  lang: xml
+  check: shell
+  script: |
+    python3 -c "import sys, xml.etree.ElementTree as E; r = E.parse(sys.argv[1]).getroot(); print(r.tag)" "$BLOCK"
+  output_contains:
+  - '{http://maven.apache.org/POM/4.0.0}project'
+- block: 5
+  lang: java
+  check: illustration
+  note: A source file; block 7's check compiles and tests it.
+- block: 6
+  lang: java
+  check: illustration
+  note: A test file; block 7's check runs it.
+- block: 7
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    mkdir w7 && cd w7
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    test -n "$GRADLE" || { echo "needs Gradle"; exit 1; }
+    gradle() { "$GRADLE" --no-daemon "$@"; }
+    mkdir -p $(dirname settings.gradle.kts)
+    cat > settings.gradle.kts <<'SRC_EOF'
+    rootProject.name = "bakery"
+    SRC_EOF
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        testImplementation(platform("org.junit:junit-bom:6.1.3"))
+        testImplementation("org.junit.jupiter:junit-jupiter")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "failed")
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/PriceCalculator.java)
+    cat > src/main/java/com/bakery/PriceCalculator.java <<'SRC_EOF'
+    package com.bakery;
+
+    import java.util.List;
+
+    public class PriceCalculator {
+        public static final int FREE_DELIVERY_FROM_PENCE = 3000;
+        public static final int DELIVERY_PENCE = 350;
+
+        public record Line(String sku, int unitPence, int quantity) {}
+
+        public int subtotal(List<Line> lines) {
+            return lines.stream().mapToInt(l -> l.unitPence() * l.quantity()).sum();
+        }
+
+        public int total(List<Line> lines) {
+            if (lines.isEmpty()) throw new IllegalArgumentException("A basket needs at least one line");
+            int subtotal = subtotal(lines);
+            return subtotal >= FREE_DELIVERY_FROM_PENCE ? subtotal : subtotal + DELIVERY_PENCE;
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/test/java/com/bakery/PriceCalculatorTest.java)
+    cat > src/test/java/com/bakery/PriceCalculatorTest.java <<'SRC_EOF'
+    package com.bakery;
+
+    import static org.junit.jupiter.api.Assertions.assertEquals;
+    import static org.junit.jupiter.api.Assertions.assertThrows;
+
+    import com.bakery.PriceCalculator.Line;
+    import java.util.List;
+    import org.junit.jupiter.api.Test;
+    import org.junit.jupiter.params.ParameterizedTest;
+    import org.junit.jupiter.params.provider.CsvSource;
+
+    class PriceCalculatorTest {
+        private final PriceCalculator calculator = new PriceCalculator();
+
+        @Test
+        void addsDeliveryBelowTheFreeDeliveryThreshold() {
+            var lines = List.of(new Line("RYE-400", 450, 2));
+
+            int total = calculator.total(lines);
+
+            assertEquals(900 + 350, total);
+        }
+
+        @ParameterizedTest
+        @CsvSource({ "2999, 3349", "3000, 3000", "4500, 4500" })
+        void deliveryIsFreeFromThirtyPounds(int subtotal, int expected) {
+            var lines = List.of(new Line("CAKE", subtotal, 1));
+
+            assertEquals(expected, calculator.total(lines));
+        }
+
+        @Test
+        void refusesAnEmptyBasket() {
+            var error = assertThrows(IllegalArgumentException.class, () -> calculator.total(List.of()));
+            assertEquals("A basket needs at least one line", error.getMessage());
+        }
+    }
+    SRC_EOF
+    source "$BLOCK"
+  output_contains:
+  - deliveryIsFreeFromThirtyPounds(int, int) > [2] "3000", "3000" PASSED
+  - BUILD SUCCESSFUL
+- block: 8
+  lang: bash
+  check: illustration
+  note: Wrapper commands; they need a project with a wrapper, which block 7's check does not create.
+- block: 9
+  lang: java
+  check: shell
+  needs: network
+  script: |
+    mkdir w9 && cd w9
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    test -n "$GRADLE" || { echo "needs Gradle"; exit 1; }
+    gradle() { "$GRADLE" --no-daemon "$@"; }
+    mkdir -p $(dirname settings.gradle.kts)
+    cat > settings.gradle.kts <<'SRC_EOF'
+    rootProject.name = "bakery"
+    SRC_EOF
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        testImplementation(platform("org.junit:junit-bom:6.1.3"))
+        testImplementation("org.junit.jupiter:junit-jupiter")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "failed")
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/PriceCalculator.java)
+    cat > src/main/java/com/bakery/PriceCalculator.java <<'SRC_EOF'
+    package com.bakery;
+
+    import java.util.List;
+
+    public class PriceCalculator {
+        public static final int FREE_DELIVERY_FROM_PENCE = 3000;
+        public static final int DELIVERY_PENCE = 350;
+
+        public record Line(String sku, int unitPence, int quantity) {}
+
+        public int subtotal(List<Line> lines) {
+            return lines.stream().mapToInt(l -> l.unitPence() * l.quantity()).sum();
+        }
+
+        public int total(List<Line> lines) {
+            if (lines.isEmpty()) throw new IllegalArgumentException("A basket needs at least one line");
+            int subtotal = subtotal(lines);
+            return subtotal >= FREE_DELIVERY_FROM_PENCE ? subtotal : subtotal + DELIVERY_PENCE;
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/test/java/com/bakery/PriceCalculatorTest.java)
+    cat > src/test/java/com/bakery/PriceCalculatorTest.java <<'SRC_EOF'
+    package com.bakery;
+
+    import static org.junit.jupiter.api.Assertions.assertEquals;
+    import static org.junit.jupiter.api.Assertions.assertThrows;
+
+    import com.bakery.PriceCalculator.Line;
+    import java.util.List;
+    import org.junit.jupiter.api.Test;
+    import org.junit.jupiter.params.ParameterizedTest;
+    import org.junit.jupiter.params.provider.CsvSource;
+
+    class PriceCalculatorTest {
+        private final PriceCalculator calculator = new PriceCalculator();
+
+        @Test
+        void addsDeliveryBelowTheFreeDeliveryThreshold() {
+            var lines = List.of(new Line("RYE-400", 450, 2));
+
+            int total = calculator.total(lines);
+
+            assertEquals(900 + 350, total);
+        }
+
+        @ParameterizedTest
+        @CsvSource({ "2999, 3349", "3000, 3000", "4500, 4500" })
+        void deliveryIsFreeFromThirtyPounds(int subtotal, int expected) {
+            var lines = List.of(new Line("CAKE", subtotal, 1));
+
+            assertEquals(expected, calculator.total(lines));
+        }
+
+        @Test
+        void refusesAnEmptyBasket() {
+            var error = assertThrows(IllegalArgumentException.class, () -> calculator.total(List.of()));
+            assertEquals("A basket needs at least one line", error.getMessage());
+        }
+    }
+    SRC_EOF
+    cp "$BLOCK" src/test/java/com/bakery/SubtotalTest.java
+    gradle test --console=plain | grep -c PASSED
+  output_contains:
+  - '7
+
+    '
+- block: 10
+  lang: java
+  check: shell
+  needs: network
+  script: |
+    mkdir w10 && cd w10
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    test -n "$GRADLE" || { echo "needs Gradle"; exit 1; }
+    gradle() { "$GRADLE" --no-daemon "$@"; }
+    mkdir -p $(dirname settings.gradle.kts)
+    cat > settings.gradle.kts <<'SRC_EOF'
+    rootProject.name = "bakery"
+    SRC_EOF
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        testImplementation(platform("org.junit:junit-bom:6.1.3"))
+        testImplementation("org.junit.jupiter:junit-jupiter")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "failed")
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/PriceCalculator.java)
+    cat > src/main/java/com/bakery/PriceCalculator.java <<'SRC_EOF'
+    package com.bakery;
+
+    import java.util.List;
+
+    public class PriceCalculator {
+        public static final int FREE_DELIVERY_FROM_PENCE = 3000;
+        public static final int DELIVERY_PENCE = 350;
+
+        public record Line(String sku, int unitPence, int quantity) {}
+
+        public int subtotal(List<Line> lines) {
+            return lines.stream().mapToInt(l -> l.unitPence() * l.quantity()).sum();
+        }
+
+        public int total(List<Line> lines) {
+            if (lines.isEmpty()) throw new IllegalArgumentException("A basket needs at least one line");
+            int subtotal = subtotal(lines);
+            return subtotal >= FREE_DELIVERY_FROM_PENCE ? subtotal : subtotal + DELIVERY_PENCE;
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/test/java/com/bakery/PriceCalculatorTest.java)
+    cat > src/test/java/com/bakery/PriceCalculatorTest.java <<'SRC_EOF'
+    package com.bakery;
+
+    import static org.junit.jupiter.api.Assertions.assertEquals;
+    import static org.junit.jupiter.api.Assertions.assertThrows;
+
+    import com.bakery.PriceCalculator.Line;
+    import java.util.List;
+    import org.junit.jupiter.api.Test;
+    import org.junit.jupiter.params.ParameterizedTest;
+    import org.junit.jupiter.params.provider.CsvSource;
+
+    class PriceCalculatorTest {
+        private final PriceCalculator calculator = new PriceCalculator();
+
+        @Test
+        void addsDeliveryBelowTheFreeDeliveryThreshold() {
+            var lines = List.of(new Line("RYE-400", 450, 2));
+
+            int total = calculator.total(lines);
+
+            assertEquals(900 + 350, total);
+        }
+
+        @ParameterizedTest
+        @CsvSource({ "2999, 3349", "3000, 3000", "4500, 4500" })
+        void deliveryIsFreeFromThirtyPounds(int subtotal, int expected) {
+            var lines = List.of(new Line("CAKE", subtotal, 1));
+
+            assertEquals(expected, calculator.total(lines));
+        }
+
+        @Test
+        void refusesAnEmptyBasket() {
+            var error = assertThrows(IllegalArgumentException.class, () -> calculator.total(List.of()));
+            assertEquals("A basket needs at least one line", error.getMessage());
+        }
+    }
+    SRC_EOF
+    cat > new.java <<'SRC_EOF'
+        public int subtotal(List<Line> lines) {
+            return lines.stream().mapToInt(PriceCalculator::lineTotal).sum();
+        }
+
+        private static int lineTotal(Line line) {
+            int full = line.unitPence() * line.quantity();
+            return line.quantity() >= 10 ? full - full / 10 : full;
+        }
+    SRC_EOF
+    cp "$BLOCK" src/test/java/com/bakery/BulkDiscountTest.java
+    if gradle test --console=plain > before.txt 2>&1; then echo "should fail first"; exit 1; fi
+    grep -q FAILED before.txt
+    python3 - <<'PY_EOF'
+    from pathlib import Path
+    p = Path("src/main/java/com/bakery/PriceCalculator.java")
+    s = p.read_text()
+    old = "    public int subtotal(List<Line> lines) {\n        return lines.stream().mapToInt(l -> l.unitPence() * l.quantity()).sum();\n    }\n"
+    assert old in s
+    p.write_text(s.replace(old, Path("new.java").read_text()))
+    PY_EOF
+    gradle test --console=plain | grep -c PASSED
+  output_contains:
+  - '8
+
+    '
+- block: 11
+  lang: java
+  check: illustration
+  note: The change to subtotal; block 10's check applies it and runs the tests.

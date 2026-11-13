@@ -1,0 +1,442 @@
+---
+title: "Java from zero: values, types and control flow"
+summary: "Variables, types, decisions, loops and methods, compiling and running Java."
+prerequisites: [be-setup]
+estimated_minutes: 300
+status: resources-verified
+---
+
+By the end of this chapter you will write and run small Java programs: storing values in variables of the right type, doing arithmetic and building text, making decisions with `if` and `switch`, repeating work with loops, and organising code into methods. Java is one of the most used languages in the world: a statically typed language that runs on the **Java Virtual Machine (JVM)**, behind a huge share of banking, retail, telecoms and enterprise back ends, usually with the Spring framework. No programming experience is assumed; you need the JDK from <Ref to="be-setup" />. The examples run on Java 21 and later.
+
+## Running Java
+
+Every Java program is made of **classes**. The program starts at a method called `main`. Save this as `Main.java`:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        System.out.println("Fresh bread, ready at 7am");
+        System.out.println(2 + 3);
+    }
+}
+```
+
+Run it with `java Main.java`. It prints `Fresh bread, ready at 7am` and `5`.
+
+- `public class Main` declares a class; the file name must match the public class name.
+- `public static void main(String[] args)` is the entry point; `args` holds any command-line arguments.
+- `System.out.println` prints a line.
+- Statements end with `;`, and blocks of code sit inside `{ }`.
+
+`java Main.java` compiles and runs a single file in one step. Bigger programs are compiled first with `javac` into **bytecode** (`.class` files), which the JVM runs and compiles to machine code as it goes (<Ref to="m-runtimes" />); build tools do this for you (<Ref to="java-build-testing" />). Java 25 also lets small programs leave out the class and write just `void main() { ... }`, but you will see the full form in every codebase, so this course uses it.
+
+## Variables and types
+
+A **variable** is a named place that holds a value. Java is **statically typed**: every variable has a type that is fixed and checked before the program runs.
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        String bread = "Sourdough";
+        int loaves = 12;
+        double weightKg = 0.8;
+        boolean vegan = true;
+        char size = 'L';
+        long ordersEver = 3_000_000_000L;
+
+        System.out.println(bread + ": " + loaves + " loaves, " + weightKg + " kg, vegan " + vegan + ", size " + size);
+        System.out.println(ordersEver);
+
+        var price = 4.50;
+        loaves = loaves - 2;
+        System.out.println(loaves + " left at " + price);
+
+        final int shelves = 4;
+        // shelves = 5;  would not compile: final variables cannot change
+        System.out.println(Integer.MAX_VALUE);
+    }
+}
+```
+
+It prints `Sourdough: 12 loaves, 0.8 kg, vegan true, size L`, `3000000000`, `10 left at 4.5` and `2147483647`.
+
+| Type | Holds | Example |
+|---|---|---|
+| `int` | whole numbers up to about ±2.1 billion | `12` |
+| `long` | much larger whole numbers | `3_000_000_000L` |
+| `double` | numbers with fractions, approximately | `0.8` |
+| `boolean` | `true` or `false` | `true` |
+| `char` | one character | `'L'` |
+| `String` | text | `"Sourdough"` |
+| `BigDecimal` | exact decimal numbers, for money | `new BigDecimal("4.50")` |
+
+- `int`, `long`, `double`, `boolean` and `char` are **primitive types**: plain values. `String` and everything else are **reference types** (objects). Each primitive has an object "wrapper" (`Integer`, `Long`, `Double`, `Boolean`) used in collections.
+- **`var`** lets the compiler work out the type from the value; the type is still fixed.
+- **`final`** makes a variable that cannot be reassigned.
+- `_` in a number is only for readability. An `int` that goes past its maximum silently **overflows** to a negative number; use `long` for big counts (<Ref to="m-data-representation" />).
+
+### Money: never double
+
+`double` stores numbers in binary, so most decimal fractions are approximate. For money use **`BigDecimal`** or whole numbers of pence:
+
+```java
+import java.math.BigDecimal;
+
+public class Main {
+    public static void main(String[] args) {
+        System.out.println(0.1 + 0.2);
+
+        var a = new BigDecimal("0.10");
+        var b = new BigDecimal("0.20");
+        System.out.println(a.add(b));
+
+        var price = new BigDecimal("4.50");
+        System.out.println(price.multiply(BigDecimal.valueOf(3)));
+
+        int pence = 450 * 3;
+        System.out.println(pence);
+    }
+}
+```
+
+It prints `0.30000000000000004`, `0.30`, `13.50` and `1350`. `BigDecimal` uses methods (`add`, `subtract`, `multiply`) rather than `+` and `*`, and must be created from a **string**, not a double, to stay exact. `import` at the top makes a class from another package available by its short name.
+
+## Arithmetic and text
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        System.out.println(17 / 5);
+        System.out.println(17 % 5);
+        System.out.println(17 / 5.0);
+        System.out.println((double) 17 / 5);
+
+        String name = "Ama";
+        int items = 3;
+        System.out.println("Hello, " + name + "! You have " + items + " items.");
+        System.out.println(String.format("Total: £%.2f", 13.5));
+        System.out.println("Total: £%.2f for %s".formatted(13.5, name));
+
+        String code = "  rye-400  ";
+        System.out.println(code.trim().toUpperCase());
+        System.out.println("Sourdough".length());
+        System.out.println("Sourdough".contains("dough"));
+        System.out.println("a,b,c".split(",").length);
+
+        String text = """
+            Order confirmed
+            Collect from 7am
+            """;
+        System.out.print(text);
+    }
+}
+```
+
+It prints `3`, `2`, `3.4`, `3.4`, the greeting, `Total: £13.50` twice, `RYE-400`, `9`, `true`, `3`, and the two lines of the **text block**. Integer division drops the fraction; `%` is the remainder; `(double)` is a **cast**, converting a value to another type. `"""` starts a text block, a multi-line string.
+
+### Comparing strings
+
+Compare strings with **`.equals`**, never `==`:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        String a = "rye";
+        String b = new String("rye");
+        System.out.println(a == b);
+        System.out.println(a.equals(b));
+        System.out.println("RYE".equalsIgnoreCase(a));
+    }
+}
+```
+
+It prints `false`, `true` and `true`. For objects, `==` asks "is this the same object?", not "do they have the same value?". This catches out nearly every Java beginner.
+
+## Decisions
+
+`if`, `else if` and `else` run code only when a condition is true:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        int basketPence = 2450;
+        boolean member = true;
+
+        if (basketPence >= 3000) {
+            System.out.println("Free delivery");
+        } else if (member && basketPence >= 2000) {
+            System.out.println("Free delivery for members");
+        } else {
+            System.out.println("Delivery: £3.50");
+        }
+
+        String label = basketPence > 5000 ? "large" : "normal";
+        System.out.println(label);
+    }
+}
+```
+
+It prints `Free delivery for members` and `normal`. Comparisons: `==`, `!=`, `<`, `<=`, `>`, `>=`. Combine conditions with `&&` (and), `||` (or) and `!` (not). `condition ? a : b` is the **ternary** operator, a short if-else that gives a value.
+
+### switch
+
+A **switch expression** picks a value by matching cases. The modern form uses arrows and must cover every possibility:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        for (String day : new String[] { "SATURDAY", "MONDAY", "SUNDAY" }) {
+            String opening = switch (day) {
+                case "SATURDAY" -> "8am to 4pm";
+                case "SUNDAY" -> "closed";
+                default -> "7am to 6pm";
+            };
+            System.out.println(day + ": " + opening);
+        }
+
+        int quantity = 25;
+        String band = switch (quantity / 10) {
+            case 0 -> "small";
+            case 1, 2 -> "medium";
+            default -> "large";
+        };
+        System.out.println(band);
+    }
+}
+```
+
+It prints `SATURDAY: 8am to 4pm`, `MONDAY: 7am to 6pm`, `SUNDAY: closed` and then `medium`. You will also meet the old `switch` statement with `case X:` and `break;`, where forgetting `break` makes execution "fall through" into the next case; prefer the arrow form.
+
+## Loops
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        for (int i = 1; i <= 3; i++) {
+            System.out.println("Batch " + i);
+        }
+
+        String[] breads = { "Rye", "Sourdough", "Bagel" };
+        for (String bread : breads) {
+            System.out.println(bread);
+        }
+
+        int stock = 10;
+        int sold = 0;
+        while (stock >= 4) {
+            stock -= 4;
+            sold++;
+        }
+        System.out.println(sold + " sold, " + stock + " left");
+
+        for (int n = 1; n <= 10; n++) {
+            if (n % 2 == 0) continue;
+            if (n > 7) break;
+            System.out.print(n + " ");
+        }
+        System.out.println();
+    }
+}
+```
+
+It prints `Batch 1` to `Batch 3`, the three breads, `2 sold, 2 left` and `1 3 5 7 `. The classic **`for`** loop has a start, a condition and a step; the **for-each** loop (`for (String bread : breads)`) visits each item; **`while`** repeats while a condition holds. `continue` skips to the next round; `break` leaves the loop. **Arrays** like `String[]` have a fixed length (`breads.length`); <Ref to="java-collections-streams" /> covers growable lists.
+
+## Methods
+
+A **method** is a named, reusable piece of code. It declares the types of its **parameters** and of the value it returns (`void` if none):
+
+```java
+public class Main {
+    static final int FREE_DELIVERY_FROM_PENCE = 3000;
+
+    public static void main(String[] args) {
+        System.out.println(deliveryPence(2450));
+        System.out.println(deliveryPence(3000));
+        System.out.println(formatPence(1350));
+        System.out.println(formatPence(5));
+        greet("Kofi");
+    }
+
+    static int deliveryPence(int basketPence) {
+        return basketPence >= FREE_DELIVERY_FROM_PENCE ? 0 : 350;
+    }
+
+    static String formatPence(int pence) {
+        return "£%d.%02d".formatted(pence / 100, pence % 100);
+    }
+
+    static void greet(String name) {
+        System.out.println("Welcome back, " + name);
+    }
+}
+```
+
+It prints `350`, `0`, `£13.50`, `£0.05` and `Welcome back, Kofi`. Methods are `static` here because `main` is static and there are no objects yet; <Ref to="java-objects" /> introduces objects and their methods. `static final` names a constant; by convention constants are written in `UPPER_SNAKE_CASE`, methods and variables in `camelCase`, and classes in `PascalCase`.
+
+Java has no default parameter values; instead you write several methods with the same name and different parameters (**overloading**).
+
+## Reading input
+
+Read lines from the keyboard with a **`Scanner`**, and turn text into numbers safely:
+
+```java
+import java.util.Scanner;
+
+public class Main {
+    public static void main(String[] args) {
+        var in = new Scanner(System.in);
+        System.out.print("How many loaves? ");
+        String line = in.nextLine();
+        try {
+            int loaves = Integer.parseInt(line.trim());
+            System.out.println("That will be £" + loaves * 4.5);
+        } catch (NumberFormatException e) {
+            System.out.println("'" + line + "' is not a whole number");
+        }
+    }
+}
+```
+
+Typing `4` prints `How many loaves? That will be £18.0`; typing `four` prints `'four' is not a whole number`. `Integer.parseInt` throws a `NumberFormatException` on bad input, which `try` and `catch` handle; <Ref to="java-errors-concurrency" /> covers exceptions properly.
+
+## Common mistakes
+
+- **Comparing strings with `==`** instead of `.equals`.
+- **Using `double` for money.** Use `BigDecimal` (from a string) or whole pence.
+- **Integer division surprises**: `17 / 5` is `3`.
+- **`int` overflow** on big counts; use `long`.
+- **File name not matching the public class name**, which fails to compile.
+- **Old-style `switch` without `break`**, falling through into the next case.
+
+## Practice
+
+**1. (warm-up)** Write a program that stores a product name, a price in pence and a quantity, and prints a line like `3 x Rye loaf = £13.50`.
+
+<Solution>
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        String name = "Rye loaf";
+        int pricePence = 450;
+        int quantity = 3;
+        int total = pricePence * quantity;
+        System.out.println("%d x %s = £%d.%02d".formatted(quantity, name, total / 100, total % 100));
+    }
+}
+```
+
+It prints **3 x Rye loaf = £13.50**.
+
+</Solution>
+
+**2. (warm-up)** What do `7 / 2`, `7 % 2` and `7 / 2.0` give in Java, and why?
+
+<Solution>
+
+`3`, `1` and `3.5`. Dividing two `int`s gives an `int`, dropping the fraction; `%` gives the remainder; if either side is a `double` the result is a `double`.
+
+</Solution>
+
+**3. (standard)** Write a method `String grade(int score)` that returns `"distinction"` for 70 and above, `"merit"` for 60 to 69, `"pass"` for 40 to 59 and `"fail"` below 40, and refuses scores outside 0 to 100 by throwing `IllegalArgumentException`. Test it with 85, 60, 39 and 120.
+
+<Solution>
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        for (int score : new int[] { 85, 60, 39, 120 }) {
+            try {
+                System.out.println(score + ": " + grade(score));
+            } catch (IllegalArgumentException e) {
+                System.out.println(score + ": " + e.getMessage());
+            }
+        }
+    }
+
+    static String grade(int score) {
+        if (score < 0 || score > 100) throw new IllegalArgumentException("score must be 0 to 100");
+        if (score >= 70) return "distinction";
+        if (score >= 60) return "merit";
+        if (score >= 40) return "pass";
+        return "fail";
+    }
+}
+```
+
+It prints **85: distinction**, **60: merit**, **39: fail** and **120: score must be 0 to 100**.
+
+</Solution>
+
+**4. (standard)** Print a price list for the sizes 400 g, 800 g and 1200 g, where bread costs £0.55 per 100 g, using `BigDecimal` so the amounts are exact.
+
+<Solution>
+
+```java
+import java.math.BigDecimal;
+
+public class Main {
+    public static void main(String[] args) {
+        var per100g = new BigDecimal("0.55");
+        for (int grams : new int[] { 400, 800, 1200 }) {
+            var price = per100g.multiply(BigDecimal.valueOf(grams / 100));
+            System.out.println(grams + " g: £" + price);
+        }
+    }
+}
+```
+
+It prints **400 g: £2.20**, **800 g: £4.40** and **1200 g: £6.60**.
+
+</Solution>
+
+**5. (stretch)** Read a weight in kilograms from input (such as `2.5`), and print the delivery charge: £3.50 for up to 2 kg, plus £1 for each started kilogram above that. Handle bad input.
+
+<Solution>
+
+```java
+import java.util.Scanner;
+
+public class Main {
+    public static void main(String[] args) {
+        var in = new Scanner(System.in);
+        String line = in.nextLine().trim();
+        double kg;
+        try {
+            kg = Double.parseDouble(line);
+        } catch (NumberFormatException e) {
+            System.out.println("Not a number: " + line);
+            return;
+        }
+        if (kg <= 0) {
+            System.out.println("Weight must be positive");
+            return;
+        }
+        int extraKg = (int) Math.max(0, Math.ceil(kg - 2));
+        int pence = 350 + extraKg * 100;
+        System.out.println("Delivery: £%d.%02d".formatted(pence / 100, pence % 100));
+    }
+}
+```
+
+With `2.5` it prints **Delivery: £4.50**; with `7` it prints **Delivery: £8.50**. `Math.ceil` rounds up, so 0.5 kg over counts as a whole started kilogram.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A Java program is made of **classes** and starts at `public static void main(String[] args)`; run one file with `java Main.java`.
+- Java is **statically typed**: `int`, `long`, `double`, `boolean`, `char` (primitives) and `String` and other objects (references). Use `var` to infer, `final` for values that never change.
+- Use **`BigDecimal`** from strings or whole pence for money, never `double`.
+- Compare strings with **`.equals`**, not `==`.
+- Decisions with `if`, the ternary `?:` and arrow-style **switch expressions**; loops with `for`, for-each and `while`.
+- **Methods** declare parameter and return types; constants are `static final`.
+
+## Go deeper
+
+- [Learn Java: getting started](https://dev.java/learn/getting-started/), Oracle (dev.java). The official tutorial, from your first program onwards.
+- [Learn Java: language basics](https://dev.java/learn/language-basics/), Oracle (dev.java). Variables, operators, expressions and control flow.
+- [Launching single-file source-code programs (JEP 330)](https://openjdk.org/jeps/330), OpenJDK. How `java Main.java` works.
+- [BigDecimal (Java SE 21)](https://docs.oracle.com/en/java/javase/21/docs/api/java.base/java/math/BigDecimal.html), Oracle. The exact decimal type for money.
