@@ -4,6 +4,12 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 13 (The job)
+
+Added
+- The project ladder: six projects from a validated read-only menu API to orders with a database, accounts and permissions, background work and events with an outbox and an idempotent consumer, a production-ready deployment with telemetry, and a service of the learner's own design, each with a specification, a definition of done and the chapters to revisit. The part also reuses the chapters on Git in a team, teamwork, AI coding tools and careers.
+- The course added to the glossary terms the reused chapters use.
+
 ### 2026-11-13: Zero to Backend Engineer, part 12 (AI in the back end)
 
 Added

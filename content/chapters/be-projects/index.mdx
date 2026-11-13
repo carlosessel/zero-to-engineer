@@ -1,0 +1,125 @@
+---
+title: "The project ladder"
+summary: "Projects from a single endpoint to a production-ready service with a queue, each with a specification and a checklist."
+prerequisites: [be-observability-stacks]
+estimated_minutes: 60
+status: resources-verified
+---
+
+By the end of this chapter you will have a plan for six projects, each a step up from the last, that turn what this course taught into working software you can show an employer: from a single validated endpoint to a production-ready service with a database, authentication, a message queue, tests, a pipeline and telemetry. Each project has a specification, a checklist of what "done" means, and the chapters to revisit. Build them in your track; the specifications are the same for C#, Java and TypeScript.
+
+## How to approach the projects
+
+- **Build each one yourself**, from an empty folder. Reading the chapters gave you knowledge; building gives you skill, and the mistakes you make on the way are the lessons that stick.
+- **Keep them in Git from the first commit**, on a public repository with a `README` explaining what the project does, how to run it, and the design choices you made (<Ref to="git-basics" />).
+- **Finish before polishing.** Meet the checklist, then improve. An unfinished project with a beautiful folder structure shows nothing.
+- **Use AI assistants as a reviewer and tutor, not an author** (<Ref to="ai-tools" />): write the code, then ask for a review and explanations. Be able to explain every line in an interview.
+- **Write down what you learnt** in each project's `README`: what was hard, what you would do differently. Interviewers ask exactly this.
+
+## Project 1: the menu API
+
+**Specification.** A read-only HTTP API for a bakery's menu. `GET /products` lists products with paging (`page`, `size`, at most 50) and an optional `category` filter; `GET /products/{sku}` returns one product or 404. Products live in memory, loaded at start-up.
+
+**Done when:**
+
+- Status codes are right (200, 400 for a bad `page` or `size`, 404), and errors are problem details (<Ref to="be-http" />).
+- Query parameters are validated.
+- There are unit tests for the paging logic and integration tests for every endpoint (<Ref to="be-integration-tests" />).
+- The `README` shows example `curl` calls.
+
+**Revisit:** your track's API chapter (<Ref to="be-api-aspnet" />, <Ref to="be-api-spring" /> or <Ref to="be-api-node" />).
+
+## Project 2: orders with a database
+
+**Specification.** Add orders. `POST /orders` takes a customer name and lines (product code and quantity), checks the products exist, computes the total with the delivery rule from earlier chapters (free from £30, otherwise £3.50), and stores the order in PostgreSQL. `GET /orders/{id}` returns it. Prices are stored in pence.
+
+**Done when:**
+
+- The schema is created by **migrations**, never by hand (<Ref to="m-schema-design" />).
+- Request bodies are validated, with separate request and response types.
+- Placing an order is one **transaction**.
+- Listing orders does not cause N+1 queries.
+- Integration tests run against a real PostgreSQL (Testcontainers, or PGlite in Node).
+- `docker compose up` starts the API and the database (<Ref to="be-deploy" />).
+
+**Revisit:** your track's data chapter (<Ref to="be-data-efcore" />, <Ref to="be-data-jpa" /> or <Ref to="be-data-node" />).
+
+## Project 3: accounts and permissions
+
+**Specification.** Customers sign in and see only their own orders; staff can see all orders and a daily sales report. Use an identity provider's free tier (or, to learn the mechanics, a token endpoint like the one in <Ref to="be-auth-stacks" />).
+
+**Done when:**
+
+- Every endpoint requires authentication unless deliberately public.
+- A customer reading another customer's order gets 404; a customer reading the report gets 403.
+- Tokens are validated for signature, issuer, audience and expiry.
+- Integration tests cover each permission rule, including the failures.
+- No secrets are in the repository; the `README` explains how to configure them.
+
+## Project 4: background work and events
+
+**Specification.** When an order is placed, send a confirmation email (a fake email sender that logs is fine) in the background, and publish an `OrderPlaced` event to Kafka (or RabbitMQ) that a separate **kitchen** service consumes to create a baking ticket.
+
+**Done when:**
+
+- The order and its event are written in one transaction with the **outbox** pattern; a relay publishes it (<Ref to="be-kafka-clients" />).
+- The kitchen consumer is **idempotent**: delivering the same event twice creates one ticket, and a test proves it.
+- Failed emails are retried with backoff and jitter, then recorded as failed (<Ref to="be-background-jobs" />).
+- A poison message goes to a dead-letter topic instead of blocking the consumer.
+- Both services shut down gracefully.
+
+## Project 5: production-ready
+
+**Specification.** Make the system from projects 2 to 4 ready to run for real.
+
+**Done when:**
+
+- A CI pipeline builds, tests and produces a container image on every push (<Ref to="m-delivery" />).
+- Liveness and readiness checks behave correctly when the database is down and during shutdown.
+- Logs are structured JSON with request and order ids and no personal data; RED metrics and a business metric are exposed; traces cross from the orders service through Kafka to the kitchen service (<Ref to="be-observability-stacks" />).
+- Calls to other services have timeouts, retries and a circuit breaker (<Ref to="m-resilience" />).
+- It is deployed somewhere reachable (a free tier of a cloud container platform is enough), with configuration from the environment.
+- A short runbook says how to tell it is healthy and what to do when the queue backs up.
+
+## Project 6: your own
+
+Pick a domain you care about (a library, a club's bookings, a game's leaderboard, a small shop) and build a service from scratch to the standard of project 5, writing a one-page design document first (<Ref to="m-design-docs" />). Your own idea, finished, is the strongest thing in a portfolio: it shows you can decide what to build, not just follow instructions.
+
+## Stretch ideas
+
+- **Rate limiting**: limit order placement per customer, and test it under load (<Ref to="m-system-design" />).
+- **Caching**: cache the menu with a clear invalidation rule, and measure the difference (<Ref to="m-caching" />).
+- **A second track**: rebuild project 2 in another of the three stacks, and write up what differed.
+- **Load test**: find the throughput where latency climbs, then find and fix the bottleneck (<Ref to="m-performance" />).
+- **An AI feature**: let customers ask about the menu in plain language, with retrieval over the product descriptions and structured output (<Ref to="rag" />).
+
+## Practice
+
+**1. (warm-up)** Write the `README` outline you would use for project 2.
+
+<Solution>
+
+A one-sentence description of what it does; how to run it (prerequisites, `docker compose up`, example `curl` calls); the API (endpoints, request and response examples, error format); design decisions (why PostgreSQL, money in pence, transactions, how N+1 is avoided); how to run the tests; what you would do next or differently.
+
+</Solution>
+
+**2. (standard)** For project 4, list the tests you would write for the kitchen consumer.
+
+<Solution>
+
+A valid `OrderPlaced` event creates one ticket; the same event delivered twice still creates one ticket; a malformed event is sent to the dead-letter topic and does not create a ticket; a temporary database failure is retried and then succeeds; events for different orders create separate tickets; and an integration test with a real broker (Testcontainers) checks the whole path from publishing to the ticket, including the outbox relay.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Six projects climb from a **validated read-only API** to **orders with a database**, **authentication and permissions**, **background work and events**, a **production-ready** system, and **your own** service.
+- Each has a specification, a **definition of done** and the chapters to revisit.
+- Build from scratch, in Git, finish before polishing, use AI as a reviewer, and write up what you learnt.
+
+## Go deeper
+
+- [roadmap.sh: back-end projects](https://roadmap.sh/backend/projects), Kamran Ahmed and contributors. More project ideas at each level, with specifications.
+- [The twelve-factor app](https://12factor.net/), Adam Wiggins and contributors. The checklist project 5 builds towards.
