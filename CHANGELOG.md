@@ -4,6 +4,16 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Zero to Backend Engineer, part 8 (Testing services)
+
+Added
+- A chapter on integration testing in each stack: test doubles (fakes, stubs and mocks), the same orders API tested through HTTP with ASP.NET Core's WebApplicationFactory and a fake `TimeProvider`, with `@SpringBootTest` on a random port and a fixed `Clock`, and with Supertest and Vitest (including a mock that makes the store fail); Testcontainers for real databases; contract tests; and what makes tests trustworthy. The part also reuses the Mastery testing chapter.
+- The checks build and run all three test suites (5, 5 and 6 tests), and the practice test is added to the .NET suite and must pass.
+- 3 glossary terms, and the course added to the existing terms the chapter uses.
+
+Not verified
+- No person has reviewed this chapter. The Testcontainers examples were not run, because Docker was not running where the checks ran. The other checks download packages, so they run only where network checks are switched on.
+
 ### 2026-11-13: Zero to Backend Engineer, part 7 (Security)
 
 Added

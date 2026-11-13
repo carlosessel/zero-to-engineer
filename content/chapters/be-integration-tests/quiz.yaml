@@ -1,0 +1,36 @@
+- question: What can an integration test catch that a unit test cannot?
+  options:
+  - A misspelt route, a renamed JSON property or validation that is not switched on
+  - A wrong calculation inside one function
+  answer: 0
+  explanation: Integration tests run the real wiring.
+- question: Which test double is a working, simplified implementation, such as an in-memory store?
+  options:
+  - A fake
+  - A mock
+  answer: 0
+  explanation: Prefer fakes; use mocks for interactions with no other trace.
+- question: Why inject a clock (TimeProvider, Clock, a now function) instead of reading the real time?
+  options:
+  - Tests can fix the time and be deterministic
+  - It is faster
+  answer: 0
+  explanation: Real time makes tests fail at midnight or month ends.
+- question: What does ConfigureTestServices do in a WebApplicationFactory test?
+  options:
+  - Replaces service registrations for the test, such as the store or the clock
+  - Starts a real web server on port 80
+  answer: 0
+  explanation: The rest of the application stays real.
+- question: Why test data access against the same database engine as production?
+  options:
+  - SQLite or H2 differ in SQL and hide bugs that PostgreSQL would show
+  - It is always faster
+  answer: 0
+  explanation: Testcontainers makes this practical.
+- question: What should you do with a flaky test?
+  options:
+  - Find and fix the cause, or delete it
+  - Retry it until it passes
+  answer: 0
+  explanation: A suite people ignore protects nothing.

@@ -1,0 +1,682 @@
+---
+title: "Integration testing a service"
+summary: "Mocks and fakes, then testing the real API and database with WebApplicationFactory, Spring Boot tests, Supertest and Testcontainers."
+prerequisites: [m-testing, be-dependency-injection]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will test a service the way it is really used: through HTTP, with its routing, JSON, validation, dependency injection and error handling all running, using **WebApplicationFactory** in .NET, **`@SpringBootTest`** in Spring and **Supertest** in Node. You will replace the parts you must control (the clock, other services) with **fakes**, use **mocks** where you need to check an interaction, and test against a **real database** with Testcontainers. <Ref to="m-testing" /> covers what and how much to test; this chapter is the mechanics in each stack. Each track tests the same small orders API, so read your own and compare.
+
+## Why integration tests
+
+Unit tests check one class or function on its own; they are fast and precise, but they cannot tell you that a route is misspelt, a JSON property is named differently from what clients send, validation is not switched on, a service is not registered, or a SQL query is wrong. **Integration tests** run the real application, or a large part of it, in the test process and talk to it over HTTP. They are slower, so you write fewer of them: one per important behaviour of each endpoint (success, validation failure, not found, not allowed), on top of unit tests for the detailed rules.
+
+## Test doubles
+
+A **test double** stands in for a real dependency during a test:
+
+- A **fake** is a working, simplified implementation: an in-memory store instead of a database, a fixed clock instead of the real one. Fakes make tests realistic and readable; prefer them.
+- A **stub** returns canned answers ("the payment provider says yes").
+- A **mock** records how it was called, so the test can check an interaction: "the email service was asked to send exactly one receipt". Use mocks for side effects that leave no other trace, and sparingly: tests full of mocks check how the code is written rather than what it does, and break whenever it is refactored.
+
+Replace only what you must: things that are slow, non-deterministic (time, random numbers) or outside your control (other companies' APIs). Dependency injection (<Ref to="be-dependency-injection" />) is what makes swapping them easy.
+
+## The API under test
+
+Each track has the same API: `POST /orders` validates and stores an order with the current time, and `GET /orders/{id}` returns it or 404. The store and the clock are injected, so tests can control them. The tests check four behaviours: a 201 with the right body and `Location`; reading the order back; 400 for invalid input; 404 for unknown ids.
+
+## .NET: WebApplicationFactory
+
+**`WebApplicationFactory<Program>`** starts your real application in memory, with a test server instead of a network socket, and gives you an `HttpClient` for it. Create the projects:
+
+```bash
+mkdir Bakery && cd Bakery
+dotnet new sln --name Bakery
+dotnet new web --name Bakery.Api --output src/Bakery.Api
+dotnet new xunit --name Bakery.Api.Tests --output tests/Bakery.Api.Tests
+dotnet sln add src/Bakery.Api tests/Bakery.Api.Tests
+dotnet add tests/Bakery.Api.Tests reference src/Bakery.Api
+dotnet add tests/Bakery.Api.Tests package Microsoft.AspNetCore.Mvc.Testing --version 10.0.15
+dotnet add tests/Bakery.Api.Tests package Microsoft.Extensions.TimeProvider.Testing --version 10.0.0
+rm tests/Bakery.Api.Tests/UnitTest1.cs
+```
+
+The API, `src/Bakery.Api/Program.cs`:
+
+```csharp
+using System.Collections.Concurrent;
+using System.ComponentModel.DataAnnotations;
+
+var builder = WebApplication.CreateBuilder(args);
+builder.Services.AddValidation();
+builder.Services.AddProblemDetails();
+builder.Services.AddSingleton<IOrderStore, InMemoryOrderStore>();
+builder.Services.AddSingleton(TimeProvider.System);
+var app = builder.Build();
+
+app.MapPost("/orders", (PlaceOrder request, IOrderStore store, TimeProvider clock) =>
+{
+    var order = store.Add(request.Customer, request.TotalPence, clock.GetUtcNow());
+    return TypedResults.Created($"/orders/{order.Id}", order);
+});
+
+app.MapGet("/orders/{id}", (string id, IOrderStore store) =>
+    store.Find(id) is { } order ? Results.Ok(order) : Results.NotFound());
+
+app.Run();
+
+public record PlaceOrder([Required, StringLength(100, MinimumLength = 1)] string Customer, [Range(1, 1_000_000)] int TotalPence);
+public record Order(string Id, string Customer, int TotalPence, DateTimeOffset PlacedAt);
+
+public interface IOrderStore
+{
+    Order Add(string customer, int totalPence, DateTimeOffset placedAt);
+    Order? Find(string id);
+}
+
+public class InMemoryOrderStore : IOrderStore
+{
+    private readonly ConcurrentDictionary<string, Order> _orders = new();
+    private int _next;
+
+    public Order Add(string customer, int totalPence, DateTimeOffset placedAt)
+    {
+        var order = new Order($"o-{Interlocked.Increment(ref _next)}", customer, totalPence, placedAt);
+        _orders[order.Id] = order;
+        return order;
+    }
+
+    public Order? Find(string id) => _orders.GetValueOrDefault(id);
+}
+
+public partial class Program;
+```
+
+The last line, `public partial class Program;`, makes the generated `Program` class visible to the test project. The tests, `tests/Bakery.Api.Tests/OrdersApiTests.cs`:
+
+```csharp
+using System.Net;
+using System.Net.Http.Json;
+using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Time.Testing;
+
+namespace Bakery.Api.Tests;
+
+public class OrdersApiTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+{
+    private static readonly DateTimeOffset SevenThirty = new(2026, 11, 13, 7, 30, 0, TimeSpan.Zero);
+
+    private HttpClient CreateClient() =>
+        factory.WithWebHostBuilder(host => host.ConfigureTestServices(services =>
+        {
+            services.AddSingleton<IOrderStore, InMemoryOrderStore>();
+            services.AddSingleton<TimeProvider>(new FakeTimeProvider(SevenThirty));
+        })).CreateClient();
+
+    [Fact]
+    public async Task Placing_an_order_returns_201_with_its_location()
+    {
+        var client = CreateClient();
+
+        var response = await client.PostAsJsonAsync("/orders", new { customer = "Ama", totalPence = 1250 });
+
+        Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+        Assert.Equal("/orders/o-1", response.Headers.Location?.ToString());
+        var order = await response.Content.ReadFromJsonAsync<Order>();
+        Assert.Equal(new Order("o-1", "Ama", 1250, SevenThirty), order);
+    }
+
+    [Fact]
+    public async Task A_placed_order_can_be_read_back()
+    {
+        var client = CreateClient();
+        var created = await client.PostAsJsonAsync("/orders", new { customer = "Kofi", totalPence = 450 });
+
+        var order = await client.GetFromJsonAsync<Order>(created.Headers.Location);
+
+        Assert.Equal("Kofi", order?.Customer);
+    }
+
+    [Theory]
+    [InlineData("", 1250, "Customer")]
+    [InlineData("Ama", 0, "TotalPence")]
+    public async Task Invalid_orders_are_refused_with_problem_details(string customer, int totalPence, string field)
+    {
+        var client = CreateClient();
+
+        var response = await client.PostAsJsonAsync("/orders", new { customer, totalPence });
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+        Assert.Contains($"\"{field}\"", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task An_unknown_order_is_404()
+    {
+        var response = await CreateClient().GetAsync("/orders/o-999");
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+}
+```
+
+Run them from the solution folder:
+
+```bash
+dotnet test
+```
+
+It reports `Passed!  - Failed: 0, Passed: 5`. Notes:
+
+- **`IClassFixture<WebApplicationFactory<Program>>`** shares one factory between the tests in the class, so the application starts once.
+- **`WithWebHostBuilder` and `ConfigureTestServices`** replace registrations for a test: here a fresh in-memory store for each client (so tests do not see each other's orders) and a **`FakeTimeProvider`** fixed at 07:30. `TimeProvider` is .NET's built-in abstraction of the clock; inject it instead of calling `DateTime.UtcNow`.
+- The tests send real JSON and check status codes, headers and bodies, exactly as a client would, so a renamed property or a missing `AddValidation()` makes them fail.
+
+## Spring: @SpringBootTest
+
+**`@SpringBootTest(webEnvironment = RANDOM_PORT)`** starts the whole application on a free port for the test class. The build file adds `spring-boot-starter-test` (JUnit, AssertJ, Mockito and Spring's test support):
+
+```kotlin
+plugins {
+    java
+    id("org.springframework.boot") version "4.1.2"
+    id("io.spring.dependency-management") version "1.1.7"
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+}
+
+tasks.test {
+    useJUnitPlatform()
+    testLogging {
+        events("passed", "failed")
+    }
+}
+```
+
+The API, in `BakeryApplication.java` (one file to keep the example short):
+
+```java
+package com.bakery;
+
+import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import java.net.URI;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.http.ResponseEntity;
+import org.springframework.stereotype.Component;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
+
+@SpringBootApplication
+public class BakeryApplication {
+    public static void main(String[] args) {
+        SpringApplication.run(BakeryApplication.class, args);
+    }
+
+    @Bean
+    Clock clock() {
+        return Clock.systemUTC();
+    }
+}
+
+record PlaceOrder(@NotBlank String customer, @Min(1) @Max(1_000_000) int totalPence) {}
+
+record Order(String id, String customer, int totalPence, Instant placedAt) {}
+
+@Component
+class OrderStore {
+    private final Map<String, Order> orders = new ConcurrentHashMap<>();
+    private final AtomicInteger next = new AtomicInteger();
+
+    Order add(String customer, int totalPence, Instant placedAt) {
+        var order = new Order("o-" + next.incrementAndGet(), customer, totalPence, placedAt);
+        orders.put(order.id(), order);
+        return order;
+    }
+
+    Optional<Order> find(String id) {
+        return Optional.ofNullable(orders.get(id));
+    }
+}
+
+@RestController
+class OrderController {
+    private final OrderStore store;
+    private final Clock clock;
+
+    OrderController(OrderStore store, Clock clock) {
+        this.store = store;
+        this.clock = clock;
+    }
+
+    @PostMapping("/orders")
+    ResponseEntity<Order> place(@Valid @RequestBody PlaceOrder request) {
+        var order = store.add(request.customer(), request.totalPence(), clock.instant());
+        return ResponseEntity.created(URI.create("/orders/" + order.id())).body(order);
+    }
+
+    @GetMapping("/orders/{id}")
+    ResponseEntity<Order> get(@PathVariable String id) {
+        return ResponseEntity.of(store.find(id));
+    }
+}
+```
+
+The tests, `src/test/java/com/bakery/OrdersApiTest.java`, call it with Java's built-in `HttpClient`:
+
+```java
+package com.bakery;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.boot.test.web.server.LocalServerPort;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
+import org.springframework.test.annotation.DirtiesContext;
+
+@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+class OrdersApiTest {
+    @TestConfiguration
+    static class FixedClock {
+        @Bean
+        @Primary
+        Clock testClock() {
+            return Clock.fixed(Instant.parse("2026-11-13T07:30:00Z"), ZoneOffset.UTC);
+        }
+    }
+
+    @LocalServerPort
+    int port;
+
+    private final HttpClient http = HttpClient.newHttpClient();
+
+    private HttpResponse<String> post(String json) throws Exception {
+        var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/orders"))
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(json))
+            .build();
+        return http.send(request, HttpResponse.BodyHandlers.ofString());
+    }
+
+    private HttpResponse<String> get(String path) throws Exception {
+        return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).build(), HttpResponse.BodyHandlers.ofString());
+    }
+
+    @Test
+    void placingAnOrderReturns201WithItsLocation() throws Exception {
+        var response = post("{\"customer\":\"Ama\",\"totalPence\":1250}");
+
+        assertEquals(201, response.statusCode());
+        assertEquals("/orders/o-1", response.headers().firstValue("Location").orElseThrow());
+        assertEquals("{\"id\":\"o-1\",\"customer\":\"Ama\",\"totalPence\":1250,\"placedAt\":\"2026-11-13T07:30:00Z\"}", response.body());
+    }
+
+    @Test
+    void aPlacedOrderCanBeReadBack() throws Exception {
+        var location = post("{\"customer\":\"Kofi\",\"totalPence\":450}").headers().firstValue("Location").orElseThrow();
+
+        var response = get(location);
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"customer\":\"Kofi\""));
+    }
+
+    @ParameterizedTest
+    @CsvSource({ "'', 1250", "Ama, 0" })
+    void invalidOrdersAreRefused(String customer, int totalPence) throws Exception {
+        var response = post("{\"customer\":\"" + customer + "\",\"totalPence\":" + totalPence + "}");
+
+        assertEquals(400, response.statusCode());
+    }
+
+    @Test
+    void anUnknownOrderIs404() throws Exception {
+        assertEquals(404, get("/orders/o-999").statusCode());
+    }
+}
+```
+
+Run them:
+
+```bash
+./gradlew test --console=plain
+```
+
+Each test is reported `PASSED`, five in all. Notes:
+
+- **`@LocalServerPort`** gives the port the app is listening on.
+- A **`@TestConfiguration`** class adds or replaces beans for the test; **`@Primary`** makes its fixed `Clock` win over the real one.
+- **`@DirtiesContext`** throws the application away after each test, so the in-memory store starts empty. It is slow (each test starts Spring again); with a database, tests usually clean the tables instead, or run each test in a transaction that is rolled back.
+- **`@MockitoBean`** replaces a bean with a Mockito mock, for interactions such as "the email client was called once". For faster tests of just the web layer, **`@WebMvcTest`** starts only the controllers with **MockMvc**.
+
+## Node: Supertest
+
+**Supertest** sends HTTP requests to an Express app in the same process, without opening a port yourself. Because `createApp` receives its dependencies (<Ref to="be-api-node" />), each test builds an app with exactly the fakes it needs. The app, `src/app.ts`:
+
+```ts
+import express, { type Request, type Response } from "express";
+import { z } from "zod";
+
+export type Order = { id: string; customer: string; totalPence: number; placedAt: string };
+
+export interface OrderStore {
+  add(customer: string, totalPence: number, placedAt: Date): Promise<Order>;
+  find(id: string): Promise<Order | undefined>;
+}
+
+export class InMemoryOrderStore implements OrderStore {
+  private orders = new Map<string, Order>();
+  private next = 0;
+
+  async add(customer: string, totalPence: number, placedAt: Date): Promise<Order> {
+    const order = { id: `o-${++this.next}`, customer, totalPence, placedAt: placedAt.toISOString() };
+    this.orders.set(order.id, order);
+    return order;
+  }
+
+  async find(id: string): Promise<Order | undefined> {
+    return this.orders.get(id);
+  }
+}
+
+const PlaceOrder = z.object({
+  customer: z.string().trim().min(1).max(100),
+  totalPence: z.number().int().min(1).max(1_000_000),
+});
+
+export function createApp(deps: { store: OrderStore; now: () => Date }) {
+  const app = express();
+  app.use(express.json());
+
+  app.post("/orders", async (req: Request, res: Response) => {
+    const parsed = PlaceOrder.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).type("application/problem+json").json({
+        title: "Invalid request",
+        status: 400,
+        errors: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+      });
+      return;
+    }
+    const order = await deps.store.add(parsed.data.customer, parsed.data.totalPence, deps.now());
+    res.status(201).location(`/orders/${order.id}`).json(order);
+  });
+
+  app.get("/orders/:id", async (req: Request<{ id: string }>, res: Response) => {
+    const order = await deps.store.find(req.params.id);
+    if (!order) {
+      res.status(404).json({ title: "Not Found", status: 404 });
+      return;
+    }
+    res.json(order);
+  });
+
+  return app;
+}
+```
+
+The tests, `src/app.test.ts`, with Vitest:
+
+```ts
+import request from "supertest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createApp, InMemoryOrderStore, type OrderStore } from "./app.ts";
+
+const sevenThirty = () => new Date("2026-11-13T07:30:00Z");
+
+describe("orders API", () => {
+  let app: ReturnType<typeof createApp>;
+
+  beforeEach(() => {
+    app = createApp({ store: new InMemoryOrderStore(), now: sevenThirty });
+  });
+
+  it("returns 201 with the order and its location", async () => {
+    const response = await request(app).post("/orders").send({ customer: "Ama", totalPence: 1250 });
+
+    expect(response.status).toBe(201);
+    expect(response.headers.location).toBe("/orders/o-1");
+    expect(response.body).toEqual({ id: "o-1", customer: "Ama", totalPence: 1250, placedAt: "2026-11-13T07:30:00.000Z" });
+  });
+
+  it("reads back a placed order", async () => {
+    const created = await request(app).post("/orders").send({ customer: "Kofi", totalPence: 450 });
+
+    const response = await request(app).get(created.headers.location);
+
+    expect(response.status).toBe(200);
+    expect(response.body.customer).toBe("Kofi");
+  });
+
+  it.each([
+    [{ customer: "", totalPence: 1250 }, "customer"],
+    [{ customer: "Ama", totalPence: 0 }, "totalPence"],
+  ])("refuses %j with a problem for %s", async (body, field) => {
+    const response = await request(app).post("/orders").send(body);
+
+    expect(response.status).toBe(400);
+    expect(response.type).toBe("application/problem+json");
+    expect(response.body.errors.map((e: { field: string }) => e.field)).toEqual([field]);
+  });
+
+  it("returns 404 for an unknown order", async () => {
+    await request(app).get("/orders/o-999").expect(404);
+  });
+
+  it("returns 500 when the store fails, and the mock shows it was called once", async () => {
+    const failing: OrderStore = {
+      add: vi.fn().mockRejectedValue(new Error("database unavailable")),
+      find: vi.fn(),
+    };
+    const broken = createApp({ store: failing, now: sevenThirty });
+
+    const response = await request(broken).post("/orders").send({ customer: "Ama", totalPence: 1250 });
+
+    expect(response.status).toBe(500);
+    expect(failing.add).toHaveBeenCalledTimes(1);
+    expect(failing.add).toHaveBeenCalledWith("Ama", 1250, sevenThirty());
+  });
+});
+```
+
+Install the test tools with `npm install --save-dev vitest supertest @types/supertest` and run `npx vitest run`. It reports `Tests  6 passed (6)`. Notes:
+
+- **`beforeEach`** builds a fresh app with a fresh store, so tests are independent.
+- `.send()` sends JSON; `response.body` is the parsed JSON; `.expect(404)` asserts inline.
+- The last test uses a **mock**: `vi.fn().mockRejectedValue(...)` makes the store fail, and the test checks both the 500 and that `add` was called once with the expected arguments. This is the kind of failure that is hard to cause with a real database.
+
+## Testing with a real database
+
+In-memory fakes cannot catch wrong SQL, missing migrations, constraint violations or transaction bugs. For those, test against the **same database engine as production**. **Testcontainers** starts a real database in a Docker container for the test run, gives you its connection string, and removes it afterwards. It needs Docker on the machine and in CI.
+
+In .NET, with the `Testcontainers.PostgreSql` package:
+
+```csharp
+public class OrderRepositoryTests : IAsyncLifetime
+{
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder().WithImage("postgres:18-alpine").Build();
+
+    public Task InitializeAsync() => _postgres.StartAsync();
+    public Task DisposeAsync() => _postgres.DisposeAsync().AsTask();
+
+    [Fact]
+    public async Task Saves_and_loads_an_order()
+    {
+        var options = new DbContextOptionsBuilder<BakeryDb>().UseNpgsql(_postgres.GetConnectionString()).Options;
+        await using var db = new BakeryDb(options);
+        await db.Database.MigrateAsync();
+        // arrange, act and assert against the real PostgreSQL
+    }
+}
+```
+
+In Spring Boot, with the `spring-boot-testcontainers` and `testcontainers-postgresql` dependencies, **`@ServiceConnection`** points the application's datasource at the container automatically:
+
+```java
+@SpringBootTest
+@Testcontainers
+class OrderRepositoryTest {
+    @Container
+    @ServiceConnection
+    static PostgreSQLContainer postgres = new PostgreSQLContainer("postgres:18-alpine");
+
+    @Autowired
+    OrderRepository orders;
+
+    @Test
+    void savesAndLoadsAnOrder() {
+        // Flyway has migrated the container's database; test against it
+    }
+}
+```
+
+In Node, with `@testcontainers/postgresql`:
+
+```ts
+import { PostgreSqlContainer, type StartedPostgreSqlContainer } from "@testcontainers/postgresql";
+import { afterAll, beforeAll, it } from "vitest";
+
+let container: StartedPostgreSqlContainer;
+
+beforeAll(async () => {
+  container = await new PostgreSqlContainer("postgres:18-alpine").start();
+  process.env.DATABASE_URL = container.getConnectionUri();
+}, 60_000);
+
+afterAll(async () => {
+  await container.stop();
+});
+
+it("saves and loads an order", async () => {
+  // run the migrations, then test the repository against the real PostgreSQL
+});
+```
+
+Start one container per test run (not per test), run the migrations once, and isolate tests by cleaning tables, using unique ids, or rolling back a transaction per test. Where Docker is not available, an in-process engine of the same kind (PGlite for PostgreSQL, <Ref to="be-data-node" />) is a good second best; SQLite or H2 standing in for PostgreSQL catches less, because their SQL differs.
+
+## Contract tests
+
+When other teams' services call yours, or yours calls theirs, **contract tests** check that both sides agree on the API: field names, types, status codes. Two common approaches: **consumer-driven contracts** (Pact), where each consumer records the requests and responses it relies on and the provider's build replays them; and checking every change to your **OpenAPI** document for breaking changes in CI. Both catch "we renamed a field and broke the mobile app" before it ships (<Ref to="m-api-design" />).
+
+## Making tests trustworthy
+
+- **Independent**: every test sets up its own data and runs in any order, alone or in parallel.
+- **Deterministic**: no real clock, random numbers or network calls to other companies; fix them with fakes.
+- **Fast enough to run on every change**: start the application once per class or run, not per test.
+- **Failing for the right reason**: break the code once and watch each new test fail.
+- **Testing behaviour, not implementation**: assert on HTTP responses and stored data, not on which private methods were called.
+- A **flaky** test (one that fails at random) is a bug: fix or delete it, because a test suite people have learnt to ignore protects nothing.
+
+## Common mistakes
+
+- **Only unit tests**, so wiring, validation and serialisation bugs reach production.
+- **Mocking everything**, so tests pass while the real system is broken.
+- **Shared state between tests** (the same database rows, a static store).
+- **Using the real clock**, so tests fail at midnight or on the last day of the month.
+- **H2 or SQLite standing in for PostgreSQL** and hiding SQL differences.
+- **Ignoring flaky tests** or retrying them until they pass.
+- **No tests for authorisation**, so a refactoring silently opens an endpoint (<Ref to="be-auth-stacks" />).
+
+## Practice
+
+**1. (warm-up)** Which double would you use: (a) a payment provider in a test of order placement; (b) the current time in a test of "orders after 2 p.m. are delivered tomorrow"; (c) checking that a receipt email was sent exactly once?
+
+<Solution>
+
+(a) A fake or stub of the payment client that approves or declines as the test needs, never the real provider. (b) A fake clock (`FakeTimeProvider`, a fixed `Clock`, or a `now` function) set to just before and just after 2 p.m. (c) A mock of the email sender, checked for exactly one call with the expected recipient; or a fake that records sent emails, which the test then inspects.
+
+</Solution>
+
+**2. (standard)** Add a test to your stack's suite for this rule: placing an order with a `customer` of 101 characters is refused with 400. Then add the boundary case that passes.
+
+<Solution>
+
+The boundary is 100 characters, the maximum allowed. In .NET, add two `InlineData` rows, or a new test:
+
+```csharp
+[Theory]
+[InlineData(100, HttpStatusCode.Created)]
+[InlineData(101, HttpStatusCode.BadRequest)]
+public async Task Customer_names_up_to_100_characters_are_accepted(int length, HttpStatusCode expected)
+{
+    var response = await CreateClient().PostAsJsonAsync("/orders", new { customer = new string('a', length), totalPence = 1250 });
+
+    Assert.Equal(expected, response.StatusCode);
+}
+```
+
+In Spring, a `@ParameterizedTest` with `@CsvSource({ "100, 201", "101, 400" })` and `"a".repeat(length)`; note the Spring API in this chapter has `@NotBlank` but no length limit, so the 101 case fails until you add `@Size(max = 100)`: a test finding a missing rule. In Node, `it.each([[100, 201], [101, 400]])` with `"a".repeat(length)`.
+
+</Solution>
+
+**3. (stretch)** Your integration tests pass on your machine but fail about one run in twenty in CI, always in different tests. List likely causes and how you would find the real one.
+
+<Solution>
+
+Likely causes: tests sharing state (database rows, a static or singleton store) and running in parallel or in a different order; reliance on the real clock (timezone, midnight, slow CI machines crossing a second boundary); fixed ports already in use; asserting on the order of results without sorting; waiting for background work with fixed sleeps; or a real external service. To find it: run the suite many times locally in random order and in parallel; run the failing test alone in a loop; log the data each failing test sees; and check what is shared between tests. Fix the cause (fresh data per test, fake clock, random ports, explicit ordering, waiting on conditions rather than time) rather than adding retries.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Integration tests** run the real application and talk to it over HTTP, catching routing, serialisation, validation, wiring and data bugs that unit tests miss. Write fewer, for each endpoint's important behaviours.
+- **Test doubles**: prefer **fakes**; use **mocks** for interactions with no other trace; replace only what is slow, non-deterministic or outside your control.
+- .NET: **`WebApplicationFactory<Program>`** with **`ConfigureTestServices`** and **`FakeTimeProvider`**. Spring: **`@SpringBootTest(webEnvironment = RANDOM_PORT)`** with **`@TestConfiguration`**, `@MockitoBean` and `@WebMvcTest`. Node: **Supertest** against `createApp(deps)`, with `vi.fn()` mocks.
+- Test data code against the **real database engine** with **Testcontainers**; consider **contract tests** between services.
+- Keep tests independent, deterministic, fast enough and focused on behaviour; fix flaky tests.
+
+## Go deeper
+
+- [Integration tests in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/test/integration-tests), Microsoft. WebApplicationFactory, replacing services and test databases.
+- [Spring Boot reference: testing](https://docs.spring.io/spring-boot/reference/testing/index.html), the Spring team. `@SpringBootTest`, test slices, mocking beans and Testcontainers.
+- [Supertest](https://github.com/forwardemail/supertest), the Supertest maintainers. HTTP assertions for Node apps.
+- [Testcontainers](https://testcontainers.com/), Docker. Real databases and services in tests, for every stack.
+- [Pact documentation](https://docs.pact.io/), the Pact Foundation. Consumer-driven contract testing.

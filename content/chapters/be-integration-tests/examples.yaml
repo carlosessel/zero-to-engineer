@@ -1,0 +1,621 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: illustration
+  note: A project file or command; the checks of blocks 4, 8 and 10 build and test the projects from it.
+- block: 2
+  lang: csharp
+  check: illustration
+  note: A project file or command; the checks of blocks 4, 8 and 10 build and test the projects from it.
+- block: 3
+  lang: csharp
+  check: illustration
+  note: A project file or command; the checks of blocks 4, 8 and 10 build and test the projects from it.
+- block: 4
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    mkdir dn && cd dn
+    cat > setup.sh <<'SRC_EOF'
+    mkdir Bakery && cd Bakery
+    dotnet new sln --name Bakery
+    dotnet new web --name Bakery.Api --output src/Bakery.Api
+    dotnet new xunit --name Bakery.Api.Tests --output tests/Bakery.Api.Tests
+    dotnet sln add src/Bakery.Api tests/Bakery.Api.Tests
+    dotnet add tests/Bakery.Api.Tests reference src/Bakery.Api
+    dotnet add tests/Bakery.Api.Tests package Microsoft.AspNetCore.Mvc.Testing --version 10.0.15
+    dotnet add tests/Bakery.Api.Tests package Microsoft.Extensions.TimeProvider.Testing --version 10.0.0
+    rm tests/Bakery.Api.Tests/UnitTest1.cs
+    SRC_EOF
+    bash -e setup.sh > setup.log 2>&1
+    cd Bakery
+    mkdir -p $(dirname src/Bakery.Api/Program.cs)
+    cat > src/Bakery.Api/Program.cs <<'SRC_EOF'
+    using System.Collections.Concurrent;
+    using System.ComponentModel.DataAnnotations;
+
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddValidation();
+    builder.Services.AddProblemDetails();
+    builder.Services.AddSingleton<IOrderStore, InMemoryOrderStore>();
+    builder.Services.AddSingleton(TimeProvider.System);
+    var app = builder.Build();
+
+    app.MapPost("/orders", (PlaceOrder request, IOrderStore store, TimeProvider clock) =>
+    {
+        var order = store.Add(request.Customer, request.TotalPence, clock.GetUtcNow());
+        return TypedResults.Created($"/orders/{order.Id}", order);
+    });
+
+    app.MapGet("/orders/{id}", (string id, IOrderStore store) =>
+        store.Find(id) is { } order ? Results.Ok(order) : Results.NotFound());
+
+    app.Run();
+
+    public record PlaceOrder([Required, StringLength(100, MinimumLength = 1)] string Customer, [Range(1, 1_000_000)] int TotalPence);
+    public record Order(string Id, string Customer, int TotalPence, DateTimeOffset PlacedAt);
+
+    public interface IOrderStore
+    {
+        Order Add(string customer, int totalPence, DateTimeOffset placedAt);
+        Order? Find(string id);
+    }
+
+    public class InMemoryOrderStore : IOrderStore
+    {
+        private readonly ConcurrentDictionary<string, Order> _orders = new();
+        private int _next;
+
+        public Order Add(string customer, int totalPence, DateTimeOffset placedAt)
+        {
+            var order = new Order($"o-{Interlocked.Increment(ref _next)}", customer, totalPence, placedAt);
+            _orders[order.Id] = order;
+            return order;
+        }
+
+        public Order? Find(string id) => _orders.GetValueOrDefault(id);
+    }
+
+    public partial class Program;
+    SRC_EOF
+    mkdir -p $(dirname tests/Bakery.Api.Tests/OrdersApiTests.cs)
+    cat > tests/Bakery.Api.Tests/OrdersApiTests.cs <<'SRC_EOF'
+    using System.Net;
+    using System.Net.Http.Json;
+    using Microsoft.AspNetCore.Mvc.Testing;
+    using Microsoft.AspNetCore.TestHost;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Time.Testing;
+
+    namespace Bakery.Api.Tests;
+
+    public class OrdersApiTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+    {
+        private static readonly DateTimeOffset SevenThirty = new(2026, 11, 13, 7, 30, 0, TimeSpan.Zero);
+
+        private HttpClient CreateClient() =>
+            factory.WithWebHostBuilder(host => host.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<IOrderStore, InMemoryOrderStore>();
+                services.AddSingleton<TimeProvider>(new FakeTimeProvider(SevenThirty));
+            })).CreateClient();
+
+        [Fact]
+        public async Task Placing_an_order_returns_201_with_its_location()
+        {
+            var client = CreateClient();
+
+            var response = await client.PostAsJsonAsync("/orders", new { customer = "Ama", totalPence = 1250 });
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            Assert.Equal("/orders/o-1", response.Headers.Location?.ToString());
+            var order = await response.Content.ReadFromJsonAsync<Order>();
+            Assert.Equal(new Order("o-1", "Ama", 1250, SevenThirty), order);
+        }
+
+        [Fact]
+        public async Task A_placed_order_can_be_read_back()
+        {
+            var client = CreateClient();
+            var created = await client.PostAsJsonAsync("/orders", new { customer = "Kofi", totalPence = 450 });
+
+            var order = await client.GetFromJsonAsync<Order>(created.Headers.Location);
+
+            Assert.Equal("Kofi", order?.Customer);
+        }
+
+        [Theory]
+        [InlineData("", 1250, "Customer")]
+        [InlineData("Ama", 0, "TotalPence")]
+        public async Task Invalid_orders_are_refused_with_problem_details(string customer, int totalPence, string field)
+        {
+            var client = CreateClient();
+
+            var response = await client.PostAsJsonAsync("/orders", new { customer, totalPence });
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+            Assert.Contains($"\"{field}\"", await response.Content.ReadAsStringAsync());
+        }
+
+        [Fact]
+        public async Task An_unknown_order_is_404()
+        {
+            var response = await CreateClient().GetAsync("/orders/o-999");
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+    }
+    SRC_EOF
+    bash -e "$BLOCK"
+  output_contains:
+  - 'Passed!  - Failed:     0, Passed:     5, Skipped:     0, Total:     5'
+- block: 5
+  lang: kotlin
+  check: illustration
+  note: A project file or command; the checks of blocks 4, 8 and 10 build and test the projects from it.
+- block: 6
+  lang: java
+  check: illustration
+  note: A project file or command; the checks of blocks 4, 8 and 10 build and test the projects from it.
+- block: 7
+  lang: java
+  check: illustration
+  note: A project file or command; the checks of blocks 4, 8 and 10 build and test the projects from it.
+- block: 8
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    mkdir sp && cd sp
+    echo 'rootProject.name = "bakery-api"' > settings.gradle.kts
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        java
+        id("org.springframework.boot") version "4.1.2"
+        id("io.spring.dependency-management") version "1.1.7"
+    }
+
+    java {
+        toolchain {
+            languageVersion = JavaLanguageVersion.of(21)
+        }
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-webmvc")
+        implementation("org.springframework.boot:spring-boot-starter-validation")
+        testImplementation("org.springframework.boot:spring-boot-starter-test")
+        testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    }
+
+    tasks.test {
+        useJUnitPlatform()
+        testLogging {
+            events("passed", "failed")
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/java/com/bakery/BakeryApplication.java)
+    cat > src/main/java/com/bakery/BakeryApplication.java <<'SRC_EOF'
+    package com.bakery;
+
+    import jakarta.validation.Valid;
+    import jakarta.validation.constraints.Max;
+    import jakarta.validation.constraints.Min;
+    import jakarta.validation.constraints.NotBlank;
+    import java.net.URI;
+    import java.time.Clock;
+    import java.time.Instant;
+    import java.util.Map;
+    import java.util.Optional;
+    import java.util.concurrent.ConcurrentHashMap;
+    import java.util.concurrent.atomic.AtomicInteger;
+    import org.springframework.boot.SpringApplication;
+    import org.springframework.boot.autoconfigure.SpringBootApplication;
+    import org.springframework.context.annotation.Bean;
+    import org.springframework.http.ResponseEntity;
+    import org.springframework.stereotype.Component;
+    import org.springframework.web.bind.annotation.GetMapping;
+    import org.springframework.web.bind.annotation.PathVariable;
+    import org.springframework.web.bind.annotation.PostMapping;
+    import org.springframework.web.bind.annotation.RequestBody;
+    import org.springframework.web.bind.annotation.RestController;
+
+    @SpringBootApplication
+    public class BakeryApplication {
+        public static void main(String[] args) {
+            SpringApplication.run(BakeryApplication.class, args);
+        }
+
+        @Bean
+        Clock clock() {
+            return Clock.systemUTC();
+        }
+    }
+
+    record PlaceOrder(@NotBlank String customer, @Min(1) @Max(1_000_000) int totalPence) {}
+
+    record Order(String id, String customer, int totalPence, Instant placedAt) {}
+
+    @Component
+    class OrderStore {
+        private final Map<String, Order> orders = new ConcurrentHashMap<>();
+        private final AtomicInteger next = new AtomicInteger();
+
+        Order add(String customer, int totalPence, Instant placedAt) {
+            var order = new Order("o-" + next.incrementAndGet(), customer, totalPence, placedAt);
+            orders.put(order.id(), order);
+            return order;
+        }
+
+        Optional<Order> find(String id) {
+            return Optional.ofNullable(orders.get(id));
+        }
+    }
+
+    @RestController
+    class OrderController {
+        private final OrderStore store;
+        private final Clock clock;
+
+        OrderController(OrderStore store, Clock clock) {
+            this.store = store;
+            this.clock = clock;
+        }
+
+        @PostMapping("/orders")
+        ResponseEntity<Order> place(@Valid @RequestBody PlaceOrder request) {
+            var order = store.add(request.customer(), request.totalPence(), clock.instant());
+            return ResponseEntity.created(URI.create("/orders/" + order.id())).body(order);
+        }
+
+        @GetMapping("/orders/{id}")
+        ResponseEntity<Order> get(@PathVariable String id) {
+            return ResponseEntity.of(store.find(id));
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/test/java/com/bakery/OrdersApiTest.java)
+    cat > src/test/java/com/bakery/OrdersApiTest.java <<'SRC_EOF'
+    package com.bakery;
+
+    import static org.junit.jupiter.api.Assertions.assertEquals;
+    import static org.junit.jupiter.api.Assertions.assertTrue;
+
+    import java.net.URI;
+    import java.net.http.HttpClient;
+    import java.net.http.HttpRequest;
+    import java.net.http.HttpResponse;
+    import java.time.Clock;
+    import java.time.Instant;
+    import java.time.ZoneOffset;
+    import org.junit.jupiter.api.Test;
+    import org.junit.jupiter.params.ParameterizedTest;
+    import org.junit.jupiter.params.provider.CsvSource;
+    import org.springframework.boot.test.context.SpringBootTest;
+    import org.springframework.boot.test.context.TestConfiguration;
+    import org.springframework.boot.test.web.server.LocalServerPort;
+    import org.springframework.context.annotation.Bean;
+    import org.springframework.context.annotation.Primary;
+    import org.springframework.test.annotation.DirtiesContext;
+
+    @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+    @DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+    class OrdersApiTest {
+        @TestConfiguration
+        static class FixedClock {
+            @Bean
+            @Primary
+            Clock testClock() {
+                return Clock.fixed(Instant.parse("2026-11-13T07:30:00Z"), ZoneOffset.UTC);
+            }
+        }
+
+        @LocalServerPort
+        int port;
+
+        private final HttpClient http = HttpClient.newHttpClient();
+
+        private HttpResponse<String> post(String json) throws Exception {
+            var request = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/orders"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(json))
+                .build();
+            return http.send(request, HttpResponse.BodyHandlers.ofString());
+        }
+
+        private HttpResponse<String> get(String path) throws Exception {
+            return http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).build(), HttpResponse.BodyHandlers.ofString());
+        }
+
+        @Test
+        void placingAnOrderReturns201WithItsLocation() throws Exception {
+            var response = post("{\"customer\":\"Ama\",\"totalPence\":1250}");
+
+            assertEquals(201, response.statusCode());
+            assertEquals("/orders/o-1", response.headers().firstValue("Location").orElseThrow());
+            assertEquals("{\"id\":\"o-1\",\"customer\":\"Ama\",\"totalPence\":1250,\"placedAt\":\"2026-11-13T07:30:00Z\"}", response.body());
+        }
+
+        @Test
+        void aPlacedOrderCanBeReadBack() throws Exception {
+            var location = post("{\"customer\":\"Kofi\",\"totalPence\":450}").headers().firstValue("Location").orElseThrow();
+
+            var response = get(location);
+
+            assertEquals(200, response.statusCode());
+            assertTrue(response.body().contains("\"customer\":\"Kofi\""));
+        }
+
+        @ParameterizedTest
+        @CsvSource({ "'', 1250", "Ama, 0" })
+        void invalidOrdersAreRefused(String customer, int totalPence) throws Exception {
+            var response = post("{\"customer\":\"" + customer + "\",\"totalPence\":" + totalPence + "}");
+
+            assertEquals(400, response.statusCode());
+        }
+
+        @Test
+        void anUnknownOrderIs404() throws Exception {
+            assertEquals(404, get("/orders/o-999").statusCode());
+        }
+    }
+    SRC_EOF
+    sed "s#./gradlew#\"$GRADLE\" --no-daemon#" "$BLOCK" > run.sh
+    bash -e run.sh
+  output_contains:
+  - placingAnOrderReturns201WithItsLocation() PASSED
+  - aPlacedOrderCanBeReadBack() PASSED
+  - anUnknownOrderIs404() PASSED
+  - '[2] customer = "Ama", totalPence = "0" PASSED'
+  - BUILD SUCCESSFUL
+- block: 9
+  lang: ts
+  check: illustration
+  note: A project file or command; the checks of blocks 4, 8 and 10 build and test the projects from it.
+- block: 10
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir nd && cd nd
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund express@5.3.0 zod@4.6.7
+    npm install --silent --no-audit --no-fund --save-dev vitest@5.1.0 supertest@7.3.2 @types/supertest
+    echo 'export default {};' > vitest.config.js
+    mkdir -p $(dirname src/app.ts)
+    cat > src/app.ts <<'SRC_EOF'
+    import express, { type Request, type Response } from "express";
+    import { z } from "zod";
+
+    export type Order = { id: string; customer: string; totalPence: number; placedAt: string };
+
+    export interface OrderStore {
+      add(customer: string, totalPence: number, placedAt: Date): Promise<Order>;
+      find(id: string): Promise<Order | undefined>;
+    }
+
+    export class InMemoryOrderStore implements OrderStore {
+      private orders = new Map<string, Order>();
+      private next = 0;
+
+      async add(customer: string, totalPence: number, placedAt: Date): Promise<Order> {
+        const order = { id: `o-${++this.next}`, customer, totalPence, placedAt: placedAt.toISOString() };
+        this.orders.set(order.id, order);
+        return order;
+      }
+
+      async find(id: string): Promise<Order | undefined> {
+        return this.orders.get(id);
+      }
+    }
+
+    const PlaceOrder = z.object({
+      customer: z.string().trim().min(1).max(100),
+      totalPence: z.number().int().min(1).max(1_000_000),
+    });
+
+    export function createApp(deps: { store: OrderStore; now: () => Date }) {
+      const app = express();
+      app.use(express.json());
+
+      app.post("/orders", async (req: Request, res: Response) => {
+        const parsed = PlaceOrder.safeParse(req.body);
+        if (!parsed.success) {
+          res.status(400).type("application/problem+json").json({
+            title: "Invalid request",
+            status: 400,
+            errors: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+          });
+          return;
+        }
+        const order = await deps.store.add(parsed.data.customer, parsed.data.totalPence, deps.now());
+        res.status(201).location(`/orders/${order.id}`).json(order);
+      });
+
+      app.get("/orders/:id", async (req: Request<{ id: string }>, res: Response) => {
+        const order = await deps.store.find(req.params.id);
+        if (!order) {
+          res.status(404).json({ title: "Not Found", status: 404 });
+          return;
+        }
+        res.json(order);
+      });
+
+      return app;
+    }
+    SRC_EOF
+    cp "$BLOCK" src/app.test.ts
+    npx vitest run
+  output_contains:
+  - Tests  6 passed (6)
+- block: 11
+  lang: csharp
+  check: not-run
+  reason: Testcontainers starts PostgreSQL in Docker, which needs a running Docker daemon and the project around the test; the API names are from each library's documentation.
+- block: 12
+  lang: java
+  check: not-run
+  reason: Testcontainers starts PostgreSQL in Docker, which needs a running Docker daemon and the project around the test; the API names are from each library's documentation.
+- block: 13
+  lang: ts
+  check: not-run
+  reason: Testcontainers starts PostgreSQL in Docker, which needs a running Docker daemon and the project around the test; the API names are from each library's documentation.
+- block: 14
+  lang: csharp
+  check: shell
+  needs: network
+  script: |
+    mkdir pr && cd pr
+    cat > setup.sh <<'SRC_EOF'
+    mkdir Bakery && cd Bakery
+    dotnet new sln --name Bakery
+    dotnet new web --name Bakery.Api --output src/Bakery.Api
+    dotnet new xunit --name Bakery.Api.Tests --output tests/Bakery.Api.Tests
+    dotnet sln add src/Bakery.Api tests/Bakery.Api.Tests
+    dotnet add tests/Bakery.Api.Tests reference src/Bakery.Api
+    dotnet add tests/Bakery.Api.Tests package Microsoft.AspNetCore.Mvc.Testing --version 10.0.15
+    dotnet add tests/Bakery.Api.Tests package Microsoft.Extensions.TimeProvider.Testing --version 10.0.0
+    rm tests/Bakery.Api.Tests/UnitTest1.cs
+    SRC_EOF
+    bash -e setup.sh > setup.log 2>&1
+    cd Bakery
+    mkdir -p $(dirname src/Bakery.Api/Program.cs)
+    cat > src/Bakery.Api/Program.cs <<'SRC_EOF'
+    using System.Collections.Concurrent;
+    using System.ComponentModel.DataAnnotations;
+
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddValidation();
+    builder.Services.AddProblemDetails();
+    builder.Services.AddSingleton<IOrderStore, InMemoryOrderStore>();
+    builder.Services.AddSingleton(TimeProvider.System);
+    var app = builder.Build();
+
+    app.MapPost("/orders", (PlaceOrder request, IOrderStore store, TimeProvider clock) =>
+    {
+        var order = store.Add(request.Customer, request.TotalPence, clock.GetUtcNow());
+        return TypedResults.Created($"/orders/{order.Id}", order);
+    });
+
+    app.MapGet("/orders/{id}", (string id, IOrderStore store) =>
+        store.Find(id) is { } order ? Results.Ok(order) : Results.NotFound());
+
+    app.Run();
+
+    public record PlaceOrder([Required, StringLength(100, MinimumLength = 1)] string Customer, [Range(1, 1_000_000)] int TotalPence);
+    public record Order(string Id, string Customer, int TotalPence, DateTimeOffset PlacedAt);
+
+    public interface IOrderStore
+    {
+        Order Add(string customer, int totalPence, DateTimeOffset placedAt);
+        Order? Find(string id);
+    }
+
+    public class InMemoryOrderStore : IOrderStore
+    {
+        private readonly ConcurrentDictionary<string, Order> _orders = new();
+        private int _next;
+
+        public Order Add(string customer, int totalPence, DateTimeOffset placedAt)
+        {
+            var order = new Order($"o-{Interlocked.Increment(ref _next)}", customer, totalPence, placedAt);
+            _orders[order.Id] = order;
+            return order;
+        }
+
+        public Order? Find(string id) => _orders.GetValueOrDefault(id);
+    }
+
+    public partial class Program;
+    SRC_EOF
+    mkdir -p $(dirname tests/Bakery.Api.Tests/OrdersApiTests.cs)
+    cat > tests/Bakery.Api.Tests/OrdersApiTests.cs <<'SRC_EOF'
+    using System.Net;
+    using System.Net.Http.Json;
+    using Microsoft.AspNetCore.Mvc.Testing;
+    using Microsoft.AspNetCore.TestHost;
+    using Microsoft.Extensions.DependencyInjection;
+    using Microsoft.Extensions.Time.Testing;
+
+    namespace Bakery.Api.Tests;
+
+    public class OrdersApiTests(WebApplicationFactory<Program> factory) : IClassFixture<WebApplicationFactory<Program>>
+    {
+        private static readonly DateTimeOffset SevenThirty = new(2026, 11, 13, 7, 30, 0, TimeSpan.Zero);
+
+        private HttpClient CreateClient() =>
+            factory.WithWebHostBuilder(host => host.ConfigureTestServices(services =>
+            {
+                services.AddSingleton<IOrderStore, InMemoryOrderStore>();
+                services.AddSingleton<TimeProvider>(new FakeTimeProvider(SevenThirty));
+            })).CreateClient();
+
+        [Fact]
+        public async Task Placing_an_order_returns_201_with_its_location()
+        {
+            var client = CreateClient();
+
+            var response = await client.PostAsJsonAsync("/orders", new { customer = "Ama", totalPence = 1250 });
+
+            Assert.Equal(HttpStatusCode.Created, response.StatusCode);
+            Assert.Equal("/orders/o-1", response.Headers.Location?.ToString());
+            var order = await response.Content.ReadFromJsonAsync<Order>();
+            Assert.Equal(new Order("o-1", "Ama", 1250, SevenThirty), order);
+        }
+
+        [Fact]
+        public async Task A_placed_order_can_be_read_back()
+        {
+            var client = CreateClient();
+            var created = await client.PostAsJsonAsync("/orders", new { customer = "Kofi", totalPence = 450 });
+
+            var order = await client.GetFromJsonAsync<Order>(created.Headers.Location);
+
+            Assert.Equal("Kofi", order?.Customer);
+        }
+
+        [Theory]
+        [InlineData("", 1250, "Customer")]
+        [InlineData("Ama", 0, "TotalPence")]
+        public async Task Invalid_orders_are_refused_with_problem_details(string customer, int totalPence, string field)
+        {
+            var client = CreateClient();
+
+            var response = await client.PostAsJsonAsync("/orders", new { customer, totalPence });
+
+            Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            Assert.Equal("application/problem+json", response.Content.Headers.ContentType?.MediaType);
+            Assert.Contains($"\"{field}\"", await response.Content.ReadAsStringAsync());
+        }
+
+        [Fact]
+        public async Task An_unknown_order_is_404()
+        {
+            var response = await CreateClient().GetAsync("/orders/o-999");
+
+            Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        }
+    }
+    SRC_EOF
+    python3 - "$BLOCK" <<'PY_EOF'
+    import sys
+    from pathlib import Path
+    p = Path("tests/Bakery.Api.Tests/OrdersApiTests.cs")
+    s = p.read_text().rstrip()
+    assert s.endswith("}")
+    method = "".join("    " + l if l.strip() else l for l in Path(sys.argv[1]).read_text().splitlines(True))
+    p.write_text(s[:-1] + "\n" + method + "}\n")
+    PY_EOF
+    dotnet test
+  output_contains:
+  - 'Passed!  - Failed:     0, Passed:     7'
