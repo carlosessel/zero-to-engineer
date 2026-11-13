@@ -1,0 +1,301 @@
+---
+title: "The maths engineers use"
+summary: "Logic, sets, counting, probability, and proof by induction, applied to code."
+prerequisites: [m-machine]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will have the handful of mathematical tools that software engineers actually reach for: simplifying conditions with logic, reasoning with sets, counting possibilities, estimating probabilities such as the chance of an id collision, using logarithms and powers of two, and convincing yourself a loop is correct. None of it needs more than school arithmetic; all of it turns up in design reviews, interviews and debugging.
+
+This kind of maths, about separate, countable things rather than smooth quantities, is called **discrete mathematics**. If you want the gentler on-ramp to algebra and functions first, <Ref to="math-numbers" /> covers it.
+
+## Logic
+
+Every `if` statement is logic. The three basic operations are **and** (`&&`, both must be true), **or** (`||`, at least one), and **not** (`!`). Two laws let you rewrite conditions safely, **De Morgan's laws**:
+
+- `!(a && b)` is the same as `!a || !b`
+- `!(a || b)` is the same as `!a && !b`
+
+In words: "not (both)" means "at least one is not"; "not (either)" means "neither". A common use is turning a negated condition into a positive one that reads better:
+
+```ts
+const isOpen = true;
+const hasStock = false;
+
+const cannotOrder1 = !(isOpen && hasStock);
+const cannotOrder2 = !isOpen || !hasStock;
+console.log(cannotOrder1, cannotOrder2);
+
+// Check the law for every combination of true and false: a truth table.
+for (const a of [true, false]) {
+  for (const b of [true, false]) {
+    console.log(a, b, !(a && b) === (!a || !b), !(a || b) === (!a && !b));
+  }
+}
+```
+
+The last loop is a **truth table**: it checks a statement for every combination of inputs. With two inputs there are four rows, and both laws hold in all four.
+
+**Implication**, "if *a* then *b*", is false only when *a* is true and *b* is false. It is equivalent to `!a || b`, which is how you write rules like "if the order is a gift, it must have a message": `!isGift || hasMessage`.
+
+Two more facts that prevent bugs:
+
+- **Short-circuit evaluation.** `a && b` does not evaluate `b` if `a` is false; `a || b` does not evaluate `b` if `a` is true. That is why `user && user.name` is safe, and why putting a cheap check first speeds things up.
+- **"All" and "some" over empty collections.** "All items are in stock" is *true* for an empty basket (there is no counterexample), and "some item is in stock" is *false*. JavaScript's `[].every(...)` returns `true` and `[].some(...)` returns `false`. Check whether your feature really wants that for empty input.
+
+## Sets
+
+A **set** is a collection of distinct items, where order does not matter. The operations:
+
+| Operation | Meaning | Example: A = {1, 2, 3}, B = {2, 3, 4} |
+|---|---|---|
+| union A ∪ B | in A or B (or both) | {1, 2, 3, 4} |
+| intersection A ∩ B | in both | {2, 3} |
+| difference A \ B | in A but not B | {1} |
+| subset A ⊆ B | everything in A is in B | false here |
+
+Sets are everywhere in code: permissions (does the user's set of roles intersect the allowed roles?), finding what changed between two lists, removing duplicates. Using a real set type makes membership checks fast (about constant time with a hash set, versus scanning a list), which matters inside loops:
+
+```ts
+const yesterday = new Set(["sourdough", "rye", "bun"]);
+const today = new Set(["rye", "bun", "croissant"]);
+
+const added = [...today].filter((x) => !yesterday.has(x));
+const removed = [...yesterday].filter((x) => !today.has(x));
+const both = [...today].filter((x) => yesterday.has(x));
+console.log({ added, removed, both });
+```
+
+This prints `{ added: ["croissant"], removed: ["sourdough"], both: ["rye", "bun"] }`: difference both ways, and the intersection.
+
+The size of a union obeys the **inclusion–exclusion** rule: |A ∪ B| = |A| + |B| − |A ∩ B|, because items in both would otherwise be counted twice. If 120 customers bought bread, 80 bought cake, and 30 bought both, then 120 + 80 − 30 = 170 bought at least one.
+
+## Counting
+
+Counting possibilities answers questions such as "how many passwords are there?", "how many test cases would cover every combination?" and "could this id space run out?".
+
+- **The product rule.** If one choice has *m* options and an independent second has *n*, together there are *m* × *n*. A 4-character code of capital letters has 26⁴ = 456,976 possibilities. Every extra independent option multiplies the total, which is why testing every combination of settings quickly becomes impossible (10 on/off switches: 2¹⁰ = 1,024 combinations).
+- **Permutations**: arranging *k* items chosen from *n* in order: *n* × (*n* − 1) × … × (*n* − *k* + 1). Arranging all *n* items gives *n*! ("*n* factorial"), which grows explosively: 10! = 3,628,800; 20! is about 2.4 × 10¹⁸.
+- **Combinations**: choosing *k* items from *n* when order does not matter: *n*! ÷ (*k*! × (*n* − *k*)!), written C(*n*, *k*). Choosing 3 toppings from 10 is C(10, 3) = 120; a 5-card hand from a 52-card deck is C(52, 5) = 2,598,960.
+- **The pigeonhole principle.** If you put more than *n* items into *n* boxes, some box gets at least two. Obvious, and powerful: a hash function that maps unlimited inputs to 2³² values *must* have collisions; a 6-digit code has only 1,000,000 values, so among 1,000,001 codes, two are equal.
+
+```ts
+function factorial(n: number): bigint {
+  let result = 1n;
+  for (let i = 2n; i <= BigInt(n); i++) result *= i;
+  return result;
+}
+
+function choose(n: number, k: number): bigint {
+  return factorial(n) / (factorial(k) * factorial(n - k));
+}
+
+console.log(26 ** 4, 2 ** 10);
+console.log(factorial(10), factorial(20));
+console.log(choose(10, 3), choose(52, 5));
+```
+
+`bigint` keeps the large values exact (<Ref to="m-data-representation" />).
+
+## Probability
+
+**Probability** is a number from 0 (impossible) to 1 (certain). For equally likely outcomes, it is the number of favourable outcomes divided by the total. Three rules cover most engineering use:
+
+- **Complement**: P(not A) = 1 − P(A). Often the easy way round: "the chance at least one of 20 servers fails" is 1 − "the chance none fails".
+- **Independent events multiply**: if a server is up 99% of the time independently of another, both are up 0.99 × 0.99 = 98.01% of the time. A request that needs 10 services each at 99.9% succeeds only 0.999¹⁰ ≈ 99.0% of the time: dependencies multiply unreliability.
+- **Expected value**: the long-run average, the sum of each outcome times its probability. If a cache hit takes 1 ms (90% of the time) and a miss 50 ms, the expected time is 0.9 × 1 + 0.1 × 50 = 5.9 ms.
+
+### The birthday problem and collisions
+
+How many people must be in a room before there is a better than even chance that two share a birthday? Most people guess around 180. It is **23**, because what matters is the number of *pairs*, which grows with the square of the number of people: 23 people make 253 pairs.
+
+The same maths governs **collisions** of random ids and hashes, which is why it matters to engineers. For *n* random values drawn from *N* possibilities, the chance of at least one collision is roughly 1 − e^(−n² / 2N), and a collision becomes likely once *n* is around √*N*.
+
+```ts
+function chanceOfCollision(n: number, possible: number): number {
+  let allDifferent = 1;
+  for (let i = 0; i < n; i++) allDifferent *= (possible - i) / possible;
+  return 1 - allDifferent;
+}
+
+console.log(chanceOfCollision(23, 365).toFixed(3));
+console.log(chanceOfCollision(100_000, 2 ** 32).toFixed(3));
+```
+
+This prints `0.507` (23 people) and `0.688`: 100,000 random 32-bit ids have about a 69% chance of containing a duplicate, although 2³² is about 4.3 billion. That is why ids are 64 or 128 bits: random UUIDs have 122 random bits, and even a billion of them have a collision chance of about 10⁻¹⁹.
+
+## Logarithms and powers of two
+
+A **logarithm** answers "how many times must I multiply?": log₂ *n* is the power you raise 2 to in order to get *n*. log₂ 1,024 = 10, because 2¹⁰ = 1,024. Equivalently, it is how many times you can halve *n* before reaching 1.
+
+That is why logarithms appear in so many costs:
+
+- **Binary search** halves the remaining range at each step, so finding an item among 1,000,000 sorted items takes about log₂ 1,000,000 ≈ 20 steps.
+- A **balanced tree** of *n* items has a height of about log₂ *n*: a billion items fit in a tree about 30 levels deep.
+- Anything that **doubles** each step grows to *n* in log₂ *n* steps: a cluster that doubles its servers each scaling step reaches 1,000 servers from 1 in 10 steps.
+
+Remember 2¹⁰ ≈ 1,000 (a thousand), 2²⁰ ≈ 1,000,000 (a million), 2³⁰ ≈ 1,000,000,000 (a billion). With those, you can estimate logarithms in your head: log₂ of a billion is about 30. The complexity chapter at the start of the next part uses them throughout.
+
+## Modular arithmetic
+
+**Modular arithmetic** is arithmetic that wraps round, like a clock: 10 o'clock plus 5 hours is 3 o'clock, because (10 + 5) mod 12 = 3. In code it is the `%` operator. It is behind:
+
+- **hashing into buckets**: `hash % numberOfBuckets` picks a bucket (and changing the number of buckets moves almost every key, which is the problem that *consistent hashing*, met later in the course, solves);
+- **round-robin**: `requestNumber % numberOfServers` spreads requests evenly;
+- **cyclic schedules**: what day of the week is it in 100 days? (today + 100) mod 7.
+
+Watch negative numbers: in JavaScript, Java and C#, `-1 % 7` is `-1`, not `6`. To wrap a possibly negative number into 0 to *n* − 1, use `((x % n) + n) % n`.
+
+## Induction and invariants: knowing a loop is right
+
+How can you be sure a loop is correct for *every* input, when you can only test some? Mathematics has a technique for this, **proof by induction**: show something holds at the start, and show that if it holds at one step it still holds after the next. Then it holds at every step.
+
+For programs, the same idea is a **loop invariant**: a statement that is true before the loop starts and stays true after every iteration. If it is true when the loop ends, and the loop does end, you know the result.
+
+```ts
+function sum(values: number[]): number {
+  let total = 0;
+  // Invariant: at the start of each iteration, total is the sum of values[0 .. i-1].
+  for (let i = 0; i < values.length; i++) {
+    total += values[i];
+  }
+  // When the loop ends, i = values.length, so total is the sum of every value.
+  return total;
+}
+
+console.log(sum([4, 2.5, 3]), sum([]));
+```
+
+- **Before the loop**, `i` is 0 and the sum of no values is 0: true.
+- **Each iteration** adds `values[i]` and then increases `i`, so the statement is true again for the new `i`.
+- **At the end**, `i` equals the length, so `total` is the sum of everything. It prints `9.5 0`, and works for the empty list too.
+
+You will rarely write formal proofs at work, but thinking in invariants is how experienced engineers write tricky code (binary search, partitioning, concurrent data structures) correctly the first time, and how they review it: "what must be true here?"
+
+## Common mistakes
+
+- **Negating compound conditions by hand** and getting it wrong. Apply De Morgan's laws, or write the positive condition.
+- **Forgetting that "all" is true for an empty list.**
+- **Searching a list inside a loop** when a set would make each check constant time.
+- **Multiplying instead of adding** (or the reverse) for "either" versus "both" probabilities.
+- **Underestimating collisions**: a 32-bit random id is not unique enough for large systems.
+- **Forgetting negative numbers in `%`.**
+- **Testing only typical inputs** without asking what invariant makes the code correct for all of them.
+
+## Practice
+
+**1. (warm-up)** Rewrite `!(isWeekend || isHoliday)` without the outer `!`.
+
+<Solution>
+
+`!isWeekend && !isHoliday`: "neither a weekend nor a holiday". (De Morgan's second law.)
+
+</Solution>
+
+**2. (warm-up)** What do `[].every(x => x > 0)` and `[].some(x => x > 0)` return?
+
+<Solution>
+
+`true` and `false`. With no items, there is no counterexample, so "all" holds; and there is no example, so "some" does not.
+
+</Solution>
+
+**3. (warm-up)** How many different 6-digit numeric codes are there (000000 to 999999)? How many 8-character codes using a to z and 0 to 9?
+
+<Solution>
+
+10⁶ = **1,000,000**. 36⁸ = **2,821,109,907,456** (about 2.8 × 10¹²).
+
+</Solution>
+
+**4. (standard)** A survey of 200 users found 140 use the mobile app, 90 use the website, and 50 use both. How many use neither?
+
+<Solution>
+
+At least one: 140 + 90 − 50 = 180. Neither: 200 − 180 = **20**.
+
+</Solution>
+
+**5. (standard)** A request passes through 5 services, each available 99.9% of the time, independently. What is the chance the request succeeds? What if there were 50?
+
+<Solution>
+
+0.999⁵ ≈ **0.995** (99.5%). 0.999⁵⁰ ≈ **0.951** (95.1%): one request in twenty fails. Long chains of dependencies multiply unreliability, which is why the reliability part of the course covers retries, fallbacks and fewer synchronous dependencies.
+
+</Solution>
+
+**6. (standard)** A cache serves 95% of reads in 2 ms; misses go to a database taking 80 ms. What is the expected read time? What hit rate would bring it under 5 ms?
+
+<Solution>
+
+0.95 × 2 + 0.05 × 80 = 1.9 + 4 = **5.9 ms**. For a hit rate *h*: 2*h* + 80(1 − *h*) < 5 gives 80 − 78*h* < 5, so *h* > 75 ÷ 78 ≈ **96.2%**.
+
+</Solution>
+
+**7. (standard)** How many comparisons does binary search need, at most, to find an item among 1,000,000 sorted items? Among 1,000,000,000?
+
+<Solution>
+
+About log₂ 1,000,000 ≈ 19.9, so **20**; and log₂ 1,000,000,000 ≈ 29.9, so **30**. A thousand times more data costs only 10 more steps.
+
+</Solution>
+
+**8. (standard)** Your system creates short links with 6 random characters from a to z and 0 to 9. Roughly how many links can you create before a collision is likely (about a 50% chance)?
+
+<Solution>
+
+There are 36⁶ ≈ 2.18 × 10⁹ possible codes. Collisions become likely around √*N*: √(36⁶) = 6⁶ = 46,656, and the 50% point is about 1.18 × √*N* ≈ **55,000** links. Far fewer than the 2 billion codes suggest. So check for collisions on creation (and retry), or use longer codes.
+
+</Solution>
+
+**9. (standard)** What is `-3 % 5` in JavaScript, and how do you get a result between 0 and 4?
+
+<Solution>
+
+`-3 % 5` is **−3**. Use `((-3 % 5) + 5) % 5`, which is **2**.
+
+</Solution>
+
+**10. (stretch)** State a loop invariant for this function, and use it to argue that the function returns the largest value of a non-empty array.
+
+```ts
+function largest(values: number[]): number {
+  let best = values[0];
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] > best) best = values[i];
+  }
+  return best;
+}
+```
+
+<Solution>
+
+Invariant: at the start of each iteration, `best` is the largest of `values[0 .. i-1]`. Before the loop, `i` is 1 and `best` is `values[0]`, the largest of one value: true. In each iteration, if `values[i]` is larger, `best` becomes it; otherwise it stays; either way, `best` is now the largest of `values[0 .. i]`, so the invariant holds for the next `i`. When the loop ends, `i` equals the length, so `best` is the largest of the whole array. (For an empty array, `values[0]` is `undefined`: the function's assumption "non-empty" must be checked by the caller or the function.)
+
+</Solution>
+
+**11. (stretch)** A feature has 6 independent settings, each with 3 options. How many combinations are there? If you test every pair of settings' options at least once rather than every combination, roughly how many pairs must be covered?
+
+<Solution>
+
+All combinations: 3⁶ = **729**. Pairs: there are C(6, 2) = 15 pairs of settings, each with 3 × 3 = 9 combinations of options, so **135** option pairs must each appear in some test. Because each test covers 15 pairs at once, a well-chosen set of only about 15 tests can cover them all (this is called *pairwise testing*), far fewer than 729.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Logic**: and, or, not; **De Morgan's laws** rewrite negations; implication is `!a || b`; mind **short-circuit evaluation** and that "all" is true for empty collections.
+- **Sets**: union, intersection, difference; use set types for fast membership; **inclusion–exclusion** avoids double counting.
+- **Counting**: the **product rule**, **permutations**, **combinations**, and the **pigeonhole principle** (hashes must collide).
+- **Probability**: complements, multiplying independent events (dependencies multiply unreliability), **expected value**; the **birthday problem** shows collisions become likely around √*N*.
+- **Logarithms**: halving and doubling; log₂ of a million is about 20, of a billion about 30.
+- **Modular arithmetic** for buckets and round-robin; beware negative remainders.
+- **Induction** and **loop invariants** let you reason that code is correct for every input.
+
+## Go deeper
+
+- [Mathematics for Computer Science (6.042J, Spring 2015)](https://ocw.mit.edu/courses/6-042j-mathematics-for-computer-science-spring-2015/), Albert R. Meyer and Adam Chlipala, MIT OpenCourseWare. Proofs, induction, sets, counting, graphs and probability, with an open textbook.
+- [Discrete Mathematics: An Open Introduction](http://discrete.openmathbooks.org/dmoi4.html), Oscar Levin. Logic, proofs, sets, counting, probability and graphs.

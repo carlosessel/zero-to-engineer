@@ -1,0 +1,244 @@
+---
+title: "Networking in depth"
+summary: "TCP, UDP, IP, DNS, TLS, HTTP/1.1, HTTP/2 and HTTP/3, sockets, and where latency comes from."
+prerequisites: [m-operating-systems, internet]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will understand what happens, layer by layer, when one program talks to another over a network, and you will be able to reason about the questions that come up constantly in back-end work: why the first request is slow and later ones fast, why a connection pool matters, what a timeout should be, why HTTP/2 and HTTP/3 exist, and what "the network is slow" might actually mean. <Ref to="internet" /> gave the overview; this is the engineer's view.
+
+## Layers
+
+Networking is built in **layers**, each using the one below and hiding its details from the one above:
+
+| Layer | Job | Examples |
+|---|---|---|
+| Application | what the programs are saying | HTTP, DNS, SMTP, database protocols |
+| Security (between the two) | encryption and identity | TLS |
+| Transport | a conversation between two programs | TCP, UDP, QUIC |
+| Network | getting packets from one machine to another, across networks | IP (IPv4, IPv6) |
+| Link | getting bits across one physical hop | Ethernet, Wi-Fi |
+
+Your code mostly lives at the top, but problems at every layer show up as "the request was slow" or "the connection failed", so it pays to know them all.
+
+## IP: addresses and packets
+
+The **Internet Protocol** (IP) moves **packets**, small chunks of data (typically up to about 1,500 bytes), from one **IP address** to another, hop by hop through **routers**. An IPv4 address is 32 bits, written like `203.0.113.7`; an IPv6 address is 128 bits, written like `2001:db8::7`. IPv4 addresses ran out long ago, which is why home and office networks share one public address through **NAT** (network address translation), and why IPv6 adoption keeps growing.
+
+IP makes only a **best effort**: packets can be lost, duplicated, delayed, or arrive in a different order from the one they were sent in. Everything reliable is built on top of it.
+
+## TCP: a reliable stream
+
+**TCP** (Transmission Control Protocol) turns unreliable packets into a reliable, ordered **stream of bytes** between two programs. Each end is identified by an IP address and a **port** (a number from 0 to 65,535 naming a program on that machine): web servers listen on 443, databases such as PostgreSQL on 5432.
+
+What TCP does for you:
+
+- **Connection set-up.** Before any data, the two sides exchange three packets, the **three-way handshake** (SYN, SYN-ACK, ACK). That costs one **round trip** (RTT: the time for a message to go there and back) before the first byte of data.
+- **Reliability and order.** Every byte is numbered; the receiver acknowledges what it got; lost packets are sent again; out-of-order packets are put back in order before your program sees them.
+- **Flow control.** The receiver tells the sender how much it can accept, so a fast sender does not overwhelm a slow receiver.
+- **Congestion control.** TCP starts sending slowly and speeds up as packets are acknowledged (**slow start**), and backs off when packets are lost, so that many connections share the network fairly. A brand-new connection therefore cannot use its full bandwidth straight away.
+
+The cost of reliable ordering is **head-of-line blocking**: if one packet is lost, everything after it waits, even data that has arrived, until the lost packet is resent.
+
+## UDP
+
+**UDP** (User Datagram Protocol) sends individual messages (**datagrams**) with none of TCP's guarantees: no handshake, no retransmission, no ordering. That sounds worse, but it suits work where late data is useless (live audio and video, games) or where the application wants its own control. DNS traditionally uses UDP for small queries. QUIC, below, builds a new reliable transport on top of UDP.
+
+## Sockets: the programming interface
+
+Programs use the network through **sockets**, which the operating system provides (they are file descriptors underneath; <Ref to="m-operating-systems" />). A server creates a socket, **binds** it to a port, **listens**, and **accepts** connections; a client **connects** to the server's address and port. Then both read and write bytes.
+
+This Java program runs both sides on one machine, over the **loopback** address `127.0.0.1`, which never leaves the computer:
+
+```java
+import java.io.*;
+import java.net.*;
+
+public class Main {
+    public static void main(String[] args) throws Exception {
+        try (ServerSocket server = new ServerSocket(0, 50, InetAddress.getLoopbackAddress())) {
+            int port = server.getLocalPort();
+            Thread serverThread = new Thread(() -> {
+                try (Socket conn = server.accept();
+                     BufferedReader in = new BufferedReader(new InputStreamReader(conn.getInputStream()));
+                     PrintWriter out = new PrintWriter(conn.getOutputStream(), true)) {
+                    String line = in.readLine();
+                    out.println("Server received: " + line.toUpperCase());
+                } catch (IOException e) {
+                    System.out.println("server error: " + e);
+                }
+            });
+            serverThread.start();
+
+            try (Socket client = new Socket(InetAddress.getLoopbackAddress(), port);
+                 PrintWriter out = new PrintWriter(client.getOutputStream(), true);
+                 BufferedReader in = new BufferedReader(new InputStreamReader(client.getInputStream()))) {
+                out.println("two sourdough loaves");
+                System.out.println(in.readLine());
+            }
+            serverThread.join();
+        }
+    }
+}
+```
+
+It prints `Server received: TWO SOURDOUGH LOAVES`. Port `0` asks the OS for any free port. Notice that TCP gives you a stream of bytes, not messages: the program has to agree on where a message ends (here, a newline). Every protocol above TCP (HTTP, database protocols) defines its own **framing**.
+
+## DNS: names to addresses
+
+People use names like `api.example.com`; IP needs addresses. The **Domain Name System** (DNS) translates. Your program asks a **resolver** (usually provided by your operating system or network), which asks the authoritative name servers for that domain if it does not already know, and returns the address.
+
+Every DNS answer has a **TTL** (time to live): how many seconds it may be cached. Caching makes repeat look-ups nearly free, and it also explains why DNS changes take time to spread: until the TTL expires, old answers are still being used. Before moving a service to new addresses, teams lower the TTL in advance.
+
+DNS failures are a classic cause of outages: when a lookup fails or is slow, everything that depends on that name fails or is slow too.
+
+## TLS: privacy and identity
+
+**TLS** (Transport Layer Security) runs on top of TCP and gives three things: **encryption** (nobody in between can read the data), **integrity** (nobody can change it unnoticed), and **authentication** (the client can check it is really talking to `api.example.com`, using the server's **certificate**, signed by a certificate authority the client trusts). HTTPS is HTTP over TLS. The current version is TLS 1.3, now specified in RFC 9846 (2026), which replaced RFC 8446 (2018).
+
+A full TLS 1.3 handshake takes **one round trip**, after TCP's own. A client that has talked to the server recently can **resume** with no extra round trip at all (0-RTT), though data sent that way can be replayed by an attacker, so it is only safe for requests that do no harm when repeated.
+
+The cryptography itself is the subject of a later chapter. What matters here is the cost: a fresh HTTPS connection needs about two round trips (TCP, then TLS) before the first request can even be sent.
+
+## Where latency comes from
+
+Measure the stages of a real HTTPS request with `curl`:
+
+```bash
+curl -s -o /dev/null -w 'dns %{time_namelookup}s, connect %{time_connect}s, tls %{time_appconnect}s, first byte %{time_starttransfer}s, http %{http_version}\n' https://www.example.com/
+```
+
+One run, from the machine this chapter was checked on, printed:
+
+```text
+dns 0.051105s, connect 0.068595s, tls 0.120504s, first byte 0.181851s, http 2
+```
+
+The times are cumulative from the start, so read the differences:
+
+- **DNS lookup**: 51 ms.
+- **TCP handshake**: 69 − 51 = 18 ms, about one round trip.
+- **TLS handshake**: 121 − 69 = 52 ms.
+- **Request and response start**: 182 − 121 = 61 ms: one more round trip plus the server's work.
+
+Over 180 ms before the first byte of the reply, of which the server's own work was a small part. The lesson for performance:
+
+- **Reuse connections.** Once a connection is open, later requests skip DNS, TCP and TLS entirely. HTTP clients keep connections open (**keep-alive**) and reuse them from a **connection pool**. Creating a new HTTP client, or a new database connection, per request is one of the most common performance mistakes in back-end code.
+- **Reduce round trips.** Distance sets a floor: light in fibre covers roughly 200 km per millisecond, so London to New York and back (about 11,000 km) cannot take less than about 55 ms however fast the servers are. Put servers near users (or use a CDN), and batch calls instead of making many small sequential ones.
+- **Latency and bandwidth are different.** **Bandwidth** is how many bytes per second a link can carry; **latency** is how long one trip takes. Most web requests are small, so latency, not bandwidth, dominates their time.
+
+## HTTP/1.1, HTTP/2 and HTTP/3
+
+**HTTP/1.1** sends one request at a time on a connection and waits for the response. To load many resources in parallel, browsers open several connections (typically up to six per host), each paying its own handshakes.
+
+**HTTP/2** (first published in 2015; now specified in RFC 9113) keeps the same meaning (methods, headers, status codes, specified in RFC 9110) but changes how it travels: one connection carries many requests at once as interleaved **streams** (**multiplexing**), and headers are compressed. Fewer connections, fewer handshakes, better use of each one. But it all still runs over one TCP connection, so one lost packet stalls every stream: TCP's head-of-line blocking.
+
+**HTTP/3** (2022; RFC 9114) runs over **QUIC** (RFC 9000), a transport built on UDP that provides reliable, encrypted streams itself. Because QUIC tracks each stream separately, a lost packet delays only its own stream. QUIC also combines the transport and TLS handshakes into one round trip, and lets a connection survive the client changing networks (Wi-Fi to mobile data). Most major sites and CDNs support it; clients fall back to HTTP/2 when it is blocked.
+
+The `http 2` in the curl output above shows which version that request used.
+
+## Timeouts, retries and failure
+
+Networks fail in ways that are hard to tell apart: a server that is down, one that is slow, a lost packet, a dropped connection. Two rules follow, and the distributed-systems part of this course builds on them:
+
+- **Every network call needs a timeout.** Without one, a call to a server that never answers can wait for minutes (or for ever), holding a thread and a connection the whole time. Set a **connect timeout** (how long to wait for the connection) and a **request timeout** (how long to wait for the response), based on how long the call normally takes and what your users can wait for.
+- **A timeout does not mean the request failed.** It may have succeeded and only the reply was lost. Retrying is safe only if the operation can be repeated without harm (it is **idempotent**, such as reading data or setting a value), or if the server can recognise a repeated request. Retrying "charge this card" blindly can charge twice.
+
+## Common mistakes
+
+- **A new connection per request** (new HTTP client, new database connection) instead of reusing a pool.
+- **No timeouts**, or timeouts far longer than any user would wait.
+- **Many small sequential calls** across a network instead of one batched call.
+- **Treating TCP as messages** rather than a byte stream, so reads split or join messages unexpectedly.
+- **Retrying non-idempotent requests** after a timeout.
+- **Forgetting DNS**: long TTLs before a migration, or no plan for the resolver failing.
+- **Assuming bandwidth will fix latency.**
+
+## Practice
+
+**1. (warm-up)** What does TCP add on top of IP?
+
+<Solution>
+
+A connection between two programs (ports), reliable delivery (numbering, acknowledgements and retransmission), ordering, flow control and congestion control, presented as one ordered byte stream.
+
+</Solution>
+
+**2. (warm-up)** About how many round trips does a request on a brand-new HTTPS connection take before the response starts arriving, ignoring DNS?
+
+<Solution>
+
+About three: one for the TCP handshake, one for the TLS 1.3 handshake, and one for the request and response. (HTTP/3 over QUIC combines the first two, making it about two.)
+
+</Solution>
+
+**3. (warm-up)** A DNS record has a TTL of 86,400. What does that mean in practice when you change it?
+
+<Solution>
+
+Resolvers may cache the old answer for up to 86,400 seconds (24 hours), so some clients keep using the old address for up to a day after the change. Lower the TTL well before a planned change.
+
+</Solution>
+
+**4. (standard)** A service calls another service 20 times per request, one call after another, each on a new connection, with a 30 ms round trip between them. Estimate the time spent on round trips, and how much connection reuse would save.
+
+<Solution>
+
+New HTTPS connection: about 3 round trips each (TCP, TLS, request) = 90 ms; 20 calls = 1,800 ms. With connections reused, each call needs about 1 round trip = 30 ms; 20 calls = 600 ms. Reuse saves about 1.2 seconds. Batching the 20 calls into one, or running them in parallel, would save far more.
+
+</Solution>
+
+**5. (standard)** Why does HTTP/2's multiplexing still suffer from head-of-line blocking, and how does HTTP/3 fix it?
+
+<Solution>
+
+HTTP/2 sends all its streams over one TCP connection, and TCP delivers bytes strictly in order, so one lost packet holds up the data of every stream behind it until it is retransmitted. HTTP/3 runs over QUIC, which handles each stream's ordering separately on top of UDP, so a lost packet only delays the stream it belongs to.
+
+</Solution>
+
+**6. (standard)** Using the figure of about 200 km per millisecond in fibre, what is the minimum round-trip time between two data centres 6,000 km apart?
+
+<Solution>
+
+There and back is 12,000 km; 12,000 ÷ 200 = **60 ms**, before any processing, queuing or indirect routing. Real round trips are longer.
+
+</Solution>
+
+**7. (standard)** A client calls a payment API to charge £20 and times out. Should it retry? What would make retrying safe?
+
+<Solution>
+
+Not blindly: the charge may have succeeded and only the response was lost, so retrying could charge twice. It becomes safe if the API supports an **idempotency key**: the client sends a unique id with the request, and the server returns the original result instead of charging again when it sees the same id. Otherwise, check the payment's status before retrying.
+
+</Solution>
+
+**8. (stretch)** The Java socket example sends one line and reads one line. Explain what could go wrong if the client sent two messages without newlines, and how real protocols avoid it.
+
+<Solution>
+
+TCP is a byte stream with no message boundaries, so the server could receive both messages joined together, or one split across several reads; it would have no way to know where one message ends. Real protocols define **framing**: a delimiter (a newline, as in the example), or a length prefix (send the number of bytes first, then the bytes, as HTTP's `Content-Length` and many binary protocols do).
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Networking is **layered**: link, network (**IP**), transport (**TCP**, **UDP**, **QUIC**), security (**TLS**), application (**HTTP**, **DNS**).
+- **IP** moves packets on a best-effort basis between addresses; NAT lets networks share addresses.
+- **TCP** gives a reliable, ordered byte stream after a **three-way handshake**, with flow and congestion control (**slow start**), at the cost of **head-of-line blocking**. **UDP** sends unreliable datagrams.
+- Programs use **sockets**; TCP has no message boundaries, so protocols define **framing**.
+- **DNS** maps names to addresses with cached answers governed by **TTL**.
+- **TLS 1.3** (RFC 9846) encrypts and authenticates in one extra round trip.
+- Latency comes from round trips: **reuse connections** (keep-alive, pools), reduce round trips, and remember distance sets a floor. Bandwidth is not latency.
+- **HTTP/2** multiplexes streams over one TCP connection; **HTTP/3** uses QUIC to avoid TCP head-of-line blocking and to combine handshakes.
+- Every network call needs **timeouts**; retry only **idempotent** operations or use idempotency keys.
+
+## Go deeper
+
+- [High Performance Browser Networking](https://hpbn.co/), Ilya Grigorik. Latency, bandwidth, TCP, UDP, TLS, HTTP/1.x and HTTP/2.
+- [Computer Networks: A Systems Approach](https://book.systemsapproach.org/), Larry Peterson and Bruce Davie. Networking from links to applications, including congestion control.
+- [Beej's Guide to Network Programming](https://beej.us/guide/bgnet/), Beej. Sockets in practice: TCP and UDP clients and servers.
+- [Evolution of HTTP](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Evolution_of_HTTP), MDN Web Docs. How HTTP grew from 1.0 to HTTP/3 over QUIC.
+- [RFC 9293: Transmission Control Protocol](https://www.rfc-editor.org/rfc/rfc9293), IETF. The current TCP specification.

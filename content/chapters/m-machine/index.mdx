@@ -1,0 +1,296 @@
+---
+title: "Inside the machine: CPU, memory and caches"
+summary: "Binary, the CPU, the memory hierarchy, cache lines and the latency numbers every engineer should know."
+prerequisites: []
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will be able to explain why two pieces of code that do the same amount of work can differ in speed by ten times or more, estimate how long an operation should take before you measure it, and write code that works *with* the hardware instead of against it. Great engineers carry a rough model of the machine in their heads. This chapter builds yours.
+
+This course assumes you can already program in at least one language. Examples are in TypeScript (which you can run on this page), with Java or C# beside it where the languages behave differently. If you have not programmed before, start with <Ref to="js-values-variables" /> or <Ref to="python-basics" />.
+
+## Everything is bits
+
+A computer stores and processes everything as **bits**: values that are either 0 or 1. Eight bits make a **byte**, which can hold 2⁸ = 256 different patterns. Numbers, text, images and programs are all patterns of bytes; what a pattern *means* depends entirely on how a program reads it.
+
+Numbers in base 2 (**binary**) work like ordinary base 10, with powers of two instead of ten. The binary number 1011 is 1×8 + 0×4 + 1×2 + 1×1 = 11. Because long binary numbers are hard to read, programmers often write bytes in base 16 (**hexadecimal**, or hex), where each hex digit stands for exactly four bits: 0 to 9, then a to f for 10 to 15. So the byte 1111 1111 is `ff` in hex, or 255.
+
+```ts
+const n = 11;
+console.log(n.toString(2));        // binary
+console.log((255).toString(16));   // hexadecimal
+console.log(0b1011, 0xff);         // binary and hex literals
+console.log(2 ** 8, 2 ** 16, 2 ** 32);
+```
+
+This prints `1011`, `ff`, `11 255`, and `256 65536 4294967296`. Those powers of two are worth recognising on sight: a byte holds 256 values, 16 bits hold 65,536, and 32 bits about 4.3 billion. <Ref to="m-data-representation" /> goes much further into how numbers and text are stored.
+
+## The CPU
+
+The **CPU** (central processing unit, or processor) runs programs. At its heart it repeats a simple cycle billions of times a second: **fetch** the next instruction from memory, **decode** what it means, **execute** it (add two numbers, compare them, load a value from memory, jump to another instruction), and move on.
+
+The instructions are very small steps. A line such as `total += price * quantity` becomes several: load `price` and `quantity`, multiply them, load `total`, add, store `total`. The CPU holds the values it is working on in **registers**: a handful of tiny, extremely fast storage slots inside the processor itself.
+
+A few facts explain most of what you will see about CPU speed:
+
+- **Clock speed.** A CPU's clock ticks a few billion times a second (3 GHz is 3 billion ticks). One tick takes about a third of a nanosecond (a **nanosecond**, ns, is a billionth of a second).
+- **Pipelining.** Like a production line, a modern CPU works on many instructions at once, each at a different stage. It can finish several instructions per tick when nothing gets in the way.
+- **Branch prediction.** An `if` statement is a fork in the production line. Rather than wait to find out which way to go, the CPU *guesses*, using the history of that branch, and carries on. A right guess costs nothing; a wrong one (a **branch misprediction**) throws away the half-done work, costing a few nanoseconds. Code whose branches go the same way most of the time runs faster than code whose branches are random.
+- **Several cores.** A modern CPU has several **cores**, each a full processor of its own, so it can run several programs (or several parts of one program) truly at the same time. Using them is the subject of the concurrency part of this course.
+
+## The memory hierarchy
+
+Here is the single most important fact about performance in modern computers: **the CPU is far faster than main memory.** Fetching a value from main memory (RAM) takes on the order of 100 nanoseconds: hundreds of CPU ticks, during which the CPU could have done hundreds of instructions. If every value had to come from RAM, the CPU would spend almost all its time waiting.
+
+The answer is a **memory hierarchy**: several layers of storage, each smaller and faster than the one below it.
+
+| Layer | Typical size | Rough time to read |
+|---|---|---|
+| Registers | a few hundred bytes | under a nanosecond |
+| L1 cache | tens of kilobytes per core | about 1 ns |
+| L2 cache | hundreds of kilobytes to a few megabytes | a few ns |
+| L3 cache | several to tens of megabytes, shared between cores | tens of ns |
+| Main memory (RAM) | gigabytes | about 100 ns |
+| SSD | hundreds of gigabytes to terabytes | tens to hundreds of microseconds |
+| Network round trip | anywhere | from half a millisecond (same building) to over 100 ms (across the world) |
+
+(Sizes and times vary a lot between machines; treat these as orders of magnitude. A **microsecond**, µs, is a thousand nanoseconds; a **millisecond**, ms, a thousand microseconds.)
+
+A **cache** keeps copies of recently used memory close to the CPU. When the CPU needs a value, it looks in L1 first, then L2, then L3, and only then in RAM. Finding it in a cache is a **cache hit**; having to go further down is a **cache miss**.
+
+### Cache lines and locality
+
+Caches do not fetch single values. They fetch **cache lines**: fixed-size blocks of neighbouring memory, commonly 64 bytes on today's PCs and servers (some processors use larger lines). Ask for one 4-byte integer, and the 60 bytes around it arrive too.
+
+That design rewards two habits, called **locality**:
+
+- **Spatial locality**: using memory that is close together. If you read one element of an array, the next few are already in the cache, free.
+- **Temporal locality**: using the same memory again soon, while it is still cached.
+
+The CPU also watches your access pattern, and when it sees you moving steadily through memory, it **prefetches**: loads the next lines before you ask. Steady, sequential access through memory is about as fast as it gets.
+
+### A worked example: rows and columns
+
+A two-dimensional array in Java is stored row by row: each row's numbers sit next to each other in memory. This program adds up every number in a 4,096 × 4,096 grid twice: once going along each row, and once going down each column. Both loops do exactly the same additions.
+
+```java
+public class Main {
+    static final int N = 4096;
+
+    public static void main(String[] args) {
+        int[][] grid = new int[N][N];
+        for (int r = 0; r < N; r++)
+            for (int c = 0; c < N; c++)
+                grid[r][c] = 1;
+
+        for (int round = 0; round < 3; round++) {
+            long start = System.nanoTime();
+            long sum = 0;
+            for (int r = 0; r < N; r++)
+                for (int c = 0; c < N; c++)
+                    sum += grid[r][c];
+            long rowsMs = (System.nanoTime() - start) / 1_000_000;
+
+            start = System.nanoTime();
+            long sum2 = 0;
+            for (int c = 0; c < N; c++)
+                for (int r = 0; r < N; r++)
+                    sum2 += grid[r][c];
+            long columnsMs = (System.nanoTime() - start) / 1_000_000;
+
+            System.out.printf("round %d: row by row %d ms, column by column %d ms (sums %d and %d)%n",
+                    round + 1, rowsMs, columnsMs, sum, sum2);
+        }
+    }
+}
+```
+
+On the computer this chapter was checked on, the last round printed:
+
+```text
+round 3: row by row 8 ms, column by column 204 ms (sums 16777216 and 16777216)
+```
+
+Same answer, same number of additions, about 25 times slower. Why?
+
+- **Row by row**, each read is the next integer in memory. One cache miss brings in a line holding 16 integers (64 bytes ÷ 4 bytes each), so 15 of every 16 reads are cache hits, and the prefetcher sees the steady pattern and loads ahead.
+- **Column by column**, each read jumps to a different row: 4,096 integers (16 KB) away from the last one. Every read is in a different cache line, so almost every read is a miss, and by the time the loop comes back to the next column, those lines have been pushed out of the cache.
+
+The program runs three rounds because Java's runtime starts slowly and speeds up as it compiles the hot loops (<Ref to="m-runtimes" />); the first round is usually slower for both. The exact numbers will differ on your machine, but the gap will be large. Run it yourself: save it as `Main.java` and run `java Main.java`.
+
+### Arrays and pointers
+
+The same principle explains why an array often beats a linked list (<Ref to="data-structures" />) even when the "Big O" is the same. Walking an array reads memory in order. Walking a linked list follows a **pointer** (an address) from each node to the next, and the nodes can be scattered anywhere in memory, so each step may be a cache miss, sometimes called **pointer chasing**. Modern performance advice ("prefer arrays", "store data of the same kind together") is mostly about cache lines.
+
+### Cores sharing caches
+
+Each core has its own L1 and L2 caches, so when two cores use the same data, the hardware must keep their copies in agreement. If two threads on different cores keep writing to *different* variables that happen to share one cache line, the line bounces between the cores' caches on every write, and both slow down dramatically, although they never touch each other's data. This is **false sharing**. You will meet it again in the concurrency part; for now, know that cache lines matter for multi-threaded code too.
+
+## Memory, addresses and words
+
+Main memory is one long list of bytes, each with a numbered **address**. A 64-bit processor works with 64-bit **words** (8 bytes) and 64-bit addresses, which is why programs can use far more than 4 GB, the limit of 32-bit addresses (2³² bytes).
+
+When a value longer than a byte is stored, its bytes have to go in some order. Most processors today (x86 and ARM) are **little-endian**: the least significant byte comes first, at the lowest address. Network protocols traditionally use the opposite, **big-endian**, order. You rarely need to care, until you read binary files or network data by hand, when getting it wrong turns 1 into 16,777,216.
+
+```ts
+const buffer = new ArrayBuffer(4);
+const view = new DataView(buffer);
+view.setUint32(0, 1, true);                       // write 1 as little-endian
+console.log(new Uint8Array(buffer).join(" "));    // the bytes in memory order
+console.log(view.getUint32(0, false));            // read the same bytes as big-endian
+```
+
+This prints `1 0 0 0` (the least significant byte first) and then `16777216`: the same four bytes read in the wrong order.
+
+## Storage and the network
+
+Below memory are **storage** devices that keep data when the power is off. A solid-state drive (**SSD**) is far faster than an old spinning hard disk, but still very slow compared with RAM, and, like memory, much faster for **sequential** access (reading a file from start to end) than **random** access (jumping around). This is why databases, logs and message systems such as Kafka are designed to write sequentially wherever possible.
+
+The **network** is slower still, and its delay is limited by physics: light in optical fibre travels roughly 200 kilometres per millisecond, so a round trip between Europe and the west coast of the United States cannot take less than several tens of milliseconds, whatever your code does. <Ref to="m-networking" /> covers why.
+
+## Latency numbers every engineer should know
+
+A famous table, popularised by Jeff Dean at Google and Peter Norvig, gives rough times for common operations. Its exact values are from around 2010 and some have improved (SSDs especially), but the *ratios* are what matter, and they still hold well:
+
+| Operation | Roughly |
+|---|---|
+| L1 cache reference | 0.5 ns |
+| Branch misprediction | 5 ns |
+| L2 cache reference | 7 ns |
+| Main memory reference | 100 ns |
+| Read 1 MB sequentially from memory | 250 µs |
+| Round trip within a data centre | 500 µs |
+| Read 1 MB sequentially from disk | 20 ms |
+| Send a packet California to the Netherlands and back | 150 ms |
+
+Scale them up to human time to feel the differences: if an L1 cache hit took one second, a main-memory reference would take over three minutes, a round trip in the data centre nearly two weeks, and the trip across the Atlantic and back almost ten years.
+
+### Estimating before measuring
+
+These numbers let you do **back-of-the-envelope estimates**: rough calculations that tell you whether a design can possibly work before you build it.
+
+*Worked example.* A page shows a user's 50 most recent orders. The code fetches the list of 50 order ids in one database query, then fetches each order with its own query, one after another. The database is in the same data centre, about 0.5 ms per round trip, and each query takes about 1 ms on the database.
+
+- Each query costs about 0.5 ms (round trip) + 1 ms (work) = 1.5 ms.
+- 1 + 50 = 51 queries in sequence: 51 × 1.5 ms ≈ **77 ms** for this one page, mostly waiting.
+- Fetching all 50 orders in *one* query (`WHERE id IN (...)`) would take about 1.5 ms plus a little more work: perhaps **3 ms**.
+
+This pattern, one query for the list and then one per item, is called the **N + 1 query problem**, and it is one of the most common performance bugs in back-end code. The estimate finds it before any profiler does.
+
+## Common mistakes
+
+- **Thinking only about the number of operations.** Memory access patterns can matter more: the row and column loops do the same work at very different speeds.
+- **Walking memory in a scattered order** when the data could be laid out to be read in sequence.
+- **Assuming the network is free.** A loop that makes one network call per item is slow however fast each call is.
+- **Trusting a single timing.** Runtimes warm up, caches fill, other programs interfere; measure several rounds (the performance chapter shows how to benchmark properly).
+- **Optimising without measuring.** Estimates tell you where to look; profilers tell you where the time actually goes.
+- **Treating the latency table as precise.** It gives orders of magnitude. Your hardware will differ.
+
+## Practice
+
+**1. (warm-up)** Convert binary 110101 to decimal, and 200 to hexadecimal.
+
+<Solution>
+
+110101 = 32 + 16 + 4 + 1 = **53**. 200 = 12 × 16 + 8, and 12 is `c` in hex, so 200 = **c8** (check: `(200).toString(16)` gives `"c8"`).
+
+</Solution>
+
+**2. (warm-up)** How many different values can 10 bits hold? And 64 bits, roughly?
+
+<Solution>
+
+2¹⁰ = **1,024**. 2⁶⁴ is about **1.8 × 10¹⁹** (18,446,744,073,709,551,616).
+
+</Solution>
+
+**3. (warm-up)** A cache line is 64 bytes. How many 8-byte numbers (such as `double` or `long`) fit in one?
+
+<Solution>
+
+64 ÷ 8 = **8**. Reading them in order, one miss brings in eight values.
+
+</Solution>
+
+**4. (standard)** Explain, in terms of cache lines, why summing a large array of numbers in order is faster than summing the same numbers in a random order.
+
+<Solution>
+
+In order, each cache line fetched brings the next several values, so most reads are cache hits, and the prefetcher loads lines ahead of time because the pattern is predictable. In a random order, almost every read lands in a different cache line that is probably not cached, so most reads wait about 100 ns for main memory, and prefetching cannot help.
+
+</Solution>
+
+**5. (standard)** A loop calls an external API once for each of 2,000 customers, one after another. Each call takes about 80 ms. How long does the loop take, and name two ways to make it faster.
+
+<Solution>
+
+2,000 × 80 ms = 160,000 ms = **160 seconds**, almost three minutes. Faster: use a batch endpoint that takes many customers in one call, if the API has one; or make calls concurrently (say 20 at a time, within the API's rate limits), bringing it to about 2,000 ÷ 20 × 80 ms = 8 seconds. Caching results that do not change also helps.
+
+</Solution>
+
+**6. (standard)** Using the latency table, how many main-memory references fit in the time of one round trip within a data centre?
+
+<Solution>
+
+500 µs = 500,000 ns; 500,000 ÷ 100 = **5,000** main-memory references. One network round trip costs as much as thousands of memory accesses, which is why reducing round trips usually matters more than tuning code.
+
+</Solution>
+
+**7. (standard)** What does this print, and why? (Run it to check.)
+
+```ts
+const view = new DataView(new ArrayBuffer(2));
+view.setUint16(0, 258, true);
+console.log(view.getUint8(0), view.getUint8(1));
+```
+
+<Solution>
+
+It prints **2 1**. 258 = 1 × 256 + 2, so its two bytes are 1 (high) and 2 (low). Written little-endian, the low byte comes first: byte 0 is 2, byte 1 is 1.
+
+</Solution>
+
+**8. (standard)** An image is stored as rows of pixels. A filter loops `for x in columns: for y in rows: process(pixel[y][x])`. What would you change, and why?
+
+<Solution>
+
+Swap the loops so the inner loop runs along a row: `for y in rows: for x in columns`. Pixels in a row are next to each other in memory, so the inner loop then reads memory sequentially, using whole cache lines and the prefetcher, instead of jumping a whole row's width on every step.
+
+</Solution>
+
+**9. (stretch)** Two threads each increment their own counter a billion times. The counters are two `long` fields next to each other in one object. The program is much slower with two threads than you expect. Explain, and suggest a fix.
+
+<Solution>
+
+The two counters share a cache line (two 8-byte fields fit easily in 64 bytes). Every write by one core takes exclusive ownership of the line, invalidating the other core's copy, so the line bounces between cores on every increment: false sharing. Fix it by keeping each thread's counter in a local variable and combining at the end, or by placing the counters in separate cache lines (padding, or language features for this, such as Java's `@Contended` in JDK internals or separate objects).
+
+</Solution>
+
+**10. (stretch)** Estimate how long it takes to read a 2 GB file sequentially from an SSD that reads 3 GB per second, and compare with reading it in 4 KB pieces at random positions if each random read takes 100 µs.
+
+<Solution>
+
+Sequential: 2 ÷ 3 ≈ **0.67 seconds**. Random: 2 GB ÷ 4 KB = 2,000,000,000 ÷ 4,096 ≈ 488,000 reads, × 100 µs ≈ 48.8 seconds: about **70 times slower**. Access pattern matters on storage as much as in memory.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Everything is **bits**; 8 bits make a **byte**; binary and **hexadecimal** are ways of writing them.
+- The **CPU** fetches, decodes and executes tiny instructions billions of times a second, using **registers**, **pipelining**, **branch prediction** and several **cores**.
+- Main memory is hundreds of times slower than the CPU, so a **memory hierarchy** of **caches** (L1, L2, L3) keeps recent data close.
+- Caches move **cache lines** (commonly 64 bytes). Code with good **spatial** and **temporal locality**, reading memory in order, runs far faster: the row-by-row loop was about 25 times faster than column by column.
+- Arrays beat **pointer chasing**; **false sharing** slows threads that write neighbouring data.
+- Memory is a list of addressed bytes; most CPUs are **little-endian**.
+- Storage and networks are slower still, and sequential beats random everywhere.
+- Learn the **latency numbers** as orders of magnitude, and use them for **back-of-the-envelope estimates**, such as spotting an **N + 1 query problem** before it ships.
+
+## Go deeper
+
+- [What every programmer should know about memory](https://lwn.net/Articles/250967/), Ulrich Drepper. Memory, CPU caches, virtual memory and memory-aware optimisation, in depth.
+- [Algorithms for Modern Hardware](https://en.algorithmica.org/hpc/), Sergey Slotin. Pipelining, caches, memory and SIMD from a performance point of view.
+- [Latency Numbers Every Programmer Should Know (interactive)](https://colin-scott.github.io/personal_website/research/interactive_latency.html), Colin Scott. How the classic latency numbers change from 1990 to 2020.
+- [Nand to Tetris](https://www.nand2tetris.org/), Noam Nisan and Shimon Schocken. Building a computer from logic gates up through a CPU, assembler, virtual machine and compiler.

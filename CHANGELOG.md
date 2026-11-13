@@ -4,6 +4,23 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 1 (How the machine really works)
+
+Added
+- The course's first part, eight chapters: inside the machine (CPU, caches, latency numbers); numbers, text and time; operating systems; how code runs (compilers, bytecode, JIT); memory management and garbage collection; networking in depth; the maths engineers use; and what computers cannot do. About 22,700 words, 66 practice problems, 41 quiz questions, 32 checked resources.
+- Java and C# examples are now checked automatically: new `java` and `csharp` kinds in the example harness run them as single-file programs (Java 21 here and Java 25 in CI; .NET 10), comparing output. 14 such examples in this part, beside TypeScript ones for the same ideas.
+- Experiments whose numbers vary are asserted by the relationship the chapter claims: column-by-column traversal at least three times slower than row by row (about 25 times here), later rounds faster than the first after JIT warm-up, G1 chosen by the JVM, objects promoted through .NET's generations.
+- `scripts/ts_output.ts` prints what each TypeScript block outputs, for drafting. The JavaScript example runner now provides `TextEncoder`, `TextDecoder` and `Intl`.
+- About 175 glossary terms. "Virtual machine" now gives both meanings (a runtime's virtual machine, and a rented cloud server).
+
+Fixed (found while checking)
+- Facts updated from the sources: TLS 1.3 is now specified in RFC 9846 (2026), Unicode 18.0 is current, leap seconds stop from 20 May 2027, G1 is Java's default only on server-class machines, ZGC is generational only since JDK 24, and CPython 3.14.5 went back to its generational collector.
+- A practice answer about thread and CPU limits mixed the two up; it now works out both and takes the lower.
+- Glossary links that would have used the wrong meaning ("Reference" skills, .NET's "server" GC mode, "Routing" as route planning) are no longer links there.
+
+Not verified
+- No person has reviewed these chapters. Timings in the text are from one machine. The curl timing example needs the network and is checked only when network checks are on.
+
 ### 2026-11-12: A new look, and points, streaks and trophies
 
 Added

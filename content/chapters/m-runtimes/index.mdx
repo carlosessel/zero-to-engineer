@@ -1,0 +1,206 @@
+---
+title: "How code runs: compilers, interpreters and virtual machines"
+summary: "Compilation, bytecode, the JVM, the .NET runtime, V8 and JIT compilation."
+prerequisites: [m-operating-systems]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will know what actually happens between saving a source file and the CPU running it, for the languages you are most likely to use at work: Java, C#, JavaScript and TypeScript, and Python. That knowledge explains things that otherwise look like magic: why a Java service is slow for its first minute, why one language starts fast and another runs fast, why a "compiled" TypeScript project can still crash on a type, and what options you have when start-up time matters.
+
+## The CPU only runs machine code
+
+From <Ref to="m-machine" />: the CPU executes **machine code**, numbered instructions specific to its family (x86-64 in most PCs and servers, ARM in phones, recent Macs and many cloud servers). Every programming language must, one way or another, end up as machine code. The languages differ in *when* and *how* that happens.
+
+There are two basic approaches, and most modern languages combine them.
+
+**A compiler** translates the whole program into another language before it runs. **Ahead-of-time (AOT) compilation** to machine code, as in C, C++, Rust and Go, produces a native executable for one kind of CPU and operating system. It starts instantly and runs fast, but the compiler cannot know how the program will actually be used, and you need a separate build for each platform.
+
+**An interpreter** reads the program and carries out each step as it goes, without producing machine code. It is simple and flexible but slow: every operation pays the cost of being worked out again each time it runs.
+
+## Bytecode and virtual machines
+
+Java and C# take a middle road. Their compilers do not produce machine code. They produce **bytecode**: compact instructions for an imaginary computer, a **virtual machine**, that is the same on every platform. The real machine then runs the bytecode with a **runtime** that is specific to it.
+
+- Java's compiler `javac` turns `.java` files into `.class` files of **Java bytecode**, run by the **JVM** (Java Virtual Machine). The most widely used JVM is HotSpot, part of OpenJDK. Kotlin and Scala compile to the same bytecode.
+- C#'s compiler turns code into **IL** (intermediate language), packaged in `.dll` files and run by the .NET runtime (the **CLR**, common language runtime). F# and Visual Basic compile to the same IL.
+
+You can see bytecode for yourself. Take this small Java class:
+
+```java
+public class Price {
+    static int lineTotal(int pence, int quantity) {
+        return pence * quantity;
+    }
+}
+```
+
+Compile it and disassemble the result with the JDK's `javap` tool:
+
+```bash
+javac Price.java
+javap -c Price
+```
+
+The part for `lineTotal` reads:
+
+```text
+  static int lineTotal(int, int);
+    Code:
+       0: iload_0
+       1: iload_1
+       2: imul
+       3: ireturn
+```
+
+Four instructions for an imaginary **stack machine**: push the first `int` argument, push the second, multiply the top two values, return the result. Bytecode is close to the source, easy to check for safety, and identical on every platform. That is how "write once, run anywhere" works.
+
+## JIT compilation: getting fast while running
+
+Interpreting bytecode would be slow, so the JVM and the CLR use a **just-in-time (JIT) compiler**: while the program runs, they compile bytecode into machine code for the actual CPU, and switch to it.
+
+JIT compilation has an advantage over ahead-of-time compilation: it can see how the program really behaves. It knows which methods are called millions of times (**hot** code), which branches are usually taken, and which concrete types appear at a call site. It uses that **profile** to compile the hot code very aggressively: putting small methods' code inline in their callers, removing checks that never fail, and laying out the common path first. If an assumption later turns out false (a new type appears), it can throw the optimised code away and fall back: **deoptimisation**.
+
+Because compiling well takes time, runtimes use **tiered compilation**:
+
+- **HotSpot (Java)** starts by interpreting; methods that run often are compiled quickly by the **C1** compiler with little optimisation; the hottest are recompiled by the slower, heavily optimising **C2** compiler using the profile gathered so far.
+- **.NET** compiles each method quickly the first time it runs (tier 0), then recompiles hot methods with full optimisation (tier 1), using profile data gathered meanwhile (dynamic profile-guided optimisation).
+
+### Warm-up
+
+The result is **warm-up**: a JVM or .NET service is slower for its first seconds or minutes, then reaches full speed. You can see it in this Java program, which times the same method five times:
+
+```java
+public class Main {
+    static long work() {
+        long total = 0;
+        for (int i = 0; i < 5_000_000; i++) {
+            total += (i % 7) * (i % 13);
+        }
+        return total;
+    }
+
+    public static void main(String[] args) {
+        for (int round = 1; round <= 5; round++) {
+            long start = System.nanoTime();
+            long result = work();
+            long micros = (System.nanoTime() - start) / 1_000;
+            System.out.printf("round %d: %,d µs (result %d)%n", round, micros, result);
+        }
+    }
+}
+```
+
+On the machine this chapter was checked on, the first round took about 14,800 µs and the last about 8,700 µs: the same work, 1.7 times faster once compiled and optimised. Your numbers will differ.
+
+Warm-up matters in practice:
+
+- **Benchmarks** must run code enough times before measuring, or they measure the interpreter. Use a benchmarking tool (JMH for Java, BenchmarkDotNet for .NET) rather than a loop and a stopwatch; the performance chapter later in this course explains why.
+- **Deployments**: a freshly started instance is slower. Platforms often warm instances up with real-looking traffic before sending them users, or roll out gradually.
+- **Short-lived programs** (command-line tools, functions that run for a second) may finish before the JIT helps at all.
+
+### Ahead-of-time options
+
+When start-up time or memory matters more than peak speed (command-line tools, serverless functions, containers that scale up and down often), both platforms offer ahead-of-time options:
+
+- **.NET**: **ReadyToRun** includes precompiled machine code alongside the IL, so start-up is faster while the JIT can still optimise hot code later; **Native AOT** compiles the whole application to a native executable with no JIT at all, starting very fast with a smaller memory footprint, but with restrictions on features that need code generated at run time.
+- **Java**: **GraalVM Native Image** compiles a Java application to a native executable, with similar trade-offs; recent JDKs also add features that save and reuse work from earlier runs to start faster.
+
+## JavaScript and TypeScript
+
+JavaScript has no separate compile step for you to run: you ship source code, and the engine does everything at run time. **V8**, the engine in Chrome, Node.js and Deno, uses tiers like the JVM: it parses the code, interprets it as bytecode first (its interpreter is called Ignition), and compiles hot functions with progressively more optimising compilers, the most optimising being TurboFan. Like the JVM, it optimises using observed types and deoptimises when they change, which is why code that keeps the **same shapes of objects** (the same properties, added in the same order) runs faster than code that mixes them.
+
+**TypeScript** adds a step before all that: the TypeScript compiler (or a faster tool such as esbuild or Sucrase) removes the types and produces JavaScript (<Ref to="typescript-basics" />). The types are checked at build time and then **erased**: nothing of them remains when the code runs. This is why a TypeScript program can still fail at run time on data that did not match its declared types, such as JSON from a server: the checks you need at run time you must write (or generate) yourself.
+
+## Python
+
+**CPython**, the standard Python, compiles your source code to its own bytecode (stored in `__pycache__` folders as `.pyc` files) and interprets that bytecode. It does not JIT-compile by default, which is one reason pure Python loops are much slower than the same loops in Java or C#, and why numerical Python code relies on libraries such as NumPy whose inner loops are written in C (<Ref to="numpy-pandas" />). Recent CPython versions have added an experimental JIT compiler, off by default; and other implementations, such as PyPy, use JIT compilation.
+
+## Comparing the approaches
+
+| | Start-up | Peak speed | Portability | Examples |
+|---|---|---|---|---|
+| AOT to machine code | instant | high, fixed at build time | rebuild per platform | C, C++, Rust, Go, Native AOT |
+| Bytecode + JIT | slower (warm-up) | high, adapts to real use | same bytecode everywhere | Java, C#, Kotlin |
+| Source + JIT engine | fast | high for hot code | same source everywhere | JavaScript (V8) |
+| Bytecode interpreter | fast | lower | same source everywhere | CPython (by default) |
+
+None is "best". Each language's runtime is a set of trade-offs, and choosing a platform for a service (a long-running server, a command-line tool, a function invoked a million times a day) includes choosing those trade-offs.
+
+## Common mistakes
+
+- **Benchmarking without warm-up**, then concluding Java or .NET "is slow".
+- **Judging start-up and peak performance as one thing.** A service that runs for weeks cares about peak; a command-line tool cares about start-up.
+- **Believing TypeScript types protect you at run time.** They are erased; validate external data.
+- **Writing JavaScript that keeps changing objects' shapes** in hot code (adding properties in different orders, mixing types in one array), defeating the engine's optimisations.
+- **Writing heavy numeric loops in pure Python** instead of using a library that runs them in compiled code.
+- **Choosing Native AOT or native images without checking** that your libraries support them (reflection and run-time code generation are common problems).
+
+## Practice
+
+**1. (warm-up)** What is bytecode, and why do Java and C# use it instead of compiling straight to machine code?
+
+<Solution>
+
+Bytecode is a set of compact instructions for a virtual machine rather than a real CPU. The same bytecode runs on any platform that has the runtime, so one build runs everywhere; it is easy to verify for safety; and the runtime can JIT-compile it to machine code tuned for the actual CPU and the program's real behaviour.
+
+</Solution>
+
+**2. (warm-up)** What does the bytecode `iload_0, iload_1, imul, ireturn` do?
+
+<Solution>
+
+It pushes the first and second `int` arguments onto the stack, multiplies the top two values, and returns the result: `return a * b`.
+
+</Solution>
+
+**3. (standard)** A colleague times a Java method once with `System.nanoTime()`, finds it slower than the same logic in Go, and concludes Java is slower. What is wrong with the measurement?
+
+<Solution>
+
+A single run of a fresh JVM measures mostly interpretation and compilation, not the optimised code a long-running service would use. The method needs to run many times first (warm-up), and the measurement should be repeated and analysed statistically, ideally with a benchmarking tool such as JMH that handles warm-up and other pitfalls. Even then, compare like with like (same algorithm, same data).
+
+</Solution>
+
+**4. (standard)** Your team runs a .NET function that handles each request in a fresh instance, and users complain about slow first responses. Name two runtime options to investigate.
+
+<Solution>
+
+ReadyToRun, which ships precompiled machine code so less JIT work is needed at start-up; and Native AOT, which compiles the whole application ahead of time with no JIT, for much faster start-up and lower memory (after checking the libraries support it). Keeping instances warm, if the platform allows, also helps.
+
+</Solution>
+
+**5. (standard)** Why does a TypeScript function declared as `function total(items: { price: number }[])` still crash when a server sends `{"price": "4.50"}`?
+
+<Solution>
+
+TypeScript types are checked at build time and erased from the JavaScript that runs, so nothing checks the server's data when it arrives. The string "4.50" flows into code that expects a number. Validate external data at run time (by hand, or with a schema library), and only then treat it as the declared type.
+
+</Solution>
+
+**6. (stretch)** Explain deoptimisation, with an example of code that could trigger it in a JIT-compiled language.
+
+<Solution>
+
+A JIT compiler optimises hot code using assumptions from what it has seen, for example that a function is always called with objects of one shape or class, so it can skip checks and call a method directly. If a different kind of object later arrives, the assumption is false, so the runtime discards the optimised machine code, goes back to slower code, and may recompile later with more general assumptions. Example: a JavaScript function that sums `item.price` over millions of objects created the same way, and then receives one object whose properties were added in a different order or whose `price` is a string.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The CPU runs only **machine code**. **Compilers** translate ahead of time; **interpreters** execute as they go.
+- Java and C# compile to **bytecode** (Java bytecode, IL), run by a **virtual machine** (the **JVM**, the **CLR**) that is the same on every platform.
+- **JIT compilers** turn hot bytecode into optimised machine code using the program's real behaviour, in **tiers**, and **deoptimise** when assumptions break. The cost is **warm-up**.
+- **ReadyToRun**, **Native AOT** and **GraalVM Native Image** trade some flexibility for fast start-up.
+- **V8** runs JavaScript with an interpreter and optimising JITs; keep object shapes consistent. **TypeScript** types are erased at build time.
+- **CPython** interprets bytecode and is slow for pure-Python loops; use compiled libraries.
+- Choose runtimes by their trade-offs: start-up, peak speed, memory and portability.
+
+## Go deeper
+
+- [Crafting Interpreters](https://craftinginterpreters.com/), Robert Nystrom. Building a language from scratch: parsing, a bytecode virtual machine, closures and garbage collection.
+- [Maglev: V8's Fastest Optimizing JIT](https://v8.dev/blog/maglev), V8 team. V8's tiers, from the Ignition interpreter to the TurboFan optimiser, and their trade-offs.
+- [Compilation config settings (.NET)](https://learn.microsoft.com/en-us/dotnet/core/runtime-config/compilation), Microsoft. Tiered compilation, ReadyToRun and dynamic profile-guided optimisation in .NET.
+- [Java HotSpot VM performance enhancements (JDK 25)](https://docs.oracle.com/en/java/javase/25/vm/java-hotspot-virtual-machine-performance-enhancements.html), Oracle. HotSpot's tiered compilation and other performance features.

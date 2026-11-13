@@ -1,0 +1,26 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: java
+  check: java
+  note: The process id and core count differ every run; the check asserts the shape.
+  verify: |
+    import re
+    assert re.search(r'^This process: \d+$', out, re.M) and re.search(r'^Cores available: \d+$', out, re.M)
+    assert 'hello from a child process' in out and 'Child exited with 0' in out
+- block: 2
+  lang: bash
+  check: shell
+  output_contains:
+  - exit status 143
+  note: 143 = 128 + 15, the number of SIGTERM.
+- block: 3
+  lang: java
+  check: java
+  verify: |
+    import re
+    assert 'Hello from thread worker-1' in out and re.search(r'Both threads ran in process \d+', out)
+- block: 4
+  lang: bash
+  check: shell
+  output_contains:
+  - written through descriptor 3

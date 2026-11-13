@@ -1,0 +1,12 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  note: 'Type-checked only: it declares the impossible function, so there is nothing that could run.'
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    { found: true, tried: 21 }
+    { found: false, tried: 64 }
+    1048576

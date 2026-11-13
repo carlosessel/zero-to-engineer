@@ -1,0 +1,37 @@
+- question: What does a tracing garbage collector free?
+  options:
+  - Objects not used recently
+  - Objects not reachable from the roots
+  - Large objects first
+  answer: 1
+  explanation: 'Reachable but unused objects are not freed: that is how leaks happen.'
+- question: Why are young-generation collections cheap?
+  options:
+  - The young generation is on the stack
+  - Most young objects are already dead, so few survivors are copied
+  answer: 1
+  explanation: The generational hypothesis.
+- question: A Java service in a 1 GB container runs with -Xmx1g and is killed with code 137. Why?
+  options:
+  - The heap is too small
+  - Non-heap memory pushes the process over the container limit
+  answer: 1
+  explanation: 'Leave room: for example -XX:MaxRAMPercentage=75.'
+- question: Which is a common memory leak in a garbage-collected language?
+  options:
+  - Forgetting to call free
+  - A cache with no size limit or expiry
+  answer: 1
+  explanation: Every cache needs a bound.
+- question: In .NET, where does a 100,000-byte array go?
+  options:
+  - Generation 0
+  - The Large Object Heap (collected with generation 2)
+  answer: 1
+  explanation: Objects of 85,000 bytes or more go there.
+- question: How do you find what keeps a leaking object alive?
+  options:
+  - Restart the service
+  - Compare heap dumps and follow the path of references to the GC roots
+  answer: 1
+  explanation: The path names the guilty collection or listener.

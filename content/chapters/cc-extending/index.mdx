@@ -52,7 +52,7 @@ Test it: in a project with some changes, ask "What did I change?" (Claude should
 
 The documentation describes two kinds of content:
 
-- **Reference** skills hold knowledge Claude applies while working: your API conventions, a style guide, domain rules. Let Claude load them when relevant.
+- Reference skills hold knowledge Claude applies while working: your API conventions, a style guide, domain rules. Let Claude load them when relevant.
 - **Task** skills are step-by-step procedures: deploying, cutting a release, creating a migration. These are usually things *you* want to start deliberately, so add `disable-model-invocation: true` to the header, and Claude will not start them on its own:
 
 ```markdown
@@ -309,7 +309,7 @@ Bundled as a plugin in the team's marketplace, every developer gets the same wor
 ## Summary
 
 - A **skill** is a folder with a `SKILL.md`: a header with a `description` (when to use it) and concise instructions. Claude loads it when relevant, or you run it as `/name`.
-- Skills live in `~/.claude/skills/` (yours), `.claude/skills/` (project), or plugins. **Reference** skills hold knowledge; **task** skills are procedures, usually with `disable-model-invocation: true`.
+- Skills live in `~/.claude/skills/` (yours), `.claude/skills/` (project), or plugins. Reference skills hold knowledge; task skills are procedures, usually with `disable-model-invocation: true`.
 - `!` lines inject a command's output into a skill, grounding it in real data.
 - A **hook** is a command Claude Code runs on an event (`SessionStart`, `PreToolUse`, `PostToolUse`, `Stop`…). Exit code **2** blocks, with stderr as the reason. Hooks are for rules with no exceptions.
 - A **plugin** bundles skills, hooks, agents and MCP settings, shared through **marketplaces** and installed with `/plugin install`.

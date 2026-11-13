@@ -1,0 +1,179 @@
+---
+title: "What computers cannot do"
+summary: "Computability, P and NP, and recognising problems with no fast solution."
+prerequisites: [m-discrete-maths]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will know the two hard limits on what software can do: some problems cannot be solved by *any* program, and many practical problems have no known *fast* solution. More usefully, you will recognise these problems when they turn up disguised as feature requests ("detect any infinite loop", "find the perfect delivery schedule"), and know what engineers do instead of attempting the impossible.
+
+## Problems no program can solve
+
+It seems as if a clever enough program could answer any precise question about other programs. In 1936, Alan Turing proved otherwise, with the most famous example: the **halting problem**. Is there a program that, given any program and its input, always correctly answers whether that program eventually stops (halts) or runs for ever?
+
+There is not. The proof is short enough to follow. Suppose someone had written `halts(program, input)`, which always returns `true` or `false` correctly. Then we could write this:
+
+```ts
+declare function halts(program: (input: unknown) => unknown, input: unknown): boolean;
+
+function contrary(program: (input: unknown) => unknown): void {
+  if (halts(program, program)) {
+    while (true) {}          // halts says it stops, so run for ever
+  }
+  // halts says it runs for ever, so stop at once
+}
+```
+
+Now ask: what happens when we run `contrary(contrary)`?
+
+- If `halts(contrary, contrary)` returns `true` ("it stops"), then `contrary` loops for ever: so it does not stop, and `halts` was wrong.
+- If it returns `false` ("it runs for ever"), then `contrary` stops at once: so `halts` was wrong again.
+
+Either answer is wrong, so no correct `halts` can exist. (The `declare` line describes the impossible function's type without defining it: the type checker accepts this code, but it cannot run, because there is no `halts` to call.) A problem that no program can solve correctly for every input is called **undecidable**.
+
+### What this means in practice
+
+Turing's result generalises far beyond halting. **Rice's theorem** says that *every* non-trivial question about what a program does (does it ever divide by zero? does it ever reach this line? does it ever return null? is it a virus?) is undecidable in general. Consequences you meet at work:
+
+- **No perfect static analyser exists.** Linters, type checkers and security scanners must either miss some real problems (false negatives) or report some problems that cannot actually happen (false positives), and usually both. That is not poor engineering; it is mathematics. Good tools choose their trade-off deliberately, and good engineers treat their output as evidence, not proof.
+- **No program can detect every infinite loop or every malicious program.** Timeouts, sandboxes and resource limits exist because prediction is impossible.
+- **Tests cannot prove the absence of bugs** for all inputs; they sample.
+
+Undecidable does not mean hopeless. It means "not for *every* program". Tools can be excellent on the programs people actually write; type systems succeed by rejecting some correct programs in exchange for certainty about the ones they accept.
+
+## Problems with no known fast solution
+
+Many problems are perfectly solvable, but every known method takes so long on large inputs that it is useless in practice. Computer scientists sort problems into **complexity classes** by how running time grows with input size (Big O, at the start of the next part, makes this precise).
+
+- **P** is the class of problems solvable in **polynomial time**: time growing like *n*, *n*², *n*³ and so on. Sorting, searching, shortest paths in a road network: these scale.
+- **NP** is the class of problems where a proposed answer can be **checked** in polynomial time, even if finding one may be hard. For example, given a proposed timetable, it is easy to check that no student has two exams at once; finding such a timetable may be very hard.
+- **NP-complete** problems are the hardest problems in NP: if any one of them could be solved in polynomial time, all problems in NP could. Thousands of practical problems are NP-complete.
+
+Whether **P = NP**, whether every problem whose answers are easy to check is also easy to solve, is the most famous open question in computer science. The Clay Mathematics Institute offers a million dollars for its answer, and it lists the problem as unsolved. Almost everyone expects that P ≠ NP: that NP-complete problems really have no fast exact algorithm. (Modern encryption relies on related assumptions that certain problems are hard.)
+
+### Why "exponential" is a wall
+
+The known exact algorithms for NP-complete problems take time that grows **exponentially**: doubling with each extra item. Consider **subset sum**: given some numbers, is there a subset that adds up exactly to a target? The obvious method tries every subset, and *n* numbers have 2ⁿ subsets:
+
+```ts
+function subsetSum(values: number[], target: number): { found: boolean; tried: number } {
+  let tried = 0;
+  for (let mask = 0; mask < 2 ** values.length; mask++) {
+    tried++;
+    let total = 0;
+    for (let i = 0; i < values.length; i++) {
+      if (mask & (1 << i)) total += values[i];
+    }
+    if (total === target) return { found: true, tried };
+  }
+  return { found: false, tried };
+}
+
+console.log(subsetSum([3, 34, 4, 12, 5, 2], 9));
+console.log(subsetSum([3, 34, 4, 12, 5, 2], 100));
+const twenty = Array.from({ length: 20 }, (_, i) => i * 7 + 1);
+console.log(subsetSum(twenty, -1).tried);
+```
+
+Each `mask` is a number whose bits say which values are in the subset (<Ref to="m-machine" />). The first call finds 4 + 5 = 9 after trying 21 subsets; the second tries all 64 subsets of 6 numbers and finds none; the third tries all 1,048,576 subsets of 20 numbers. At 60 numbers it would need 2⁶⁰ ≈ 10¹⁸ tries: at a billion tries a second, over 30 years. Faster hardware does not help much: each extra number doubles the work, so a computer a thousand times faster handles only about 10 more numbers.
+
+### Recognising them in disguise
+
+NP-complete (and related "NP-hard") problems rarely announce themselves. They appear as:
+
+- **Scheduling**: exam timetables, shift rotas, meeting rooms with constraints.
+- Routing: the shortest route visiting all delivery addresses (the **travelling salesman problem**).
+- **Packing**: fitting items into the fewest boxes or containers (**bin packing**), or the most valuable load within a weight limit (**knapsack**).
+- **Assignment with constraints**: allocating people to teams with rules about who can work together; **graph colouring**.
+- **Satisfiability**: finding settings that satisfy many logical conditions at once (SAT), which is behind dependency resolvers in package managers.
+
+When a feature request sounds like "find the *best* arrangement of many things under many rules", suspect one of these.
+
+### What engineers do instead
+
+You do not give up; you change the question:
+
+1. **Keep the input small.** Exponential is fine for 15 items. Many real instances are small, or can be split into small independent parts.
+2. **Accept "good enough"**: **heuristics** (rules of thumb, such as "visit the nearest unvisited address next") and **approximation algorithms** (with a guarantee, such as "never worse than twice the best"). Users rarely need the mathematically perfect route; they need a good one now.
+3. **Use a specialised solver.** SAT solvers, integer-programming solvers and constraint solvers (such as Google's OR-Tools) handle remarkably large real-world instances, by using clever search that works well on typical inputs even though the worst case is exponential.
+4. **Exploit special structure.** A general problem may be NP-complete while your version, with its particular restrictions, has a fast algorithm. Subset sum, for instance, can be solved quickly when the numbers are small integers (with dynamic programming, in a later part).
+5. **Set a time limit** and return the best solution found so far.
+
+The engineering skill is recognising the situation early, so you do not promise "the optimal schedule" or spend weeks searching for a fast exact algorithm that almost certainly does not exist.
+
+## Common mistakes
+
+- **Promising a tool will catch "all" bugs, loops or vulnerabilities.** No tool can.
+- **Treating a static analyser's silence as proof**, or its every warning as certain.
+- **Writing an exact exponential algorithm** for a problem whose inputs will grow.
+- **Not recognising a scheduling, routing or packing problem** until it is in production and slow.
+- **Building a custom search** when a mature solver exists.
+- **Believing faster hardware will rescue an exponential algorithm.**
+
+## Practice
+
+**1. (warm-up)** What does it mean for a problem to be undecidable?
+
+<Solution>
+
+No program can solve it correctly for every possible input. It may be solvable for many inputs, but no single algorithm always gives the right answer and always finishes.
+
+</Solution>
+
+**2. (warm-up)** What is the difference between P and NP, in one sentence each?
+
+<Solution>
+
+P: problems that can be *solved* in polynomial time. NP: problems whose proposed answers can be *checked* in polynomial time (finding an answer may be much harder).
+
+</Solution>
+
+**3. (standard)** A manager asks for a build step that "rejects any code that can ever throw a null-pointer exception, with no false alarms". Explain why this is impossible, and what you can realistically offer.
+
+<Solution>
+
+By Rice's theorem, whether a program can ever reach a null dereference is undecidable in general, so no tool can be exact for all programs: it must either miss some or flag some that cannot happen. Realistic options: a type system with null safety (Kotlin, C#'s nullable reference types, TypeScript's strict null checks), which proves the absence of null errors for code it accepts by rejecting some code; plus static analysis tuned for few false alarms; plus tests and code review.
+
+</Solution>
+
+**4. (standard)** The subset-sum brute force tries 2ⁿ subsets. How many does it try for 30 numbers, and how long at 100 million tries per second?
+
+<Solution>
+
+2³⁰ = 1,073,741,824 tries; ÷ 100,000,000 ≈ **10.7 seconds**. For 40 numbers it would be 1,024 times longer: about 3 hours.
+
+</Solution>
+
+**5. (standard)** Which of these are likely NP-hard in general? (a) sorting 10 million names; (b) choosing which of 300 parcels to load on a van to maximise value within a weight limit; (c) assigning 60 nurses to shifts so that dozens of rules are met; (d) finding the shortest driving route between two towns.
+
+<Solution>
+
+(b) is the knapsack problem and (c) is constrained scheduling: both NP-hard in general. (a) is sorting, solvable in about *n* log *n* time. (d) is a shortest-path problem, solvable efficiently (Dijkstra's algorithm, in a later part).
+
+</Solution>
+
+**6. (stretch)** You must plan delivery routes for 200 stops a day, in under a minute. Describe an approach.
+
+<Solution>
+
+Accept a near-optimal answer rather than the exact one. Start with a fast heuristic (such as nearest-neighbour, or a solver's construction method) to get a reasonable route at once, then improve it with local search (for example repeatedly reversing segments of the route if that shortens it) until the time limit, returning the best found. Better still, use a routing solver such as OR-Tools, which does this well and handles constraints like time windows and van capacity. Measure the result against a lower bound or past routes to know how good it is.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Some problems are **undecidable**: no program solves them for every input. The **halting problem** is the classic; **Rice's theorem** extends it to every non-trivial question about program behaviour.
+- So no static analyser is perfect, no tool catches every infinite loop or virus, and tests sample rather than prove.
+- **P**: solvable in polynomial time. **NP**: answers checkable in polynomial time. **NP-complete**: the hardest in NP. Whether **P = NP** is open; most expect not.
+- Exact algorithms for NP-complete problems take **exponential** time; each extra item doubles the work, and faster hardware barely helps.
+- They hide in **scheduling**, **routing**, **packing**, constrained assignment and **satisfiability**.
+- Instead: keep inputs small, use **heuristics** and **approximation**, use specialised **solvers**, exploit special structure, and set time limits.
+
+## Go deeper
+
+- [Theory of Computation (18.404J, Fall 2020)](https://ocw.mit.edu/courses/18-404j-theory-of-computation-fall-2020/), Michael Sipser, MIT OpenCourseWare. Decidability, undecidability, complexity classes and NP-completeness.
+- [Algorithms, chapter 12: NP-Hardness](https://jeffe.cs.illinois.edu/teaching/algorithms/), Jeff Erickson. Reductions and NP-hardness from an engineer's angle.
+- [P vs NP](https://www.claymath.org/millennium/p-vs-np/), Clay Mathematics Institute. The P versus NP problem in plain language, with the official statement.

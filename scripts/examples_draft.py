@@ -76,6 +76,18 @@ def draft(chapter):
         elif lang in ("jsx",):
             e["check"] = "not-run"
             e["reason"] = "TODO: a piece of a component, not a whole file; combine it or explain"
+        elif lang in ("java", "csharp"):
+            e["check"] = lang
+            probe.spec = [{"check": "not-run", "reason": "draft"}] * (i - 1) + [{"check": lang}]
+            folder = probe.tmp / f"draft{i}"
+            folder.mkdir()
+            name = "Main.java" if lang == "java" else "app.cs"
+            (folder / name).write_text(code + "\n", encoding="utf-8")
+            cmd = ["java", name] if lang == "java" else ["dotnet", "run", name]
+            r = subprocess.run(cmd, cwd=folder, capture_output=True, text=True, timeout=300)
+            e["output"] = Block(r.stdout)
+            if r.returncode != 0:
+                e["DRAFT_PROBLEM"] = Block(f"exit code {r.returncode}\n{r.stderr[-1500:]}")
         elif lang == "text":
             e["check"] = "illustration"
         else:

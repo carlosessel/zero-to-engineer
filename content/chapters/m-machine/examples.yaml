@@ -1,0 +1,35 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    1011
+    ff
+    11 255
+    256 65536 4294967296
+- block: 2
+  lang: java
+  check: java
+  note: Timings vary between machines; the check asserts the relationship the chapter describes, not exact numbers.
+  verify: |
+    import re
+    rows = [tuple(map(int, m)) for m in re.findall(r'row by row (\d+) ms, column by column (\d+) ms', out)]
+    assert len(rows) == 3
+    row_ms, col_ms = rows[-1]
+    assert col_ms >= 3 * max(row_ms, 1), rows
+    assert 'sums 16777216 and 16777216' in out
+- block: 3
+  lang: text
+  check: illustration
+  note: One line of block 2's output on the machine this chapter was checked on; block 2's check confirms column-by-column is at least three times slower wherever it runs.
+- block: 4
+  lang: ts
+  check: ts
+  output: |
+    1 0 0 0
+    16777216
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    2 1

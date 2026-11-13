@@ -1,0 +1,41 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: java
+  check: shell
+  script: |
+    cp "$BLOCK" Price.java
+    javac Price.java
+    javap -c Price > out.txt
+    grep -A5 "static int lineTotal" out.txt
+    for op in iload_0 iload_1 imul ireturn; do grep -q "$op" out.txt; done
+  note: Compiles the class and disassembles it; the four instructions the chapter shows must appear.
+- block: 2
+  lang: bash
+  check: shell
+  script: |
+    cat > Price.java <<'JAVA'
+    public class Price {
+        static int lineTotal(int pence, int quantity) {
+            return pence * quantity;
+        }
+    }
+    JAVA
+    bash "$BLOCK"
+  output_contains:
+  - imul
+  - ireturn
+  note: Runs the two commands on the Price class from the block before.
+- block: 3
+  lang: text
+  check: illustration
+  note: The javap output for lineTotal, which the checks of blocks 1 and 2 confirm instruction by instruction.
+- block: 4
+  lang: java
+  check: java
+  note: Timings vary between machines; the check asserts the relationship the chapter describes, not exact numbers.
+  verify: |
+    import re
+    us = [int(x.replace(',', '')) for x in re.findall(r'round \d: ([\d,]+) µs', out)]
+    assert len(us) == 5
+    assert min(us[2:]) < us[0], us
+    assert out.count('result 89999940') == 5

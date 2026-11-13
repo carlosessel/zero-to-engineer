@@ -1,0 +1,318 @@
+---
+title: "Memory management and garbage collection"
+summary: "Stack and heap, manual memory, reference counting, tracing and generational GC in the JVM, .NET and V8, and memory leaks in GC languages."
+prerequisites: [m-runtimes]
+estimated_minutes: 240
+status: resources-verified
+---
+
+By the end of this chapter you will know where your program's data lives, who frees it, and what a **garbage collector** actually does in Java, C#, JavaScript and Python. You will be able to read a GC log, explain a pause, recognise the memory leaks that happen even in garbage-collected languages, and choose sensible settings for a service in a container. Memory problems are some of the hardest production incidents; this is the knowledge that makes them tractable.
+
+## The stack and the heap
+
+A running program keeps its data in two main areas.
+
+The **stack** holds each function call's local variables and bookkeeping in a **stack frame**. Calling a function pushes a frame; returning pops it. That makes the stack extremely fast (allocation is moving one pointer) and automatically cleaned up, but limited: frames must have a known size, live only as long as their call, and the stack is small, typically a megabyte or so per thread. Recursion that goes too deep runs out of it:
+
+```java
+public class Main {
+    static int depth = 0;
+
+    static void down() {
+        depth++;
+        down();
+    }
+
+    public static void main(String[] args) {
+        try {
+            down();
+        } catch (StackOverflowError e) {
+            System.out.println("Stack overflow after about " + depth + " calls");
+        }
+    }
+}
+```
+
+On the machine this was checked on, it reported about 22,000 calls; the number depends on the stack size and frame size. (In .NET, a stack overflow cannot be caught at all: the process is terminated. Deep recursion on untrusted input is a real way to crash a service.)
+
+The **heap** holds everything that must outlive a single call or whose size is not known in advance: objects, arrays, strings, collections. Allocating on the heap is more work, and someone has to **free** that memory when it is no longer needed. Who does it, and how, is what this chapter is about.
+
+### Values and references
+
+In Java, C# and JavaScript, a variable of a primitive type (an `int`, a `double`, a `boolean`) holds the value itself. A variable of an object type holds a **reference**: the address of an object on the heap. Copying the variable copies the reference, so both variables point at the same object (<Ref to="js-arrays-objects" /> showed this in JavaScript).
+
+C# adds **value types** you define yourself: a `struct` is stored inline, in a local variable on the stack or inside the object that contains it, and copied by value. Many small structs in an array are one contiguous block of memory, with no separate heap objects at all: good for the cache (<Ref to="m-machine" />) and for the garbage collector. Java currently has only its built-in primitive types as values (work to add user-defined value types has been under way for years).
+
+## Three ways to free memory
+
+### 1. Manual memory management
+
+In C and C++, the programmer allocates (`malloc`, `new`) and frees (`free`, `delete`) heap memory explicitly. It is fast and predictable, and it is the source of some of the most serious bugs in computing:
+
+- a **memory leak**: forgetting to free, so memory use grows until the program fails;
+- a **use-after-free**: using memory after freeing it, when something else may have reused it;
+- a **double free**: freeing the same memory twice, corrupting the allocator.
+
+The last two are behind a large share of security vulnerabilities in software written in these languages. Rust takes a different approach: its compiler tracks which variable **owns** each piece of memory and frees it when the owner goes out of scope, rejecting at compile time programs that could use memory after freeing it. It gets manual-management speed without those bugs, at the cost of a stricter language.
+
+### 2. Reference counting
+
+Each object keeps a count of how many references point to it. Creating a reference increments the count; dropping one decrements it; when the count reaches zero, the object is freed immediately. Python (CPython) and Swift work this way, among others.
+
+It is simple and frees memory promptly, but it has a famous weakness: **cycles**. If object A refers to B and B refers back to A, both counts stay at 1 even after nothing else refers to either, so neither is freed. CPython therefore adds a separate **cycle collector** that periodically finds and frees groups of objects that only refer to each other:
+
+```python
+import gc
+
+class Node:
+    def __init__(self, name):
+        self.name = name
+        self.other = None
+
+a, b = Node("a"), Node("b")
+a.other, b.other = b, a        # a cycle: each refers to the other
+del a, b                       # no names refer to them any more
+print("objects freed by the cycle collector:", gc.collect() > 0)
+```
+
+The reference counts never reach zero because of the cycle, so only `gc.collect()` frees them, and it reports finding unreachable objects. (CPython's cycle collector is generational, an idea explained below. Python 3.14 briefly shipped a different, incremental design and returned to the generational one in 3.14.5.)
+
+### 3. Tracing garbage collection
+
+Java, C#, JavaScript, Go and most other managed languages use a **tracing garbage collector** (GC). Instead of counting references, it periodically works out which objects are still **reachable**:
+
+1. Start from the **roots**: local variables on every thread's stack, static fields, and a few runtime-internal references.
+2. Follow every reference from those objects, and from the objects they refer to, and so on, marking everything reached.
+3. Everything not marked is **garbage**: nothing can ever reach it again, so its memory can be reused.
+
+Cycles are no problem: two objects that refer only to each other are not reachable from the roots, so they are collected.
+
+Collectors differ in what they do with the space afterwards:
+
+- **Mark-sweep** leaves live objects where they are and records the gaps as free, which can leave memory **fragmented** into small holes.
+- **Mark-compact** slides live objects together, leaving one large free area, which makes later allocation a fast pointer bump.
+- **Copying** collectors copy live objects into a fresh area and treat the whole old area as free. That is fast when few objects survive.
+
+## Generational collection
+
+Real programs share a pattern so consistent it has a name, the **generational hypothesis**: *most objects die young*. A web request creates thousands of short-lived objects (strings, lists, request objects) that are garbage within milliseconds, while a few objects (caches, connection pools, configuration) live for the whole run.
+
+**Generational collectors** exploit this. New objects are allocated in a small **young generation**. It fills quickly and is collected often, and because most of its objects are already dead, collecting it is cheap: only the few survivors are copied out. Objects that survive several young collections are **promoted** to the **old generation**, which is collected much less often.
+
+You can watch .NET promote an object:
+
+```csharp
+var order = new List<int> { 1, 2, 3 };
+Console.WriteLine($"New object: generation {GC.GetGeneration(order)}");
+GC.Collect();
+Console.WriteLine($"After one collection: generation {GC.GetGeneration(order)}");
+GC.Collect();
+Console.WriteLine($"After two collections: generation {GC.GetGeneration(order)}");
+
+var big = new byte[100_000];
+Console.WriteLine($"A 100,000-byte array starts in generation {GC.GetGeneration(big)}");
+```
+
+It prints generations 0, then 1, then 2 (the oldest), and then shows that a 100,000-byte array starts directly in generation 2. That last line is the **Large Object Heap** at work: .NET puts objects of 85,000 bytes or more there, because copying them around would be expensive, and collects it with generation 2. (Calling `GC.Collect()` yourself is for demonstrations like this one; in real code, leave the timing to the runtime.)
+
+## Pauses
+
+To find live objects safely, a collector needs the heap not to change under it. The simplest collectors **stop the world**: every application thread pauses while the GC works. Pauses in the young generation are usually short (milliseconds). A full collection of a large old generation, done the simple way, can pause for much longer, and a request that arrives during a long pause waits for it: that is a common cause of rare, unexplained slow requests (the "tail latency" in your graphs).
+
+Modern collectors reduce pauses by doing most of their work **concurrently**, while the application keeps running, using small pieces of code called **barriers** to track references the application changes meanwhile. They trade some throughput (a little CPU spent on the barriers and the concurrent work) for much shorter pauses.
+
+## The collectors you will meet
+
+**Java (HotSpot).** Several collectors, chosen with a flag:
+
+- **G1** ("garbage first"), the default on what the JDK calls server-class machines (at least two processors and about 1.8 GB of memory; smaller machines get the simple Serial collector). It divides the heap into regions and aims for pauses under a target you can set (`-XX:MaxGCPauseMillis`).
+- **ZGC**, for very low pauses, typically well under a millisecond even with very large heaps, by doing almost everything concurrently. It became generational in JDK 21, generational by default in JDK 23, and generational only from JDK 24.
+- **Parallel**, for maximum throughput when pauses do not matter (batch jobs), and **Serial**, for tiny heaps.
+
+You can see what the JVM chose, and every collection, with a GC log:
+
+```bash
+java -Xlog:gc -Xmx256m Main.java
+```
+
+Run on an allocation-heavy program, the first lines looked like this on the machine this chapter was checked on:
+
+```text
+[0.007s][info][gc] Using G1
+[0.521s][info][gc] GC(0) Pause Young (Normal) (G1 Evacuation Pause) 23M->4M(256M) 4.590ms
+[0.602s][info][gc] GC(1) Pause Young (Normal) (G1 Evacuation Pause) 33M->5M(256M) 4.316ms
+```
+
+Read the second line as: the first collection, a young-generation pause; the heap held 23 MB before and 4 MB after (most objects had died young), out of 256 MB; it paused the application for about 4.6 ms. GC logs are cheap enough to leave on in production, and are the first thing to look at when latency or memory looks odd.
+
+**.NET.** Three generations (0, 1, 2) plus the Large Object Heap, with two main modes: workstation GC (the default, suited to desktop apps and small services) and server GC (a heap and collector thread per core, for throughput on servers; ASP.NET Core projects typically use it). Since .NET 9, server GC adapts its heap size to the application's actual needs by default (a feature called DATAS), which helps services in containers use less memory. Background (concurrent) collection of generation 2 is on by default.
+
+**V8 (JavaScript in Node.js and Chrome).** A young generation split into two halves, collected by copying survivors from one half to the other (the **scavenger**), promoting objects that survive twice; and an old generation collected by mark-sweep with compaction, with marking done concurrently on helper threads so the main thread pauses only briefly. In Node.js, the old generation's size limit can be set with `--max-old-space-size`.
+
+## Memory leaks in garbage-collected languages
+
+A GC frees objects that are *unreachable*. It cannot free objects that are still reachable but that you will never use again, and that is how garbage-collected programs leak memory. The usual causes:
+
+- **Collections that only grow**: a static list, a map used as a cache with no size limit or expiry, a queue nothing drains.
+- **Listeners and callbacks never removed**: a subscriber registers with a long-lived publisher and is never unregistered, so the publisher keeps it, and everything it refers to, alive.
+- **Closures capturing more than they need**: a callback kept for a long time holds on to the large object it happened to mention.
+- **Thread-local values** in thread pools: threads live for ever, so values stored per thread do too unless removed.
+- **Unclosed resources**: connections and file handles also hold memory and operating-system resources (<Ref to="m-operating-systems" />).
+
+The cache case is the most common. A cache needs a **bound** and an **eviction policy**. Here is the simplest correct one in Java, a least-recently-used (LRU) cache that keeps at most a fixed number of entries:
+
+```java
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class Main {
+    static class LruCache<K, V> extends LinkedHashMap<K, V> {
+        private final int capacity;
+
+        LruCache(int capacity) {
+            super(16, 0.75f, true);   // true: order entries by most recent access
+            this.capacity = capacity;
+        }
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+            return size() > capacity;
+        }
+    }
+
+    public static void main(String[] args) {
+        LruCache<String, String> cache = new LruCache<>(3);
+        cache.put("a", "apple");
+        cache.put("b", "bread");
+        cache.put("c", "cake");
+        cache.get("a");               // "a" is now the most recently used
+        cache.put("d", "doughnut");   // over capacity: the least recently used, "b", goes
+        System.out.println(cache.keySet());
+    }
+}
+```
+
+It prints `[c, a, d]`: "b" was evicted because it was used least recently. In production you would use a library cache (Caffeine for Java, `MemoryCache` in .NET) with size limits and expiry, but the principle is the same: **every cache needs a limit.**
+
+Languages also offer **weak references**, which let you refer to an object without keeping it alive (Java's `WeakReference`, C#'s `WeakReference<T>`, JavaScript's `WeakMap` and `WeakRef`). A `WeakMap` keyed by an object lets you attach data to that object that disappears when the object does. They are useful for caches of extra information about objects you do not own, but they make behaviour depend on when the GC runs, so use them deliberately.
+
+### Finding a leak
+
+The symptom is memory that grows and never comes back down after collections, until the process is killed or slows to a crawl in constant collection. The method:
+
+1. **Confirm the trend** in your monitoring: does memory after each full collection keep rising?
+2. **Take heap dumps** (snapshots of every object on the heap) some time apart: `jcmd <pid> GC.heap_dump` for Java, `dotnet-gcdump` for .NET, heap snapshots in Chrome or Node.js developer tools.
+3. **Compare them** in a tool (Eclipse MAT, Visual Studio, Chrome DevTools): which type of object keeps growing, and what **path of references** keeps it alive (the "retainers" or "path to GC roots")? That path names the guilty collection or listener.
+
+## Containers and memory limits
+
+Services in containers have a memory limit, and exceeding it gets the process killed (exit code 137, <Ref to="m-operating-systems" />). The heap is not the only memory a process uses: there are thread stacks, the JIT's compiled code, the runtime's own structures, and memory used by native libraries and buffers. Set the heap limit *below* the container limit with room to spare. Modern JVMs read the container's limit and size the heap from it; `-XX:MaxRAMPercentage=75` is a common setting, leaving a quarter for everything else. .NET also respects container limits, and offers settings to cap its heap.
+
+## Reducing allocation
+
+Less garbage means less collection work. In hot code (the paths run millions of times):
+
+- avoid creating objects you do not need, such as temporary strings in a loop (use a string builder);
+- reuse buffers instead of allocating new ones per request;
+- in C#, consider `struct`s, `Span<T>` and array pools for short-lived data;
+- size collections up front when you know how big they will be.
+
+But measure first (the performance chapter later in this course shows how): modern collectors handle short-lived garbage very efficiently, and readable code that allocates a little more is usually the right trade.
+
+## Common mistakes
+
+- **Unbounded caches and collections**, the most common leak.
+- **Forgetting to unsubscribe** listeners or callbacks from long-lived objects.
+- **Calling `System.gc()` or `GC.Collect()`** to "fix" memory, which hides the cause and can hurt performance.
+- **Heap limit equal to the container limit**, leaving no room for non-heap memory, so the process is killed.
+- **Ignoring GC logs** when chasing latency spikes.
+- **Deep recursion on untrusted input**, risking a stack overflow (fatal in .NET).
+- **Optimising allocation without measuring.**
+
+## Practice
+
+**1. (warm-up)** Where does a local `int` variable live, and where does an object created with `new` live, in Java?
+
+<Solution>
+
+The local `int` lives in the current method's stack frame. The object lives on the heap; a local variable holding it contains only a reference (its address), stored in the stack frame.
+
+</Solution>
+
+**2. (warm-up)** Why can reference counting alone not free two objects that refer to each other?
+
+<Solution>
+
+Each object keeps the other's count at 1, so neither count ever reaches zero, even when nothing else refers to them. A tracing collector, or a separate cycle collector, is needed to find that they are unreachable.
+
+</Solution>
+
+**3. (standard)** Explain the generational hypothesis and why it makes young-generation collections cheap.
+
+<Solution>
+
+Most objects die young. So when the young generation is collected, nearly everything in it is already garbage, and the collector only has to find and copy the few survivors; the rest of the space is simply reused. The cost depends on the number of live objects, which is small, not on the amount of garbage.
+
+</Solution>
+
+**4. (standard)** Read this GC log line and say what happened: `GC(12) Pause Young (Normal) (G1 Evacuation Pause) 412M->96M(1024M) 18.204ms`.
+
+<Solution>
+
+The thirteenth collection (numbering starts at 0) was a young-generation pause by G1. The heap held 412 MB before and 96 MB after, out of 1,024 MB, so about 316 MB of garbage was freed. Application threads were paused for about 18 ms.
+
+</Solution>
+
+**5. (standard)** A service's memory after each full GC climbs steadily for days until it is killed. Describe how you would find the cause.
+
+<Solution>
+
+Confirm the trend (memory after collection, not total). Take two heap dumps some hours apart (for example with `jcmd <pid> GC.heap_dump` or `dotnet-gcdump`), open them in a heap analyser, and compare which object types grow. For the growing type, follow the path of references to the GC roots: it will lead to the collection, cache or listener holding them. Then fix the cause (add a bound or expiry, unsubscribe, close resources) and confirm the trend flattens.
+
+</Solution>
+
+**6. (standard)** A Java service in a container with a 1 GB memory limit is started with `-Xmx1g` and keeps getting killed with exit code 137. Why, and what would you change?
+
+<Solution>
+
+The heap alone may use the whole 1 GB, and the process also needs memory outside the heap (thread stacks, JIT code, runtime structures, native buffers), so the total exceeds the limit and the kernel kills it. Set the heap lower, for example `-XX:MaxRAMPercentage=75` (about 750 MB), or raise the container limit, and monitor total process memory, not only the heap.
+
+</Solution>
+
+**7. (standard)** Modify the `LruCache` example so it holds two entries, and work out what it prints for: put a, put b, get a, put c.
+
+<Solution>
+
+With capacity 2: after `put a`, `put b` the order is [a, b]; `get a` makes it [b, a]; `put c` adds c, making three entries, so the eldest by access, b, is removed: **[a, c]**.
+
+</Solution>
+
+**8. (stretch)** A latency graph shows that 99% of requests take under 50 ms but about 1 in 1,000 takes 600 ms, at irregular intervals. GC is a suspect. What would you check, and what could you change?
+
+<Solution>
+
+Check the GC log for pauses near those times, especially long old-generation or full collections, and their durations. If pauses match, options include: reducing allocation and long-lived object churn; giving the heap more room so full collections are rarer; tuning the pause target (`MaxGCPauseMillis` for G1); or switching to a low-pause collector such as ZGC, accepting slightly lower throughput. If pauses do not match, look elsewhere (slow downstream calls, lock contention), so the log saves you from tuning the wrong thing.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The **stack** holds call frames and locals: fast, automatic, small. The **heap** holds objects that outlive calls and must be freed somehow.
+- Variables hold values or **references**; C# **structs** are value types stored inline.
+- **Manual** management is fast but risks leaks, use-after-free and double frees; Rust's ownership checks prevent them at compile time.
+- **Reference counting** (CPython, Swift) frees promptly but needs a **cycle collector**.
+- **Tracing GCs** find objects reachable from the **roots**, and free the rest by mark-sweep, mark-compact or copying.
+- **Generational** GC exploits "most objects die young": cheap, frequent **young** collections; rare **old** ones. .NET adds the **Large Object Heap** (85,000 bytes and up).
+- **Stop-the-world** pauses cause latency spikes; **concurrent** collectors (G1, ZGC, .NET background GC, V8) shorten them. Read GC logs.
+- GC languages still leak through **reachable but unused** objects: unbounded caches, listeners, closures. Bound every cache; find leaks with **heap dumps**.
+- Leave room under container memory limits for non-heap memory.
+
+## Go deeper
+
+- [Fundamentals of garbage collection (.NET)](https://learn.microsoft.com/en-us/dotnet/standard/garbage-collection/fundamentals), Microsoft. The managed heap, roots, generations, the Large Object Heap and how collection works.
+- [HotSpot Virtual Machine Garbage Collection Tuning Guide (JDK 25)](https://docs.oracle.com/en/java/javase/25/gctuning/introduction-garbage-collection-tuning.html), Oracle. Java's collectors, how the JVM chooses one, and tuning.
+- [Trash talk: the Orinoco garbage collector](https://v8.dev/blog/trash-talk), V8 team. V8's young-generation scavenger, old-generation mark-compact and concurrent marking.
+- [Garbage collector design (CPython)](https://github.com/python/cpython/blob/main/InternalDocs/garbage_collector.md), CPython core developers. Reference counting and the cycle collector in CPython.
+- [Fix memory problems](https://developer.chrome.com/docs/devtools/memory-problems), Chrome for Developers. Finding leaks with heap snapshots and allocation timelines.

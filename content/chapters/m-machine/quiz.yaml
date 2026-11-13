@@ -1,0 +1,35 @@
+- question: Two loops add up the same 2D array, one row by row, one column by column. Why can one be many times faster?
+  options:
+  - The faster one does fewer additions
+  - Row by row reads memory in order, using whole cache lines and prefetching
+  - Column order confuses the compiler
+  answer: 1
+  explanation: 'Same work, different memory access pattern: cache hits versus misses.'
+- question: Roughly how long does a main-memory reference take compared with an L1 cache hit?
+  options:
+  - About the same
+  - About 200 times longer
+  - About a million times longer
+  answer: 1
+  explanation: About 100 ns against 0.5 ns in the classic table.
+- question: A page makes one database query for a list, then one query per item. What is this called?
+  options:
+  - The N + 1 query problem
+  - False sharing
+  - Branch misprediction
+  answer: 0
+  explanation: Fetch the items in one query instead.
+- question: Two threads write to different variables in the same cache line and both slow down. Why?
+  options:
+  - They share a lock
+  - 'The cache line bounces between cores on every write: false sharing'
+  - The variables overflow
+  answer: 1
+  explanation: Separate the data into different cache lines, or keep it local to each thread.
+- question: Why does a round trip within a data centre matter more than optimising a function's arithmetic?
+  options:
+  - Networks are unreliable
+  - One round trip costs as much time as thousands of memory references
+  - Arithmetic is free
+  answer: 1
+  explanation: '500 µs against 100 ns: reduce round trips first.'

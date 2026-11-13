@@ -1,0 +1,39 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    true true
+    true true true true
+    true false true true
+    false true true true
+    false false true true
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    { added: ["croissant"], removed: ["sourdough"], both: ["rye", "bun"] }
+- block: 3
+  lang: ts
+  check: ts
+  output: |
+    456976 1024
+    3628800n 2432902008176640000n
+    120n 2598960n
+- block: 4
+  lang: ts
+  check: ts
+  output: |
+    0.507
+    0.688
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    9.5 0
+- block: 6
+  lang: ts
+  check: ts
+  expect:
+  - largest([3, 9, 2]) === 9
+  - largest([-5]) === -5

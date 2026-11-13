@@ -1,0 +1,34 @@
+- question: A container exits with code 143. What happened?
+  options:
+  - It ran out of memory
+  - It was stopped by SIGTERM (128 + 15)
+  - It crashed with a null pointer
+  answer: 1
+  explanation: 143 is a polite stop; 137 (SIGKILL) usually means killed for memory.
+- question: What do threads in one process share that separate processes do not?
+  options:
+  - Their CPU
+  - Their memory
+  - Their exit code
+  answer: 1
+  explanation: Easy sharing, and the need for coordination.
+- question: A service fails with "Too many open files" under load. What is the likely cause?
+  options:
+  - The disk is full
+  - It leaks file descriptors by not closing files or connections
+  - The CPU is too slow
+  answer: 1
+  explanation: Always close what you open.
+- question: Which memory number shows what a process is really using?
+  options:
+  - Virtual size
+  - Resident set size (RSS)
+  answer: 1
+  explanation: Virtual size includes reserved but untouched addresses.
+- question: Why is reading a file one byte at a time slow?
+  options:
+  - Disks only read megabytes
+  - Each read is a system call, which costs far more than one byte
+  - Files are compressed
+  answer: 1
+  explanation: 'Buffer: read large blocks.'

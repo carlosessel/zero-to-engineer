@@ -1,0 +1,233 @@
+---
+title: "Operating systems for engineers"
+summary: "Processes, threads, scheduling, virtual memory, system calls and files."
+prerequisites: [m-machine]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will understand what the operating system does underneath every program you write: how it runs many programs at once on a few cores, gives each one its own private memory, controls access to files and the network, and stops or restarts programs. That understanding is what lets you read a production incident ("too many open files", "out of memory: killed process", a CPU at 100%) and know where to look.
+
+The **operating system** (OS), such as Linux, Windows or macOS, is the program that manages the hardware and shares it between all the other programs. Its core, the **kernel**, runs with full control of the machine. Everything else, including your code, runs in **user space** with restricted rights and must ask the kernel to do anything involving hardware. Servers almost always run Linux, so its terms are used here; the ideas are the same everywhere.
+
+## Processes
+
+A **process** is a running program: the program's code, plus everything the OS tracks for it, including its memory, its open files and network connections, its current directory, its environment variables, and the user it runs as. Run the same program twice and you get two processes, each with its own memory and its own **process id** (PID).
+
+Processes are created by other processes, so they form a tree: your terminal's shell starts each command you type as a **child process** of itself. Every process has a parent id (PPID), and when a child finishes, it returns an **exit status** to its parent: 0 for success, anything else for failure. Scripts, build tools and CI systems rely on that number (<Ref to="terminal-files" />).
+
+This Java program reports its own PID, starts a child process, and waits for it:
+
+```java
+public class Main {
+    public static void main(String[] args) throws Exception {
+        System.out.println("This process: " + ProcessHandle.current().pid());
+        System.out.println("Cores available: " + Runtime.getRuntime().availableProcessors());
+
+        Process child = new ProcessBuilder("echo", "hello from a child process").inheritIO().start();
+        System.out.println("Child exited with " + child.waitFor());
+    }
+}
+```
+
+The numbers differ every run, but the shape is always the same: a PID, the number of cores, the child's output, and `Child exited with 0`.
+
+### Signals: how processes are told to stop
+
+The OS can send a process a **signal**, a small notification. The ones you will meet constantly:
+
+- **SIGTERM** ("please terminate"): the polite request to stop. A well-written server catches it, stops taking new requests, finishes the ones in progress, closes connections, and exits. Container platforms send it when stopping or redeploying a service.
+- **SIGKILL**: immediate termination. It cannot be caught, so no clean-up happens. Platforms send it if a process ignores SIGTERM for too long (often 30 seconds).
+- **SIGINT**: what Ctrl+C sends in a terminal.
+
+When a process is ended by a signal, its exit status is 128 plus the signal's number: SIGTERM is 15, so 143; SIGKILL is 9, so 137. Seeing "exited with code 137" in a container log usually means it was killed, very often for using too much memory.
+
+```bash
+sleep 30 &
+pid=$!
+ps -o pid=,ppid=,comm= -p "$pid"
+kill "$pid"
+wait "$pid" || echo "exit status $?"
+```
+
+`sleep 30 &` starts a process in the background and `$!` holds its PID; `ps` shows its PID, its parent's PID and its name; `kill` sends SIGTERM; and `wait` collects the exit status, **143**.
+
+Handling SIGTERM well (graceful shutdown) is one of the marks of a production-ready service. You will implement it in the back-end course.
+
+## Threads
+
+A **thread** is a sequence of instructions being executed. Every process starts with one; a program can create more, and they all **share the process's memory**. That sharing is both the point and the danger: threads can work on the same data without copying it, and they can also corrupt it by changing it at the same time (the concurrency part of this course is about doing this safely).
+
+```java
+public class Main {
+    public static void main(String[] args) throws Exception {
+        Thread worker = new Thread(() -> System.out.println("Hello from thread " + Thread.currentThread().getName()));
+        worker.setName("worker-1");
+        worker.start();
+        worker.join();
+        System.out.println("Both threads ran in process " + ProcessHandle.current().pid());
+    }
+}
+```
+
+`start()` begins the new thread running alongside the main one; `join()` waits for it to finish.
+
+| | Processes | Threads |
+|---|---|---|
+| Memory | separate: one cannot read another's | shared within the process |
+| Cost to create | higher | lower |
+| If one crashes | the others carry on | usually the whole process dies |
+| Communicate by | files, pipes, sockets, messages | shared memory (carefully) |
+
+That isolation is why browsers run each site in its own process, and why services run as separate processes or containers.
+
+## Scheduling: sharing the cores
+
+A machine might run hundreds of processes and thousands of threads on a handful of cores. The kernel's **scheduler** gives each runnable thread short turns on a core, a **time slice** of a few milliseconds, then switches to another. Switching saves the registers of one thread and loads another's: a **context switch**, costing a few microseconds plus the slower cache behaviour afterwards, because the new thread's data is not in the cache.
+
+Most threads spend most of their time not running but **waiting** (blocked): for a disk read, a network reply, a lock, or a timer. A blocked thread uses no CPU. So:
+
+- A web server handling 1,000 requests that each wait 200 ms for a database is not "busy"; it is waiting. That is why designs that do not tie up a thread per waiting request (asynchronous I/O, event loops, virtual threads) can handle so many more connections; the concurrency part of this course covers them.
+- A process using 100% of a core is genuinely computing (or stuck in a loop). Many runnable threads competing for few cores make everything slower through switching and cache misses.
+
+The **load average** that `uptime` and `top` show is roughly the average number of threads running or waiting to run. A load of 8 on a 4-core machine means work is queuing.
+
+## Virtual memory
+
+Every process sees memory as one large, private range of addresses starting from zero, as if it had the machine to itself. That is an illusion the kernel and CPU maintain together, called **virtual memory**:
+
+- Memory is managed in **pages**, commonly 4 KB. Each process has a **page table** that maps its virtual pages to physical pages of RAM.
+- The CPU translates every address through that table (with a cache of recent translations, the TLB). A process simply cannot name memory belonging to another process, which is what keeps processes isolated.
+- Pages can be **shared**: the code of a library used by many processes is in RAM once and mapped into all of them.
+- Memory is given out **lazily**. When a program asks for a gigabyte, the kernel reserves addresses but only provides physical pages when each page is first touched. Touching a page that is not yet in RAM causes a **page fault**, which the kernel handles invisibly by supplying the page.
+- When RAM runs short, the kernel can move little-used pages to disk (**swapping** or paging out). Reading them back is thousands of times slower than RAM, so a machine that swaps heavily slows to a crawl.
+- If memory runs out entirely, Linux's **out-of-memory killer** chooses a process and kills it with SIGKILL. In a container with a memory limit, exceeding the limit gets your process killed the same way: the exit code 137 again.
+
+Two numbers describe a process's memory: its **virtual size** (all the addresses it has reserved, often huge and mostly harmless) and its **resident set size** (RSS, the RAM it is actually using). When you investigate memory, look at RSS.
+
+## System calls
+
+User-space code cannot touch hardware directly. To read a file, open a network connection, start a process or get the time, a program makes a **system call** (syscall): a controlled request to the kernel. The CPU switches into kernel mode, the kernel checks permissions and does the work, and control returns. Common ones on Linux are `open`, `read`, `write`, `close`, `socket`, `connect`, `fork`, `execve` and `mmap`.
+
+You rarely call them directly: your language's library does it for you. But knowing they are there helps in two ways. First, system calls cost more than ordinary function calls, so reading a file one byte at a time (a syscall per byte) is far slower than reading in large blocks: that is what **buffered** reading and writing are for. Second, tools like `strace` (Linux) can show every system call a process makes, which is one of the most powerful ways to find out what a stuck or misbehaving program is actually doing.
+
+## Files and file descriptors
+
+To the kernel, an open file is identified by a small integer, a **file descriptor** (Windows calls them handles). Each process starts with three: 0 is **standard input**, 1 is **standard output**, 2 is **standard error**. Opening a file, a pipe or a network connection returns the next free number. That is why the shell redirection `2>errors.log` means "send descriptor 2 to this file".
+
+```bash
+exec 3> notes.txt
+echo "written through descriptor 3" >&3
+exec 3>&-
+cat notes.txt
+```
+
+This opens `notes.txt` as descriptor 3, writes a line through it, closes it, and prints the file.
+
+Descriptors are limited per process (Linux often defaults to 1,024 for an ordinary process; servers raise it). A program that opens files or connections and forgets to close them **leaks** descriptors until it fails with "Too many open files", usually under load, at the worst moment. The fix is to always close what you open, with your language's tool for it: `try`-with-resources in Java, `using` in C#, `finally` blocks or `with` in Python.
+
+Writing to a file does not mean the data is on the disk: the kernel keeps writes in memory (the **page cache**) and writes them out later, for speed. A crash before then loses them. Databases call `fsync` to force data to disk when it must survive a crash, which is one reason committing a transaction takes time.
+
+## Permissions and users
+
+Every process runs as a **user**, and every file has an owner and permissions saying who may read, write or execute it. Running services as an unprivileged user (never as `root`, the all-powerful administrator) limits the damage if the service is compromised. Containers apply the same idea, and much more, to isolate processes: the containers chapter later in this course shows that a container is really an ordinary process that the kernel restricts.
+
+## Common mistakes
+
+- **Not handling SIGTERM**, so every deployment drops requests in progress.
+- **Not closing files and connections**, leaking descriptors until "Too many open files".
+- **Reading or writing in tiny pieces**, paying a system call each time, instead of buffering.
+- **Watching virtual size instead of resident memory** when chasing a memory problem.
+- **Assuming written data is on disk** without `fsync` (or a database that does it for you).
+- **One thread per waiting request** at very high concurrency, exhausting memory and time on switching.
+- **Running services as root.**
+- **Ignoring exit codes** in scripts, so failures pass silently. (In Bash, `set -e` stops a script at the first failing command.)
+
+## Practice
+
+**1. (warm-up)** What is the difference between a program and a process?
+
+<Solution>
+
+A program is code stored on disk; a process is a running instance of it, with its own memory, open files, PID and so on. One program can be running as many processes at once.
+
+</Solution>
+
+**2. (warm-up)** A container's log says it "exited with code 137". What probably happened?
+
+<Solution>
+
+137 = 128 + 9, so it was killed by SIGKILL, which cannot be caught. In containers this most often means it exceeded its memory limit and the out-of-memory killer ended it (or it ignored SIGTERM for too long and was forcibly killed). Check memory use and limits.
+
+</Solution>
+
+**3. (warm-up)** Which file descriptor numbers are standard input, output and error?
+
+<Solution>
+
+0 (input), 1 (output), 2 (error).
+
+</Solution>
+
+**4. (standard)** Why can threads in one process share data easily, while two processes cannot? What is the cost of the easy sharing?
+
+<Solution>
+
+Threads share their process's memory: the same virtual addresses map to the same physical pages, so one thread can read what another wrote. Processes each have their own page tables, so neither can name the other's memory. The cost is safety: threads that change shared data at the same time can corrupt it, so they need locks or other coordination, and a crash in one thread usually kills them all.
+
+</Solution>
+
+**5. (standard)** A web service has 200 threads; each request spends 5 ms computing and 195 ms waiting for other services. The machine has 4 cores. Roughly how many requests per second can it handle, and what limits it?
+
+<Solution>
+
+There are two limits; the lower one wins.
+
+- **Threads**: each request holds a thread for 200 ms, so 200 threads can finish 200 ÷ 0.2 = 1,000 requests per second.
+- **CPU**: each request needs 5 ms of a core, so 4 cores can do 4 ÷ 0.005 = 800 requests per second.
+
+So about **800 requests per second**, limited by CPU. Adding threads would not help; making each request compute less, or adding cores, would. If each request computed only 1 ms, the CPU could do 4,000 per second, and the 200 threads (1,000 per second) would become the limit: then more threads, or a design that does not hold a thread while waiting, would help.
+
+</Solution>
+
+**6. (standard)** A program reads a 100 MB file one byte at a time using unbuffered reads and takes minutes. Why, and what is the fix?
+
+<Solution>
+
+Each unbuffered read is a system call, and switching into the kernel and back costs far more than reading one byte: 100 million system calls. Use buffered reading (or read large blocks, such as 64 KB at a time), so each system call brings in many bytes.
+
+</Solution>
+
+**7. (standard)** A process reports a virtual size of 20 GB on a machine with 8 GB of RAM, and nothing is wrong. How is that possible?
+
+<Solution>
+
+Virtual size counts every address range the process has reserved, including memory it has never touched, shared libraries counted in full, and reserved but unused heap. Physical pages are given only when touched, so the RAM actually used (resident set size) can be far smaller. Look at RSS.
+
+</Solution>
+
+**8. (stretch)** Describe what a server should do between receiving SIGTERM and exiting, and why each step matters.
+
+<Solution>
+
+Stop accepting new connections (and tell the load balancer it is no longer ready, so traffic goes elsewhere); let requests already in progress finish, up to a deadline; finish or hand back background work in a safe state; flush logs and close database connections and files cleanly; then exit with status 0. Each step avoids dropping a user's request, leaving half-done work, losing log lines, or leaving resources open. The deadline matters because the platform will send SIGKILL if shutdown takes too long.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The **kernel** manages hardware; your code runs in **user space** and asks the kernel for everything through **system calls**.
+- A **process** is a running program with its own memory, files, PID and exit status; processes form a tree. **Signals** such as SIGTERM, SIGKILL and SIGINT tell them to stop; exit status 128 + n means killed by signal n.
+- **Threads** share their process's memory: cheap to share, but needing coordination.
+- The **scheduler** gives threads time slices; **context switches** cost time; waiting threads use no CPU.
+- **Virtual memory** gives each process private address space in **pages**, supplied lazily on **page faults**; running out leads to swapping or the **out-of-memory killer**. Watch resident memory, not virtual size.
+- **File descriptors** (0, 1, 2 and up) identify open files and connections; close what you open; buffer I/O; `fsync` when data must survive a crash.
+- Run services as unprivileged users.
+
+## Go deeper
+
+- [Operating Systems: Three Easy Pieces](https://pages.cs.wisc.edu/~remzi/OSTEP/), Remzi H. and Andrea C. Arpaci-Dusseau. Processes, scheduling, virtual memory, concurrency and file systems.
+- [6.1810: Operating System Engineering](https://pdos.csail.mit.edu/6.1810/), MIT. Labs on system calls, page tables, traps, locks and file systems in a small teaching OS.
+- [syscalls(2) Linux manual page](https://man7.org/linux/man-pages/man2/syscalls.2.html), Linux man-pages project. What system calls are, and a list of Linux system calls.

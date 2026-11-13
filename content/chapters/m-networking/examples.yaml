@@ -1,0 +1,21 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: java
+  check: java
+  output_contains:
+  - 'Server received: TWO SOURDOUGH LOAVES'
+  note: Both sides run on this machine over the loopback address; nothing leaves the computer.
+- block: 2
+  lang: bash
+  check: shell
+  needs: network
+  output_contains:
+  - 'dns '
+  - 'connect '
+  - 'tls '
+  - 'first byte '
+  note: Makes a real HTTPS request; the times differ every run.
+- block: 3
+  lang: text
+  check: illustration
+  note: One run of block 2 on the machine this chapter was checked on; the differences between the times are worked out in the text.

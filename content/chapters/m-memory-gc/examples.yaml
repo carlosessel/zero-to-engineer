@@ -1,0 +1,55 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: java
+  check: java
+  verify: |
+    import re
+    assert re.search(r'Stack overflow after about \d+ calls', out)
+  note: The depth depends on the stack and frame sizes; the check asserts the message.
+- block: 2
+  lang: python
+  check: python
+  output: |
+    objects freed by the cycle collector: True
+- block: 3
+  lang: csharp
+  check: csharp
+  output: |
+    New object: generation 0
+    After one collection: generation 1
+    After two collections: generation 2
+    A 100,000-byte array starts in generation 2
+- block: 4
+  lang: bash
+  check: shell
+  script: |
+    cat > Main.java <<'JAVA'
+    import java.util.ArrayList;
+    import java.util.List;
+
+    public class Main {
+        public static void main(String[] args) {
+            long kept = 0;
+            for (int i = 0; i < 200; i++) {
+                List<byte[]> batch = new ArrayList<>();
+                for (int j = 0; j < 100; j++) batch.add(new byte[10_000]);
+                kept += batch.size();
+            }
+            System.out.println("Allocated " + kept + " arrays of 10,000 bytes");
+        }
+    }
+    JAVA
+    bash "$BLOCK" > log.txt
+    cat log.txt
+    grep -q "Using G1" log.txt
+    grep -q "Pause Young" log.txt
+  note: Runs the command on an allocation-heavy program. On machines with at least two processors and about 1.8 GB of memory the JVM chooses G1, as the chapter says; the check confirms it and that young collections happened.
+- block: 5
+  lang: text
+  check: illustration
+  note: The first lines of the GC log from block 4, as printed on the machine this chapter was checked on; block 4's check confirms 'Using G1' and young pauses wherever it runs.
+- block: 6
+  lang: java
+  check: java
+  output: |
+    [c, a, d]

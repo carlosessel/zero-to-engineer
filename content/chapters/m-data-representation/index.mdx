@@ -1,0 +1,304 @@
+---
+title: "Numbers, text and time"
+summary: "Integers, floating point, Unicode and UTF-8, dates, time zones, and the bugs each one causes."
+prerequisites: [m-machine]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will understand how computers store numbers, text and time, and you will recognise the bugs that come from each: totals that are off by a penny, counters that suddenly turn negative, names that come out as garbage characters, and appointments that move by an hour twice a year. These bugs are everywhere in real software, and they are cheap to avoid once you know why they happen.
+
+## Integers
+
+An **integer** type stores whole numbers in a fixed number of bits. With *n* bits you can store 2ⁿ different values. Most languages offer several sizes:
+
+| Type (Java / C#) | Bits | Range |
+|---|---|---|
+| `byte` / `sbyte` | 8 | −128 to 127 |
+| `short` | 16 | −32,768 to 32,767 |
+| `int` | 32 | −2,147,483,648 to 2,147,483,647 (about ±2.1 billion) |
+| `long` | 64 | about ±9.2 × 10¹⁸ |
+
+(C#'s plain `byte` is unsigned, 0 to 255; `sbyte` is the signed one.)
+
+### Two's complement
+
+Negative integers are stored in **two's complement**: the highest bit counts as a large negative value. In 8 bits, the top bit is worth −128 instead of +128, so 1111 1111 is −128 + 127 = −1, and 1000 0000 is −128. The neat result is that the CPU adds positive and negative numbers with exactly the same circuit.
+
+It also explains **overflow**. Add 1 to the largest `int`, 0111…1 (2,147,483,647), and you get 1000…0, which two's complement reads as −2,147,483,648. The number wraps round from the largest positive value to the most negative.
+
+Java and C# both wrap silently by default, and both let you ask for a check instead:
+
+```java
+public class Main {
+    public static void main(String[] args) {
+        int big = Integer.MAX_VALUE;
+        System.out.println(big);
+        System.out.println(big + 1);
+        try {
+            Math.addExact(big, 1);
+        } catch (ArithmeticException e) {
+            System.out.println("Caught: " + e.getMessage());
+        }
+    }
+}
+```
+
+```csharp
+int big = int.MaxValue;
+Console.WriteLine(big);
+Console.WriteLine(unchecked(big + 1));
+try
+{
+    Console.WriteLine(checked(big + 1));
+}
+catch (OverflowException e)
+{
+    Console.WriteLine($"Caught: {e.Message}");
+}
+```
+
+Both print `2147483647`, then `-2147483648`, then their overflow message: Java's `Math.addExact` throws `ArithmeticException: integer overflow`, and C#'s `checked` throws `OverflowException`. (C# projects can also turn checking on for all arithmetic.)
+
+Overflow bugs are real and expensive. A counter of milliseconds in an `int` overflows after about 24.9 days (2,147,483,647 ms), which is why some systems have failed after running for exactly that long. Use `long` for counters, ids, timestamps and money in small units, and use checked arithmetic where wrapping would be wrong.
+
+TypeScript and JavaScript are different: their `number` is not an integer type at all but a floating-point number (next section), so it never wraps, but it loses precision above 2⁵³. For exact large integers they have **`BigInt`**:
+
+```ts
+console.log(Number.MAX_SAFE_INTEGER);              // 2 ** 53 - 1
+console.log(2 ** 53 + 1 === 2 ** 53);              // precision lost
+console.log(9007199254740993n + 1n);               // BigInt is exact
+```
+
+This prints `9007199254740991`, `true` (2⁵³ + 1 cannot be represented, so it rounds to 2⁵³), and `9007199254740994n`. That is why large ids from other systems (Twitter-style 64-bit ids, database `bigint` columns) are often sent as *strings* in JSON: a JavaScript client would silently corrupt them as numbers.
+
+## Floating point
+
+For numbers with fractions, computers use **floating point**: a number stored as a significand (the digits) and an exponent (where the point goes), like scientific notation in base 2. Nearly every language follows the **IEEE 754** standard. A 64-bit `double` (JavaScript's `number`, Java and C#'s `double`, Python's `float`) holds about 15 to 17 significant decimal digits.
+
+The catch: most decimal fractions **cannot be represented exactly in binary**, just as 1/3 cannot be written exactly in decimal. 0.1 in binary is 0.0001100110011… for ever, so it is stored rounded. Add two rounded values and the rounding shows:
+
+```ts
+console.log(0.1 + 0.2);
+console.log(0.1 + 0.2 === 0.3);
+console.log(Math.abs(0.1 + 0.2 - 0.3) < Number.EPSILON);
+console.log((0.1 + 0.2).toFixed(2));
+```
+
+This prints `0.30000000000000004`, `false`, `true` and `0.30`. Java and C# print the same `0.30000000000000004`: it is the hardware's arithmetic, not a JavaScript quirk.
+
+Rules that follow:
+
+- **Never compare floating-point results with `==`.** Compare within a tolerance, as the third line does, and choose a tolerance that makes sense for your values.
+- **Never store money in floating point.** Rounding errors accumulate across thousands of transactions, and a total that is off by a penny is still wrong. Store money as an integer number of the smallest unit (pence, cents) in a `long`, or use a decimal type: Java's `BigDecimal`, C#'s `decimal`, which stores base-10 digits exactly:
+
+```java
+import java.math.BigDecimal;
+
+public class Main {
+    public static void main(String[] args) {
+        System.out.println(0.1 + 0.2);
+        System.out.println(new BigDecimal("0.1").add(new BigDecimal("0.2")));
+        long pence = 10 + 20;
+        System.out.printf("£%d.%02d%n", pence / 100, pence % 100);
+    }
+}
+```
+
+```csharp
+Console.WriteLine(0.1 + 0.2);
+Console.WriteLine(0.1m + 0.2m);
+long pence = 10 + 20;
+Console.WriteLine($"£{pence / 100}.{pence % 100:D2}");
+```
+
+Each prints `0.30000000000000004`, then `0.3`, then `£0.30`. (In C# the `m` suffix makes a `decimal`. In Java, build `BigDecimal` from a *string*: `new BigDecimal(0.1)` captures the already-rounded double exactly, as 0.1000000000000000055511151231257827….)
+
+- **Round only when displaying**, and be explicit about the rounding rule (half up, half even); finance and tax rules often specify one.
+- Floating point also has special values: `Infinity`, `-Infinity`, and `NaN` ("not a number", from things like 0/0), which is not even equal to itself. Check for them where inputs could produce them.
+
+## Text: characters, Unicode and UTF-8
+
+Text is stored by giving each character a number. The universal list is **Unicode**, which assigns a number, a **code point**, written like `U+00E9` (é), to every character of every writing system, plus symbols and emoji: well over 150,000 of them.
+
+Code points then have to be turned into bytes, by an **encoding**. The one used for almost everything on the web and in files today is **UTF-8**: it uses 1 byte for the basic English letters and digits (the old ASCII set), 2 bytes for most European accented letters, 3 for most other scripts, and 4 for emoji and rarer characters. It is compact for English, can represent everything, and is the right default whenever you have a choice.
+
+Languages store strings in memory differently, and this is where length bugs come from. JavaScript, Java and C# all use **UTF-16** internally, where most characters take one 16-bit unit but emoji and some others take two (a **surrogate pair**). So "length" depends on what you count:
+
+```ts
+const s = "café 🎂";
+console.log(s.length);                          // UTF-16 code units
+console.log([...s].length);                     // code points
+console.log(new TextEncoder().encode(s).length); // UTF-8 bytes
+```
+
+```java
+import java.nio.charset.StandardCharsets;
+
+public class Main {
+    public static void main(String[] args) {
+        String s = "café 🎂";
+        System.out.println(s.length() + " " + s.codePointCount(0, s.length()) + " " + s.getBytes(StandardCharsets.UTF_8).length);
+    }
+}
+```
+
+```csharp
+string s = "café 🎂";
+Console.WriteLine($"{s.Length} {s.EnumerateRunes().Count()} {System.Text.Encoding.UTF8.GetByteCount(s)}");
+```
+
+All three give **7** UTF-16 units, **6** code points and **10** UTF-8 bytes: c, a, f (1 byte each), é (2), the space (1) and the cake emoji (4). Consequences:
+
+- **"Maximum 20 characters" is ambiguous.** A database column limited in bytes rejects names that a form limited in characters accepted. Decide what you count, and count the same way everywhere.
+- **Cutting a string at an arbitrary position** can split an emoji's surrogate pair and produce garbage. Cut on code points (or, better, on user-perceived characters).
+- What a person sees as one character may be several code points: a flag, a family emoji, or "é" written as "e" plus a combining accent. Two strings that look identical can be different bytes. **Normalise** text (to the NFC form) before comparing or storing, and use your language's tools for "grapheme" boundaries when it matters.
+- **Garbled text** like `cafÃ©` (called *mojibake*) means bytes written in one encoding were read as another, usually UTF-8 read as Latin-1. Use UTF-8 everywhere, and say so explicitly (in HTTP headers, database settings and file reads) rather than relying on defaults.
+
+## Dates and time
+
+Time is the richest source of bugs in this chapter, because human timekeeping is messy.
+
+**Store instants in UTC.** An **instant** is a single point in time, the same everywhere in the world. Store and transmit it in **UTC** (Coordinated Universal Time, the world's reference time, with no daylight saving), for example as an ISO 8601 string such as `2026-11-12T14:30:00Z` (the `Z` means UTC), or as a count of seconds or milliseconds since the **Unix epoch**, 1 January 1970 00:00 UTC.
+
+**Convert to local time only to show it.** A **time zone** is not just an offset from UTC: it is a region's *rules*, including daylight saving changes, which governments change from time to time. Use named zones from the **IANA time zone database** (such as `Europe/London`, `America/New_York`), never fixed offsets like "+01:00", which are only right for part of the year:
+
+```ts
+const instant = new Date("2026-07-01T12:00:00Z");
+const show = (zone: string) =>
+  new Intl.DateTimeFormat("en-GB", { timeZone: zone, dateStyle: "medium", timeStyle: "short" }).format(instant);
+
+console.log(instant.toISOString());
+console.log(show("Europe/London"));
+console.log(show("America/New_York"));
+console.log(show("Asia/Tokyo"));
+```
+
+One instant, four displays: `2026-07-01T12:00:00.000Z`, then 13:00 in London (summer time, UTC+1), 08:00 in New York (UTC−4), and 21:00 in Tokyo (UTC+9).
+
+Some facts that cause bugs:
+
+- **Not every day has 24 hours.** On the day clocks change, a local day has 23 or 25 hours. "Add 24 hours" and "add one day" are different operations.
+- **Some local times do not exist, and some happen twice.** When clocks go forward, 01:30 may be skipped; when they go back, 01:30 happens twice. Scheduling "every day at 01:30 local time" needs a rule for both cases.
+- **Future appointments should store the local time and the zone**, not a UTC instant, because the zone's rules may change before the date arrives. Past events are safely stored as instants.
+- **Months and years vary in length.** Adding one month to 31 January has no single right answer (28 February? 3 March?); decide your rule and test it. JavaScript's built-in `Date` even numbers months from 0, so `new Date(2026, 0, 31)` is 31 January.
+- **Clocks on different machines disagree** and can jump backwards when corrected. Use a *monotonic* clock (`performance.now()`, Java's `System.nanoTime()`, C#'s `Stopwatch`) to measure durations, never the wall clock.
+- **Leap seconds.** Since 1972, UTC has occasionally inserted an extra second to stay in step with the Earth's rotation, which has broken software that assumed a minute always has 60 seconds. The international body that defines time (the CGPM) decided in October 2026 to stop: UTC becomes continuous from 20 May 2027. Older timestamps still contain them, and your libraries handle them for you.
+- **Time counters overflow too.** Systems that store seconds since 1970 in a signed 32-bit integer run out at 03:14:07 UTC on 19 January 2038, the "year 2038 problem". Use 64-bit time.
+
+Use your language's modern date library rather than doing date arithmetic by hand: `java.time` in Java, `DateTimeOffset` and `TimeZoneInfo` (or the NodaTime library) in C#, and in JavaScript a well-maintained library or the newer `Temporal` API where your platforms support it.
+
+## Common mistakes
+
+- **Money in floating point.** Use integer minor units or a decimal type.
+- **`==` on floating-point results.** Compare within a tolerance.
+- **`int` for things that grow**: ids, counters, milliseconds, file sizes. Use 64 bits.
+- **Large ids as JSON numbers** read by JavaScript. Send them as strings.
+- **Counting string length without deciding what to count**, and cutting strings in the middle of a character.
+- **Not specifying UTF-8**, then seeing mojibake.
+- **Storing local times without a zone**, or using fixed offsets for named places.
+- **Assuming a day is 24 hours** or measuring durations with the wall clock.
+
+## Practice
+
+**1. (warm-up)** What is the 8-bit two's complement value of 1111 1110?
+
+<Solution>
+
+The top bit is −128, the rest are 64 + 32 + 16 + 8 + 4 + 2 = 126, so −128 + 126 = **−2**.
+
+</Solution>
+
+**2. (warm-up)** Why does `0.1 + 0.2 === 0.3` print `false`?
+
+<Solution>
+
+0.1, 0.2 and 0.3 cannot be stored exactly in binary floating point, so each is rounded. The sum of the rounded 0.1 and 0.2 is 0.30000000000000004, a different rounded value from the stored 0.3.
+
+</Solution>
+
+**3. (warm-up)** How many UTF-8 bytes does the string "naïve" take? ("ï" is one code point outside ASCII.)
+
+<Solution>
+
+n, a, v, e take 1 byte each (4), and ï takes 2: **6 bytes**. Check with `new TextEncoder().encode("naïve").length`.
+
+</Solution>
+
+**4. (standard)** A service counts milliseconds of uptime in a signed 32-bit `int`. After how many days does it overflow?
+
+<Solution>
+
+2,147,483,647 ms ÷ 1,000 = 2,147,483.6 s; ÷ 86,400 s per day ≈ **24.9 days**. After that, the counter turns negative.
+
+</Solution>
+
+**5. (standard)** Write a TypeScript function that adds up a list of prices given in pounds as strings like "4.50" without floating-point error, returning a string like "12.75".
+
+<Solution>
+
+```ts
+function totalPounds(prices: string[]): string {
+  let pence = 0;
+  for (const p of prices) {
+    const [pounds, fraction = "0"] = p.split(".");
+    pence += Number(pounds) * 100 + Number(fraction.padEnd(2, "0").slice(0, 2));
+  }
+  return `${Math.floor(pence / 100)}.${String(pence % 100).padStart(2, "0")}`;
+}
+
+console.log(totalPounds(["4.50", "2.75", "5.5"]));
+```
+
+It works in whole pence, which are exact integers, and formats only at the end: 450 + 275 + 550 = 1,275 pence, printed as **12.75**. (It assumes non-negative prices with at most two decimal places; real code would validate the input.)
+
+</Solution>
+
+**6. (standard)** A form allows names up to 20 characters, and the database column is `VARCHAR(20)` measured in bytes. Which names could the form accept but the database reject? How would you fix it?
+
+<Solution>
+
+Any name of 20 or fewer characters that takes more than 20 UTF-8 bytes: accented letters (2 bytes each), most non-Latin scripts (3 bytes), or emoji (4 bytes). For example, a 15-character Chinese name takes 45 bytes. Fix it by measuring the same way in both places: make the column limit characters (many databases can), or validate the byte length in the form. Allow generous lengths for names.
+
+</Solution>
+
+**7. (standard)** A meeting in London is set for 10:00 local time on 15 March next year. Should you store it as a UTC instant? Explain.
+
+<Solution>
+
+No: store the local date and time (`10:00`, 15 March) with the zone name (`Europe/London`), and calculate the instant when needed. If the UK's daylight-saving rules changed before then, a stored UTC instant would show the wrong local time, while the local time plus zone stays what the people agreed. Past events, which have already happened, are safely stored as instants.
+
+</Solution>
+
+**8. (stretch)** Explain why `new BigDecimal(0.1)` in Java does not give exactly 0.1, while `new BigDecimal("0.1")` does.
+
+<Solution>
+
+The literal `0.1` is first turned into a `double`, which cannot hold 0.1 exactly and stores the nearest binary value. `new BigDecimal(double)` then records that stored value exactly, with all its digits (0.1000000000000000055511151231257827…). The string constructor parses the decimal digits "0.1" directly, so no binary rounding ever happens.
+
+</Solution>
+
+**9. (stretch)** A job runs "every day at 02:30 local time" in a zone where clocks go forward from 02:00 to 03:00 on one night and back from 02:00 to 01:00 on another. What happens on those nights, and how should the schedule be designed?
+
+<Solution>
+
+On the spring night, 02:30 local time does not exist, so a naive scheduler may skip the run. On the autumn night, the clock does not pass 02:30 twice in this example (it goes back at 02:00 to 01:00, so 01:00–02:00 happens twice), but a job at 01:30 would run twice. Design: schedule critical jobs in UTC; or choose a local time that is never skipped or repeated; or use a scheduler with explicit rules (run at the next valid time when skipped; run once when repeated), and test both transitions.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Integers** have fixed sizes; negatives use **two's complement**; going past the maximum **overflows** and wraps. Use 64-bit types for things that grow and checked arithmetic where wrapping is wrong. JavaScript numbers are exact only up to 2⁵³; use `BigInt` beyond.
+- **Floating point** (IEEE 754) cannot represent most decimal fractions exactly. Compare with a tolerance; never store money in it: use integer minor units or a decimal type.
+- **Unicode** gives every character a **code point**; **UTF-8** encodes them in 1 to 4 bytes and should be your default. Length depends on what you count; normalise before comparing; mojibake means mismatched encodings.
+- Store **instants in UTC**; convert with **IANA time zones** only for display; store future local appointments with their zone. Days are not always 24 hours; use monotonic clocks for durations; use 64-bit time.
+
+## Go deeper
+
+- [The Floating-Point Guide](https://floating-point-gui.de/), floating-point-gui.de. Why 0.1 + 0.2 is not 0.3, and what to do about it.
+- [What Every Computer Scientist Should Know About Floating-Point Arithmetic](https://docs.oracle.com/cd/E19957-01/806-3568/ncg_goldberg.html), David Goldberg. IEEE 754 formats, rounding and error, in depth.
+- [FAQ: UTF-8, UTF-16, UTF-32 and BOM](https://www.unicode.org/faq/utf_bom.html), Unicode Consortium. Encodings, surrogate pairs and byte order marks.
+- [RFC 3629: UTF-8](https://www.rfc-editor.org/rfc/rfc3629), IETF. The definition of UTF-8: 1 to 4 bytes per code point.
+- [Time Zone Database](https://www.iana.org/time-zones), IANA. The database of time zones and their rule changes used by operating systems and languages.

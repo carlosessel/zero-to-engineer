@@ -1,0 +1,40 @@
+- question: What happens when you add 1 to the largest int in Java or C# by default?
+  options:
+  - An error
+  - It wraps to the most negative int
+  - It becomes a long
+  answer: 1
+  explanation: Two's complement wraps; use checked arithmetic to get an error instead.
+- question: How should money be stored?
+  options:
+  - In a double, rounded on display
+  - As integer minor units (pence) or a decimal type
+  - As a float for speed
+  answer: 1
+  explanation: Binary floating point cannot represent most decimal fractions exactly.
+- question: '"café 🎂".length in JavaScript is 7. Why not 6?'
+  options:
+  - The space counts twice
+  - The emoji takes two UTF-16 code units
+  - é takes two bytes
+  answer: 1
+  explanation: JavaScript strings count UTF-16 units; the emoji is a surrogate pair.
+- question: Text shows as cafÃ© instead of café. What is the likely cause?
+  options:
+  - A font problem
+  - UTF-8 bytes were read as a different encoding
+  - The database is full
+  answer: 1
+  explanation: Use UTF-8 everywhere, explicitly.
+- question: How should a dentist appointment next year in London be stored?
+  options:
+  - As a UTC instant
+  - As the local date and time plus the zone name Europe/London
+  answer: 1
+  explanation: Zone rules may change before then; the local time is what was agreed.
+- question: Why send 64-bit ids to a JavaScript client as strings?
+  options:
+  - Strings are faster
+  - JavaScript numbers are only exact up to 2^53, so larger ids would be corrupted
+  answer: 1
+  explanation: Number.MAX_SAFE_INTEGER is 2^53 - 1.

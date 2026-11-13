@@ -39,6 +39,11 @@ Kinds of check (the `check:` field):
                    `throws` is given, run with the types removed.
   vitest-run       Test files, run with Vitest by tests/vitest-blocks.test.ts:
                    `files` (file name -> block number), `passed`, `failed`.
+  java             A Java program, run as a single source file with `java Main.java`
+                   (or the name in `file`). Fields: output (exact), output_contains,
+                   exit_code (default 0), stderr_contains, stdin, files ({name: text}).
+  csharp           A C# program, run as a .NET file-based app with `dotnet run app.cs`.
+                   Same fields as java.
   web              HTML or CSS, validated by tests/web-blocks.test.ts (html-validate,
                    css-tree). `expect_problems` for examples that are wrong on purpose.
   browser          As web, and rendered in real Chrome by e2e/examples.e2e.ts, which
@@ -72,7 +77,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CHAPTERS = ROOT / "content" / "chapters"
 FENCE = re.compile(r"^(`{3,})(\w+)\n(.*?)\n\1[ \t]*$", re.S | re.M)
-KINDS = {"python", "python-fake-api", "heavy", "shell", "sql", "pip", "docker", "vitest", "web", "browser", "js", "react", "ts", "vitest-run", "illustration", "not-run"}
+KINDS = {"python", "python-fake-api", "heavy", "shell", "sql", "pip", "docker", "vitest", "web", "browser", "js", "react", "ts", "vitest-run", "java", "csharp", "illustration", "not-run"}
 AUTOMATED = {"python", "shell", "sql", "pip", "docker", "vitest"}
 
 
@@ -200,6 +205,8 @@ class Chapter:
             return self._python(e, code)
         if kind in ("shell", "docker"):
             return self._shell(e, code)
+        if kind in ("java", "csharp"):
+            return self._compiled(kind, e, code)
         if kind == "pip":
             pkgs = [w for line in code.splitlines() if line.startswith("pip install") for w in line.split("#")[0].split()[2:]]
             return self._shell({**e, "script": f"python -m pip install --dry-run --quiet {' '.join(pkgs)}"}, code)
@@ -281,6 +288,32 @@ class Chapter:
             if part not in out:
                 return f"output does not contain {part!r}\n--- got\n{out[-3000:]}"
         return self._verify(e, code, out, {})
+
+    def _compiled(self, kind: str, e: dict, code: str) -> str | None:
+        """Runs a Java or C# block as a single-file program in its own folder."""
+        tool = "java" if kind == "java" else "dotnet"
+        if not shutil.which(tool):
+            raise Skip(f"needs {'a Java JDK (21 or later)' if kind == 'java' else 'the .NET SDK (10 or later)'} installed")
+        folder = Path(tempfile.mkdtemp(prefix=f"zte-{kind}-", dir=self.tmp))
+        name = e.get("file") or ("Main.java" if kind == "java" else "app.cs")
+        (folder / name).write_text(code + "\n", encoding="utf-8")
+        for extra_name, text in (e.get("files") or {}).items():
+            (folder / extra_name).write_text(text, encoding="utf-8")
+        cmd = ["java", name] if kind == "java" else ["dotnet", "run", name]
+        env = {**os.environ, "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_NOLOGO": "1"}
+        p = subprocess.run(cmd, cwd=folder, env=env, input=e.get("stdin"), capture_output=True, text=True, timeout=e.get("timeout", 300))
+        want = e.get("exit_code", 0)
+        if p.returncode != want:
+            return f"exit code {p.returncode}, expected {want}\n--- stdout\n{p.stdout[-2000:]}\n--- stderr\n{p.stderr[-2000:]}"
+        if "output" in e and _clean(p.stdout) != _clean(e["output"]):
+            return f"output differs\n--- expected\n{_clean(e['output'])}\n--- got\n{_clean(p.stdout)}"
+        for part in e.get("output_contains") or []:
+            if part not in p.stdout:
+                return f"output does not contain {part!r}\n--- got\n{p.stdout[-2000:]}"
+        for part in e.get("stderr_contains") or []:
+            if part not in p.stderr:
+                return f"stderr does not contain {part!r}\n--- got\n{p.stderr[-2000:]}"
+        return self._verify(e, code, p.stdout, {"stderr": p.stderr})
 
     def _verify(self, e: dict, code: str, out: str, extra: dict) -> str | None:
         if not e.get("verify"):
