@@ -4,6 +4,16 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 12 (Reference): the course is complete
+
+Added
+- The library: 30 books and courses grouped by part, from Computer Systems: A Programmer's Perspective and Designing Data-Intensive Applications to Google's SRE books and MIT's distributed systems course, each opened and checked.
+- The course glossary page, listing all 786 terms the course defines.
+- Software Engineering Mastery now has 12 parts and 73 chapters (71 of its own and 2 reused from other courses).
+
+Fixed
+- The glossary entry for "API" had per-course definitions without one for this course, which only showed up when the course's glossary page was built; it now has one.
+
 ### 2026-11-13: Software Engineering Mastery, part 11 (The engineer)
 
 Added
