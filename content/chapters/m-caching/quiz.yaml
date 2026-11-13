@@ -1,0 +1,36 @@
+- question: What kind of data suits caching?
+  options:
+  - Read often, expensive to produce, and safe to be slightly stale
+  - Account balances used at checkout
+  answer: 0
+  explanation: Read decisions that need the truth from the source.
+- question: In cache-aside, what should a write do to the cached entry?
+  options:
+  - Delete it
+  - Leave it
+  answer: 0
+  explanation: The next read reloads fresh data.
+- question: Why must every cache have a size limit?
+  options:
+  - Otherwise it is a memory leak
+  - Limits make lookups faster
+  answer: 0
+  explanation: Use eviction such as LRU.
+- question: What is a cache stampede?
+  options:
+  - Many requests reloading the same expired entry at once
+  - A cache with too many keys
+  answer: 0
+  explanation: Coalesce reloads and refresh early.
+- question: Which header stops any cache storing a response?
+  options:
+  - 'Cache-Control: no-store'
+  - 'Cache-Control: public'
+  answer: 0
+  explanation: Use it for sensitive data.
+- question: How can a cache show one user another user's data?
+  options:
+  - A shared key that leaves out an input such as the user id
+  - TTLs that are too short
+  answer: 0
+  explanation: Build keys from every input that affects the result.

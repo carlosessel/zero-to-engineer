@@ -1,0 +1,36 @@
+- question: What does normalisation aim for?
+  options:
+  - Each fact stored once
+  - As few tables as possible
+  answer: 0
+  explanation: Then one update changes the fact everywhere.
+- question: Why add database constraints when the application validates input?
+  options:
+  - Every writer, including buggy code and manual fixes, is checked
+  - They make queries faster
+  answer: 0
+  explanation: They are the safety net for the data.
+- question: How do you allow only one active subscription per customer but many cancelled ones?
+  options:
+  - A partial unique index WHERE status = 'active'
+  - A CHECK constraint on status
+  answer: 0
+  explanation: The uniqueness applies only to matching rows.
+- question: Why is renaming a column in one step dangerous during a rolling deployment?
+  options:
+  - Servers still running the old code break immediately
+  - Renames are slow
+  answer: 0
+  explanation: Use expand and contract.
+- question: What are the steps of expand and contract?
+  options:
+  - Add the new structure, move writes, backfill, move reads, then remove the old
+  - Drop the old structure first
+  answer: 0
+  explanation: Each step works with both code versions.
+- question: Should a past order's line store the price paid?
+  options:
+  - Yes; it is a different fact from the product's current price
+  - No; it duplicates data
+  answer: 0
+  explanation: Prices change; what was charged must not.

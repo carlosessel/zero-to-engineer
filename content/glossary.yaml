@@ -22,6 +22,10 @@
 - term: "Accumulator"
   definition: "A variable set before a loop that the loop keeps updating, such as a running total."
   courses: [web]
+- term: "ACID"
+  aliases: ["atomicity", "durability"]
+  definition: "Atomicity, consistency, isolation and durability: what a database transaction guarantees."
+  courses: [mastery]
 - term: "Actor"
   aliases: ["actor model", "mailbox"]
   definition: "An object that owns its state and handles messages from its mailbox one at a time."
@@ -228,6 +232,9 @@
 - term: "Bit"
   definition: "The smallest unit of data: a 0 or a 1."
   courses: [mastery, se, web]
+- term: "BM25"
+  definition: "The standard formula search engines use to rank documents by relevance."
+  courses: [mastery]
 - term: "Boolean blindness"
   definition: "Calls such as create(true, false, true) whose flags hide their meaning."
   courses: [mastery]
@@ -262,6 +269,9 @@
 - term: "Bucket"
   definition: "One slot of a hash table's array, holding the entries whose keys hash to it."
   courses: [mastery]
+- term: "Buffer pool"
+  definition: "The database's in-memory cache of recently used pages."
+  courses: [mastery]
 - term: "Bug"
   definition: "A mistake that makes software behave wrongly."
   courses: [se, mastery]
@@ -289,11 +299,23 @@
 - term: "Cache hit"
   definition: "Finding the data you need in a cache, so no slower layer has to be asked."
   courses: [mastery]
+- term: "Cache invalidation"
+  aliases: ["invalidation"]
+  definition: "Removing or updating cached copies when the source data changes."
+  courses: [mastery]
 - term: "Cache line"
   definition: "The fixed-size block of neighbouring memory (commonly 64 bytes) that a CPU cache loads at once."
   courses: [mastery]
 - term: "Cache miss"
   definition: "Not finding the data in a cache, so it must be fetched from a slower layer."
+  courses: [mastery]
+- term: "Cache stampede"
+  aliases: ["request coalescing"]
+  definition: "Many requests reloading the same expired entry at once; coalescing lets only one reload it."
+  courses: [mastery]
+- term: "Cache-aside"
+  aliases: ["read-through", "write-through", "write-behind"]
+  definition: "Loading data into the cache on a miss and deleting it on writes."
   courses: [mastery]
 - term: "Cache-Control"
   definition: "An HTTP header telling browsers whether, and for how long, they may keep and reuse a file."
@@ -314,6 +336,10 @@
 - term: "Case-sensitive"
   definition: "Treating capital and small letters as different, so name and Name are different names."
   courses: [web]
+- term: "CDN"
+  aliases: ["content delivery network"]
+  definition: "A network of servers worldwide that caches content close to users."
+  courses: [mastery, se]
 - term: "Certificate"
   definition: "A signed document that proves a server's identity for TLS."
   courses: [mastery]
@@ -325,6 +351,9 @@
     mastery: "Handling hash collisions by keeping a small list of entries in each bucket."
     web: "Calling one method on the result of another, such as items.filter(...).map(...)."
   courses: [mastery, web]
+- term: "Change data capture"
+  definition: "Streaming a database's committed changes, from its log, to other systems."
+  courses: [mastery]
 - term: "Change tracker"
   definition: "The part of an ORM that records which loaded objects were added, changed or removed."
   courses: [mastery]
@@ -464,6 +493,10 @@
 - term: "Composite"
   definition: "A pattern that lets single items and groups of items be treated the same way, for tree structures."
   courses: [mastery]
+- term: "Composite index"
+  aliases: ["leftmost prefix"]
+  definition: "An index on several columns in order, usable for filters on a leftmost prefix of them."
+  courses: [mastery]
 - term: "Composition over inheritance"
   definition: "Building objects from other objects they hold, rather than inheriting from a base class."
   courses: [mastery]
@@ -490,6 +523,10 @@
 - term: "Connectors"
   definition: "Links that let the Claude apps reach your other services, such as a drive, a tracker or a calendar, often built on MCP."
   courses: [claude]
+- term: "Consistent hashing"
+  aliases: ["virtual nodes"]
+  definition: "Placing keys and nodes on a hash ring so adding a node moves only the keys it takes over."
+  courses: [mastery]
 - term: "Container"
   definition: "A package of an application with everything it needs to run the same anywhere."
   courses: [se]
@@ -557,6 +594,9 @@
   aliases: ["tight coupling", "loose coupling"]
   definition: "How much one module depends on another's details; low (loose) coupling is the aim."
   courses: [mastery]
+- term: "Covering index"
+  definition: "An index containing every column a query needs, so the table is never read."
+  courses: [mastery]
 - term: "CPU"
   definition: "The central processing unit, or processor: the part of a computer that runs instructions."
   courses: [mastery]
@@ -569,6 +609,10 @@
   courses: [mastery]
 - term: "CQRS"
   definition: "Command Query Responsibility Segregation: separate models for writing and for reading."
+  courses: [mastery]
+- term: "CRDT"
+  aliases: ["CRDTs"]
+  definition: "A conflict-free replicated data type, whose concurrent changes merge automatically."
   courses: [mastery]
 - term: "Critical section"
   definition: "Code that must not run on two threads at once."
@@ -652,6 +696,9 @@
 - term: "Default value"
   definition: "The value a parameter or prop takes when none is passed."
   courses: [web]
+- term: "Denormalisation"
+  definition: "Deliberately storing duplicated or derived data for faster reads."
+  courses: [mastery]
 - term: "Deoptimisation"
   definition: "Discarding optimised machine code when the assumptions it was built on turn out false."
   courses: [mastery]
@@ -695,6 +742,9 @@
 - term: "Dijkstra's algorithm"
   definition: "An algorithm for shortest paths in a weighted graph with no negative weights."
   courses: [mastery]
+- term: "Dirty read"
+  definition: "Reading another transaction's uncommitted change."
+  courses: [mastery]
 - term: "Discrete mathematics"
   definition: "The mathematics of separate, countable things: logic, sets, counting, probability and graphs."
   courses: [mastery]
@@ -708,9 +758,15 @@
   aliases: ["distributed monoliths"]
   definition: "Services that must still be deployed or changed together, with the costs of both styles."
   courses: [mastery]
+- term: "Distributed SQL"
+  definition: "Relational databases that partition and replicate automatically, such as CockroachDB or Spanner."
+  courses: [mastery]
 - term: "DNS"
   definition: "The system that turns a domain name into a numeric address."
   courses: [se, web, mastery]
+- term: "Document database"
+  definition: "A database storing JSON-like documents, such as MongoDB."
+  courses: [mastery]
 - term: "DOM"
   definition: "The browser’s tree of objects representing a page."
   courses: [se, web]
@@ -776,7 +832,7 @@
   courses: [web, se]
 - term: "Embedding"
   definition: "A list of numbers that represents the meaning of a piece of text or an image."
-  courses: [ai]
+  courses: [ai, mastery]
 - term: "Encapsulation"
   definition: "Keeping an object's state private and changing it only through methods that keep it valid."
   courses: [mastery, se]
@@ -835,6 +891,10 @@
   aliases: ["eventually consistent"]
   definition: "Data that may be briefly out of date but becomes consistent once pending updates are applied."
   courses: [mastery]
+- term: "Eviction"
+  aliases: ["LRU", "LFU"]
+  definition: "Removing entries when a cache is full, for example the least recently used."
+  courses: [mastery]
 - term: "Eviction policy"
   definition: "The rule a cache uses to decide what to remove when full, such as least recently used."
   courses: [mastery]
@@ -851,6 +911,10 @@
 - term: "Exit status"
   definition: "The number a process returns when it ends: 0 for success, anything else for failure."
   courses: [mastery]
+- term: "Expand and contract"
+  aliases: ["parallel change"]
+  definition: "Changing a schema without downtime: add the new, move code and data over, then remove the old."
+  courses: [mastery]
 - term: "Expected value"
   definition: "The long-run average of a quantity: each outcome times its probability, added up."
   courses: [mastery]
@@ -858,6 +922,9 @@
   aliases: ["expressions"]
   definition: "A piece of code that produces a value, such as 2 + 3, a variable or a function call."
   courses: [web]
+- term: "Expression index"
+  definition: "An index on the result of an expression, such as LOWER(email)."
+  courses: [mastery]
 - term: "Facade"
   definition: "A simple interface in front of a complicated subsystem."
   courses: [mastery]
@@ -868,6 +935,9 @@
 - term: "Fail fast"
   aliases: ["failing fast"]
   definition: "Detecting a problem as early as possible and stopping, rather than carrying on with bad data."
+  courses: [mastery]
+- term: "Failover"
+  definition: "Promoting a follower to leader when the leader fails."
   courses: [mastery]
 - term: "Fake"
   definition: "A test double that is a working, simplified implementation, such as an in-memory repository."
@@ -963,6 +1033,9 @@
 - term: "Full stack"
   definition: "Working on both the front end and the back end of an application."
   courses: [web]
+- term: "Full table scan"
+  definition: "Reading every row of a table to answer a query, because no index helps."
+  courses: [mastery]
 - term: "Function"
   definition: "A named, reusable piece of code that takes inputs and returns a result."
   courses: [ai, se, web, mastery]
@@ -1015,6 +1088,9 @@
 - term: "Graph"
   definition: "A set of vertices connected by edges."
   courses: [mastery]
+- term: "Graph database"
+  definition: "A database storing nodes and relationships for deep relationship queries, such as Neo4j."
+  courses: [mastery]
 - term: "GraphQL"
   definition: "An API style with one endpoint where clients query exactly the fields they need from a typed schema."
   courses: [mastery]
@@ -1042,7 +1118,7 @@
   courses: [claude]
 - term: "Hash"
   definition: "The output of a one-way function, used for fast lookup and for storing passwords."
-  courses: [se]
+  courses: [se, mastery]
 - term: "Hash code"
   definition: "The number a hash function produces for a key."
   courses: [mastery]
@@ -1087,6 +1163,10 @@
     web: "A React function whose name starts with use, such as useState, called at the top level of a component."
     claude: "A command Claude Code itself runs on an event, such as before a tool is used or when Claude tries to finish; exit code 2 blocks."
   courses: [web, claude]
+- term: "Hot spot"
+  aliases: ["hot spots", "hot keys"]
+  definition: "A partition or key receiving far more load than others."
+  courses: [mastery]
 - term: "HTML"
   definition: "The language that says what is on a web page: headings, paragraphs, links, images and so on."
   courses: [web]
@@ -1134,7 +1214,7 @@
   courses: [mastery]
 - term: "Index"
   definition: "Two meanings. In arrays and strings, the position of an item, counting from 0. In databases, a structure that makes lookups on a column fast."
-  courses: [se, web]
+  courses: [se, web, mastery]
 - term: "Inference"
   definition: "Using a trained model to get an output, as opposed to training it."
   courses: [ai]
@@ -1180,9 +1260,17 @@
   aliases: ["invariants"]
   definition: "A rule about an object's state that must always hold, such as a balance never going below zero."
   courses: [mastery]
+- term: "Inverted index"
+  aliases: ["postings"]
+  definition: "For each word, the list of documents containing it: the core of search engines."
+  courses: [mastery]
 - term: "IP address"
   definition: "A machine's address on a network: 32 bits for IPv4, 128 for IPv6."
   courses: [mastery, se, web]
+- term: "Isolation level"
+  aliases: ["isolation levels"]
+  definition: "How much concurrent transactions are shielded from each other: read committed, repeatable read, serializable."
+  courses: [mastery]
 - term: "Iteration"
   definition: "One pass through a loop."
   courses: [web]
@@ -1202,6 +1290,9 @@
 - term: "Jitter"
   aliases: ["full jitter"]
   definition: "Randomness added to retry delays so clients do not all retry at once."
+  courses: [mastery]
+- term: "Join table"
+  definition: "A table linking two others in a many-to-many relationship."
   courses: [mastery]
 - term: "jsdom"
   definition: "A pretend browser page written in JavaScript, used to test components without opening a browser."
@@ -1233,6 +1324,9 @@
 - term: "Key"
   definition: "Two meanings. In a Python dictionary, the name a value is stored under and looked up by. In React, a unique, stable value on each item of a list, so React can tell the items apart when the list changes."
   courses: [web, ai, se]
+- term: "Key-value store"
+  definition: "A database that maps keys to values, such as Redis or DynamoDB."
+  courses: [mastery]
 - term: "KISS"
   definition: "Keep it simple: the simplest design that works is usually best."
   courses: [mastery]
@@ -1403,6 +1497,9 @@
   aliases: ["matchers"]
   definition: "The method in an assertion that says what kind of check to make, such as toBe or toEqual."
   courses: [web]
+- term: "Materialised view"
+  definition: "A stored query result, refreshed from its source tables."
+  courses: [mastery]
 - term: "MCP"
   definition: "Model Context Protocol: an open standard for connecting models to tools and data."
   courses: [ai, claude]
@@ -1465,7 +1562,7 @@
   courses: [mastery]
 - term: "Migration"
   definition: "A versioned script that changes a database’s structure."
-  courses: [se]
+  courses: [se, mastery]
 - term: "Millisecond"
   definition: "A thousandth of a second; a thousand microseconds."
   courses: [mastery]
@@ -1508,6 +1605,10 @@
   aliases: ["mutants"]
   definition: "Making small changes to code and checking whether any test fails; surviving mutants show what tests miss."
   courses: [mastery]
+- term: "MVCC"
+  aliases: ["multi-version concurrency control"]
+  definition: "Keeping several versions of rows so each transaction reads a consistent snapshot and readers never block writers."
+  courses: [mastery]
 - term: "N + 1 query problem"
   definition: "Making one query for a list and then one more for each item, instead of fetching them together."
   courses: [mastery]
@@ -1530,6 +1631,10 @@
 - term: "Native AOT"
   definition: "A .NET option that compiles a whole application ahead of time to a native executable with no JIT."
   courses: [mastery]
+- term: "Negative caching"
+  aliases: ["cache penetration"]
+  definition: "Caching 'not found' results so repeated lookups of missing keys do not hit the database."
+  courses: [mastery]
 - term: "Neural network"
   definition: "A model made of layers of simple units that multiply, add and bend numbers."
   courses: [ai]
@@ -1545,9 +1650,16 @@
 - term: "Non-null assertion"
   definition: "TypeScript's ! after an expression, telling the compiler a value is not null or undefined without checking."
   courses: [mastery]
+- term: "Non-repeatable read"
+  definition: "Reading a row twice in one transaction and getting different values."
+  courses: [mastery]
 - term: "Normal flow"
   definition: "How boxes are laid out when nothing changes it: blocks stacked down the page, inline boxes along lines of text."
   courses: [web]
+- term: "Normalisation"
+  aliases: ["normal forms"]
+  definition: "Organising tables so each fact is stored once, preventing update, insertion and deletion anomalies."
+  courses: [mastery]
 - term: "NP"
   definition: "The class of problems whose proposed answers can be checked in polynomial time."
   courses: [mastery]
@@ -1654,6 +1766,17 @@
 - term: "Parse, don't validate"
   definition: "Turning outside input into a type that can only hold valid values, once, where it enters the program."
   courses: [mastery]
+- term: "Partial unique index"
+  definition: "A uniqueness rule that applies only to rows matching a condition."
+  courses: [mastery]
+- term: "Partition key"
+  aliases: ["sort key"]
+  definition: "The key that decides which partition holds a record; a sort key orders records within it."
+  courses: [mastery]
+- term: "Partitioning"
+  aliases: ["sharding", "shard", "partition", "range partitioning", "hash partitioning"]
+  definition: "Splitting data so each node stores only part of it."
+  courses: [mastery, se]
 - term: "PATH"
   definitions:
     web: "The list of folders your computer searches when you type a program's name in the terminal."
@@ -1674,6 +1797,12 @@
 - term: "Permutation"
   aliases: ["permutations"]
   definition: "An arrangement of items in a particular order."
+  courses: [mastery]
+- term: "Pessimistic locking"
+  definition: "Locking rows when reading them (SELECT ... FOR UPDATE) so others wait."
+  courses: [mastery]
+- term: "Phantom read"
+  definition: "Running a query twice in one transaction and getting a different set of rows."
   courses: [mastery]
 - term: "Placeholder"
   definition: "Grey hint text inside an empty form field; it disappears when you type, so it never replaces a label."
@@ -1699,6 +1828,9 @@
 - term: "Polling"
   aliases: ["long polling"]
   definition: "Asking a server repeatedly whether anything has changed; long polling holds each request open until it has."
+  courses: [mastery]
+- term: "Polyglot persistence"
+  definition: "Using several kinds of database in one system, each for what it does best."
   courses: [mastery]
 - term: "Polymorphism"
   definition: "One call running different code depending on the actual object it is made on."
@@ -1825,6 +1957,10 @@
 - term: "Quantisation"
   definition: "Storing a model’s numbers with fewer bits so it needs less memory."
   courses: [ai]
+- term: "Query planner"
+  aliases: ["query plan"]
+  definition: "The part of a database that chooses how to run a query; EXPLAIN shows its plan."
+  courses: [mastery]
 - term: "Queue"
   definition: "A collection where the first item added is the first removed (FIFO)."
   courses: [mastery, se]
@@ -1833,6 +1969,10 @@
   courses: [mastery]
 - term: "Quicksort"
   definition: "A sort that partitions data around a pivot and sorts each side; fast on average, O(n²) with bad pivots."
+  courses: [mastery]
+- term: "Quorum"
+  aliases: ["quorums"]
+  definition: "A minimum number of replicas that must agree; reads see the latest write when W + R > N."
   courses: [mastery]
 - term: "Race condition"
   definition: "A bug where the result depends on the timing of simultaneous operations."
@@ -1859,8 +1999,15 @@
 - term: "Read model"
   definition: "Data shaped for queries and kept up to date from the write side's events."
   courses: [mastery]
+- term: "Read-your-writes"
+  aliases: ["monotonic reads", "consistent prefix reads"]
+  definition: "A guarantee that users always see their own changes."
+  courses: [mastery]
 - term: "ReadyToRun"
   definition: "A .NET option that ships precompiled machine code alongside IL for faster start-up."
+  courses: [mastery]
+- term: "Rebalancing"
+  definition: "Moving data between partitions or nodes as data grows or nodes change."
   courses: [mastery]
 - term: "Recursion"
   definition: "A function solving a problem by calling itself on a smaller version of it."
@@ -1904,6 +2051,13 @@
   aliases: ["rendering"]
   definition: "In React, calling a component to get a fresh description of what should be on screen; React then updates the page to match."
   courses: [web]
+- term: "Replication"
+  aliases: ["single-leader", "leader", "followers"]
+  definition: "Keeping copies of the same data on several machines; in single-leader replication one leader takes writes and followers copy them."
+  courses: [mastery]
+- term: "Replication lag"
+  definition: "How far a follower is behind its leader."
+  courses: [mastery]
 - term: "Repository"
   definition: "Two meanings. In version control, a project’s folder together with its Git history. In application design, a collection-like interface for loading and saving domain objects, hiding the database."
   courses: [se, web, mastery]
@@ -1974,6 +2128,9 @@
 - term: "Sandbox"
   definition: "Operating-system limits on what commands Claude Code runs can write and reach on the network."
   courses: [claude]
+- term: "Scatter-gather"
+  definition: "Sending a query to every partition and combining the results."
+  courses: [mastery]
 - term: "Scavenger"
   definition: "V8's young-generation collector, which copies surviving objects between two halves."
   courses: [mastery]
@@ -1989,6 +2146,10 @@
 - term: "Sealed interface"
   aliases: ["sealed interfaces"]
   definition: "In Java, an interface that lists every type allowed to implement it, so switches over it can be exhaustive."
+  courses: [mastery]
+- term: "Search engine"
+  aliases: ["search engines"]
+  definition: "A system that finds and ranks documents relevant to a text query, such as Elasticsearch or OpenSearch."
   courses: [mastery]
 - term: "Secret scanning"
   definition: "Detecting passwords, keys and tokens in code before or after they are committed."
@@ -2074,16 +2235,26 @@
   definition: "TCP's practice of sending slowly on a new connection and speeding up as data is acknowledged."
   courses: [mastery]
 - term: "Snapshot"
-  definition: "In React, the idea that state keeps the same value for the whole of one render, even after you ask to change it."
-  courses: [web]
+  definition: "Two meanings. In React, the idea that state keeps the same value for the whole of one render, even after you ask to change it. In databases and concurrency, a consistent view of data as it was at one moment."
+  courses: [web, mastery]
 - term: "Socket"
   definition: "The operating system's interface for sending and receiving data over a network connection."
+  courses: [mastery]
+- term: "Soft delete"
+  definition: "Marking rows as deleted instead of removing them."
   courses: [mastery]
 - term: "Software architecture"
   definition: "The decisions about a system that are expensive to change later, and their trade-offs."
   courses: [mastery]
 - term: "Software composition analysis"
   definition: "Checking a project's dependencies against databases of known vulnerabilities."
+  courses: [mastery]
+- term: "Source of truth"
+  definition: "The one store whose data is authoritative; other copies are derived from it."
+  courses: [mastery]
+- term: "Split brain"
+  aliases: ["fencing"]
+  definition: "Two nodes both acting as leader after a failover; fencing shuts the old one out."
   courses: [mastery]
 - term: "Spread syntax"
   aliases: ["spread"]
@@ -2153,6 +2324,9 @@
 - term: "Stdio"
   definition: "Standard input and output: the way a local MCP server and Claude Code talk, by the program reading and writing text."
   courses: [claude]
+- term: "Stemming"
+  definition: "Reducing words to a common form, such as loaves to loaf, for searching."
+  courses: [mastery]
 - term: "Stop the world"
   definition: "Pausing all application threads while the garbage collector works."
   courses: [mastery]
@@ -2203,6 +2377,10 @@
 - term: "Subset sum"
   definition: "Deciding whether some of a set of numbers add up exactly to a target."
   courses: [mastery]
+- term: "Surrogate key"
+  aliases: ["natural key"]
+  definition: "A meaningless system-generated identifier; a natural key is a real-world one such as an email."
+  courses: [mastery]
 - term: "Surrogate pair"
   definition: "Two UTF-16 units that together represent one character outside the basic range, such as most emoji."
   courses: [mastery]
@@ -2217,7 +2395,7 @@
   courses: [mastery]
 - term: "Synchronous"
   definition: "Running in order, each step finishing before the next starts."
-  courses: [web]
+  courses: [web, mastery]
 - term: "System call"
   definition: "A controlled request from a program to the kernel, such as to read a file or open a connection."
   courses: [mastery]
@@ -2341,7 +2519,7 @@
   courses: [ai, claude]
 - term: "Transaction"
   definition: "A group of database changes that all succeed or all fail together."
-  courses: [se]
+  courses: [se, mastery]
 - term: "Transaction script"
   definition: "Organising business logic as one procedure per use case."
   courses: [mastery]
@@ -2375,6 +2553,9 @@
   courses: [mastery]
 - term: "TTL"
   definition: "Time to live: how long a DNS answer (or other cached value) may be kept."
+  courses: [mastery]
+- term: "Tunable consistency"
+  definition: "Choosing per query how many replicas must respond, trading freshness for speed."
   courses: [mastery]
 - term: "Two pointers"
   definition: "A technique moving two positions through data, often from both ends, to avoid checking all pairs."
@@ -2444,6 +2625,10 @@
 - term: "Unix epoch"
   definition: "1 January 1970 00:00 UTC, from which many systems count time in seconds or milliseconds."
   courses: [mastery]
+- term: "Update anomaly"
+  aliases: ["insertion anomaly", "deletion anomaly"]
+  definition: "Inconsistency caused by storing one fact in several rows and changing only some."
+  courses: [mastery]
 - term: "Updater function"
   aliases: ["updater functions"]
   definition: "A function passed to a state setter, such as (c) => c + 1, which React calls with the latest value."
@@ -2475,6 +2660,9 @@
 - term: "V8"
   definition: "The JavaScript engine in Chrome and Node.js."
   courses: [mastery]
+- term: "VACUUM"
+  definition: "PostgreSQL's process that removes row versions no transaction can see any more."
+  courses: [mastery]
 - term: "Value object"
   aliases: ["value objects"]
   definition: "An immutable object defined only by its values and compared by value, such as an amount of money."
@@ -2494,10 +2682,10 @@
   courses: [mastery, ai]
 - term: "Vector"
   definition: "A list of numbers; a point in space."
-  courses: [ai]
+  courses: [ai, mastery]
 - term: "Vector database"
   definition: "A store that finds the embeddings closest to a query embedding quickly."
-  courses: [ai]
+  courses: [ai, mastery]
 - term: "Version control"
   definition: "Keeping a recorded history of every change to a set of files, so you can compare and go back; Git does this."
   courses: [web]
@@ -2567,6 +2755,9 @@
 - term: "WebSocket"
   definition: "A two-way connection, upgraded from HTTP, where either side can send messages at any time."
   courses: [mastery]
+- term: "Wide-column store"
+  definition: "A database such as Cassandra built for huge write volumes across many machines, with one table per query."
+  courses: [mastery]
 - term: "WOFF2"
   definition: "The most compressed font file format, supported by every current browser."
   courses: [web]
@@ -2591,6 +2782,13 @@
   courses: [claude]
 - term: "Worst case"
   definition: "The input of a given size that makes an algorithm do the most work."
+  courses: [mastery]
+- term: "Write skew"
+  definition: "Two transactions each reading shared data and writing different rows, together breaking a rule."
+  courses: [mastery]
+- term: "Write-ahead log"
+  aliases: ["WAL"]
+  definition: "A log of changes written to disk before a commit is acknowledged, replayed after a crash."
   courses: [mastery]
 - term: "XML tags"
   definition: "Labels in angle brackets, such as <document> and </document>, used in prompts to mark where each kind of content starts and ends."

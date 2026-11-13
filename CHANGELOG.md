@@ -4,6 +4,20 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-13: Software Engineering Mastery, part 7 (Data)
+
+Added
+- Five chapters: relational databases in depth (pages, B-tree indexes, query plans, ACID, the write-ahead log, isolation levels and anomalies, MVCC, connection pools); schema design and migrations (normalisation, keys including UUIDv7, types, constraints, denormalising deliberately, expand-and-contract migrations); NoSQL and search (key-value, document, wide-column and graph stores, inverted indexes and BM25, vector and time-series stores, choosing); caching (HTTP caching, cache-aside and other patterns, TTLs and eviction, invalidation, stampedes); and replication and partitioning (leaders and followers, replication lag and read-your-writes, failover, quorums, range and hash partitioning, consistent hashing). About 11,800 words, 27 practice problems, 30 quiz questions, 25 checked resources.
+- Real database behaviour, checked with SQLite through Python's standard library: a 300,000-row table scanned and then searched through an index (asserted at least 100 times faster), composite-index plans for five query shapes, a rolled-back transfer, a lost update and its atomic fix, an MVCC snapshot surviving another connection's commit in WAL mode, constraints rejecting bad rows, and a five-step expand-and-contract migration. TypeScript and Java examples cover key design, cache-aside with a fake clock, an LRU cache, request coalescing, replication lag, quorums, and keys moved by mod-N versus consistent hashing.
+- Earlier chapters (performance, patterns, sorting and searching, enterprise patterns) now link to the data chapters.
+- 57 glossary terms. "Snapshot" now gives both meanings.
+
+Fixed (found by running the examples)
+- My drafted numbers for the BM25 tie without length normalisation (0.88), the jitter example, and the share of keys moved by consistent hashing (25.5% with 100 points per node, above the ideal 20%; the text now explains why) were wrong until the code ran.
+
+Not verified
+- No person has reviewed these chapters. PostgreSQL-specific behaviour is described from its documentation, not run (no PostgreSQL server here). Problem counts are below the standard's 30 to 50.
+
 ### 2026-11-13: Software Engineering Mastery, part 6 (Concurrency)
 
 Added

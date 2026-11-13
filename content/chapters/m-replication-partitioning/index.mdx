@@ -1,0 +1,280 @@
+---
+title: "Replication and partitioning"
+summary: "Leaders and followers, replication lag, sharding and rebalancing."
+prerequisites: [m-relational, m-caching]
+estimated_minutes: 210
+status: resources-verified
+---
+
+By the end of this chapter you will understand the two ways data is spread across machines: **replication** (keeping copies of the same data on several machines, for availability and read capacity) and **partitioning** or **sharding** (splitting the data so each machine holds a part, for capacity beyond one machine). You will know the consistency problems replication causes and how to handle them, how keys are assigned to partitions, why some schemes make adding servers painful, and when you need any of this at all. These ideas underpin every distributed database, from PostgreSQL read replicas to DynamoDB, Cassandra and Kafka.
+
+## Why spread data out?
+
+One database server eventually hits a limit:
+
+- **Availability**: if it fails, everything stops. Copies on other machines can take over.
+- **Read load**: more reads than one machine can serve. Copies can share them.
+- **Write load and size**: more writes, or more data, than one machine can handle. Only splitting the data helps.
+- **Latency**: users far away wait for every round trip. Copies near them help reads.
+
+Modern single servers are very large (hundreds of cores, terabytes of memory), so try a bigger machine, better indexes, caching (<Ref to="m-caching" />) and read replicas before sharding: sharding is a big step in complexity.
+
+## Leader-based replication
+
+The most common scheme is **single-leader** (also called primary-replica, or leader-follower): one node, the **leader**, accepts all writes and records them in its log; the **followers** (replicas) apply the same changes in the same order and serve reads. PostgreSQL streaming replication, MySQL replication, SQL Server availability groups, MongoDB replica sets and Kafka partitions all work this way.
+
+Replication can be:
+
+- **Synchronous**: the leader waits until a follower confirms before reporting success. The follower is guaranteed to be up to date, but writes are slower, and a slow or failed follower blocks writes.
+- **Asynchronous**: the leader reports success at once and followers catch up. Fast, but followers lag behind, and if the leader dies, recent writes not yet copied are **lost**.
+
+Many systems use a mix: one synchronous follower (so committed data exists on two machines) and the rest asynchronous.
+
+## Replication lag and its anomalies
+
+With asynchronous followers, reads from a follower may be **stale**. Usually the lag is milliseconds; under load, or after a network blip, it can be seconds or minutes. That causes visible bugs:
+
+```ts
+type Write = { key: string; value: string; at: number };
+
+class ReplicatedStore {
+  private leader = new Map<string, string>();
+  private follower = new Map<string, string>();
+  private log: Write[] = [];
+  private applied = 0;
+  private lastWriteBy = new Map<string, number>();
+
+  constructor(private lagMs: number) {}
+
+  write(user: string, key: string, value: string, now: number) {
+    this.leader.set(key, value);
+    this.log.push({ key, value, at: now });
+    this.lastWriteBy.set(user, now);
+  }
+
+  replicate(now: number) {
+    while (this.applied < this.log.length && this.log[this.applied].at + this.lagMs <= now) {
+      const w = this.log[this.applied++];
+      this.follower.set(w.key, w.value);
+    }
+  }
+
+  readFromFollower(key: string) {
+    return this.follower.get(key) ?? "(not found)";
+  }
+
+  readYourWrites(user: string, key: string, now: number) {
+    const recent = now - (this.lastWriteBy.get(user) ?? -Infinity) < 5_000;
+    return recent ? this.leader.get(key) ?? "(not found)" : this.readFromFollower(key);
+  }
+}
+
+const store = new ReplicatedStore(800);
+store.write("ama", "profile:ama", "address: 4 Park Row", 0);
+store.replicate(100);
+console.log("follower at 100 ms:", store.readFromFollower("profile:ama"));
+console.log("read-your-writes at 100 ms:", store.readYourWrites("ama", "profile:ama", 100));
+store.replicate(900);
+console.log("follower at 900 ms:", store.readFromFollower("profile:ama"));
+```
+
+It prints `follower at 100 ms: (not found)`, `read-your-writes at 100 ms: address: 4 Park Row` and `follower at 900 ms: address: 4 Park Row`. Ama saves her address, the page reloads from a follower that has not caught up, and her change seems to have vanished. The guarantees you may need, and common ways to get them:
+
+- **Read-your-writes** (read-after-write consistency): a user always sees their own changes. Read from the leader for a short time after a user writes (as above), or for data the user can edit, or track the log position of their last write and read only from followers that have reached it.
+- **Monotonic reads**: a user never sees data go backwards, which can happen when successive reads hit followers with different lag. Route each user to the same follower.
+- **Consistent prefix reads**: causally related writes are seen in order (a reply never appears before the question).
+
+And some reads must always go to the leader: anything that decides what to write next (checking stock before reserving it, checking a balance before a payment).
+
+## Failover
+
+When the leader fails, a follower must be **promoted**: detect the failure (usually by a missed heartbeat and a timeout), choose the most up-to-date follower, and redirect writes to it. Managed databases (Amazon RDS, Azure SQL, Cloud SQL) and tools such as Patroni for PostgreSQL automate this. Failover is where things go wrong:
+
+- Writes the old leader acknowledged but had not replicated are **lost** with asynchronous replication.
+- If the old leader was only slow, not dead, and comes back still believing it is the leader, two nodes accept writes: **split brain**, which corrupts data. Systems prevent it with a **quorum** (a majority must agree on who leads, using a consensus algorithm such as Raft, covered in the distributed systems part) and by **fencing** the old leader off.
+- Timeouts are a trade-off: too short causes needless failovers during brief slowdowns; too long means longer outages.
+
+## Multi-leader and leaderless replication
+
+**Multi-leader** replication accepts writes on several leaders (often one per region) and replicates between them. Writes are fast everywhere and survive a region's loss, but two leaders can change the same record at the same time, and the **conflicts** must be resolved: last write wins (by timestamp, silently losing one change), merging (for some data types, **CRDTs**, conflict-free replicated data types, merge automatically, as collaborative editors do), or asking the application or the user. Use it where conflicts are rare or naturally mergeable.
+
+**Leaderless** replication (Amazon's original Dynamo design, Cassandra, Riak, and ScyllaDB) sends each write to several replicas and reads from several, and uses **quorums** to decide what is current. With **N** replicas, a write must be confirmed by **W** of them and a read must ask **R** of them. If **W + R > N**, every read set overlaps every write set, so at least one replica asked has the latest value:
+
+```ts
+type Version = { value: string; version: number };
+
+function quorumRead(replicas: Version[], readFrom: number[]): Version {
+  return readFrom.map((i) => replicas[i]).reduce((latest, v) => (v.version > latest.version ? v : latest));
+}
+
+const N = 3;
+const replicas: Version[] = Array.from({ length: N }, () => ({ value: "450p", version: 1 }));
+
+function write(value: string, version: number, ackedBy: number[]) {
+  for (const i of ackedBy) replicas[i] = { value, version };
+}
+
+write("480p", 2, [0, 1]);
+const allReadSets = [[0, 1], [0, 2], [1, 2]];
+console.log("W=2, R=2:", allReadSets.map((set) => quorumRead(replicas, set).value));
+console.log("W=2, R=1:", [[0], [1], [2]].map((set) => quorumRead(replicas, set).value));
+```
+
+It prints `W=2, R=2: ["480p", "480p", "480p"]` and `W=2, R=1: ["480p", "480p", "450p"]`. With W + R = 4 > 3, every pair of replicas a read might ask includes one that took the write; with R = 1, a read that happens to ask replica 2 sees the old price. Cassandra lets you choose this per query (consistency levels `ONE`, `QUORUM`, `ALL`), trading latency and availability against freshness. Background **read repair** and **anti-entropy** processes bring stale replicas up to date.
+
+## Partitioning (sharding)
+
+**Partitioning** splits the data so each node stores only part of it; each piece is a **partition** or **shard** (and is usually itself replicated). The central question is how to assign each record to a partition, by its **partition key**.
+
+**Range partitioning** assigns contiguous key ranges to partitions (A to F, G to M…; or by date). Range queries are efficient, because neighbouring keys live together. The risk is **hot spots**: partitioning orders by date sends every one of today's writes to the same partition.
+
+**Hash partitioning** applies a hash function to the key and assigns hash ranges to partitions, spreading keys evenly regardless of patterns. Range queries over the key now hit every partition. A popular compromise, used by Cassandra and DynamoDB: hash the first part of a compound key (the customer) to choose the partition, and keep rows sorted by the second part (the date) within it (<Ref to="m-nosql" />).
+
+### Rebalancing
+
+Data grows and machines are added, so data must move between partitions: **rebalancing**. The naive approach, `partition = hash(key) mod N`, is a trap: changing N moves almost every key.
+
+```ts
+function fnv1a(text: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+const keys = Array.from({ length: 10_000 }, (_, i) => `customer-${i}`);
+
+const modMoved = keys.filter((k) => fnv1a(k) % 4 !== fnv1a(k) % 5).length;
+
+function ring(nodes: string[], pointsPerNode: number) {
+  const points = nodes.flatMap((n) => Array.from({ length: pointsPerNode }, (_, i) => ({ at: fnv1a(`${n}#${i}`), node: n })));
+  return points.sort((a, b) => a.at - b.at);
+}
+
+function ownerOn(points: { at: number; node: string }[], key: string): string {
+  const h = fnv1a(key);
+  return (points.find((p) => p.at >= h) ?? points[0]).node;
+}
+
+const before = ring(["db1", "db2", "db3", "db4"], 100);
+const after = ring(["db1", "db2", "db3", "db4", "db5"], 100);
+const ringMoved = keys.filter((k) => ownerOn(before, k) !== ownerOn(after, k)).length;
+
+console.log(`hash mod N, 4 -> 5 nodes: ${((modMoved / keys.length) * 100).toFixed(1)}% of keys move`);
+console.log(`consistent hashing, 4 -> 5 nodes: ${((ringMoved / keys.length) * 100).toFixed(1)}% of keys move`);
+```
+
+It prints `hash mod N, 4 -> 5 nodes: 79.8% of keys move` and `consistent hashing, 4 -> 5 nodes: 25.5% of keys move`. With **consistent hashing**, nodes and keys are placed on the same ring of hash values and each key belongs to the next node clockwise, so a new node takes over only the slices next to its points, and every key that moves, moves *to* the new node. The ideal is a fifth of the keys; with 100 points per node the slices are not perfectly even and a quarter move here. Giving each node more **virtual nodes** (points on the ring) evens the slices out further. Amazon's Dynamo, Cassandra and many caches use it.
+
+The other common approach is a **fixed number of partitions**, many more than nodes (say 1,024 partitions on 8 nodes): keys map permanently to partitions, and rebalancing moves whole partitions between nodes. Kafka, Elasticsearch, Couchbase and Redis Cluster (16,384 hash slots) work this way. Some systems split partitions automatically when they grow (DynamoDB, HBase, CockroachDB).
+
+### Living with partitions
+
+- Routing: clients must find the partition for a key: through a routing layer, a coordinator node, or a partition map the client caches.
+- **Secondary indexes** become harder: a **local** index (each partition indexes its own data) means a query by a non-key field must ask every partition (**scatter-gather**); a **global** index is partitioned separately and updated asynchronously, so it can lag.
+- **Cross-partition operations** are expensive: joins, aggregations and especially transactions across shards need coordination (two-phase commit, or avoiding them by design). Choose the partition key so that most operations touch one partition: a **tenant id** in software-as-a-service systems is the classic choice, because almost every query is within one tenant.
+- **Hot keys**: one celebrity, one huge customer or one viral product can overload a single partition however well data is spread. Split hot keys (add a suffix and fan out), cache them, or give big tenants their own partitions.
+
+For relational databases, sharding is offered by extensions and proxies (Citus for PostgreSQL, Vitess for MySQL) or by **distributed SQL** databases built for it (CockroachDB, YugabyteDB, Google Spanner), which partition and replicate automatically while keeping SQL and transactions.
+
+## Common mistakes
+
+- **Sharding too early**, before a bigger machine, indexes, caching and replicas were exhausted.
+- **Reading your own writes from a lagging replica**, so users' changes seem to vanish.
+- **Making decisions on follower reads** (stock, balances).
+- **Asynchronous replication without accepting** that failover can lose recent writes.
+- **`hash(key) mod N`** partitioning that reshuffles everything when N changes.
+- **Partitioning by a monotonically increasing key** (dates, auto-increment ids), creating a hot partition.
+- **A partition key that splits most operations across shards.**
+
+## Practice
+
+**1. (warm-up)** What is the difference between replication and partitioning, and what problem does each solve?
+
+<Solution>
+
+Replication keeps full copies of the same data on several nodes: for availability (another copy can take over), read capacity and lower latency. Partitioning splits the data so each node holds a different part: for data size and write load beyond one machine. Real systems usually do both: each partition is replicated.
+
+</Solution>
+
+**2. (warm-up)** A user edits their profile, presses save, and the next page shows the old details. What is happening, and name two fixes.
+
+<Solution>
+
+The write went to the leader but the next read was served by an asynchronous follower that had not yet applied it (replication lag). Fixes: read the user's own profile from the leader (always, or for a short time after they write); or record the log position of their write and read only from a follower that has caught up to it. Sticky routing to one follower helps with monotonic reads but not with this.
+
+</Solution>
+
+**3. (warm-up)** With N = 5 replicas, which (W, R) pairs guarantee that a read sees the latest acknowledged write?
+
+<Solution>
+
+Any pair with W + R > 5, for example (3, 3), (4, 2), (2, 4), (5, 1) or (1, 5). (3, 3) is the usual balance; (5, 1) makes reads fast but any one unavailable replica blocks writes.
+
+</Solution>
+
+**4. (standard)** Using the consistent-hashing code, how many keys move when going from 5 nodes to 6, and how does that compare with mod N? Write the code.
+
+<Solution>
+
+```ts
+function fnv1a(text: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    hash ^= text.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
+function ring(nodes: string[], pointsPerNode: number) {
+  const points = nodes.flatMap((n) => Array.from({ length: pointsPerNode }, (_, i) => ({ at: fnv1a(`${n}#${i}`), node: n })));
+  return points.sort((a, b) => a.at - b.at);
+}
+
+const ownerOn = (points: { at: number; node: string }[], key: string) => {
+  const h = fnv1a(key);
+  return (points.find((p) => p.at >= h) ?? points[0]).node;
+};
+
+const keys = Array.from({ length: 10_000 }, (_, i) => `customer-${i}`);
+const five = ring(["db1", "db2", "db3", "db4", "db5"], 100);
+const six = ring(["db1", "db2", "db3", "db4", "db5", "db6"], 100);
+const ringMoved = keys.filter((k) => ownerOn(five, k) !== ownerOn(six, k)).length;
+const modMoved = keys.filter((k) => fnv1a(k) % 5 !== fnv1a(k) % 6).length;
+console.log(`ring: ${((ringMoved / keys.length) * 100).toFixed(1)}%, mod N: ${((modMoved / keys.length) * 100).toFixed(1)}%`);
+```
+
+It prints **ring: 17.8%, mod N: 81.7%**. The ideal is 1/6 (about 16.7%) of the keys moving to the new node; consistent hashing lands close to it, while mod N moves most of the keys.
+
+</Solution>
+
+**5. (stretch)** You are designing a multi-tenant SaaS database that will outgrow one server. Most queries are within one tenant; a few large tenants are 100 times bigger than average. Propose a partitioning scheme.
+
+<Solution>
+
+Partition by tenant id, so almost every query and transaction stays within one partition (no cross-shard joins or transactions in normal use). Use a fixed, large number of logical partitions mapped to physical nodes (or a distributed SQL database or Citus, which do this for you), so tenants can be moved between nodes by moving partitions. Give the few very large tenants dedicated partitions or nodes, so one cannot overload a shard shared by many small tenants. Keep a small global, replicated database for cross-tenant data (plans, users' tenant memberships) and a routing map from tenant to partition. Cross-tenant reporting goes to a separate analytics store fed from all shards.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Replication** copies data for availability, read capacity and latency; **partitioning** splits it for size and write capacity. Try a bigger machine, indexes, caching and replicas before sharding.
+- **Single-leader** replication: the leader takes writes, followers replay them; **synchronous** is safe but slow, **asynchronous** is fast but lags and can lose writes on failover.
+- Handle **replication lag**: read-your-writes, monotonic reads, and leader reads for decisions.
+- **Failover** risks lost writes and **split brain**; quorums and fencing prevent the latter.
+- **Multi-leader** replication needs conflict resolution; **leaderless** systems use quorums (**W + R > N**).
+- Partition by **range** (good for ranges, risk of hot spots) or **hash** (even spread); rebalance with **consistent hashing** or a **fixed number of partitions**, never `mod N`.
+- Choose a partition key that keeps most operations in one partition (often the tenant); plan for routing, secondary indexes and hot keys.
+
+## Go deeper
+
+- [Designing Data-Intensive Applications](https://dataintensive.net/), Martin Kleppmann. The standard book on replication, partitioning and distributed data.
+- [PostgreSQL: high availability, load balancing and replication](https://www.postgresql.org/docs/current/high-availability.html), the PostgreSQL Global Development Group. The options PostgreSQL offers and their trade-offs.
+- [Dynamo: Amazon's highly available key-value store](https://www.allthingsdistributed.com/files/amazon-dynamo-sosp2007.pdf), Giuseppe DeCandia and others. The 2007 paper behind consistent hashing, quorums and leaderless replication in practice.
+- [Cassandra: data distribution and replication](https://cassandra.apache.org/doc/latest/cassandra/architecture/dynamo.html), the Apache Software Foundation. Consistent hashing, virtual nodes and tunable consistency.
+- [Vitess: sharding](https://vitess.io/docs/reference/features/sharding/), the Vitess authors. Sharding MySQL in production.

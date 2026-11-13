@@ -184,13 +184,13 @@ Most real slowness comes from a short list:
 
 - **N+1 queries**: one query for a list, then one per item (<Ref to="m-patterns-structural" />). Fetch related data in one query or a batch.
 - **Chatty remote calls**: many small calls to a service or database where one would do. Each round trip costs latency (<Ref to="m-networking" />).
-- **Missing indexes** and queries that scan whole tables. Read the query plan (the data part of the course covers this).
+- **Missing indexes** and queries that scan whole tables. Read the query plan (<Ref to="m-relational" /> covers this).
 - **Unbounded results**: loading or returning everything instead of paginating (<Ref to="m-api-design" />).
 - **The wrong algorithm**: quadratic loops over growing data, string building with `+=`, linear searches where a hash map would do (<Ref to="m-arrays-hashing" />).
 - **Blocking I/O on threads that should not block**, such as synchronous calls on Node.js's single event-loop thread or `.Result` on async code in .NET (<Ref to="m-async" />).
 - **Excessive allocation** in hot paths, adding garbage-collection pauses.
 - **Lock contention**: many threads waiting for one lock.
-- **Doing work too early or too often**: rebuilding something on every request that could be computed once and cached, or the opposite, caching without limits until memory runs out (the caching chapter).
+- **Doing work too early or too often**: rebuilding something on every request that could be computed once and cached, or the opposite, caching without limits until memory runs out (<Ref to="m-caching" />).
 - **Catastrophic regex backtracking**: some regular expressions (such as `(a+)+$`) take exponential time on certain inputs, which attackers can exploit.
 
 ```ts

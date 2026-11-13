@@ -1,0 +1,57 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  note: Timings vary; the check asserts the plans, the answer, and that the index is at least 100 times faster.
+  verify: |
+    import re
+    assert "plan: ['SCAN orders']" in out
+    assert "plan: ['SEARCH orders USING INDEX idx_orders_customer (customer_id=?)']" in out
+    assert 'same answer: True (15, 56660)' in out
+    m = re.search(r'without index: ([\d.]+) ms per query, with index: ([\d.]+) ms', out)
+    assert float(m.group(1)) >= 100 * max(float(m.group(2)), 0.001), m.groups()
+- block: 2
+  lang: text
+  check: illustration
+  note: One run of block 1 on the machine this chapter was checked on; block 1's check confirms everything except the exact timings.
+- block: 3
+  lang: python
+  check: python
+  output: |
+    customer only: SEARCH orders USING INDEX idx_customer_date (customer_id=?)
+    customer and date range: SEARCH orders USING INDEX idx_customer_date (customer_id=? AND placed_at>?)
+    date only: SCAN orders
+    customer, newest first: SEARCH orders USING INDEX idx_customer_date (customer_id=?)
+    function on the column: SCAN orders
+- block: 4
+  lang: text
+  check: illustration
+  note: The output of block 3, which its check confirms line for line.
+- block: 5
+  lang: python
+  check: python
+  output: |
+    done {'ama': 3000, 'kofi': 3000}
+    rolled back (CHECK constraint failed: pence >= 0) {'ama': 3000, 'kofi': 3000}
+- block: 6
+  lang: python
+  check: python
+  output: |
+    read then write, two withdrawals of 8000: 2000
+    phone approved
+    laptop refused
+    atomic update: 2000
+- block: 7
+  lang: python
+  check: python
+  output: |
+    reader sees: 10
+    writer committed 7; writer sees: 7
+    reader, same transaction, still sees: 10
+    reader, new transaction, sees: 7
+- block: 8
+  lang: python
+  check: python
+  output: |
+    ['SCAN orders', 'USE TEMP B-TREE FOR ORDER BY']
+    ['SEARCH orders USING INDEX idx_customer_status_date (customer_id=? AND status=?)']

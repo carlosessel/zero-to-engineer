@@ -1,0 +1,257 @@
+---
+title: "Beyond relational: NoSQL and search"
+summary: "Key-value, document, wide-column and graph databases, search engines, and choosing between them."
+prerequisites: [m-schema-design]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know the main families of non-relational databases (key-value, document, wide-column, graph), search engines and the specialist stores for time series and vectors: what each is good at, how to model data for them, what they give up compared with a relational database, and how to choose. "NoSQL" is a loose label for databases that are not relational; the useful question is never "SQL or NoSQL?" but "what are my access patterns, and which store serves them best?"
+
+## Why other databases exist
+
+Relational databases are flexible and correct, and they should be your default. Other designs exist because some workloads need things relational systems historically made hard:
+
+- **Scale beyond one machine**: spreading data and writes across many servers automatically (<Ref to="m-replication-partitioning" />).
+- **Predictable low latency at huge volume**: single-digit milliseconds for simple lookups, whatever the size.
+- **Flexible or nested data**: records whose shape varies or that are naturally hierarchical.
+- **Different questions**: relevance-ranked text search, graph traversals, time-windowed aggregates, similarity of vectors.
+
+They usually get these by giving something up: joins, multi-record transactions, ad hoc queries, or strong consistency. Modern relational databases have also absorbed many of these features (PostgreSQL has `jsonb`, full-text search, and vector search through the pgvector extension), so the gap is narrower than it once was.
+
+## Key-value stores
+
+A **key-value store** maps a key to a value and does little else: get, put, delete, sometimes with expiry. That simplicity makes it extremely fast and easy to scale. **Redis** keeps everything in memory and adds rich data types (lists, sets, sorted sets, hashes, streams), which makes it the standard choice for caches, sessions, rate limiters, leaderboards and queues (<Ref to="m-caching" />). **Amazon DynamoDB** and Azure Cosmos DB's table mode are managed, durable key-value stores that scale to enormous volumes.
+
+You can only look things up by key, so the key design *is* the data model. DynamoDB-style tables use a **partition key** (which decides which server holds the item) and a **sort key** (which orders items within a partition), so one query can fetch "all orders for customer 17 in November" as a range of sort keys:
+
+```ts
+type Item = { pk: string; sk: string; data: Record<string, unknown> };
+
+const table: Item[] = [
+  { pk: "CUSTOMER#c-17", sk: "PROFILE", data: { name: "Ama", tier: "gold" } },
+  { pk: "CUSTOMER#c-17", sk: "ORDER#2026-10-30#o-5", data: { pence: 900 } },
+  { pk: "CUSTOMER#c-17", sk: "ORDER#2026-11-02#o-7", data: { pence: 5400 } },
+  { pk: "CUSTOMER#c-17", sk: "ORDER#2026-11-12#o-9", data: { pence: 1250 } },
+  { pk: "CUSTOMER#c-4", sk: "ORDER#2026-11-05#o-8", data: { pence: 450 } },
+];
+
+function query(pk: string, skPrefix: string, from = "", to = "￿"): Item[] {
+  return table
+    .filter((i) => i.pk === pk && i.sk.startsWith(skPrefix) && i.sk >= from && i.sk <= to)
+    .sort((a, b) => a.sk.localeCompare(b.sk));
+}
+
+console.log(query("CUSTOMER#c-17", "ORDER#", "ORDER#2026-11", "ORDER#2026-11￿").map((i) => i.sk));
+console.log(query("CUSTOMER#c-17", "PROFILE")[0].data);
+```
+
+It prints `["ORDER#2026-11-02#o-7", "ORDER#2026-11-12#o-9"]` and `{ name: "Ama", tier: "gold" }`. In a real DynamoDB table this is a single, fast request to one partition. The customer's profile and orders live together because the application always reads them together: you design the keys around the **queries you will run**, decided up front. A query you did not plan for (all orders over £50 across all customers) means a full scan or a new index.
+
+## Document databases
+
+A **document database** stores **documents**, usually JSON-like objects, each with a key, and can query and index fields inside them. **MongoDB** is the best known; others are Couchbase, Firestore and Cosmos DB's document API.
+
+Documents suit data that is naturally **nested** and read as a unit: an order with its lines and delivery address, a product with its variants, a user's settings. The key design decision is **embed or reference**:
+
+- **Embed** child data inside the parent when it is owned by it, read with it, and bounded in size (an order's lines). One read fetches everything, and an update to one document is atomic.
+- **Reference** by id when the child is shared (a product referred to by many orders), large, unbounded (a customer's every order ever), or changes independently.
+
+```ts
+const order = {
+  _id: "o-7",
+  customerId: "c-17",
+  placedAt: "2026-11-02T10:15:00Z",
+  status: "paid",
+  delivery: { line1: "4 Park Row", postcode: "LS1 4AP" },
+  lines: [
+    { sku: "RYE-400", name: "Rye loaf", unitPence: 450, qty: 2 },
+    { sku: "JAM-STR", name: "Strawberry jam", unitPence: 380, qty: 1 },
+  ],
+};
+
+const total = order.lines.reduce((sum, l) => sum + l.unitPence * l.qty, 0);
+console.log(order._id, order.lines.length, "lines,", total, "pence, to", order.delivery.postcode);
+```
+
+It prints `o-7 2 lines, 1280 pence, to LS1 4AP`. The order is self-contained (the product name and price are copied in, as they should be for a past order, <Ref to="m-schema-design" />), while the customer is referenced by id.
+
+The flexibility is real, and so is the cost: "schemaless" means the schema lives in your application code instead of the database, every reader must handle every shape any version of the code ever wrote, and validation is your job (MongoDB supports JSON Schema validation; use it). Joins across documents are limited (MongoDB's `$lookup`), and while modern MongoDB supports multi-document transactions, designs that rely on them heavily are often better served by a relational database.
+
+## Wide-column stores
+
+**Wide-column** databases such as **Apache Cassandra** and ScyllaDB (and, historically, HBase and Google's Bigtable) are built for very high write volumes spread across many machines, with no single leader (<Ref to="m-replication-partitioning" />). Data is organised by partition key and clustering columns, much like the DynamoDB example, and modelling follows the same rule, taken further: you create **one table per query**, duplicating data deliberately, because there are no joins and queries must hit one partition. They suit event logs, sensor readings, messaging history and other append-heavy data at large scale, and they let you choose per query how many replicas must agree (**tunable consistency**).
+
+## Graph databases
+
+A **graph database** stores **nodes** (people, products, accounts) and **relationships** between them as first-class data, and is designed for queries that follow relationships many steps deep: friends of friends, "customers who bought this also bought", fraud rings sharing addresses and cards, permissions inherited through groups. **Neo4j** (with the Cypher query language) is the best known; Amazon Neptune and others support the Gremlin language and the SPARQL query language for RDF data.
+
+```text
+MATCH (me:Customer {id: 'c-17'})-[:BOUGHT]->(p:Product)<-[:BOUGHT]-(other:Customer)-[:BOUGHT]->(rec:Product)
+WHERE NOT (me)-[:BOUGHT]->(rec)
+RETURN rec.name, count(*) AS score
+ORDER BY score DESC
+LIMIT 5
+```
+
+This Cypher query finds products bought by people who bought what customer c-17 bought, which in SQL is a chain of self-joins that grows with every hop. Graph traversals (<Ref to="m-graphs" />) follow stored pointers rather than looking up indexes, so their cost depends on the part of the graph visited, not the size of the whole database. For shallow relationships (one or two hops), a relational database with good indexes is usually fine.
+
+## Search engines
+
+Databases find rows that **match** a condition exactly; **search engines** find documents that are **relevant** to a query and rank them, tolerating word forms, typos and synonyms. **Elasticsearch** and its open-source fork **OpenSearch** (both built on the Apache Lucene library), Solr, and hosted services such as Algolia and Typesense are the common choices.
+
+The core structure is an **inverted index**: for every word, the list of documents containing it (its **postings**), like the index of a book. Ranking scores each document by how often the query words appear in it, how rare those words are across all documents, and how long the document is; the standard formula is **BM25**:
+
+```python
+import math
+import re
+from collections import Counter, defaultdict
+
+products = {
+    1: "Dark rye loaf, dense and sour, made with whole rye flour",
+    2: "White sandwich loaf, soft crust",
+    3: "Rye crackers with caraway seeds",
+    4: "Sourdough loaf with a crisp crust and an open crumb",
+    5: "Chocolate rye brownies",
+}
+
+
+def tokens(text):
+    return re.findall(r"[a-z]+", text.lower())
+
+
+index = defaultdict(dict)
+lengths = {}
+for doc_id, text in products.items():
+    words = tokens(text)
+    lengths[doc_id] = len(words)
+    for word, count in Counter(words).items():
+        index[word][doc_id] = count
+
+
+def search(query, k1=1.2, b=0.75):
+    n = len(products)
+    average = sum(lengths.values()) / n
+    scores = defaultdict(float)
+    for word in tokens(query):
+        postings = index.get(word, {})
+        if not postings:
+            continue
+        idf = math.log(1 + (n - len(postings) + 0.5) / (len(postings) + 0.5))
+        for doc_id, tf in postings.items():
+            scores[doc_id] += idf * tf * (k1 + 1) / (tf + k1 * (1 - b + b * lengths[doc_id] / average))
+    return [(doc_id, round(score, 2)) for doc_id, score in sorted(scores.items(), key=lambda kv: -kv[1])]
+
+
+def main():
+    print("postings for 'rye':", index["rye"])
+    print("postings for 'loaf':", index["loaf"])
+    print("rye loaf ->", search("rye loaf"))
+    print("crust ->", search("crust"))
+
+
+main()
+```
+
+It prints the postings (`{1: 2, 3: 1, 5: 1}` for "rye": product 1 contains it twice) and then the rankings: `rye loaf -> [(1, 1.06), (5, 0.7), (3, 0.6), (2, 0.6), (4, 0.45)]` and `crust -> [(2, 0.98), (4, 0.73)]`. The dark rye loaf matches both words and ranks first; among the "crust" results, the shorter description wins because the word makes up more of it. Real engines add **analysers** (lower-casing, **stemming** "loaves" to "loaf", synonyms, language rules), typo tolerance, filters and facets, and distribute the index across machines.
+
+A search engine is almost always a **secondary** store: the database remains the source of truth, and the search index is updated from it (through events or change data capture), so it can be rebuilt at any time and may lag slightly behind.
+
+## Other specialist stores
+
+- **Time-series databases** (TimescaleDB, InfluxDB, Prometheus for metrics) store timestamped measurements efficiently and make windowed aggregations ("average latency per minute over the last day") fast, with automatic down-sampling and retention.
+- **Vector databases** (pgvector in PostgreSQL, Pinecone, Qdrant, Weaviate, and vector support in Elasticsearch, OpenSearch, Redis and MongoDB) store **embeddings** (numeric vectors that represent the meaning of text or images) and find the nearest ones quickly with **approximate nearest neighbour** indexes. They power semantic search and retrieval for AI applications (the AI course covers embeddings).
+- **Analytical (columnar) databases and warehouses** (ClickHouse, DuckDB, BigQuery, Snowflake) store data by column rather than by row, which makes scanning and aggregating billions of rows fast, for reporting rather than transactions.
+
+## Choosing
+
+| Need | Good fit |
+|---|---|
+| General business data with relationships, transactions and ad hoc queries | Relational (PostgreSQL, MySQL, SQL Server) |
+| Caching, sessions, counters, rate limits, leaderboards | Redis |
+| Massive scale with known, key-based access patterns | DynamoDB, Cassandra |
+| Self-contained, nested records read as a whole, with varying shape | Document store (MongoDB), or `jsonb` in PostgreSQL |
+| Deep relationship queries | Graph database |
+| Relevance-ranked text search, facets | Search engine (Elasticsearch, OpenSearch) |
+| Metrics and measurements over time | Time-series database |
+| Similarity search on embeddings | pgvector or a vector database |
+| Analytics over huge datasets | Columnar warehouse |
+
+Most systems end up with more than one store, each for what it does best (**polyglot persistence**), with one **source of truth** and the others derived from it. Each extra store adds operational cost (backups, monitoring, upgrades, people who understand it) and a consistency problem (keeping copies in step). Start with a relational database, and add a specialist store when a real access pattern needs it.
+
+## Common mistakes
+
+- **Choosing NoSQL for "scale"** you do not have, and then rebuilding joins and transactions in application code.
+- **Designing a key-value or wide-column model without listing the access patterns first.**
+- **Embedding unbounded lists** in documents (every order a customer has ever placed), until documents hit size limits.
+- **Treating "schemaless" as "no schema"**: no validation, and many incompatible shapes in one collection.
+- **Using a search engine as the primary database.**
+- **Ignoring the consistency model**: reads that may be stale, writes that may be lost without the right settings.
+- **Adding a new database for every feature.**
+
+## Practice
+
+**1. (warm-up)** Match each need to a store: (a) "show me the 10 highest scores in this game, live"; (b) "products matching 'gluten free sourdough', best first"; (c) "people within three introductions of this person"; (d) "invoices, payments and refunds that must always add up".
+
+<Solution>
+
+(a) Redis sorted sets. (b) A search engine (Elasticsearch or OpenSearch). (c) A graph database. (d) A relational database, with transactions and constraints.
+
+</Solution>
+
+**2. (warm-up)** In a document database, should a blog post embed its comments or reference them? Explain the trade-off.
+
+<Solution>
+
+It depends on their number. A few comments that are always shown with the post can be embedded (one read). Popular posts can have thousands of comments, which grow without limit, are paginated, and are added concurrently by many users, so storing them as separate documents that reference the post (indexed by post id and date) is usually better.
+
+</Solution>
+
+**3. (standard)** Design DynamoDB-style keys so that one query returns all the items in one order (the order header and its lines), and another returns a customer's orders from newest to oldest. Show sample items.
+
+<Solution>
+
+Store each order in its own partition: header `{ pk: "ORDER#o-7", sk: "HEADER" }` and lines `{ pk: "ORDER#o-7", sk: "LINE#001" }`, `{ pk: "ORDER#o-7", sk: "LINE#002" }`; querying `pk = "ORDER#o-7"` returns the whole order. For the customer's orders, store a summary item per order `{ pk: "CUSTOMER#c-17", sk: "ORDER#2026-11-02#o-7" }` (or use a secondary index on the header with those keys) and query that partition in descending sort-key order. The duplication is deliberate: each access pattern gets the key layout it needs.
+
+</Solution>
+
+**4. (standard)** Run `search("crust")` with `b=0` (no length normalisation). How do the scores change, and why?
+
+<Solution>
+
+```python
+print(search("crust", b=0))
+```
+
+It prints **[(2, 0.88), (4, 0.88)]**: both descriptions contain "crust" once, and with length normalisation switched off the shorter description no longer gets a boost, so they tie. With `b=0.75`, product 2 (five words) scores higher than product 4 (ten words), because one match in a short text is stronger evidence of relevance.
+
+</Solution>
+
+**5. (stretch)** A team stores orders in MongoDB, then needs monthly revenue reports by product category joined with a separate product catalogue, and transactional refunds that update the order, the payment and stock together. What would you advise?
+
+<Solution>
+
+The new needs (cross-collection joins for reporting and multi-entity transactions) are exactly what relational databases do best. Options: move the transactional order, payment and stock data to a relational database (and keep MongoDB where flexible documents genuinely help, such as product content); or keep MongoDB as the source of truth and send changes to a warehouse or columnar store for reporting, using MongoDB's multi-document transactions for refunds while keeping them small. The decision should come from listing the access patterns and consistency needs, not from which database is already installed.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Non-relational stores trade joins, transactions, ad hoc queries or strong consistency for scale, latency, flexibility or different kinds of query. PostgreSQL covers many of these needs too.
+- **Key-value** (Redis, DynamoDB): design keys (**partition key**, **sort key**) around known access patterns.
+- **Document** (MongoDB): **embed** owned, bounded data read together; **reference** shared or unbounded data; validate shapes.
+- **Wide-column** (Cassandra): very high write volume, one table per query, tunable consistency.
+- **Graph** (Neo4j): deep relationship queries.
+- **Search engines** (Elasticsearch, OpenSearch): **inverted indexes** and **BM25** relevance; a secondary store fed from the source of truth.
+- Time-series, **vector** and columnar stores serve specialist workloads.
+- Start relational; add stores for proven access patterns (**polyglot persistence**), with one source of truth.
+
+## Go deeper
+
+- [Data modeling (MongoDB)](https://www.mongodb.com/docs/manual/data-modeling/), MongoDB. Embedding, referencing and schema validation.
+- [Best practices for designing with DynamoDB](https://docs.aws.amazon.com/amazondynamodb/latest/developerguide/best-practices.html), Amazon Web Services. Partition keys, sort keys and single-table design.
+- [Redis data types](https://redis.io/docs/latest/develop/data-types/), Redis. Strings, lists, sets, sorted sets, hashes and streams.
+- [Practical BM25: how shards affect relevance scoring](https://www.elastic.co/blog/practical-bm25-part-1-how-shards-affect-relevance-scoring-in-elasticsearch), Elastic. How search engines rank results.
+- [Neo4j Cypher manual](https://neo4j.com/docs/cypher-manual/current/introduction/), Neo4j. The graph query language.

@@ -1,0 +1,29 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: text
+  check: illustration
+  note: Example Cache-Control and ETag header values, explained line by line in the text.
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    after price change, cached: 450
+    after invalidation: 480
+    { hits: 5, misses: 3, queries: 3 }
+- block: 3
+  lang: java
+  check: java
+  output: |
+    [baguette, rye loaf, jam]
+- block: 4
+  lang: ts
+  check: ts
+  wait_ms: 300
+  output: |
+    without coalescing: 100 queries
+    with coalescing: 1 query for 100 requests
+- block: 5
+  lang: ts
+  check: ts
+  output: |
+    [["menu", 60499], ["prices", 56603], ["opening-hours", 63608]]

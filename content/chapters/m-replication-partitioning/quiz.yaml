@@ -1,0 +1,36 @@
+- question: What does asynchronous replication risk on failover?
+  options:
+  - Losing writes the leader acknowledged but had not yet copied
+  - Nothing
+  answer: 0
+  explanation: Synchronous replication avoids it at the cost of slower writes.
+- question: A user's change seems to vanish after saving. What is the likely cause?
+  options:
+  - The read went to a lagging follower
+  - The write failed silently
+  answer: 0
+  explanation: Provide read-your-writes consistency.
+- question: With N replicas, when does a quorum read see the latest write?
+  options:
+  - When W + R > N
+  - When W = R
+  answer: 0
+  explanation: Read and write sets then always overlap.
+- question: What is split brain?
+  options:
+  - Two nodes both believing they are the leader and accepting writes
+  - A partition with two keys
+  answer: 0
+  explanation: Quorums and fencing prevent it.
+- question: Why is hash(key) mod N a poor partitioning scheme?
+  options:
+  - Changing N moves almost every key
+  - Hashes are slow
+  answer: 0
+  explanation: Use consistent hashing or a fixed number of partitions.
+- question: What makes a good partition key in multi-tenant SaaS?
+  options:
+  - The tenant id, so most operations stay in one partition
+  - The creation date
+  answer: 0
+  explanation: Dates create hot partitions.

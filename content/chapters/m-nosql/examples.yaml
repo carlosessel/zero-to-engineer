@@ -1,0 +1,29 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: ts
+  output: |
+    ["ORDER#2026-11-02#o-7", "ORDER#2026-11-12#o-9"]
+    { name: "Ama", tier: "gold" }
+- block: 2
+  lang: ts
+  check: ts
+  output: |
+    o-7 2 lines, 1280 pence, to LS1 4AP
+- block: 3
+  lang: text
+  check: illustration
+  note: A Cypher query; it needs a Neo4j database with this data, which the course does not install.
+- block: 4
+  lang: python
+  check: python
+  output: |
+    postings for 'rye': {1: 2, 3: 1, 5: 1}
+    postings for 'loaf': {1: 1, 2: 1, 4: 1}
+    rye loaf -> [(1, 1.06), (5, 0.7), (3, 0.6), (2, 0.6), (4, 0.45)]
+    crust -> [(2, 0.98), (4, 0.73)]
+- block: 5
+  lang: python
+  check: python
+  output: |
+    [(2, 0.88), (4, 0.88)]

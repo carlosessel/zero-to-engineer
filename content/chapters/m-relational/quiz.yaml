@@ -1,0 +1,36 @@
+- question: What does a query plan saying SCAN orders mean?
+  options:
+  - Every row of the table is read
+  - An index is used
+  answer: 0
+  explanation: SEARCH ... USING INDEX means the index was used.
+- question: Which queries can an index on (customer_id, placed_at) serve?
+  options:
+  - Filters on customer_id, or customer_id plus placed_at
+  - Filters on placed_at alone
+  answer: 0
+  explanation: Only a leftmost prefix of the columns.
+- question: What provides durability in most relational databases?
+  options:
+  - The write-ahead log, written before the commit is acknowledged
+  - Indexes
+  answer: 0
+  explanation: The log is replayed after a crash.
+- question: Two transactions read a balance, compute and write it back. What anomaly can happen?
+  options:
+  - A lost update
+  - A dirty read
+  answer: 0
+  explanation: Use an atomic UPDATE, a version check or SELECT FOR UPDATE.
+- question: What is PostgreSQL's default isolation level?
+  options:
+  - Read committed
+  - Serializable
+  answer: 0
+  explanation: Most code runs at the default without realising.
+- question: What is the main benefit of MVCC?
+  options:
+  - Readers and writers do not block each other
+  - It uses less disk space
+  answer: 0
+  explanation: The cost is cleaning up old row versions.

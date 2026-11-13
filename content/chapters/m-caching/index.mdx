@@ -1,0 +1,298 @@
+---
+title: "Caching"
+summary: "Cache-aside, write-through, expiry, invalidation, Redis, CDNs and the problems caches cause."
+prerequisites: [m-relational]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know where caches sit in a system (from the browser to the database), the patterns for reading and writing through them, how expiry, eviction and invalidation work, and how to avoid the problems caches cause: stale data, stampedes when popular entries expire, and memory that grows without limit. Caching is the cheapest big performance win in most systems, and one of the easiest ways to introduce subtle bugs.
+
+## What a cache is
+
+A **cache** keeps a copy of data somewhere faster or closer than its source, so repeated requests avoid the slow path. A request that finds what it needs in the cache is a **hit**; one that does not is a **miss**, and goes to the source. The **hit ratio** (hits ÷ all requests) is the main measure of a cache's usefulness.
+
+Caching works because access is uneven: a small fraction of the data (today's menu, the top products, the logged-in user's profile) receives most of the requests. It suits data that is **read far more often than it changes**, is **expensive to produce** (a slow query, a call to another service, a rendered page), and can be **slightly out of date** without harm. That last condition is the crucial one, because almost every cache serves stale data some of the time.
+
+## Where caches live
+
+From closest to the user to closest to the data:
+
+- **Browser cache**: controlled by HTTP headers from your server.
+- **CDN** (content delivery network: Cloudflare, Fastly, Akamai, CloudFront): copies of responses in data centres near users, worldwide. Ideal for static files and public pages, and increasingly for API responses.
+- **Reverse proxy cache** (Varnish, NGINX) in front of your servers.
+- **In-process application cache**: a map in your service's own memory (Caffeine in Java, `IMemoryCache` in .NET, an LRU map in Node.js). The fastest of all (no network), but each server has its own copy, so copies can disagree, and memory is limited.
+- **Distributed cache**: a shared cache server such as **Redis** or Memcached that every application server uses. One copy, survives application restarts, costs a network round trip (well under a millisecond in the same data centre).
+- **Database caches**: the database's own buffer pool (<Ref to="m-relational" />), and materialised views.
+
+## HTTP caching
+
+The cheapest request is one that never reaches your servers. HTTP caching is controlled by response headers:
+
+```text
+Cache-Control: public, max-age=31536000, immutable
+Cache-Control: public, max-age=60, stale-while-revalidate=300
+Cache-Control: private, max-age=0, must-revalidate
+Cache-Control: no-store
+ETag: "menu-v42"
+```
+
+In order: a fingerprinted static file (`app.3f9a1c.js`) can be cached for a year, because a new version gets a new name; a public page may be reused for 60 seconds and then served stale for up to five more minutes while the cache refreshes it in the background; a personal page may be stored only by the user's own browser and must be checked with the server each time (cheaply, with `ETag` and `If-None-Match`, getting `304 Not Modified` when nothing changed, <Ref to="m-api-design" />); and `no-store` forbids caching at all, for sensitive data. Never let a shared cache store a response that contains one user's private data (`private` or `no-store`), and make sure anything that varies by request header says so (`Vary: Accept-Encoding`).
+
+## Patterns for application caches
+
+### Cache-aside
+
+The most common pattern is **cache-aside** (or lazy loading): the application checks the cache; on a miss it loads from the database, stores the result in the cache with an expiry, and returns it. On a write, it updates the database and **deletes** (rather than updates) the cached entry, so the next read reloads fresh data.
+
+```ts
+type Entry<T> = { value: T; expiresAt: number };
+
+class TtlCache<T> {
+  private entries = new Map<string, Entry<T>>();
+  hits = 0;
+  misses = 0;
+  constructor(private ttlMs: number, private now: () => number) {}
+
+  async getOrLoad(key: string, load: () => Promise<T>): Promise<T> {
+    const entry = this.entries.get(key);
+    if (entry && entry.expiresAt > this.now()) {
+      this.hits++;
+      return entry.value;
+    }
+    this.misses++;
+    const value = await load();
+    this.entries.set(key, { value, expiresAt: this.now() + this.ttlMs });
+    return value;
+  }
+
+  invalidate(key: string) {
+    this.entries.delete(key);
+  }
+}
+
+let clock = 0;
+let queries = 0;
+const db = new Map([["RYE-400", 450]]);
+const loadPrice = (sku: string) => async () => {
+  queries++;
+  return db.get(sku)!;
+};
+
+async function main() {
+  const prices = new TtlCache<number>(60_000, () => clock);
+  for (let i = 0; i < 5; i++) await prices.getOrLoad("RYE-400", loadPrice("RYE-400"));
+  db.set("RYE-400", 480);
+  console.log("after price change, cached:", await prices.getOrLoad("RYE-400", loadPrice("RYE-400")));
+  prices.invalidate("RYE-400");
+  console.log("after invalidation:", await prices.getOrLoad("RYE-400", loadPrice("RYE-400")));
+  clock += 61_000;
+  await prices.getOrLoad("RYE-400", loadPrice("RYE-400"));
+  console.log({ hits: prices.hits, misses: prices.misses, queries });
+}
+
+main();
+```
+
+It prints `after price change, cached: 450` (the cache still serves the old price: staleness), then `after invalidation: 480`, then `{ hits: 5, misses: 3, queries: 3 }`: eight reads cost three queries. The third miss came from **expiry**: after 61 seconds the entry was too old. Passing the clock in makes the expiry testable (<Ref to="m-functional" />).
+
+### Other patterns
+
+- **Read-through**: the cache itself knows how to load missing entries (a loader function configured on the cache, as in Caffeine's `LoadingCache`). The same idea as cache-aside, with the logic in the cache library.
+- **Write-through**: every write goes to the cache and the database together, so the cache is always populated and fresh, at the cost of slower writes and caching data that may never be read.
+- **Write-behind** (write-back): writes go to the cache and are flushed to the database later in batches. Very fast writes, but data is lost if the cache fails before flushing; use it only where that is acceptable (view counters, say).
+
+## Expiry and eviction
+
+Caches have two ways to remove entries:
+
+- **Expiry** (time to live, **TTL**): an entry is discarded after a fixed time. TTL bounds how stale data can get, even if invalidation is forgotten. Choose it from how stale the data may be: seconds for stock levels, minutes for a product list, hours for configuration.
+- **Eviction**: when the cache is full, it must drop something. **LRU** (least recently used) drops what has not been used for longest; **LFU** (least frequently used) drops what is used least often; modern libraries such as Caffeine use smarter policies (W-TinyLFU) that combine the two.
+
+A cache **without a size limit is a memory leak** (<Ref to="m-memory-gc" />). Java's `LinkedHashMap` can be turned into a tiny LRU cache in a few lines:
+
+```java
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+public class Main {
+    static class LruCache<K, V> extends LinkedHashMap<K, V> {
+        private final int capacity;
+
+        LruCache(int capacity) {
+            super(16, 0.75f, true);
+            this.capacity = capacity;
+        }
+
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
+            return size() > capacity;
+        }
+    }
+
+    public static void main(String[] args) {
+        LruCache<String, Integer> prices = new LruCache<>(3);
+        prices.put("rye loaf", 450);
+        prices.put("croissant", 275);
+        prices.put("baguette", 300);
+        prices.get("rye loaf");
+        prices.put("jam", 380);
+        System.out.println(prices.keySet());
+    }
+}
+```
+
+It prints `[baguette, rye loaf, jam]`. The third constructor argument (`true`) orders entries by access, so reading the rye loaf made it recent, and adding a fourth item evicted the croissant, the least recently used. In production use Caffeine (Java), `IMemoryCache` with size limits (.NET) or lru-cache (Node.js), which add expiry, statistics and thread safety.
+
+## Invalidation
+
+Phil Karlton is often quoted as saying there are only two hard things in computer science: cache invalidation and naming things. **Invalidation** means removing or updating cached copies when the source changes. Approaches, from simplest:
+
+1. **Short TTLs only**: accept up to N seconds of staleness. Simple and robust; often enough.
+2. **Delete on write**: when the application changes data, delete the affected keys. Watch for every place that writes, including other services, scripts and manual fixes, and for derived entries (changing a product's price must also invalidate the cached category page that shows it).
+3. **Versioned keys**: put a version in the key (`menu:v42`) and bump it on change; old entries simply stop being read and expire. Fingerprinted static file names are this idea.
+4. **Events**: the owner of the data publishes change events, and caches (in every service and server) delete or refresh entries when they receive them, possibly from a **change data capture** stream of the database's log.
+
+Deleting, rather than writing the new value into the cache, avoids a race where two concurrent writers leave the older value cached. A subtle race remains with cache-aside (a reader loads an old value, a writer updates the database and deletes the key, then the reader writes its old value into the cache), which is one more reason every entry should have a TTL as a backstop.
+
+In-process caches need invalidation on **every** server: either short TTLs, or a broadcast (Redis pub/sub) telling each server to drop a key.
+
+## Problems caches cause
+
+### Stampedes
+
+When a popular entry expires, every request that arrives before it is reloaded misses at once, and hundreds of identical expensive queries hit the database together: a **cache stampede** (a thundering herd, <Ref to="m-realtime" />). If the database slows down under the load, reloading takes longer, more requests pile up, and the system can collapse. Defences:
+
+- **Request coalescing** (single-flight): only one request reloads a key; others wait for its result.
+- **Early or background refresh**: refresh popular entries shortly before they expire (`stale-while-revalidate`, Caffeine's `refreshAfterWrite`), so they never expire under load.
+- **Jittered TTLs**: add randomness so many entries do not expire at the same moment.
+
+```ts
+let queries = 0;
+const slowMenuQuery = async () => {
+  queries++;
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  return ["rye loaf", "croissant", "baguette"];
+};
+
+const inFlight = new Map<string, Promise<string[]>>();
+function coalesced(key: string, load: () => Promise<string[]>): Promise<string[]> {
+  const existing = inFlight.get(key);
+  if (existing) return existing;
+  const promise = load().finally(() => inFlight.delete(key));
+  inFlight.set(key, promise);
+  return promise;
+}
+
+async function main() {
+  await Promise.all(Array.from({ length: 100 }, () => slowMenuQuery()));
+  console.log("without coalescing:", queries, "queries");
+  queries = 0;
+  const menus = await Promise.all(Array.from({ length: 100 }, () => coalesced("menu", slowMenuQuery)));
+  console.log("with coalescing:", queries, "query for", menus.length, "requests");
+}
+
+main();
+```
+
+It prints `without coalescing: 100 queries` and `with coalescing: 1 query for 100 requests`. All 100 requests share the one in-flight promise.
+
+### Other problems
+
+- **Stale data shown where it matters**: never serve cached data for decisions that need the truth (stock at checkout, balances, permissions); read those from the source.
+- **Cache penetration**: requests for keys that do not exist always miss and hit the database (often attackers probing ids). Cache the "not found" result briefly (**negative caching**).
+- **Hot keys**: one extremely popular key overloads one Redis node; replicate it into in-process caches.
+- **Cold start**: after a deployment or a cache restart, everything misses at once. Warm the cache gradually, or protect the database with coalescing and rate limits.
+- **Cache as hidden dependency**: if the system cannot cope when the cache is empty or down, the cache has become part of your capacity, and its failure is an outage. Load-test with a cold cache.
+- **Correctness bugs**: caching per-user data under a shared key, or forgetting part of the key (language, currency, permissions), shows one user another user's data. Build keys from every input that affects the result.
+
+## Redis in practice
+
+Redis is the default distributed cache. Beyond `GET` and `SET` with expiry (`SET key value EX 60`), its data types make it useful for much more than caching: sorted sets for leaderboards, `INCR` with expiry for rate limiting, sets for "who is online", streams for lightweight queues, and `SET key value NX PX 30000` for simple locks (with care: a lock with an expiry can be lost while still in use, so protect critical sections with fencing tokens or the database). Configure `maxmemory` and an eviction policy (`allkeys-lru` for a pure cache), monitor memory and the hit ratio, and decide what should happen to your application when Redis is unavailable.
+
+## Common mistakes
+
+- **Caching before measuring**, adding complexity where a better query or index would do.
+- **No TTL** and no size limit.
+- **Forgetting invalidation paths** (other writers, derived pages).
+- **Shared caching of personal data**, or keys missing an input.
+- **Using cached data for decisions** that need current truth.
+- **No protection against stampedes** on popular, expensive entries.
+- **Treating the cache as durable storage.**
+- **A system that cannot survive an empty cache.**
+
+## Practice
+
+**1. (warm-up)** Which `Cache-Control` header suits each? (a) `app.3f9a1c.js`; (b) a public product page that may be up to a minute old; (c) a page showing the user's own orders; (d) a page showing a bank account number.
+
+<Solution>
+
+(a) `public, max-age=31536000, immutable`. (b) `public, max-age=60` (optionally with `stale-while-revalidate`). (c) `private, max-age=0, must-revalidate` (or `private, no-cache`), with an ETag. (d) `no-store`.
+
+</Solution>
+
+**2. (warm-up)** Why delete the cached entry on a write, rather than write the new value into the cache?
+
+<Solution>
+
+Deleting is simpler and avoids races: if two writers update the database and then each writes its value into the cache, the cache can end up holding the older value if their cache writes arrive in the opposite order. After a delete, the next read loads whatever is now in the database.
+
+</Solution>
+
+**3. (standard)** Add a small random jitter to the cache's TTL so entries loaded at the same moment do not all expire together. Show three entries' expiry times with a seeded random function.
+
+<Solution>
+
+```ts
+function jitteredExpiry(now: number, ttlMs: number, jitterFraction: number, random: () => number): number {
+  const jitter = ttlMs * jitterFraction * (random() * 2 - 1);
+  return Math.round(now + ttlMs + jitter);
+}
+
+let seed = 3;
+const random = () => {
+  seed = (seed * 1103515245 + 12345) % 2 ** 31;
+  return seed / 2 ** 31;
+};
+
+console.log(["menu", "prices", "opening-hours"].map((key) => [key, jitteredExpiry(0, 60_000, 0.1, random)]));
+```
+
+It prints **[["menu", 60499], ["prices", 56603], ["opening-hours", 63608]]**: each entry expires somewhere between 54 and 66 seconds instead of all at exactly 60.
+
+</Solution>
+
+**4. (standard)** A product page is cached for 10 minutes in Redis. Marketing complains that price changes take up to 10 minutes to appear. List three ways to fix it, with their trade-offs.
+
+<Solution>
+
+Shorten the TTL (simple, but more database load and still some delay). Delete the product's keys, and any derived page keys, when the price changes (immediate, but every writer must do it, including the admin tool and imports). Publish a "price changed" event that cache owners subscribe to and invalidate on (decoupled and covers all writers that publish, at the cost of messaging infrastructure). Whichever you choose, keep a TTL as a backstop, and read the price from the database at checkout.
+
+</Solution>
+
+**5. (stretch)** After a Redis outage, the database is overwhelmed as soon as Redis comes back empty, and the site goes down again. Explain why and how to design for it.
+
+<Solution>
+
+The system's normal load assumed a high hit ratio; with an empty cache, every request misses and goes to the database at once (a cold-start stampede), far beyond its capacity, so queries slow down, requests pile up, and the outage continues. Design for it: coalesce reloads per key so each popular entry is loaded once; limit concurrent database queries with a pool or semaphore and shed or queue excess load; warm the most popular keys before sending full traffic; serve slightly stale data or a simplified page while warming; and load-test with a cold cache so the real capacity is known.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **cache** trades freshness for speed; measure its **hit ratio**. Cache data that is read often, costly to produce and safe to be slightly stale.
+- Caches live in the browser, **CDN**, reverse proxy, application memory and **Redis**; control HTTP caching with `Cache-Control` and `ETag`.
+- **Cache-aside** (load on miss, delete on write) is the default pattern; also read-through, write-through, write-behind.
+- Bound staleness with **TTLs** and memory with **eviction** (LRU, LFU); an unbounded cache is a leak.
+- **Invalidation**: short TTLs, delete on write, versioned keys or events, with a TTL as backstop.
+- Prevent **stampedes** with coalescing, early refresh and jitter; beware penetration, hot keys, cold starts, and keys that leak one user's data to another.
+
+## Go deeper
+
+- [HTTP caching](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Caching), MDN. How browsers and shared caches use `Cache-Control`, `ETag` and validation.
+- [Caching best practices](https://aws.amazon.com/caching/best-practices/), Amazon Web Services. Cache-aside, write-through, TTLs and stampedes.
+- [Caffeine](https://github.com/ben-manes/caffeine), Ben Manes. A high-performance Java cache, with documentation on its eviction policy.
+- [Redis: key eviction](https://redis.io/docs/latest/develop/reference/eviction/), Redis. `maxmemory` and the eviction policies.
+- [Caching in .NET](https://learn.microsoft.com/en-us/dotnet/core/extensions/caching), Microsoft. In-memory and distributed caching, and `HybridCache`.

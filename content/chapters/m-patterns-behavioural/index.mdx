@@ -398,7 +398,7 @@ const app = chain([rateLimit(2)], (req) => `200 ${req.path}`);
 for (let i = 0; i < 3; i++) console.log(app({ path: "/orders", user: "ama" }));
 ```
 
-It prints **200 /orders** twice and then **429 Too Many Requests**. A real rate limiter counts per time window and shares counts between servers (the caching chapter later in this course covers that).
+It prints **200 /orders** twice and then **429 Too Many Requests**. A real rate limiter counts per time window and shares counts between servers (<Ref to="m-caching" /> covers that).
 
 </Solution>
 

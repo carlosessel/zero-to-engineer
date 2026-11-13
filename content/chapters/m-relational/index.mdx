@@ -1,0 +1,365 @@
+---
+title: "Relational databases in depth"
+summary: "Indexes and B-trees, query plans, transactions, ACID, isolation levels and their anomalies, locking and MVCC."
+prerequisites: [m-trees-heaps]
+estimated_minutes: 270
+status: resources-verified
+---
+
+By the end of this chapter you will understand what a relational database does with your queries: how indexes make lookups fast, how to read a query plan, what a transaction guarantees, what the isolation levels really allow, and how locking and multi-version concurrency let many users work at once. Almost every back end stores its most important data in a relational database (PostgreSQL, MySQL, SQL Server, Oracle, SQLite), and most production performance and data-corruption problems come from misunderstanding these few ideas. The web and AI courses introduced SQL; this chapter goes underneath it.
+
+The runnable examples use SQLite through Python's built-in `sqlite3` module, so they work anywhere without a server. The ideas carry over to PostgreSQL, MySQL and SQL Server, and the chapter notes where they differ.
+
+## How data is stored
+
+A table's rows are stored in fixed-size **pages** on disk (8 KB in PostgreSQL and SQL Server, 16 KB in MySQL's InnoDB, 4 KB by default in SQLite). Reading one row means reading its whole page, and the database keeps recently used pages in memory (the **buffer pool** or shared buffers) because disk access is thousands of times slower (<Ref to="m-machine" />). Almost everything about database performance is about **reading fewer pages**.
+
+Without any help, finding the orders for one customer means reading every page of the table: a **full table scan**. That is fine for a thousand rows and disastrous for a hundred million.
+
+## Indexes and B-trees
+
+An **index** is a separate structure that lets the database find rows by a column's value without scanning the table, like the index at the back of a book. Nearly all relational indexes are **B-trees** (strictly B+ trees, <Ref to="m-trees-heaps" />): balanced trees whose nodes are pages holding hundreds of keys each, with the leaves in sorted order and linked together. Because each node has so many children, the tree is very shallow: with 300 keys per page, three levels cover 27 million rows and four cover 8 billion. Finding any key takes a handful of page reads, and because the leaves are sorted, range queries (`BETWEEN`, `>=`, `ORDER BY`) are fast too.
+
+```python
+import random
+import sqlite3
+import time
+
+db = sqlite3.connect(":memory:")
+
+
+def plan(sql):
+    return [row[3] for row in db.execute("EXPLAIN QUERY PLAN " + sql)]
+
+
+def timed(sql, runs):
+    start = time.perf_counter()
+    for _ in range(runs):
+        result = db.execute(sql).fetchone()
+    return result, (time.perf_counter() - start) / runs * 1000
+
+
+def main():
+    db.execute("CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, placed_at TEXT, pence INTEGER)")
+    rng = random.Random(1)
+    db.executemany(
+        "INSERT INTO orders (customer_id, placed_at, pence) VALUES (?, ?, ?)",
+        [(rng.randrange(20_000), f"2026-{rng.randrange(1, 13):02d}-{rng.randrange(1, 29):02d}", rng.randrange(100, 9000)) for _ in range(300_000)],
+    )
+    query = "SELECT COUNT(*), SUM(pence) FROM orders WHERE customer_id = 4242"
+
+    print("plan:", plan(query))
+    before, without_ms = timed(query, 20)
+    db.execute("CREATE INDEX idx_orders_customer ON orders (customer_id)")
+    print("plan:", plan(query))
+    after, with_ms = timed(query, 200)
+    print("same answer:", before == after, after)
+    print(f"without index: {without_ms:.2f} ms per query, with index: {with_ms:.3f} ms")
+
+
+main()
+```
+
+On the machine this chapter was checked on it printed:
+
+```text
+plan: ['SCAN orders']
+plan: ['SEARCH orders USING INDEX idx_orders_customer (customer_id=?)']
+same answer: True (15, 56660)
+without index: 10.84 ms per query, with index: 0.007 ms
+```
+
+Before the index, the database **scans** all 300,000 rows; after it, it **searches** the index straight to the 15 matching rows, over a thousand times faster. `EXPLAIN QUERY PLAN` (SQLite), `EXPLAIN ANALYZE` (PostgreSQL, MySQL 8) and the execution plan in SQL Server show what the database will do; reading them is the most important database performance skill.
+
+### Using indexes well
+
+A **composite index** covers several columns in order, like a phone book sorted by surname, then first name. It can be used for queries that filter on a **leftmost prefix** of its columns, and it returns rows already sorted by the next column:
+
+```python
+import sqlite3
+
+db = sqlite3.connect(":memory:")
+
+
+def main():
+    db.execute("CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, placed_at TEXT, status TEXT, pence INTEGER)")
+    db.execute("CREATE INDEX idx_customer_date ON orders (customer_id, placed_at)")
+    queries = {
+        "customer only": "SELECT * FROM orders WHERE customer_id = 7",
+        "customer and date range": "SELECT * FROM orders WHERE customer_id = 7 AND placed_at >= '2026-11-01'",
+        "date only": "SELECT * FROM orders WHERE placed_at >= '2026-11-01'",
+        "customer, newest first": "SELECT * FROM orders WHERE customer_id = 7 ORDER BY placed_at DESC LIMIT 10",
+        "function on the column": "SELECT * FROM orders WHERE customer_id + 0 = 7",
+    }
+    for name, sql in queries.items():
+        detail = " | ".join(row[3] for row in db.execute("EXPLAIN QUERY PLAN " + sql))
+        print(f"{name}: {detail}")
+
+
+main()
+```
+
+It prints:
+
+```text
+customer only: SEARCH orders USING INDEX idx_customer_date (customer_id=?)
+customer and date range: SEARCH orders USING INDEX idx_customer_date (customer_id=? AND placed_at>?)
+date only: SCAN orders
+customer, newest first: SEARCH orders USING INDEX idx_customer_date (customer_id=?)
+function on the column: SCAN orders
+```
+
+The index serves the customer filter, the customer-plus-date filter, and "newest first for a customer" without any separate sort step. It does not help a filter on the date alone (the second column is only sorted *within* each customer), and wrapping the column in an expression (`customer_id + 0`, `LOWER(email)`, `DATE(placed_at)`) hides it from the index, unless you create an **expression index** on exactly that expression.
+
+Rules of thumb:
+
+- Index the columns you **filter, join and sort** on, starting with foreign keys and the columns in your most frequent `WHERE` clauses.
+- Order composite index columns by **equality filters first**, then range or sort columns.
+- A **covering index** contains every column a query needs, so the table itself is never read (PostgreSQL and SQL Server let you add extra columns with `INCLUDE`).
+- Indexes are not free: each one slows down **inserts, updates and deletes** (every index must be updated) and takes space. Remove unused ones; PostgreSQL's `pg_stat_user_indexes` shows which are never used.
+- Indexes help **selective** queries. If a query returns 30% of the table, scanning may be faster than jumping around an index, and the planner will (correctly) ignore it.
+- The **query planner** chooses plans using **statistics** about the data. Stale statistics produce bad plans; databases refresh them automatically, and `ANALYZE` refreshes them by hand.
+
+## Transactions and ACID
+
+A **transaction** groups statements into one unit of work. Databases promise four properties, **ACID**:
+
+- **Atomicity**: all of the transaction's changes happen, or none do. A failure part-way through rolls everything back.
+- **Consistency**: the transaction moves the database from one valid state to another, respecting every constraint. (This one depends on your constraints; the database enforces only what you declare.)
+- **Isolation**: concurrent transactions do not see each other's half-finished work, to the degree set by the **isolation level** (below).
+- **Durability**: once committed, changes survive a crash. Databases achieve this by writing every change to a **write-ahead log** (WAL) on disk before acknowledging the commit, and replaying the log after a crash.
+
+```python
+import sqlite3
+
+db = sqlite3.connect(":memory:", isolation_level=None)
+
+
+def transfer(source, target, pence):
+    try:
+        db.execute("BEGIN")
+        db.execute("UPDATE accounts SET pence = pence + ? WHERE id = ?", (pence, target))
+        db.execute("UPDATE accounts SET pence = pence - ? WHERE id = ?", (pence, source))
+        db.execute("COMMIT")
+        return "done"
+    except sqlite3.IntegrityError as e:
+        db.execute("ROLLBACK")
+        return f"rolled back ({e})"
+
+
+def main():
+    db.execute("CREATE TABLE accounts (id TEXT PRIMARY KEY, pence INTEGER NOT NULL CHECK (pence >= 0))")
+    db.execute("INSERT INTO accounts VALUES ('ama', 5000), ('kofi', 1000)")
+    print(transfer("ama", "kofi", 2000), dict(db.execute("SELECT * FROM accounts")))
+    print(transfer("kofi", "ama", 9000), dict(db.execute("SELECT * FROM accounts")))
+
+
+main()
+```
+
+It prints `done {'ama': 3000, 'kofi': 3000}` and then `rolled back (CHECK constraint failed: pence >= 0) {'ama': 3000, 'kofi': 3000}`. In the second transfer the credit to Ama ran first and succeeded, then the debit from Kofi broke the `CHECK` constraint; the rollback undid the credit too, so no money appeared from nowhere. Keep transactions **short**: a transaction holds locks and old row versions until it ends, so one left open (waiting for a user, or for a slow HTTP call) blocks others and bloats the database.
+
+## Concurrency inside the database
+
+Many transactions run at once, and the database must stop them from interfering, just as threads must (<Ref to="m-threads-locks" />). The classic problems, called **anomalies**:
+
+- **Dirty read**: reading another transaction's uncommitted change, which may then be rolled back.
+- **Non-repeatable read**: reading the same row twice in one transaction and getting different values, because another transaction committed a change in between.
+- **Phantom read**: running the same query twice and getting different *sets* of rows, because another transaction inserted or deleted matching rows.
+- **Lost update**: two transactions read a value, both compute a new one, both write; one change is lost.
+- **Write skew**: two transactions each read overlapping data, make decisions based on it, and write to *different* rows, together breaking a rule neither broke alone (two doctors each check "at least one other doctor is on call" and both go off call).
+
+### Isolation levels
+
+The SQL standard defines four **isolation levels**, trading safety for concurrency:
+
+| Level | Prevents |
+|---|---|
+| Read uncommitted | (almost nothing) |
+| Read committed | dirty reads |
+| Repeatable read | dirty and non-repeatable reads (and, in practice, most phantoms) |
+| Serializable | all anomalies: the result is as if transactions ran one at a time |
+
+Real databases differ from the standard in important ways. **PostgreSQL** defaults to read committed; its repeatable read is snapshot isolation (no phantoms, but write skew is possible), and its serializable level detects dangerous patterns and aborts one transaction, which you must then retry. **MySQL's InnoDB** defaults to repeatable read. **SQL Server** defaults to read committed implemented with locks, unless the database enables read committed snapshot isolation (Azure SQL does by default). **Oracle** offers read committed and serializable (snapshot isolation). Know your database's default, because most code runs at it without realising.
+
+The lost update is the anomaly application code causes most often, by reading a value into the program, computing, and writing it back:
+
+```python
+import sqlite3
+
+db = sqlite3.connect(":memory:", isolation_level=None)
+
+
+def balance():
+    return db.execute("SELECT pence FROM accounts").fetchone()[0]
+
+
+def main():
+    db.execute("CREATE TABLE accounts (id TEXT PRIMARY KEY, pence INTEGER)")
+    db.execute("INSERT INTO accounts VALUES ('ama', 10000)")
+
+    phone = db.execute("SELECT pence FROM accounts WHERE id = 'ama'").fetchone()[0]
+    laptop = db.execute("SELECT pence FROM accounts WHERE id = 'ama'").fetchone()[0]
+    db.execute("UPDATE accounts SET pence = ? WHERE id = 'ama'", (phone - 8000,))
+    db.execute("UPDATE accounts SET pence = ? WHERE id = 'ama'", (laptop - 8000,))
+    print("read then write, two withdrawals of 8000:", balance())
+
+    db.execute("UPDATE accounts SET pence = 10000")
+    for device in ("phone", "laptop"):
+        changed = db.execute("UPDATE accounts SET pence = pence - 8000 WHERE id = 'ama' AND pence >= 8000").rowcount
+        print(device, "approved" if changed else "refused")
+    print("atomic update:", balance())
+
+
+main()
+```
+
+It prints `read then write, two withdrawals of 8000: 2000` (two £80 withdrawals from £100 both succeeded, and the account shows £20), then `phone approved`, `laptop refused` and `atomic update: 2000`. The fixes, from simplest:
+
+1. **Do the arithmetic in SQL** in one statement, with the rule in the `WHERE` clause, and check how many rows changed.
+2. **Optimistic concurrency** with a version column (<Ref to="m-enterprise-patterns" />).
+3. **Pessimistic locking**: `SELECT ... FOR UPDATE` (PostgreSQL, MySQL, Oracle) or `WITH (UPDLOCK)` (SQL Server) locks the row until the transaction ends, so the second reader waits.
+4. **Serializable isolation**, with retries when the database aborts a transaction.
+
+## Locking and MVCC
+
+Databases implement isolation in two main ways.
+
+**Locking**: transactions take shared locks to read and exclusive locks to write, and wait for conflicting locks. Simple and strict, but readers and writers block each other, and deadlocks between transactions happen (the database detects them and aborts one; your code should retry).
+
+**Multi-version concurrency control** (MVCC), used by PostgreSQL, MySQL's InnoDB, Oracle and SQLite's WAL mode: each update creates a new **version** of the row instead of overwriting it, and each transaction reads from a consistent **snapshot** of the committed versions as of when it started (or, at read committed, when each statement started). **Readers never block writers and writers never block readers.** Writers still lock the rows they change, so two updates of the same row still queue.
+
+```python
+import os
+import sqlite3
+import tempfile
+
+path = os.path.join(tempfile.mkdtemp(), "shop.db")
+
+
+def main():
+    setup = sqlite3.connect(path, isolation_level=None)
+    setup.execute("PRAGMA journal_mode=WAL")
+    setup.execute("CREATE TABLE stock (sku TEXT PRIMARY KEY, on_hand INTEGER)")
+    setup.execute("INSERT INTO stock VALUES ('RYE-400', 10)")
+
+    reader = sqlite3.connect(path, isolation_level=None)
+    writer = sqlite3.connect(path, isolation_level=None)
+    on_hand = lambda conn: conn.execute("SELECT on_hand FROM stock").fetchone()[0]
+
+    reader.execute("BEGIN")
+    print("reader sees:", on_hand(reader))
+    writer.execute("UPDATE stock SET on_hand = 7 WHERE sku = 'RYE-400'")
+    print("writer committed 7; writer sees:", on_hand(writer))
+    print("reader, same transaction, still sees:", on_hand(reader))
+    reader.execute("COMMIT")
+    print("reader, new transaction, sees:", on_hand(reader))
+
+
+main()
+```
+
+It prints `reader sees: 10`, `writer committed 7; writer sees: 7`, `reader, same transaction, still sees: 10` and `reader, new transaction, sees: 7`. The writer was not blocked by the open read transaction, and the reader kept a consistent snapshot until it finished. The price of MVCC is cleaning up old versions no transaction can see any more: PostgreSQL's **VACUUM** (run automatically by autovacuum), InnoDB's purge. Long-running transactions prevent that clean-up, which is another reason to keep them short.
+
+## Connection pools
+
+Opening a database connection is expensive (a network handshake, authentication, server-side memory; PostgreSQL starts a whole process per connection). Applications keep a **connection pool**: a set of open connections that requests borrow and return. HikariCP (Java), the pool built into ADO.NET and Npgsql (.NET), and node-postgres's `Pool` all do this. Size it modestly: a database with 8 cores does not run 500 queries at once any faster than 30, and too many connections hurt. Little's law (<Ref to="m-performance" />) gives the number needed: queries per second times average query time. When many application instances share one PostgreSQL, a server-side pooler such as PgBouncer keeps the total down.
+
+## Common mistakes
+
+- **Missing indexes** on foreign keys and frequently filtered columns; or indexes on everything, slowing every write.
+- **Functions on indexed columns** in `WHERE` clauses, silently forcing scans.
+- **Never reading query plans.**
+- **Read-modify-write in application code** without a lock, version check or atomic update.
+- **Long transactions**, especially ones that wait for users or remote calls.
+- **Assuming the default isolation level is serializable.** It almost never is.
+- **No retries** for deadlocks and serialisation failures.
+- **Too many connections**, or a new connection per query.
+
+## Practice
+
+**1. (warm-up)** Why are B-tree indexes so shallow, and why does that matter?
+
+<Solution>
+
+Each node is a page holding hundreds of keys, so each level multiplies the number of reachable rows by hundreds: three or four levels cover billions of rows. Finding a row therefore needs only a few page reads, most of which are cached in memory.
+
+</Solution>
+
+**2. (warm-up)** An index exists on `(customer_id, placed_at)`. Which of these can use it to find rows? (a) `WHERE customer_id = 7`; (b) `WHERE placed_at > '2026-11-01'`; (c) `WHERE customer_id = 7 AND placed_at > '2026-11-01'`; (d) `WHERE LOWER(status) = 'paid' AND customer_id = 7`.
+
+<Solution>
+
+(a) Yes (leftmost prefix). (b) No: the dates are sorted only within each customer. (c) Yes, both columns. (d) Yes, for the `customer_id` part; the status condition is then checked on the matching rows.
+
+</Solution>
+
+**3. (warm-up)** Name the four ACID properties and say which one the write-ahead log provides.
+
+<Solution>
+
+Atomicity, consistency, isolation, durability. The write-ahead log provides durability (committed changes survive a crash because they are on disk in the log), and also supports atomicity (incomplete transactions can be rolled back).
+
+</Solution>
+
+**4. (standard)** Write a SQLite query and index so that "the 20 most recent paid orders for a customer" uses an index with no separate sort, and show the plan.
+
+<Solution>
+
+```python
+import sqlite3
+
+db = sqlite3.connect(":memory:")
+
+
+def main():
+    db.execute("CREATE TABLE orders (id INTEGER PRIMARY KEY, customer_id INTEGER, status TEXT, placed_at TEXT, pence INTEGER)")
+    query = "SELECT id, placed_at, pence FROM orders WHERE customer_id = 7 AND status = 'paid' ORDER BY placed_at DESC LIMIT 20"
+    print([r[3] for r in db.execute("EXPLAIN QUERY PLAN " + query)])
+    db.execute("CREATE INDEX idx_customer_status_date ON orders (customer_id, status, placed_at)")
+    print([r[3] for r in db.execute("EXPLAIN QUERY PLAN " + query)])
+
+
+main()
+```
+
+It prints **['SCAN orders', 'USE TEMP B-TREE FOR ORDER BY']** without the index and **['SEARCH orders USING INDEX idx_customer_status_date (customer_id=? AND status=?)']** with it. The two equality columns come first and the sort column last, so the index delivers exactly the matching rows already in date order, and the database stops after 20.
+
+</Solution>
+
+**5. (standard)** Two clinicians are on call. The rule is that at least one must stay on call. Each, at the same moment, runs a transaction: "if more than one person is on call, set me off call". Under snapshot isolation both succeed. Name the anomaly and two ways to prevent it.
+
+<Solution>
+
+Write skew: each transaction read the same snapshot (two on call), and each updated a different row, so no write conflicted. Prevent it with serializable isolation (the database detects the dependency and aborts one; retry it), or by locking the rows read (`SELECT ... FROM on_call WHERE shift = ? FOR UPDATE`), so the second transaction waits for the first and then sees only one person on call. A third option is to turn the rule into a write conflict, for example by updating a shared shift row in both transactions.
+
+</Solution>
+
+**6. (stretch)** A PostgreSQL table's disk usage keeps growing although the number of rows is stable, and queries slow down. A monitoring query shows a transaction that has been open for two days. Explain the connection.
+
+<Solution>
+
+Under MVCC, each update or delete leaves an old row version that VACUUM can remove only when no running transaction might still need it. A transaction open for two days pins its snapshot, so no version newer than two days old can be cleaned up anywhere in the database: dead versions accumulate (bloat), tables and indexes grow, and scans read more pages. Find and end the long transaction (often a session left "idle in transaction" by a bug), set `idle_in_transaction_session_timeout`, and let autovacuum catch up.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Databases store rows in **pages**; performance is about reading fewer of them.
+- **B-tree indexes** make lookups and ranges fast; use **composite indexes** with equality columns first, avoid functions on indexed columns, and remember that every index slows writes.
+- Read **query plans** (`EXPLAIN`): scan versus search, sorts, and estimated rows.
+- **Transactions** give **ACID**; the **write-ahead log** makes commits durable. Keep transactions short.
+- Know the **anomalies** (dirty, non-repeatable, phantom, lost update, write skew) and your database's **default isolation level**.
+- Prevent lost updates with atomic SQL, version columns, `SELECT ... FOR UPDATE` or serializable isolation with retries.
+- **MVCC** lets readers and writers proceed without blocking each other, at the cost of cleaning up old versions.
+- Use a modestly sized **connection pool**.
+
+## Go deeper
+
+- [Use The Index, Luke](https://use-the-index-luke.com/), Markus Winand. A free book on SQL indexing and query plans for every major database.
+- [PostgreSQL: transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html), the PostgreSQL Global Development Group. Exactly what each level allows in PostgreSQL.
+- [PostgreSQL: using EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html), the PostgreSQL Global Development Group. Reading query plans.
+- [SQLite query planning](https://www.sqlite.org/queryplanner.html), the SQLite team. How indexes are chosen, explained from first principles.
+- [About pool sizing](https://github.com/brettwooldridge/HikariCP/wiki/About-Pool-Sizing), Brett Wooldridge. Why smaller connection pools are usually faster.

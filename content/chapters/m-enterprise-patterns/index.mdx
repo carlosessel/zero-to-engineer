@@ -172,7 +172,7 @@ There are two ways for objects to get in and out of a database:
 - **Active record**: each object knows how to save itself (`order.save()`, `Order.find(7)`). Rails' ActiveRecord, Laravel's Eloquent and Django's models work this way. It is quick to build with and couples the domain object to the database.
 - **Data mapper**: a separate layer moves data between objects and tables, so domain objects know nothing about persistence. Hibernate and JPA, Entity Framework and TypeORM's data mapper mode work this way. It keeps the domain model independent and testable, at the cost of more machinery.
 
-An **object-relational mapper** (ORM) is a library implementing a data mapper (or active record), a unit of work, an **identity map** (each database row is loaded as at most one object per unit of work, so two lookups of order 7 return the same object) and lazy loading (with the N+1 query trap from <Ref to="m-patterns-structural" />). ORMs remove a great deal of repetitive code; they do not remove the need to understand the SQL they generate. The data part of this course covers SQL and query plans.
+An **object-relational mapper** (ORM) is a library implementing a data mapper (or active record), a unit of work, an **identity map** (each database row is loaded as at most one object per unit of work, so two lookups of order 7 return the same object) and lazy loading (with the N+1 query trap from <Ref to="m-patterns-structural" />). ORMs remove a great deal of repetitive code; they do not remove the need to understand the SQL they generate. <Ref to="m-relational" /> covers query plans.
 
 ## Data transfer objects
 
