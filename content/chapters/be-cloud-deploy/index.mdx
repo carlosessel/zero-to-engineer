@@ -100,7 +100,8 @@ The command prints the service's URL, with HTTPS already set up. Check the healt
 
 ```bash
 # -- Not run: needs a Google Cloud account with billing.
-curl -s https://orders-abc123-ew.a.run.app/health
+URL=$(gcloud run services describe orders --format="value(status.url)")
+curl -s "$URL/health"
 gcloud beta run services logs tail orders
 ```
 
