@@ -1,0 +1,167 @@
+# Outline requested 14 November 2026 ("add one for SQL and databases, do everything in one go").
+# Examples run on PostgreSQL 18 (PGlite) through the postgres check kind; other engines are compared where they differ.
+# Created so far: parts 1 to 10 (complete).
+course: databases
+title: Zero to Database Expert
+tagline: Write SQL fluently, design schemas well, and keep databases fast and safe.
+description: From your first SELECT to window functions, schema design, indexes and query plans, transactions and locking, security, operations and analytics, taught on PostgreSQL with every query run and checked.
+order: 7
+parts:
+- name: Start here
+  blurb: What databases are, and a database of your own
+  chapters:
+  - id: db-the-map
+    title: What databases are and what this course covers
+    summary: Tables, rows and SQL; relational and other databases; who works with them; how the course is organised.
+    minutes: 40
+  - id: db-setup
+    title: Set up PostgreSQL and the sample database
+    summary: Installing PostgreSQL, psql and a graphical client, and loading the bakery database used in every chapter.
+    minutes: 60
+- name: SQL from zero
+  blurb: Asking questions of data
+  chapters:
+  - id: db-select
+    title: 'SELECT: reading rows'
+    summary: Choosing columns, filtering with WHERE, sorting, limiting, expressions and NULL.
+    minutes: 120
+  - id: db-aggregates
+    title: Counting, summing and grouping
+    summary: Aggregate functions, GROUP BY, HAVING, and the order a query is evaluated in.
+    minutes: 100
+  - id: db-joins
+    title: Joins
+    summary: Inner, left, right, full, cross and self joins, joining many tables, and finding what is missing.
+    minutes: 120
+  - id: db-subqueries-ctes
+    title: Subqueries and common table expressions
+    summary: Subqueries, IN and EXISTS, WITH clauses, and recursive queries over hierarchies.
+    minutes: 120
+  - id: db-modifying-data
+    title: Inserting, updating and deleting
+    summary: INSERT, UPDATE and DELETE, RETURNING, upserts with ON CONFLICT, MERGE, and doing it safely.
+    minutes: 90
+  - id: db-types-functions
+    title: Types, functions and expressions
+    summary: Text, numbers, money, dates, times and time zones, CASE, COALESCE and casts.
+    minutes: 120
+- name: Advanced SQL
+  blurb: The features that make SQL powerful
+  chapters:
+  - id: db-window-functions
+    title: Window functions
+    summary: Ranking, running totals, moving averages, and comparing rows with LAG and LEAD.
+    minutes: 120
+  - id: db-advanced-queries
+    title: Advanced query techniques
+    summary: ROLLUP and grouping sets, FILTER, LATERAL joins, set operations, pivoting, and gaps and islands.
+    minutes: 120
+  - id: db-json-search
+    title: JSON, arrays and full-text search
+    summary: Storing and querying JSONB and arrays, and searching text with PostgreSQL's full-text search.
+    minutes: 120
+- name: Designing databases
+  blurb: Tables that keep data correct
+  chapters:
+  - id: db-tables-constraints
+    title: Tables, keys and constraints
+    summary: CREATE and ALTER TABLE, identity columns, primary and foreign keys, CHECK, UNIQUE and generated columns.
+    minutes: 120
+  - m-schema-design
+  - id: db-modelling
+    title: Data modelling in practice
+    summary: From requirements to tables; many-to-many, hierarchies, history and auditing, soft deletes, and multi-tenancy.
+    minutes: 150
+  - id: db-views-functions
+    title: Views, functions and triggers
+    summary: Views and materialised views, SQL and PL/pgSQL functions, procedures, triggers, and when to keep logic out of the database.
+    minutes: 120
+- name: Performance
+  blurb: Making queries fast
+  chapters:
+  - id: db-indexes
+    title: Indexes in depth
+    summary: B-tree, multi-column, partial, expression and covering indexes, GIN, GiST and BRIN, and their costs.
+    minutes: 150
+  - id: db-query-plans
+    title: Reading query plans
+    summary: EXPLAIN and EXPLAIN ANALYZE, scans, joins and sorts, statistics, and why the planner chooses what it does.
+    minutes: 150
+  - id: db-performance
+    title: A performance workflow
+    summary: Finding slow queries, pagination, batching, N+1, bloat and VACUUM, and connection pooling.
+    minutes: 120
+- name: Transactions and concurrency
+  blurb: Many users at once, without corrupting anything
+  chapters:
+  - m-relational
+  - id: db-transactions-locking
+    title: Transactions and locking in practice
+    summary: Isolation levels in PostgreSQL, row and table locks, SELECT FOR UPDATE, SKIP LOCKED queues, deadlocks and advisory locks.
+    minutes: 150
+- name: Running databases
+  blurb: Security, operations and change
+  chapters:
+  - id: db-security
+    title: Database security
+    summary: Roles and privileges, least privilege, row-level security, SQL injection, encryption and auditing.
+    minutes: 120
+  - id: db-operations
+    title: Backups, replication and operations
+    summary: Backups and point-in-time recovery, replication and failover, monitoring, VACUUM, upgrades and managed databases.
+    minutes: 150
+  - m-replication-partitioning
+  - id: db-migrations
+    title: Changing schemas safely
+    summary: Migration tools, locks taken by DDL, lock timeouts, concurrent indexes, and zero-downtime changes step by step.
+    minutes: 120
+- name: Beyond PostgreSQL
+  blurb: Other engines, analytics and search
+  chapters:
+  - id: db-other-engines
+    title: MySQL, SQL Server, SQLite and Oracle
+    summary: What changes between the major engines, and how to learn a new one quickly.
+    minutes: 90
+  - m-nosql
+  - m-caching
+  - id: db-analytics
+    title: Analytics and data warehouses
+    summary: OLTP and OLAP, star schemas, columnar storage, warehouses and lakehouses, and analytical SQL.
+    minutes: 120
+  - id: db-vectors
+    title: Vector search with pgvector
+    summary: Embeddings, similarity search, vector indexes, and combining vector and keyword search.
+    minutes: 90
+- name: Databases from code
+  blurb: Using databases from applications
+  chapters:
+  - sql
+  - be-data-efcore
+  - be-data-jpa
+  - be-data-node
+- name: Practice and careers
+  blurb: Interviews, projects and roles
+  chapters:
+  - id: db-interview-sql
+    title: SQL interview problems
+    summary: The classic SQL interview questions, worked through with several solutions each.
+    minutes: 120
+  - id: db-projects
+    title: Database projects
+    summary: Projects from a reporting database to a tuned, secured, backed-up production system, each with a checklist.
+    minutes: 60
+  - id: db-careers
+    title: Careers with databases
+    summary: Database administrator, data engineer, analytics engineer and back-end roles, and how to get there.
+    minutes: 40
+- name: Reference
+  blurb: Checked free materials and a glossary
+  chapters:
+  - id: db-library
+    title: 'The library: checked free materials'
+    summary: The best free courses, documentation and books on SQL and databases, each opened and checked.
+    minutes: 30
+  - id: db-glossary
+    title: Glossary
+    summary: Every term in this course, one sentence each.
+    minutes: 15

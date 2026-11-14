@@ -1,0 +1,201 @@
+---
+title: "Changing schemas safely"
+summary: "Migration tools, locks taken by DDL, lock timeouts, concurrent indexes, and zero-downtime changes step by step."
+prerequisites: [db-transactions-locking]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will change the schema of a busy production database without taking the application down: manage changes with a **migration tool**, know which DDL statements **lock** tables and for how long, protect the application with **`lock_timeout`**, build indexes **concurrently**, add constraints without long scans, and break risky changes (renames, type changes, new required columns) into **expand and contract** steps. Most database outages that are not hardware are caused by a schema change that looked harmless.
+
+## Migrations as code
+
+A **migration** is a versioned, reviewed script that changes the schema, applied in order by a tool that records which ones have run: Flyway or Liquibase (Java and others), EF Core migrations (.NET), drizzle-kit, Prisma Migrate or Knex (Node), Alembic (Python), sqitch, or plain numbered SQL files with a runner. The rules are the same everywhere:
+
+- Every schema change goes through a migration, never by hand on a server.
+- Migrations are reviewed like code; the reviewer asks "what does this lock, and for how long?"
+- An applied migration is never edited; mistakes are fixed by a new one.
+- Migrations run once per release, before the new application version starts (<Ref to="db-operations" />).
+- They are tested against a copy of production-sized data before running for real.
+
+## Locks taken by DDL
+
+Every DDL statement takes a lock on its table, and the strong ones conflict with all reads and writes:
+
+| Statement | Lock | Blocks reads? | Blocks writes? | Runs for |
+|---|---|---|---|---|
+| `ADD COLUMN` (nullable, or with a constant default) | ACCESS EXCLUSIVE | yes | yes | a moment |
+| `ADD COLUMN ... DEFAULT random()` (volatile default) | ACCESS EXCLUSIVE | yes | yes | rewrites the table |
+| `ALTER COLUMN TYPE` (most changes) | ACCESS EXCLUSIVE | yes | yes | rewrites the table |
+| `ALTER COLUMN SET NOT NULL` | ACCESS EXCLUSIVE | yes | yes | scans the table |
+| `ADD CONSTRAINT ... CHECK` / `FOREIGN KEY` | SHARE ROW EXCLUSIVE or ACCESS EXCLUSIVE | partly | yes | scans the table |
+| `... NOT VALID`, then `VALIDATE CONSTRAINT` | weaker lock to validate | no | no (validation) | scans without blocking |
+| `CREATE INDEX` | SHARE | no | yes | builds the whole index |
+| `CREATE INDEX CONCURRENTLY` | SHARE UPDATE EXCLUSIVE | no | no | longer, in the background |
+| `DROP COLUMN` | ACCESS EXCLUSIVE | yes | yes | a moment (space is reclaimed later) |
+
+"A moment" is only true once the lock is **granted**. A statement that needs ACCESS EXCLUSIVE must wait for every running query on the table to finish, and while it waits, every **new** query on the table queues behind it. One long report plus one `ALTER TABLE` can stop an entire application:
+
+| Time | Long report | Migration | Web requests |
+|---|---|---|---|
+| 1 | `SELECT ... FROM orders` (runs 2 minutes) | | |
+| 2 | still running | `ALTER TABLE orders ADD COLUMN note text` waits for the report | |
+| 3 | still running | still waiting | every `SELECT` and `INSERT` on orders queues behind the migration |
+| 4 | finishes | runs in a millisecond | the queue drains, two minutes late |
+
+## lock_timeout: fail fast and retry
+
+Set a **`lock_timeout`** before DDL, so a migration that cannot get its lock quickly gives up instead of blocking everyone, and retry it later:
+
+```sql
+CREATE TABLE orders_demo (id integer PRIMARY KEY, status text NOT NULL);
+INSERT INTO orders_demo SELECT n, 'placed' FROM generate_series(1, 1000) AS n;
+
+SET lock_timeout = '2s';
+SET statement_timeout = '30s';
+ALTER TABLE orders_demo ADD COLUMN note text;
+SELECT column_name FROM information_schema.columns WHERE table_name = 'orders_demo' ORDER BY ordinal_position;
+```
+
+```text
+ column_name 
+-------------
+ id
+ status
+ note
+(3 rows)
+```
+
+Here nothing else holds a lock, so it succeeds at once. On a busy server, if the lock is not granted within two seconds, the statement fails with `canceling statement due to lock timeout`, nothing has changed, and the migration tool can wait and try again. Many teams set this in every migration by default.
+
+## Indexes without blocking writes
+
+`CREATE INDEX` blocks writes for as long as the build takes, which on a large table can be many minutes. **`CREATE INDEX CONCURRENTLY`** builds the index while writes continue:
+
+```sql
+CREATE INDEX CONCURRENTLY orders_demo_status_idx ON orders_demo (status);
+
+SELECT indexname, indexdef FROM pg_indexes WHERE tablename = 'orders_demo' ORDER BY indexname;
+```
+
+```text
+       indexname        |                                    indexdef                                    
+------------------------+--------------------------------------------------------------------------------
+ orders_demo_pkey       | CREATE UNIQUE INDEX orders_demo_pkey ON public.orders_demo USING btree (id)
+ orders_demo_status_idx | CREATE INDEX orders_demo_status_idx ON public.orders_demo USING btree (status)
+(2 rows)
+```
+
+It takes longer, cannot run inside a transaction block (so migration tools need it marked as non-transactional), and if it fails it leaves an **invalid** index that must be dropped and rebuilt. `DROP INDEX CONCURRENTLY` and `REINDEX CONCURRENTLY` exist too.
+
+## Constraints without long locks
+
+Adding a `CHECK` or foreign key normally scans the whole table while blocking writes. Split it: add the constraint **`NOT VALID`** (enforced for new and changed rows from now on, without checking old ones, which is instant), then **`VALIDATE`** it, which checks existing rows without blocking writes:
+
+```sql
+ALTER TABLE orders_demo ADD CONSTRAINT orders_demo_status_check
+  CHECK (status IN ('placed', 'paid', 'delivered', 'cancelled')) NOT VALID;
+
+INSERT INTO orders_demo VALUES (1001, 'lost');
+
+ALTER TABLE orders_demo VALIDATE CONSTRAINT orders_demo_status_check;
+
+SELECT conname, convalidated FROM pg_constraint WHERE conname = 'orders_demo_status_check';
+```
+
+```text
+ERROR:  new row for relation "orders_demo" violates check constraint "orders_demo_status_check"
+DETAIL:  Failing row contains (1001, lost, null).
+         conname          | convalidated 
+--------------------------+--------------
+ orders_demo_status_check | t
+(1 row)
+```
+
+The new invalid row was refused at once; validation then confirmed every existing row. To make a column `NOT NULL` on a large table, add a `CHECK (col IS NOT NULL) NOT VALID`, validate it, and then `SET NOT NULL`, which PostgreSQL then performs without scanning because the validated check proves it.
+
+## Expand and contract
+
+Changes that the running application version cannot survive must be split across releases. During a rolling deployment, old and new application versions run at the same time against one schema (<Ref to="m-delivery" />), so each step must work with both:
+
+**Renaming a column** (`note` to `customer_note`):
+
+1. **Expand**: add `customer_note`; release code that writes both columns and reads the old one.
+2. **Migrate**: backfill `customer_note` from `note` in batches.
+3. Release code that reads and writes only `customer_note`.
+4. **Contract**: drop `note`, once no running version uses it.
+
+**Adding a required column**: add it nullable (or with a constant default, which PostgreSQL stores without rewriting the table), release code that always sets it, backfill old rows in batches, then add `NOT NULL` with the `NOT VALID` trick.
+
+**Changing a column's type** (say, `integer` to `bigint` for an id that will overflow): add a new column, write both, backfill in batches, switch reads, then swap. A direct `ALTER COLUMN TYPE` rewrites the table under an exclusive lock.
+
+Backfills run in **batches** in separate transactions, so they never hold locks for long or build a huge transaction:
+
+```sql
+ALTER TABLE orders_demo ADD COLUMN customer_note text;
+UPDATE orders_demo SET note = 'deliver to back door' WHERE id % 100 = 0;
+
+UPDATE orders_demo SET customer_note = note WHERE id BETWEEN 1 AND 500 AND customer_note IS DISTINCT FROM note;
+UPDATE orders_demo SET customer_note = note WHERE id BETWEEN 501 AND 1001 AND customer_note IS DISTINCT FROM note;
+
+SELECT count(*) FILTER (WHERE note IS DISTINCT FROM customer_note) AS rows_left_to_copy,
+       count(*) FILTER (WHERE customer_note IS NOT NULL) AS notes_copied
+FROM orders_demo;
+```
+
+```text
+ rows_left_to_copy | notes_copied 
+-------------------+--------------
+                 0 |           10
+(1 row)
+```
+
+In a real migration the batch loop runs in a script or a procedure that commits between batches, with a pause to let replicas keep up.
+
+## Common mistakes
+
+- **DDL without `lock_timeout`** on busy tables.
+- **`CREATE INDEX` without `CONCURRENTLY`** on large production tables.
+- **Renames and type changes in one step**, breaking the running application version.
+- **Huge single-transaction backfills** that hold locks, bloat the table and lag replicas.
+- **Editing applied migrations**, so environments drift apart.
+- **Testing migrations only on tiny development databases**, where every operation is instant.
+
+## Practice
+
+**1. (warm-up)** Which of these can lock a large, busy table for a long time? (a) `ADD COLUMN note text`; (b) `CREATE INDEX ON orders (customer_id)`; (c) `ALTER COLUMN id TYPE bigint`; (d) `ADD CONSTRAINT ... FOREIGN KEY ... NOT VALID`.
+
+<Solution>
+
+(b) blocks writes for the whole index build; use `CONCURRENTLY`. (c) rewrites the table under an exclusive lock; use a new column and expand and contract. (a) and (d) are near-instant once their lock is granted, though like all DDL they can queue traffic while waiting for it, so set `lock_timeout`.
+
+</Solution>
+
+**2. (standard)** Plan the migrations and releases to make `orders.channel` required (`NOT NULL`) on a large table where some old rows have NULL, without downtime.
+
+<Solution>
+
+1. Release code that always sets `channel` on new orders.
+2. Backfill old rows in batches: `UPDATE orders SET channel = 'unknown' WHERE channel IS NULL AND id BETWEEN ...`, committing between batches.
+3. `ALTER TABLE orders ADD CONSTRAINT orders_channel_not_null CHECK (channel IS NOT NULL) NOT VALID;` (instant).
+4. `ALTER TABLE orders VALIDATE CONSTRAINT orders_channel_not_null;` (scans without blocking writes).
+5. `ALTER TABLE orders ALTER COLUMN channel SET NOT NULL;` (no scan needed, thanks to the validated check), then drop the now-redundant check constraint.
+
+Each DDL statement runs with `lock_timeout` set.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Change schemas only through **reviewed, versioned migrations**, never edited once applied.
+- Strong DDL locks block everything, and **waiting** for them queues all traffic: always set **`lock_timeout`** and retry.
+- Use **`CREATE INDEX CONCURRENTLY`**, and add constraints **`NOT VALID`** then **`VALIDATE`** them.
+- Split risky changes into **expand and contract** steps that both application versions survive, with **batched** backfills.
+
+## Go deeper
+
+- [PostgreSQL: explicit locking, table-level locks](https://www.postgresql.org/docs/current/explicit-locking.html#LOCKING-TABLES), the PostgreSQL project. Which statements take which locks.
+- [PostgreSQL: ALTER TABLE](https://www.postgresql.org/docs/current/sql-altertable.html), the PostgreSQL project. Including NOT VALID, VALIDATE and the notes on rewrites.
+- [Zero-downtime Postgres schema migrations need lock_timeout and retries](https://postgres.ai/blog/20210923-zero-downtime-postgres-schema-migrations-lock-timeout-and-retries), Nikolay Samokhvalov. Why waiting for locks causes outages, and the retry pattern.

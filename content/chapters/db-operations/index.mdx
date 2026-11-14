@@ -1,0 +1,192 @@
+---
+title: "Backups, replication and operations"
+summary: "Backups and point-in-time recovery, replication and failover, monitoring, VACUUM, upgrades and managed databases."
+prerequisites: [db-performance]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will know how PostgreSQL databases are kept alive in production: **backups** that can really be restored, **point-in-time recovery** from the write-ahead log, **replication** to standby servers and **failover** when the primary dies, what to **monitor** and alert on, keeping **VACUUM** healthy, **upgrading** between versions, and what **managed services** do for you. Even if a cloud provider runs your database, these are the questions you must be able to answer on the day something goes wrong.
+
+## Two numbers that drive everything
+
+Before choosing tools, agree with the business on two numbers for each database:
+
+- **RPO** (recovery point objective): how much data may be lost in a disaster. "At most five minutes of orders."
+- **RTO** (recovery time objective): how long the service may be down. "Back within an hour."
+
+Nightly backups alone mean an RPO of up to 24 hours. Continuous archiving gives minutes; synchronous replication gives zero. Each step costs more, so the numbers decide the design (<Ref to="m-reliability" />).
+
+## Logical backups: pg_dump
+
+**`pg_dump`** writes a consistent snapshot of one database as SQL or in a compressed custom format, while the database stays online; **`pg_restore`** loads it:
+
+```bash
+pg_dump --format=custom --file=bakery-2026-11-14.dump bakery
+pg_restore --list bakery-2026-11-14.dump | head
+createdb bakery_restore_test
+pg_restore --dbname=bakery_restore_test --jobs=4 bakery-2026-11-14.dump
+psql -d bakery_restore_test -c "SELECT count(*) FROM orders;"
+```
+
+Logical backups are portable across PostgreSQL versions and machines, and can restore a single table. But they are slow for large databases (a terabyte takes hours to dump and longer to restore), and they capture only the moment they ran.
+
+## Physical backups and point-in-time recovery
+
+PostgreSQL writes every change first to the **write-ahead log** (WAL), then to the data files; that is how it survives crashes. Archiving the WAL continuously, plus a periodic **base backup** (a copy of the data files, taken with `pg_basebackup` or a backup tool), allows **point-in-time recovery** (PITR): restore the base backup, then replay archived WAL up to any moment, such as one second before someone ran a bad `DELETE`.
+
+```bash
+# In postgresql.conf, ship every completed WAL segment to an archive (tools such as pgBackRest do this for you)
+archive_mode = on
+archive_command = 'pgbackrest --stanza=bakery archive-push %p'
+
+# To recover to just before a mistake, restore the latest base backup, then set:
+recovery_target_time = '2026-11-14 10:41:00+00'
+```
+
+In practice, use a dedicated tool such as **pgBackRest** or **Barman**, which handles base backups, WAL archiving, retention, compression, encryption and verification. Managed services do all of this automatically and let you restore to any second within the retention period with one command.
+
+## Testing restores
+
+**A backup that has never been restored is a hope, not a backup.** Restore regularly, automatically, to a separate server, and check the data: row counts, the newest rows, that the application can run against it. Measure how long the restore takes, which is your real RTO. Keep backups in a different account or region from the database (so one mistake or one compromised credential cannot delete both), encrypted, and with retention long enough to notice problems (corruption found three weeks later needs a backup older than three weeks).
+
+## Replication
+
+**Streaming replication** sends the primary's WAL to one or more **standby** servers, which replay it and stay a few milliseconds behind. Standbys can serve read-only queries (**read replicas**) and can be promoted to primary if the primary fails (<Ref to="m-replication-partitioning" />).
+
+- **Asynchronous** replication (the default): the primary commits without waiting for standbys. Fast, but a failover can lose the last few transactions.
+- **Synchronous** replication: commits wait until a standby confirms, so no committed data is lost, at the cost of latency, and of stalled writes if the synchronous standby is unavailable.
+
+Watch **replication lag**: read replicas serve slightly old data, so a user who just placed an order and is then routed to a replica may not see it. Read your own writes from the primary.
+
+```sql
+-- On a real server: on the primary, how far behind each standby is
+SELECT application_name, state, sync_state,
+       pg_size_pretty(pg_wal_lsn_diff(pg_current_wal_lsn(), replay_lsn)) AS replay_lag
+FROM pg_stat_replication;
+```
+
+**Logical replication** sends changes per table as rows rather than WAL, so it can replicate between major versions or to other systems, and is used for upgrades with near-zero downtime and for change data capture.
+
+## Failover
+
+When the primary fails, a standby must be promoted and applications pointed at it. Doing this by hand at 3 a.m. is slow and error-prone; tools such as **Patroni** (with a consensus store such as etcd), or a managed service's high-availability option, detect the failure, promote the most up-to-date standby, and prevent **split brain** (two primaries accepting writes at once) (<Ref to="m-consistency-consensus" />). Applications reconnect through a stable address (a DNS name, a proxy, or a connection string listing several hosts with `target_session_attrs=read-write`) and must retry transactions that failed during the switch.
+
+## Monitoring
+
+What to watch, and alert on:
+
+| Signal | Why | Where |
+|---|---|---|
+| Up and accepting connections | the basics | a health check that runs a query |
+| Connections in use and waiting | pool exhaustion, connection storms | `pg_stat_activity` |
+| Long-running and idle-in-transaction sessions | locks and bloat | `pg_stat_activity` (`xact_start`, `state`) |
+| Slow queries and top total time | performance regressions | `pg_stat_statements`, slow-query log |
+| Replication lag | stale reads, failover data loss | `pg_stat_replication` |
+| Disk space and growth | a full disk stops the database | the operating system or provider |
+| Transaction ID age | wraparound protection (below) | `age(datfrozenxid)` |
+| Backup and archive success | silent backup failures | the backup tool |
+| Cache hit ratio, locks, deadlocks, checkpoints | health and tuning | `pg_stat_database`, logs |
+
+This shows the sessions on the database and what each is doing:
+
+```sql
+SELECT state, count(*) AS sessions FROM pg_stat_activity GROUP BY state ORDER BY state;
+SELECT datname, age(datfrozenxid) AS xid_age FROM pg_database ORDER BY datname;
+```
+
+```text
+ state  | sessions 
+--------+----------
+ active |        1
+(1 row)
+
+  datname  | xid_age 
+-----------+---------
+ postgres  |       8
+ template0 |       8
+ template1 |       8
+(3 rows)
+```
+
+In the in-process database these examples run on, only the query's own session exists, and few transactions have run; on a real server you will also see the application pool's `idle` connections, background workers (with no state), and transaction ages in the millions. Export these to your metrics system (the Prometheus `postgres_exporter`, or the provider's monitoring) and alert on trends, not just thresholds (<Ref to="m-observability" />).
+
+## VACUUM in production
+
+<Ref to="db-performance" /> showed why VACUUM is needed. In production, also know about **transaction ID wraparound**: PostgreSQL numbers transactions with 32-bit counters, and VACUUM must regularly "freeze" old rows so that the counter can wrap round safely. If freezing falls too far behind (because autovacuum is disabled, too slow, or blocked by a transaction left open for days), PostgreSQL eventually refuses new writes to protect the data. Keep autovacuum on, give it enough resources on large tables, and alert when `age(datfrozenxid)` passes a few hundred million.
+
+## Upgrades
+
+- **Minor releases** (18.0 to 18.1) fix bugs and security problems; install them promptly. They need only a restart.
+- **Major releases** (17 to 18) come yearly, each supported for five years. Upgrade with **`pg_upgrade`** (fast, minutes of downtime; it reuses the data files), with logical replication to a new server (near-zero downtime), or with dump and restore (simplest, slowest). Test the application against the new version first, and read the release notes' incompatibilities.
+
+## Managed databases
+
+Amazon RDS and Aurora, Azure Database for PostgreSQL, Google Cloud SQL and AlloyDB, and providers such as Neon, Supabase and Crunchy Bridge run PostgreSQL for you: backups and PITR, replicas and failover, patching, monitoring and encryption. They do not do your schema design, indexes, query tuning, capacity planning, access control, or restore testing. For most teams, managed is the right choice; know its limits (extensions available, superuser access, failover times, cost of replicas and storage).
+
+## Common mistakes
+
+- **Untested backups**, or backups stored next to the database with the same credentials.
+- **Only nightly dumps** when the business expects minutes of data loss at most.
+- **Reading from replicas** in flows that need the user's own latest writes.
+- **No alerting on disk, replication lag or transaction ID age.**
+- **Disabling autovacuum** to "improve performance".
+- **Staying on an unsupported major version** for years.
+
+## Practice
+
+**1. (warm-up)** The business says: "we can lose at most one minute of orders, and must be back within 30 minutes." Is a nightly `pg_dump` enough? What would you use?
+
+<Solution>
+
+No: a nightly dump can lose up to a day of orders, and restoring a large dump can take hours. Use continuous WAL archiving with base backups (pgBackRest, or a managed service's PITR) for an RPO of about a minute, plus a streaming-replication standby with automated failover (Patroni or the provider's high-availability option) to come back within minutes. Test both regularly.
+
+</Solution>
+
+**2. (standard)** At 10:42 a developer ran `DELETE FROM orders` without a `WHERE` on production. Describe how to recover with point-in-time recovery, and how to avoid losing the orders placed since.
+
+<Solution>
+
+Restore the latest base backup to a **new** server and replay the WAL up to `recovery_target_time = '10:41:59'` (one moment before the delete). Do not overwrite production: copy the deleted rows from the recovered server back into production (for example with `pg_dump --table=orders --data-only` and `pg_restore`, or `INSERT ... SELECT` over a foreign data wrapper), which keeps the orders placed after 10:42. Then add safeguards: least-privilege roles without `DELETE` on orders, `BEGIN` before manual changes, and reviews for production access (<Ref to="db-security" />).
+
+</Solution>
+
+**3. (standard)** Show the sessions on your database grouped by state, and explain what an `idle in transaction` session is and why it matters.
+
+<Solution>
+
+```sql
+SELECT coalesce(state, 'background') AS state, count(*) AS sessions
+FROM pg_stat_activity
+GROUP BY state
+ORDER BY state;
+```
+
+```text
+ state  | sessions 
+--------+----------
+ active |        1
+(1 row)
+```
+
+An `idle in transaction` session has started a transaction and is not running anything: usually an application that forgot to commit, or is waiting for something slow while holding a transaction open. It keeps its locks and prevents VACUUM from removing row versions it might see, causing blocked queries and bloat. Set `idle_in_transaction_session_timeout` and alert on old `xact_start` values.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Agree **RPO** and **RTO** first; they decide the design.
+- **`pg_dump`** gives portable logical backups; **base backups plus WAL archiving** give **point-in-time recovery**; use pgBackRest, Barman or a managed service.
+- **Test restores** regularly, and keep backups encrypted, separate and long-lived enough.
+- **Streaming replication** gives standbys and read replicas (asynchronous or synchronous); **Patroni** or managed HA handle **failover** without split brain.
+- **Monitor** connections, long transactions, slow queries, replication lag, disk, transaction ID age and backups; keep **autovacuum** healthy.
+- Apply **minor releases** promptly; plan **major upgrades** with `pg_upgrade` or logical replication. Managed services run the machinery, not your design.
+
+## Go deeper
+
+- [PostgreSQL: backup and restore](https://www.postgresql.org/docs/current/backup.html), the PostgreSQL project. SQL dumps, file-level backups and continuous archiving with PITR.
+- [PostgreSQL: high availability, load balancing and replication](https://www.postgresql.org/docs/current/high-availability.html), the PostgreSQL project. Standbys, streaming and synchronous replication.
+- [pgBackRest user guide](https://pgbackrest.org/user-guide.html), the pgBackRest project. Reliable backup and restore for PostgreSQL.
+- [Patroni documentation](https://patroni.readthedocs.io/), the Patroni project. Automated high availability for PostgreSQL.

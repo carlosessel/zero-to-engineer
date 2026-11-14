@@ -1,0 +1,36 @@
+- question: Which type should hold money?
+  options:
+  - Integer minor units such as pence, or numeric
+  - double precision
+  answer: 0
+  explanation: Floating point cannot store most decimal fractions exactly.
+- question: What does timestamptz store?
+  options:
+  - An exact instant, shown in the session's time zone
+  - A wall-clock time plus the name of a zone
+  answer: 0
+  explanation: It converts input to UTC.
+- question: Why group a shop's daily report by (placed_at AT TIME ZONE 'Europe/London')::date?
+  options:
+  - So evening orders count on the local day, not the UTC day
+  - Because ::date does not work on timestamptz
+  answer: 0
+  explanation: The date depends on the time zone.
+- question: What does CASE return when no WHEN matches and there is no ELSE?
+  options:
+  - 'NULL'
+  - An error
+  answer: 0
+  explanation: Add an ELSE when a value is needed.
+- question: How do you avoid division by zero in x / y?
+  options:
+  - x / nullif(y, 0), which gives NULL instead of an error
+  - x / coalesce(y, 0)
+  answer: 0
+  explanation: nullif turns a zero into NULL.
+- question: What happens when an integer column would exceed its maximum?
+  options:
+  - 'An error: integer out of range'
+  - It wraps round to a negative number
+  answer: 0
+  explanation: PostgreSQL refuses rather than corrupting the value.

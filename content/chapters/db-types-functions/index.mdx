@@ -1,0 +1,301 @@
+---
+title: "Types, functions and expressions"
+summary: "Text, numbers, money, dates, times and time zones, CASE, COALESCE and casts."
+prerequisites: [db-modifying-data]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will choose the right **data type** for each column and work with values fluently: numbers and exact money, text and its functions, dates, times, intervals and **time zones** (the source of many real bugs), conditional expressions with `CASE`, and conversions with casts. The functions here are PostgreSQL's; other databases have the same ideas with different names (<Ref to="db-other-engines" />).
+
+## Numbers
+
+| Type | Holds | Use for |
+|---|---|---|
+| `integer` (`int4`) | whole numbers up to about ±2.1 billion | counts, quantities, ids, money in pence |
+| `bigint` (`int8`) | whole numbers up to about ±9.2 × 10¹⁸ | ids of very large tables, big totals |
+| `numeric(p, s)` | exact decimals, `p` digits with `s` after the point | money, rates, anything that must add up exactly |
+| `double precision` | approximate binary fractions | measurements, science, statistics |
+
+```sql
+SELECT 7 / 2 AS int_division,
+       7 % 2 AS remainder,
+       7 / 2.0 AS decimal_division,
+       0.1::double precision + 0.2::double precision AS float_sum,
+       0.1::numeric + 0.2::numeric AS numeric_sum,
+       round(2.675, 2) AS rounded;
+
+SELECT 2147483647 + 1 AS overflow;
+```
+
+```text
+ int_division | remainder |  decimal_division  |      float_sum      | numeric_sum | rounded 
+--------------+-----------+--------------------+---------------------+-------------+---------
+            3 |         1 | 3.5000000000000000 | 0.30000000000000004 |         0.3 |    2.68
+(1 row)
+
+ERROR:  integer out of range
+```
+
+Dividing integers drops the fraction; `double precision` cannot store 0.1 exactly, so sums drift; `numeric` is exact. An `integer` that would go past its maximum is an **error**, not a silent wrap-around. Store money as integers in the smallest unit (pence, cents), or as `numeric(12, 2)`; never as floating point. PostgreSQL's `money` type exists but ties values to a server setting, so most teams avoid it.
+
+## Text
+
+Use **`text`** for strings in PostgreSQL; `varchar(n)` is the same type with a length check, which you can also write as a `CHECK` constraint. (`char(n)` pads with spaces and is best avoided.)
+
+```sql
+SELECT name,
+       length(name) AS length,
+       lower(name) AS lower,
+       left(sku, 3) AS prefix,
+       split_part(sku, '-', 2) AS suffix,
+       replace(name, ' ', '_') AS slug,
+       position('o' IN name) AS first_o,
+       format('%s costs £%s', name, to_char(price_pence / 100.0, 'FM990.00')) AS sentence
+FROM products
+WHERE category = 'pastry'
+ORDER BY name;
+```
+
+```text
+       name       | length |      lower       | prefix | suffix |       slug       | first_o |           sentence           
+------------------+--------+------------------+--------+--------+------------------+---------+------------------------------
+ Almond croissant |     16 | almond croissant | ALM    | 100    | Almond_croissant |       4 | Almond croissant costs £3.40
+ Cinnamon bun     |     12 | cinnamon bun     | CIN    | 120    | Cinnamon_bun     |       7 | Cinnamon bun costs £3.10
+ Croissant        |      9 | croissant        | CRO    | 090    | Croissant        |       3 | Croissant costs £2.75
+(3 rows)
+```
+
+Other everyday functions: `trim`, `upper`, `substring`, `concat_ws` (join with a separator, skipping NULLs), `regexp_replace` and `regexp_match` for regular expressions, and `initcap`. `||` returns NULL if either side is NULL; `concat` treats NULL as empty.
+
+## Dates, times and time zones
+
+| Type | Holds | Example |
+|---|---|---|
+| `date` | a calendar date | `2026-11-14` |
+| `time` | a time of day | `08:30:00` |
+| `timestamp` | date and time, **without** a time zone | `2026-11-14 08:30:00` |
+| `timestamptz` | an exact **instant**, shown in the session's time zone | `2026-11-14 08:30:00+00` |
+| `interval` | a length of time | `3 days 02:00:00` |
+
+**Use `timestamptz` for moments things happened** (orders placed, users signed up). Despite its name it does not store a zone: it stores an exact instant, converts input to UTC, and shows it in the session's `TimeZone`. Plain `timestamp` is just numbers on a wall clock, with no idea where; mixing them is a classic source of off-by-an-hour bugs around daylight saving.
+
+```sql
+SELECT placed_at,
+       placed_at AT TIME ZONE 'Europe/London' AS london_wall_clock,
+       placed_at AT TIME ZONE 'America/New_York' AS new_york_wall_clock,
+       placed_at::date AS utc_date,
+       extract(dow FROM placed_at) AS day_of_week,
+       to_char(placed_at, 'Dy DD Mon YYYY HH24:MI') AS formatted
+FROM orders
+WHERE id IN (1, 15);
+```
+
+```text
+       placed_at        |  london_wall_clock  | new_york_wall_clock |  utc_date  | day_of_week |       formatted       
+------------------------+---------------------+---------------------+------------+-------------+-----------------------
+ 2026-10-01 08:12:00+00 | 2026-10-01 09:12:00 | 2026-10-01 04:12:00 | 2026-10-01 |           4 | Thu 01 Oct 2026 08:12
+ 2026-11-03 17:25:00+00 | 2026-11-03 17:25:00 | 2026-11-03 12:25:00 | 2026-11-03 |           2 | Tue 03 Nov 2026 17:25
+(2 rows)
+```
+
+`AT TIME ZONE` turns an instant into the wall-clock time in a named zone. Order 1 was placed on 1 October, when London was on summer time (UTC+1); order 15 on 3 November, after the clocks went back (UTC+0): the database knows the rules for every zone. `extract(dow ...)` gives the day of the week, 0 for Sunday. **"Which day was this order?" depends on the time zone**: a shop's daily report must group by the local date, `(placed_at AT TIME ZONE 'Europe/London')::date`, or late-evening orders land on the wrong day.
+
+Date arithmetic uses intervals:
+
+```sql
+SELECT date '2026-11-14' + 30 AS plus_30_days,
+       date '2026-01-31' + interval '1 month' AS month_after_jan_31,
+       date '2026-11-14' - date '2026-01-14' AS days_between,
+       age(date '2026-11-14', date '2023-01-14') AS age,
+       date_trunc('month', timestamptz '2026-11-14 15:20:00+00') AS month_start,
+       now() > timestamptz '2026-01-01 00:00:00+00' AS after_new_year;
+```
+
+```text
+ plus_30_days | month_after_jan_31  | days_between |       age       |      month_start       | after_new_year 
+--------------+---------------------+--------------+-----------------+------------------------+----------------
+ 2026-12-14   | 2026-02-28 00:00:00 |          304 | 3 years 10 mons | 2026-11-01 00:00:00+00 | t
+(1 row)
+```
+
+Adding a month to 31 January gives the last day of February, not 3 March. `now()` returns the start time of the current transaction (so it does not change within one), `clock_timestamp()` the actual current time, and `current_date` today's date in the session's zone. For "orders in the last 7 days", write `placed_at >= now() - interval '7 days'`.
+
+## CASE and friends
+
+**`CASE`** is SQL's if-then-else, usable anywhere a value is:
+
+```sql
+SELECT name, price_pence,
+       CASE
+         WHEN price_pence < 300 THEN 'budget'
+         WHEN price_pence < 1000 THEN 'standard'
+         ELSE 'treat'
+       END AS price_band,
+       CASE category WHEN 'bread' THEN 'baked daily' ELSE 'baked weekly' END AS baking
+FROM products
+WHERE id <= 8
+ORDER BY price_pence;
+```
+
+```text
+       name       | price_pence | price_band |    baking    
+------------------+-------------+------------+--------------
+ Bagel            |         120 | budget     | baked daily
+ Croissant        |         275 | budget     | baked weekly
+ Cinnamon bun     |         310 | standard   | baked weekly
+ Almond croissant |         340 | standard   | baked weekly
+ Rye loaf         |         450 | standard   | baked daily
+ Sourdough        |         520 | standard   | baked daily
+ Lemon drizzle    |        1950 | treat      | baked weekly
+ Chocolate cake   |        2400 | treat      | baked weekly
+(8 rows)
+```
+
+Conditions are tested in order, and the first true one wins; without an `ELSE`, unmatched rows get NULL. Related functions: **`coalesce(a, b)`** (the first non-NULL), **`nullif(a, b)`** (NULL if a equals b, handy to avoid dividing by zero: `x / nullif(y, 0)`), and **`greatest`** and **`least`**.
+
+## Casts
+
+A **cast** converts a value to another type, with `CAST(x AS type)` (standard) or `x::type` (PostgreSQL):
+
+```sql
+SELECT '42'::integer + 1 AS number,
+       '2026-11-14'::date + 1 AS date,
+       '3 days'::interval * 2 AS interval,
+       '0.1'::numeric * 3 AS exact,
+       round(450::numeric / 3, 2) AS pounds,
+       'yes'::boolean AS flag;
+```
+
+```text
+ number |    date    | interval | exact | pounds | flag 
+--------+------------+----------+-------+--------+------
+     43 | 2026-11-15 | 6 days   |   0.3 | 150.00 | t
+(1 row)
+```
+
+A value that cannot be converted is an error (`'ten'::integer`), which is better than silently guessing. Compare values of the same type: comparing a text column with a number, or a `date` with a `timestamptz`, forces conversions that can be wrong and can stop indexes being used (<Ref to="db-indexes" />).
+
+## Choosing types: a checklist
+
+- Ids: `integer` or `bigint` generated identity columns; `uuid` when ids are made outside the database or must not be guessable.
+- Money: integer minor units or `numeric`. Never `double precision`.
+- Moments: `timestamptz`. Birthdays and other calendar dates: `date`.
+- Text: `text`, with a `CHECK` on length or format where it matters.
+- Yes/no: `boolean`. A fixed set of values: `text` with a `CHECK`, a lookup table, or an `enum` type.
+- Structured but variable data: `jsonb` (<Ref to="db-json-search" />).
+
+## Common mistakes
+
+- **Floating point for money.**
+- **`timestamp` without time zone** for moments, and grouping by UTC dates for local reports.
+- **Integer division** in averages and percentages.
+- **`||` with a NULL**, which makes the whole result NULL.
+- **Comparing different types** and relying on automatic conversion.
+- **`BETWEEN` on timestamps** with an end date, missing the last day's afternoon; use half-open ranges.
+
+## Practice
+
+**1. (warm-up)** Show each cake's price formatted as pounds, like `£24.00`.
+
+<Solution>
+
+```sql
+SELECT name, to_char(price_pence / 100.0, 'FM£999990.00') AS price
+FROM products
+WHERE category = 'cake'
+ORDER BY price_pence DESC;
+```
+
+```text
+      name      | price  
+----------------+--------
+ Chocolate cake | £24.00
+ Lemon drizzle  | £19.50
+(2 rows)
+```
+
+`FM` removes the padding that `to_char` would otherwise add.
+
+</Solution>
+
+**2. (standard)** Count orders by the hour of the day they were placed, in London time, for hours that have orders.
+
+<Solution>
+
+```sql
+SELECT extract(hour FROM placed_at AT TIME ZONE 'Europe/London') AS london_hour,
+       count(*) AS orders
+FROM orders
+GROUP BY london_hour
+ORDER BY london_hour;
+```
+
+```text
+ london_hour | orders 
+-------------+--------
+           7 |      1
+           8 |      4
+           9 |      3
+          10 |      3
+          11 |      1
+          12 |      2
+          13 |      1
+          14 |      1
+          16 |      1
+          17 |      2
+          18 |      1
+(11 rows)
+```
+
+</Solution>
+
+**3. (standard)** For each customer, show how many whole days they had been a customer on 14 November 2026, and label them `new` (under a year), `regular` (one to two years) or `loyal`.
+
+<Solution>
+
+```sql
+SELECT name,
+       date '2026-11-14' - joined_on AS days,
+       CASE
+         WHEN date '2026-11-14' - joined_on < 365 THEN 'new'
+         WHEN date '2026-11-14' - joined_on < 730 THEN 'regular'
+         ELSE 'loyal'
+       END AS label
+FROM customers
+ORDER BY days DESC;
+```
+
+```text
+  name  | days |  label  
+--------+------+---------
+ Ama    | 1400 | loyal
+ Kofi   | 1292 | loyal
+ Esi    |  998 | loyal
+ Yaa    |  858 | loyal
+ Kwame  |  680 | regular
+ Akosua |  606 | regular
+ Kobina |  441 | regular
+ Afua   |  276 | new
+ Kweku  |  166 | new
+(9 rows)
+```
+
+Subtracting two dates gives a whole number of days.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Numbers: `integer`, `bigint`, exact `numeric`, approximate `double precision`. Money is integer minor units or `numeric`.
+- Text: use `text`, with functions such as `length`, `lower`, `split_part`, `replace`, `format` and regular expressions.
+- Time: `date`, `timestamptz` for instants, `interval` for durations. Convert to local time with `AT TIME ZONE` before taking dates.
+- **`CASE`**, `coalesce`, `nullif`, `greatest` and `least` compute conditional values; **casts** (`::type`) convert types and fail loudly.
+
+## Go deeper
+
+- [PostgreSQL: data types](https://www.postgresql.org/docs/current/datatype.html), the PostgreSQL project. Every built-in type.
+- [PostgreSQL: date/time functions and operators](https://www.postgresql.org/docs/current/functions-datetime.html), the PostgreSQL project. Including AT TIME ZONE and date_trunc.
+- [Don't do this](https://wiki.postgresql.org/wiki/Don%27t_Do_This), the PostgreSQL wiki. Common mistakes with types and features, from the community.

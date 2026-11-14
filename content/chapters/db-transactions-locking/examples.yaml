@@ -1,0 +1,73 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: sql
+  check: postgres
+  output: "ERROR:  new row for relation \"stock\" violates check constraint \"stock_quantity_check\"\nDETAIL:  Failing row contains (CRO-090, -1).\nERROR:  current transaction is aborted, commands ignored until end of transaction block\n   sku   | quantity \n---------+----------\n CRO-090 |        2\n RYE-400 |        5\n(2 rows)\n"
+- block: 2
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 3
+  lang: sql
+  check: postgres
+  output: " quantity \n----------\n        3\n(1 row)\n\n quantity \n----------\n        1\n(1 row)\n\n quantity \n----------\n(0 rows)\n"
+- block: 4
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 5
+  lang: sql
+  check: postgres
+  output: "   sku   | quantity \n---------+----------\n CRO-090 |        2\n(1 row)\n\n   sku   | quantity \n---------+----------\n CRO-090 |        1\n RYE-400 |        1\n(2 rows)\n"
+- block: 6
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 7
+  lang: sql
+  check: postgres
+  output: " id |  kind   |     payload      \n----+---------+------------------\n  1 | receipt | {\"order_id\": 19}\n(1 row)\n\n id |  kind   | status  \n----+---------+---------\n  1 | receipt | running\n  2 | receipt | ready\n  3 | report  | ready\n(3 rows)\n"
+- block: 8
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 9
+  lang: sql
+  check: postgres
+  output: "      level      \n-----------------\n repeatable read\n(1 row)\n\n total_stock \n-------------\n           2\n(1 row)\n"
+- block: 10
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 11
+  lang: sql
+  check: not-run
+  reason: It inspects other sessions, and the in-process PostgreSQL used for the checks has only one; the functions and columns are from the PostgreSQL documentation on pg_stat_activity and pg_blocking_pids.
+- block: 12
+  lang: sql
+  check: postgres
+  output: " got_lock \n----------\n t\n(1 row)\n\n got_it_again \n--------------\n t\n(1 row)\n\n released | released_again \n----------+----------------\n t        | t\n(1 row)\n"
+- block: 13
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 14
+  lang: sql
+  check: postgres
+  output: "   code    \n-----------\n GIFT-7K2Q\n(1 row)\n\n code \n------\n(0 rows)\n"
+- block: 15
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 16
+  lang: sql
+  check: not-run
+  reason: Application code with :from_sku and :to_sku placeholders that only deadlocks when run by two sessions at once; the fixed version below it is run.
+- block: 17
+  lang: sql
+  check: postgres
+  output: "   sku   \n---------\n CRO-090\n RYE-400\n(2 rows)\n\n   sku   | quantity \n---------+----------\n CRO-090 |        2\n RYE-400 |        0\n(2 rows)\n"
+- block: 18
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.

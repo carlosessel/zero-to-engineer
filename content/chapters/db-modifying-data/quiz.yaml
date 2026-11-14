@@ -1,0 +1,30 @@
+- question: What happens to UPDATE products SET price_pence = 0 with no WHERE?
+  options:
+  - Every row is changed (or the statement fails if a constraint forbids it)
+  - Nothing; WHERE is required
+  answer: 0
+  explanation: Always check the WHERE with a SELECT first.
+- question: What does RETURNING do?
+  options:
+  - Returns the rows an INSERT, UPDATE or DELETE changed
+  - Undoes a change
+  answer: 0
+  explanation: Useful for generated ids.
+- question: Why use INSERT ... ON CONFLICT instead of checking and then inserting?
+  options:
+  - It is atomic, so concurrent requests cannot both insert
+  - It is shorter to type
+  answer: 0
+  explanation: Check-then-insert races.
+- question: In ON CONFLICT DO UPDATE, what is excluded?
+  options:
+  - The row that was proposed for insertion
+  - The existing row
+  answer: 0
+  explanation: The existing row is referred to by the table's name.
+- question: How do you undo a change made inside BEGIN?
+  options:
+  - ROLLBACK
+  - UNDO
+  answer: 0
+  explanation: COMMIT keeps it instead.

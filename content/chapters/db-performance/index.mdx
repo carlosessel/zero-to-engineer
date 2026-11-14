@@ -1,0 +1,260 @@
+---
+title: "A performance workflow"
+summary: "Finding slow queries, pagination, batching, N+1, bloat and VACUUM, and connection pooling."
+prerequisites: [db-query-plans]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will have a repeatable way to make a database fast: **find** the queries that matter with `pg_stat_statements`, **fix** them with the techniques that cover most real problems (better indexes, **keyset pagination**, **batching**, fewer round trips, smarter queries), keep tables healthy with **VACUUM**, and protect the server with **connection pooling** and **timeouts**. Performance work starts with measuring, never with guessing.
+
+## Find what matters
+
+On a busy database, a query that takes 2 ms but runs a million times an hour matters more than a 2-second report that runs once a day. The **`pg_stat_statements`** extension records, for every distinct query shape, how many times it ran and the total and average time:
+
+```sql
+-- Requires the pg_stat_statements extension (enabled by default on most managed services)
+SELECT left(query, 60) AS query,
+       calls,
+       round(total_exec_time) AS total_ms,
+       round(mean_exec_time, 2) AS mean_ms,
+       rows
+FROM pg_stat_statements
+ORDER BY total_exec_time DESC
+LIMIT 10;
+```
+
+Sort by **total time** to find what the database spends its time on; by **mean time** to find individually slow queries; by **calls** to find chatty application code. Most managed PostgreSQL services enable it by default. Also turn on **`log_min_duration_statement`** (for example, `500ms`) to log every slow query with its parameters, and the **`auto_explain`** extension to log the plans of slow queries automatically.
+
+Then, for each important query, follow the method from <Ref to="db-query-plans" />: `EXPLAIN (ANALYZE, BUFFERS)`, find where the time goes, compare estimates with reality, fix, measure again.
+
+## Test data for this chapter
+
+```sql
+CREATE TABLE events (
+  id          bigint PRIMARY KEY,
+  customer_id integer NOT NULL,
+  kind        text NOT NULL,
+  created_at  timestamptz NOT NULL
+);
+
+INSERT INTO events
+SELECT n, n % 2000 + 1, (ARRAY['view', 'basket', 'order'])[n % 3 + 1],
+       timestamptz '2026-01-01 00:00+00' + n * interval '1 minute'
+FROM generate_series(1, 30000) AS n;
+
+CREATE INDEX events_created_at_id_idx ON events (created_at, id);
+ANALYZE events;
+```
+
+## Pagination: OFFSET versus keyset
+
+`LIMIT 20 OFFSET 20000` must produce and throw away 20,000 rows to return 20, so deep pages get slower and slower:
+
+```sql
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT id, created_at FROM events ORDER BY created_at, id LIMIT 20 OFFSET 20000;
+```
+
+```text
+                                          QUERY PLAN                                           
+-----------------------------------------------------------------------------------------------
+ Limit (actual rows=20.00 loops=1)
+   ->  Index Only Scan using events_created_at_id_idx on events (actual rows=20020.00 loops=1)
+         Heap Fetches: 20020
+         Index Searches: 1
+(4 rows)
+```
+
+**Keyset pagination** (also called the seek method) remembers where the previous page ended and asks for rows after it. With an index on the sort columns, every page costs the same, however deep:
+
+```sql
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT id, created_at FROM events
+WHERE (created_at, id) > ('2026-01-14 21:20:00+00', 20000)
+ORDER BY created_at, id
+LIMIT 20;
+```
+
+```text
+                                                 QUERY PLAN                                                 
+------------------------------------------------------------------------------------------------------------
+ Limit (actual rows=20.00 loops=1)
+   ->  Index Only Scan using events_created_at_id_idx on events (actual rows=20.00 loops=1)
+         Index Cond: (ROW(created_at, id) > ROW('2026-01-14 21:20:00+00'::timestamp with time zone, 20000))
+         Heap Fetches: 20
+         Index Searches: 1
+(5 rows)
+```
+
+The **row comparison** `(created_at, id) > (...)` handles ties in `created_at` correctly, and matches the index `(created_at, id)`. The index scan read 20 rows instead of 20,020. The trade-off: keyset pages are "next" and "previous", not "jump to page 1,001", which is what infinite scroll and API cursors need anyway (<Ref to="m-api-design" />).
+
+## Batching and round trips
+
+Every statement sent from an application costs a **round trip**: on a cloud network, often 0.5 to 2 ms before the database does any work. One thousand single-row inserts cost a thousand round trips; one insert of a thousand rows costs one:
+
+```sql
+CREATE TABLE import_test (id integer PRIMARY KEY, value text);
+
+INSERT INTO import_test (id, value)
+SELECT n, 'row ' || n FROM generate_series(1, 1000) AS n;
+
+UPDATE import_test AS t
+SET value = v.value
+FROM (VALUES (1, 'first'), (2, 'second'), (3, 'third')) AS v (id, value)
+WHERE t.id = v.id;
+
+SELECT * FROM import_test WHERE id <= 4 ORDER BY id;
+```
+
+```text
+ id | value  
+----+--------
+  1 | first
+  2 | second
+  3 | third
+  4 | row 4
+(4 rows)
+```
+
+- Insert many rows per statement (multi-row `VALUES`, or arrays with `unnest`), or use **`COPY`** for bulk loads, which is the fastest way to load data.
+- Update many rows in one statement with `UPDATE ... FROM (VALUES ...)`.
+- Fix the **N+1 query** pattern, where code loads a list and then queries once per item: load related data with a join or one `WHERE id = ANY (...)` query (<Ref to="be-data-efcore" /> and its sister chapters show it in each ORM).
+- Process large changes in chunks (say, 5,000 rows per transaction) so one statement does not lock rows or build up work for minutes.
+
+## Query rewrites that matter
+
+- **Select only the columns you need**: fewer bytes, and index-only scans become possible.
+- **Filter early and in SQL**, not after loading rows into the application.
+- **`EXISTS` instead of `count(*) > 0`** when you only need to know whether a row exists; it stops at the first match.
+- **Avoid functions on indexed columns** in `WHERE`; compare the raw column with a range instead (<Ref to="db-indexes" />).
+- **`UNION ALL`, not `UNION`**, when duplicates are impossible.
+- **Precompute** expensive aggregates that are read constantly: summary tables, materialised views (<Ref to="db-views-functions" />), or caches in front of the database (<Ref to="m-caching" />).
+
+## VACUUM and bloat
+
+PostgreSQL never overwrites a row in place. An `UPDATE` writes a new version of the row and marks the old one dead; a `DELETE` marks the row dead. This is how **MVCC** lets readers see a consistent snapshot without locks (<Ref to="m-relational" />). Dead row versions must be cleaned up later by **`VACUUM`**, which makes their space reusable:
+
+```sql
+SELECT pg_size_pretty(pg_relation_size('import_test')) AS before_update;
+
+UPDATE import_test SET value = value || '!';
+UPDATE import_test SET value = value || '!';
+
+SELECT pg_size_pretty(pg_relation_size('import_test')) AS after_two_updates;
+
+VACUUM import_test;
+UPDATE import_test SET value = value || '!';
+
+SELECT pg_size_pretty(pg_relation_size('import_test')) AS after_vacuum_and_update;
+```
+
+```text
+ before_update 
+---------------
+ 48 kB
+(1 row)
+
+ after_two_updates 
+-------------------
+ 128 kB
+(1 row)
+
+ after_vacuum_and_update 
+-------------------------
+ 128 kB
+(1 row)
+```
+
+Two updates of every row nearly tripled the table's size with dead versions. After `VACUUM`, the next update reused the freed space instead of growing the table. Space that stays allocated but mostly empty is **bloat**: it makes scans read more pages and indexes bigger.
+
+**Autovacuum** runs `VACUUM` (and `ANALYZE`) automatically when enough rows have changed. Keep it on, and on busy tables tune it to run more often rather than less. Things that stop VACUUM cleaning up, and so cause bloat, are long-running transactions and abandoned sessions left "idle in transaction": the database must keep every row version they might still see. Monitor for them (<Ref to="db-operations" />). `VACUUM FULL` rewrites a table compactly but locks it completely; tools such as `pg_repack` do it online.
+
+## Connections and pooling
+
+Each PostgreSQL connection is a separate server process using several megabytes of memory, and performance drops when hundreds of connections are active at once. Applications should use a **connection pool** (built into most drivers and ORMs) with a modest size, and many deployments add **PgBouncer** in front of the database to share a small number of server connections among thousands of clients. A useful starting point for the total number of busy connections is a small multiple of the server's CPU cores, not hundreds.
+
+## Timeouts
+
+Protect the database from runaway queries and stuck transactions with settings per role or per application:
+
+```sql
+-- On a real server, as an administrator
+ALTER ROLE bakery_app SET statement_timeout = '5s';
+ALTER ROLE bakery_app SET idle_in_transaction_session_timeout = '30s';
+ALTER ROLE bakery_app SET lock_timeout = '2s';
+```
+
+A request that would take a minute fails after five seconds, freeing its connection; a forgotten open transaction is ended before it bloats the database; a statement waiting for a lock gives up rather than piling up behind it.
+
+## Common mistakes
+
+- **Tuning without measuring**, or measuring on tiny development data.
+- **Deep `OFFSET` pagination** on large tables.
+- **N+1 queries** and row-by-row loops from application code.
+- **Turning off autovacuum**, or long-running and idle-in-transaction sessions that stop it working.
+- **Hundreds of direct connections** from many application instances.
+- **No timeouts**, so one bad query or stuck client can exhaust the server.
+
+## Practice
+
+**1. (warm-up)** An API lists events with `?page=500&size=20` using `OFFSET`. Why does it get slower for later pages, and what would you change?
+
+<Solution>
+
+`OFFSET 9980` makes the database read and discard 9,980 rows before returning 20, so each page costs more than the last. Change to keyset pagination: return a cursor with the last row's `(created_at, id)`, and fetch the next page with `WHERE (created_at, id) > (cursor) ORDER BY created_at, id LIMIT 20`, served by an index on `(created_at, id)`.
+
+</Solution>
+
+**2. (standard)** Using keyset pagination, fetch the first three `order` events after `2026-01-10 00:00+00`, then the next three after the last row of that page.
+
+<Solution>
+
+```sql
+SELECT id, created_at FROM events
+WHERE kind = 'order' AND (created_at, id) > ('2026-01-10 00:00+00', 0)
+ORDER BY created_at, id
+LIMIT 3;
+
+SELECT id, created_at FROM events
+WHERE kind = 'order' AND (created_at, id) > ('2026-01-10 00:08:00+00', 12968)
+ORDER BY created_at, id
+LIMIT 3;
+```
+
+```text
+  id   |       created_at       
+-------+------------------------
+ 12962 | 2026-01-10 00:02:00+00
+ 12965 | 2026-01-10 00:05:00+00
+ 12968 | 2026-01-10 00:08:00+00
+(3 rows)
+
+  id   |       created_at       
+-------+------------------------
+ 12971 | 2026-01-10 00:11:00+00
+ 12974 | 2026-01-10 00:14:00+00
+ 12977 | 2026-01-10 00:17:00+00
+(3 rows)
+```
+
+The second query starts after the first page's last row; the application passes those values as the cursor.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Measure first**: `pg_stat_statements` for where time goes overall, slow-query logs and `auto_explain` for individual queries, then `EXPLAIN (ANALYZE, BUFFERS)`.
+- Use **keyset pagination** for deep pages; batch inserts and updates; remove **N+1** queries; process big changes in chunks.
+- Select less, filter in SQL, use `EXISTS`, keep indexed columns unwrapped, and precompute hot aggregates.
+- **MVCC** leaves dead row versions; **VACUUM** (autovacuum) reclaims them; long transactions cause **bloat**.
+- Use **connection pools** and PgBouncer, and set **statement, idle-in-transaction and lock timeouts**.
+
+## Go deeper
+
+- [PostgreSQL: pg_stat_statements](https://www.postgresql.org/docs/current/pgstatstatements.html), the PostgreSQL project. Tracking query statistics.
+- [PostgreSQL: routine vacuuming](https://www.postgresql.org/docs/current/routine-vacuuming.html), the PostgreSQL project. Why VACUUM is needed and how autovacuum works.
+- [Use The Index, Luke: paging through results](https://use-the-index-luke.com/sql/partial-results/fetch-next-page), Markus Winand. Keyset pagination explained.
+- [PgBouncer](https://www.pgbouncer.org/), the PgBouncer project. The lightweight connection pooler for PostgreSQL.

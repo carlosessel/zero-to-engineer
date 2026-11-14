@@ -1,0 +1,30 @@
+- question: Which function finds the N-th highest distinct salary, handling ties?
+  options:
+  - dense_rank()
+  - row_number()
+  answer: 0
+  explanation: row_number cuts ties arbitrarily.
+- question: How do you delete duplicates while keeping the earliest row of each?
+  options:
+  - Number rows per group with row_number ordered by time and delete those numbered above 1
+  - DELETE ... WHERE count(*) > 1
+  answer: 0
+  explanation: Then add a unique constraint so it cannot happen again.
+- question: Which detects consecutive days for a customer?
+  options:
+  - Comparing each day with lag(day) over the customer's days
+  - GROUP BY day
+  answer: 0
+  explanation: Gaps and islands handles longer runs.
+- question: What is the difference between percentile_cont and percentile_disc?
+  options:
+  - percentile_cont interpolates; percentile_disc returns an actual value
+  - They are the same
+  answer: 0
+  explanation: Both compute medians at 0.5.
+- question: What should you ask before writing an interview query?
+  options:
+  - How to treat ties, NULLs, empty groups and time zones
+  - Which index to create
+  answer: 0
+  explanation: Clarifying questions show care.

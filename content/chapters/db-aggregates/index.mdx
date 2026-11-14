@@ -1,0 +1,336 @@
+---
+title: "Counting, summing and grouping"
+summary: "Aggregate functions, GROUP BY, HAVING, and the order a query is evaluated in."
+prerequisites: [db-select]
+estimated_minutes: 100
+status: resources-verified
+---
+
+By the end of this chapter you will summarise data: count rows, add, average and find extremes with **aggregate functions**, split rows into groups with `GROUP BY`, filter groups with `HAVING`, aggregate only some rows with `FILTER`, and avoid the mistakes that make totals silently wrong. These are the questions businesses ask every day: how many orders, how much revenue, which product sells best.
+
+## Aggregate functions
+
+An **aggregate function** turns many rows into one value:
+
+```sql
+SELECT count(*) AS products,
+       min(price_pence) AS cheapest,
+       max(price_pence) AS dearest,
+       sum(price_pence) AS total,
+       round(avg(price_pence)) AS average
+FROM products;
+```
+
+```text
+ products | cheapest | dearest | total | average 
+----------+----------+---------+-------+---------
+       12 |      120 |    2400 |  8835 |     736
+(1 row)
+```
+
+| Function | Returns |
+|---|---|
+| `count(*)` | the number of rows |
+| `count(column)` | the number of rows where the column is **not NULL** |
+| `count(DISTINCT column)` | the number of different non-NULL values |
+| `sum`, `avg` | the total and the mean of non-NULL values |
+| `min`, `max` | the smallest and largest |
+| `string_agg(text, ', ')` | the values joined into one string |
+| `array_agg(value)` | the values as an array |
+| `bool_and`, `bool_or` | whether all, or any, are true |
+
+Aggregates **ignore NULLs**, which matters:
+
+```sql
+SELECT count(*) AS customers,
+       count(city) AS with_city,
+       count(DISTINCT city) AS cities
+FROM customers;
+```
+
+```text
+ customers | with_city | cities 
+-----------+-----------+--------
+         9 |         8 |      3
+(1 row)
+```
+
+Nine customers, eight with a known city, in three different cities. And `sum` of no rows at all is NULL, not 0; wrap it in `coalesce(sum(x), 0)` when you need a number.
+
+## GROUP BY
+
+`GROUP BY` splits the rows into groups with the same values and computes the aggregates for each group:
+
+```sql
+SELECT status, count(*) AS orders
+FROM orders
+GROUP BY status
+ORDER BY orders DESC;
+```
+
+```text
+  status   | orders 
+-----------+--------
+ delivered |     13
+ paid      |      3
+ placed    |      2
+ cancelled |      2
+(4 rows)
+```
+
+Revenue per order needs the order lines: each line is `quantity * unit_price_pence`, summed per order:
+
+```sql
+SELECT order_id,
+       count(*) AS lines,
+       sum(quantity) AS items,
+       sum(quantity * unit_price_pence) AS total_pence
+FROM order_lines
+GROUP BY order_id
+ORDER BY total_pence DESC
+LIMIT 5;
+```
+
+```text
+ order_id | lines | items | total_pence 
+----------+-------+-------+-------------
+       12 |     1 |     2 |        3900
+       10 |     2 |     3 |        3160
+        5 |     2 |     3 |        2850
+       17 |     1 |     1 |        2400
+        4 |     1 |     1 |        2400
+(5 rows)
+```
+
+The rule that catches everyone: **every column in the select list must either be in `GROUP BY` or inside an aggregate.** Selecting `product_id` here would be an error, because each group has many products and the database cannot know which one you mean. (PostgreSQL relaxes this when you group by a table's primary key, since every other column of that table then has one value per group.)
+
+You can group by several columns, or by an expression:
+
+```sql
+SELECT date_trunc('week', placed_at)::date AS week,
+       channel,
+       count(*) AS orders
+FROM orders
+WHERE status <> 'cancelled'
+GROUP BY week, channel
+ORDER BY week, channel;
+```
+
+```text
+    week    | channel | orders 
+------------+---------+--------
+ 2026-09-28 | app     |      1
+ 2026-09-28 | shop    |      1
+ 2026-09-28 | web     |      1
+ 2026-10-05 | app     |      1
+ 2026-10-05 | shop    |      1
+ 2026-10-05 | web     |      1
+ 2026-10-12 | app     |      1
+ 2026-10-12 | shop    |      1
+ 2026-10-12 | web     |      1
+ 2026-10-19 | shop    |      1
+ 2026-10-19 | web     |      1
+ 2026-10-26 | app     |      1
+ 2026-10-26 | shop    |      1
+ 2026-11-02 | shop    |      1
+ 2026-11-02 | web     |      1
+ 2026-11-09 | app     |      1
+ 2026-11-09 | web     |      2
+(17 rows)
+```
+
+`date_trunc('week', ...)` rounds each timestamp down to the Monday it belongs to, and `::date` turns it into a plain date (<Ref to="db-types-functions" />). PostgreSQL lets you use the output alias `week` in `GROUP BY`.
+
+## HAVING: filtering groups
+
+`WHERE` filters **rows** before grouping; **`HAVING`** filters **groups** after aggregating. Customers who have placed at least three orders that were not cancelled:
+
+```sql
+SELECT customer_id, count(*) AS orders
+FROM orders
+WHERE status <> 'cancelled'
+GROUP BY customer_id
+HAVING count(*) >= 3
+ORDER BY orders DESC;
+```
+
+```text
+ customer_id | orders 
+-------------+--------
+           1 |      5
+           6 |      3
+(2 rows)
+```
+
+Put conditions on individual rows in `WHERE` (it is also faster, since fewer rows are grouped), and conditions on aggregates in `HAVING`. A condition such as `count(*) >= 3` cannot go in `WHERE`, because `WHERE` runs before any counting happens.
+
+## FILTER: aggregating some rows
+
+To count different things in one pass, add **`FILTER (WHERE ...)`** to an aggregate:
+
+```sql
+SELECT channel,
+       count(*) AS orders,
+       count(*) FILTER (WHERE status = 'cancelled') AS cancelled,
+       round(100.0 * count(*) FILTER (WHERE status = 'cancelled') / count(*), 1) AS cancelled_percent
+FROM orders
+GROUP BY channel
+ORDER BY channel;
+```
+
+```text
+ channel | orders | cancelled | cancelled_percent 
+---------+--------+-----------+-------------------
+ app     |      5 |         0 |               0.0
+ shop    |      6 |         0 |               0.0
+ web     |      9 |         2 |              22.2
+(3 rows)
+```
+
+Other databases write the same thing as `sum(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END)`, which also works in PostgreSQL. Multiplying by `100.0` first keeps the division from rounding to a whole number.
+
+## Grouping after a join
+
+Most real reports group data from several tables. Revenue per product category, from delivered orders only, needs orders, lines and products together. <Ref to="db-joins" /> explains joins fully; here is a first look:
+
+```sql
+SELECT p.category,
+       sum(l.quantity) AS items_sold,
+       sum(l.quantity * l.unit_price_pence) AS revenue_pence
+FROM order_lines AS l
+JOIN orders AS o ON o.id = l.order_id
+JOIN products AS p ON p.id = l.product_id
+WHERE o.status = 'delivered'
+GROUP BY p.category
+ORDER BY revenue_pence DESC;
+```
+
+```text
+ category | items_sold | revenue_pence 
+----------+------------+---------------
+ bread    |         21 |          6500
+ pastry   |         17 |          5045
+ cake     |          2 |          4350
+ pantry   |          7 |          2870
+(4 rows)
+```
+
+## The evaluation order, again
+
+With grouping, the order from <Ref to="db-select" /> matters more:
+
+1. `FROM` and joins build the rows.
+2. `WHERE` removes rows.
+3. `GROUP BY` forms groups.
+4. Aggregates are computed; `HAVING` removes groups.
+5. `SELECT` computes the output.
+6. `ORDER BY`, then `LIMIT`.
+
+## Common mistakes
+
+- **Selecting a column that is neither grouped nor aggregated.**
+- **Filtering on an aggregate in `WHERE`** instead of `HAVING`.
+- **`count(column)` when you meant `count(*)`**, quietly skipping NULLs.
+- **`sum` returning NULL** for no rows, which then breaks arithmetic; use `coalesce`.
+- **Integer division in percentages**: `100 * part / whole` with integers rounds down; use `100.0`.
+- **Summing after a join that multiplies rows**, so totals are counted twice (<Ref to="db-joins" />).
+
+## Practice
+
+**1. (warm-up)** How many orders did each shop receive? Show the shop id and the count, largest first.
+
+<Solution>
+
+```sql
+SELECT shop_id, count(*) AS orders
+FROM orders
+GROUP BY shop_id
+ORDER BY orders DESC;
+```
+
+```text
+ shop_id | orders 
+---------+--------
+       1 |      9
+       2 |      8
+       3 |      3
+(3 rows)
+```
+
+</Solution>
+
+**2. (standard)** For each product that has been ordered, show the product id, the total quantity ordered across all orders, and the number of different orders it appears in. Show only products ordered in at least three different orders.
+
+<Solution>
+
+```sql
+SELECT product_id,
+       sum(quantity) AS quantity,
+       count(DISTINCT order_id) AS orders
+FROM order_lines
+GROUP BY product_id
+HAVING count(DISTINCT order_id) >= 3
+ORDER BY quantity DESC;
+```
+
+```text
+ product_id | quantity | orders 
+------------+----------+--------
+          4 |       15 |      4
+          3 |       13 |      3
+          1 |        7 |      5
+          5 |        7 |      3
+          6 |        6 |      3
+          2 |        6 |      5
+          9 |        4 |      3
+          7 |        3 |      3
+(8 rows)
+```
+
+</Solution>
+
+**3. (standard)** For each staff role, show the number of people, the lowest, highest and average salary in pounds (two decimal places), and the names in alphabetical order joined with commas.
+
+<Solution>
+
+```sql
+SELECT role,
+       count(*) AS people,
+       round(min(salary_pence) / 100.0, 2) AS lowest,
+       round(max(salary_pence) / 100.0, 2) AS highest,
+       round(avg(salary_pence) / 100.0, 2) AS average,
+       string_agg(name, ', ' ORDER BY name) AS names
+FROM staff
+GROUP BY role
+ORDER BY average DESC;
+```
+
+```text
+  role   | people |  lowest  | highest  | average  |                  names                  
+---------+--------+----------+----------+----------+-----------------------------------------
+ owner   |      1 | 52000.00 | 52000.00 | 52000.00 | Abena Owusu
+ manager |      3 | 36000.00 | 38000.00 | 37000.00 | Ama Serwaa, Efua Darko, Kojo Asante
+ baker   |      3 | 29000.00 | 30000.00 | 29500.00 | Adwoa Ofori, Akua Frimpong, Yaw Boateng
+ counter |      2 | 23500.00 | 24000.00 | 23750.00 | Fiifi Mensah, Kwesi Appiah
+(4 rows)
+```
+
+`string_agg` takes its own `ORDER BY`, which sorts the values inside each group.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Aggregates** (`count`, `sum`, `avg`, `min`, `max`, `string_agg`, `array_agg`) turn many rows into one value and **ignore NULLs**; `count(*)` counts rows.
+- **`GROUP BY`** computes aggregates per group; every selected column must be grouped or aggregated.
+- **`WHERE`** filters rows before grouping; **`HAVING`** filters groups after.
+- **`FILTER (WHERE ...)`** aggregates a subset of rows, so one query can count several things.
+- Use `coalesce` for empty sums and `100.0` for percentages.
+
+## Go deeper
+
+- [PostgreSQL tutorial: aggregate functions](https://www.postgresql.org/docs/current/tutorial-agg.html), the PostgreSQL project. GROUP BY, HAVING and FILTER explained.
+- [PostgreSQL: aggregate functions](https://www.postgresql.org/docs/current/functions-aggregate.html), the PostgreSQL project. Every aggregate function.
+- [SQL Murder Mystery](https://mystery.knightlab.com/), Knight Lab. A free detective game solved with SQL queries.

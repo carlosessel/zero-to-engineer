@@ -1,0 +1,331 @@
+---
+title: "JSON, arrays and full-text search"
+summary: "Storing and querying JSONB and arrays, and searching text with PostgreSQL's full-text search."
+prerequisites: [db-advanced-queries]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will store and query semi-structured data in PostgreSQL: **JSONB** documents with their operators, functions and indexes; **arrays** of values; and **full-text search** that finds "croissants" when someone types "croissant", ranks results by relevance, and runs fast on large tables. Together these let one PostgreSQL database do work that once needed a document store or a search engine beside it.
+
+## JSONB
+
+**`jsonb`** stores JSON documents in a parsed, binary form that can be queried and indexed. (`json` keeps the exact text, including whitespace and duplicate keys, but is slower to query; use `jsonb`.) Product details vary by product (allergens, sizes, nutrition), which suits a document column:
+
+```sql
+ALTER TABLE products ADD COLUMN details jsonb NOT NULL DEFAULT '{}';
+
+UPDATE products SET details = '{"allergens": ["gluten"], "weight_g": 400, "shelf_life_days": 4}' WHERE sku = 'RYE-400';
+UPDATE products SET details = '{"allergens": ["gluten", "milk", "egg"], "weight_g": 90}' WHERE sku = 'CRO-090';
+UPDATE products SET details = '{"allergens": ["gluten", "milk", "egg", "nuts"], "weight_g": 100}' WHERE sku = 'ALM-100';
+UPDATE products SET details = '{"allergens": ["gluten", "milk", "egg"], "serves": 12, "sizes": {"small": 1600, "large": 2400}}' WHERE sku = 'CAKE-CHOC';
+
+SELECT name,
+       details -> 'allergens' AS allergens,
+       details ->> 'weight_g' AS weight_text,
+       (details ->> 'weight_g')::integer AS weight_g,
+       details #>> '{sizes,small}' AS small_price
+FROM products
+WHERE details <> '{}'
+ORDER BY id;
+```
+
+```text
+       name       |             allergens             | weight_text | weight_g | small_price 
+------------------+-----------------------------------+-------------+----------+-------------
+ Rye loaf         | ["gluten"]                        | 400         |      400 |
+ Croissant        | ["gluten", "milk", "egg"]         | 90          |       90 |
+ Almond croissant | ["gluten", "milk", "egg", "nuts"] | 100         |      100 |
+ Chocolate cake   | ["gluten", "milk", "egg"]         |             |          | 1600
+(4 rows)
+```
+
+- **`->`** returns a JSON value; **`->>`** returns it as text, which you can cast. Mixing them up is the most common JSONB mistake.
+- **`#>`** and **`#>>`** follow a path into nested objects.
+- A missing key gives NULL, not an error.
+
+### Querying inside documents
+
+**`@>`** (contains) asks whether a document includes another; **`?`** asks whether a key or array element exists. Products containing nuts, and those with a size option:
+
+```sql
+SELECT name FROM products WHERE details -> 'allergens' ? 'nuts';
+
+SELECT name FROM products WHERE details @> '{"allergens": ["milk"]}' ORDER BY name;
+
+SELECT name FROM products WHERE details ? 'sizes';
+```
+
+```text
+       name       
+------------------
+ Almond croissant
+(1 row)
+
+       name       
+------------------
+ Almond croissant
+ Chocolate cake
+ Croissant
+(3 rows)
+
+      name      
+----------------
+ Chocolate cake
+(1 row)
+```
+
+**`jsonb_array_elements`** and its text version turn a JSON array into rows, so you can join and count across them:
+
+```sql
+SELECT allergen, count(*) AS products
+FROM products, jsonb_array_elements_text(details -> 'allergens') AS allergen
+GROUP BY allergen
+ORDER BY products DESC, allergen;
+```
+
+```text
+ allergen | products 
+----------+----------
+ gluten   |        4
+ egg      |        3
+ milk     |        3
+ nuts     |        1
+(4 rows)
+```
+
+Change part of a document with `jsonb_set`, `||` (merge) and `-` (remove a key):
+
+```sql
+UPDATE products
+SET details = jsonb_set(details, '{shelf_life_days}', '5') || '{"organic": true}'
+WHERE sku = 'RYE-400'
+RETURNING details;
+```
+
+```text
+                                      details                                      
+-----------------------------------------------------------------------------------
+ {"organic": true, "weight_g": 400, "allergens": ["gluten"], "shelf_life_days": 5}
+(1 row)
+```
+
+PostgreSQL also builds JSON from rows, which is handy for APIs: `to_jsonb(row)`, `jsonb_build_object` and `jsonb_agg`. And it supports the standard **SQL/JSON path** language (`jsonb_path_query(details, '$.allergens[*] ? (@ == "nuts")')`) and functions such as `JSON_TABLE` for turning documents into rows.
+
+### When to use JSONB, and when not
+
+Use it for data that genuinely varies in shape, is read and written as a whole, or comes from outside (webhook payloads, settings, product attributes). Keep anything you filter, join or enforce rules on in **ordinary columns**: types, `NOT NULL`, foreign keys and `CHECK` constraints protect columns, and the planner has statistics for them. A table that is one `id` and one `jsonb` column has given up most of what a relational database offers.
+
+### Indexing JSONB
+
+A **GIN** index makes containment and key-existence queries fast on large tables:
+
+```sql
+CREATE INDEX products_details_idx ON products USING gin (details);
+
+CREATE INDEX products_weight_idx ON products (((details ->> 'weight_g')::integer));
+```
+
+The first supports `@>`, `?`, `?|` and `?&` on the whole document; the second is an **expression index** on one value, for comparisons such as `(details ->> 'weight_g')::integer > 200` (<Ref to="db-indexes" />).
+
+## Arrays
+
+A PostgreSQL column can hold an **array** of any type. Tags are a typical use:
+
+```sql
+ALTER TABLE products ADD COLUMN tags text[] NOT NULL DEFAULT '{}';
+
+UPDATE products SET tags = ARRAY['bestseller', 'breakfast'] WHERE sku IN ('CRO-090', 'BAG-250');
+UPDATE products SET tags = ARRAY['gift', 'celebration'] WHERE sku IN ('CAKE-CHOC', 'GIFT-BOX');
+UPDATE products SET tags = ARRAY['breakfast'] WHERE sku = 'TEA-250';
+
+SELECT name, tags, cardinality(tags) AS tag_count, tags[1] AS first_tag
+FROM products
+WHERE 'breakfast' = ANY (tags) OR tags && ARRAY['gift']
+ORDER BY name;
+```
+
+```text
+      name      |          tags          | tag_count | first_tag  
+----------------+------------------------+-----------+------------
+ Bagel          | {bestseller,breakfast} |         2 | bestseller
+ Breakfast tea  | {breakfast}            |         1 | breakfast
+ Chocolate cake | {gift,celebration}     |         2 | gift
+ Croissant      | {bestseller,breakfast} |         2 | bestseller
+ Gift box       | {gift,celebration}     |         2 | gift
+(5 rows)
+```
+
+- `ARRAY[...]` or `'{a,b}'` builds an array; arrays are numbered from **1**.
+- **`= ANY (array)`** tests membership; **`@>`** (contains all), **`<@`** (contained in) and **`&&`** (overlap) compare arrays, and a GIN index speeds them up.
+- **`unnest(array)`** turns an array into rows; **`array_agg`** builds one from rows.
+
+Arrays suit short lists of simple values that belong to the row and are not referenced elsewhere. If tags need their own data (a description, an owner) or you query "all products with tag X" heavily across millions of rows, a proper tags table with a many-to-many link is the relational design (<Ref to="db-modelling" />).
+
+## Full-text search
+
+`LIKE '%croissant%'` finds the exact letters, cannot use an ordinary index, knows nothing about word forms, and cannot rank results. **Full-text search** works on words:
+
+- A document is turned into a **`tsvector`**: its words reduced to **lexemes** (stems, so "croissants" and "croissant" match), without common **stop words** such as "the" and "with".
+- A query is turned into a **`tsquery`**, with `&` (and), `|` (or), `!` (not) and phrases.
+- **`@@`** tests whether they match, and `ts_rank` scores how well.
+
+```sql
+ALTER TABLE products ADD COLUMN description text;
+
+UPDATE products SET description = CASE sku
+  WHEN 'RYE-400' THEN 'Dense dark rye loaf with caraway seeds, baked daily'
+  WHEN 'SOUR-800' THEN 'Slow fermented sourdough with a crisp crust'
+  WHEN 'CRO-090' THEN 'Buttery flaky croissant, baked every morning'
+  WHEN 'ALM-100' THEN 'Twice baked croissant filled with almond cream'
+  WHEN 'CIN-120' THEN 'Soft bun swirled with cinnamon butter'
+  WHEN 'CAKE-CHOC' THEN 'Rich chocolate cake layered with chocolate ganache'
+  ELSE name
+END;
+
+SELECT to_tsvector('english', 'Buttery flaky croissants, baked every morning') AS document,
+       to_tsquery('english', 'croissant & bake') AS query;
+```
+
+```text
+                            document                             |        query         
+-----------------------------------------------------------------+----------------------
+ 'bake':4 'butteri':1 'croissant':3 'everi':5 'flaki':2 'morn':6 | 'croissant' & 'bake'
+(1 row)
+```
+
+Words became stems with their positions: "croissants" became `croissant` and "baked" became `bake`, so different forms of a word match. Stems need not be real words ("buttery" became `butteri`), and very common **stop words** such as "the" and "with" would have been dropped. Now search, ranked by relevance:
+
+```sql
+SELECT name,
+       round(ts_rank(to_tsvector('english', name || ' ' || description), query)::numeric, 3) AS rank
+FROM products,
+     websearch_to_tsquery('english', 'baked croissant') AS query
+WHERE to_tsvector('english', name || ' ' || description) @@ query
+ORDER BY rank DESC;
+```
+
+```text
+       name       | rank  
+------------------+-------
+ Almond croissant | 0.188
+ Croissant        | 0.185
+(2 rows)
+```
+
+**`websearch_to_tsquery`** understands what people type into search boxes: plain words (all required), `"quoted phrases"`, `or`, and `-word` to exclude. It never raises an error for strange input, unlike `to_tsquery`, so it is the safe choice for user input.
+
+For speed, store the vector in a **generated column** and index it with GIN:
+
+```sql
+ALTER TABLE products
+  ADD COLUMN search tsvector
+  GENERATED ALWAYS AS (to_tsvector('english', name || ' ' || coalesce(description, ''))) STORED;
+
+CREATE INDEX products_search_idx ON products USING gin (search);
+
+SELECT name FROM products WHERE search @@ websearch_to_tsquery('english', 'chocolate') ORDER BY name;
+```
+
+```text
+      name      
+----------------
+ Chocolate cake
+(1 row)
+```
+
+The generated column is kept up to date by the database on every insert and update. Highlight matches for display with `ts_headline`. For typo tolerance ("croisant"), add the **`pg_trgm`** extension, whose trigram indexes also make `ILIKE '%...%'` fast. PostgreSQL's search is excellent up to millions of documents; dedicated engines (Elasticsearch, OpenSearch) add more relevance tuning, facets and scale.
+
+## Common mistakes
+
+- **`->` where `->>` was needed**, comparing JSON to text.
+- **Putting core, queried fields in JSONB** and losing types, constraints and statistics.
+- **No GIN index** on large JSONB or array columns that are searched.
+- **`LIKE '%word%'` for search** on big tables.
+- **`to_tsquery` with raw user input**, which errors on unexpected syntax; use `websearch_to_tsquery`.
+- **Different text search configurations** for the document and the query (such as `english` and `simple`), so stems do not match.
+
+## Practice
+
+**1. (warm-up)** List the products whose details say they serve more than 10 people.
+
+<Solution>
+
+```sql
+SELECT name, (details ->> 'serves')::integer AS serves
+FROM products
+WHERE (details ->> 'serves')::integer > 10;
+```
+
+```text
+      name      | serves 
+----------------+--------
+ Chocolate cake |     12
+(1 row)
+```
+
+</Solution>
+
+**2. (standard)** Find products that are **free** of milk, among those whose allergens are recorded.
+
+<Solution>
+
+```sql
+SELECT name
+FROM products
+WHERE details ? 'allergens'
+  AND NOT details -> 'allergens' ? 'milk'
+ORDER BY name;
+```
+
+```text
+   name   
+----------
+ Rye loaf
+(1 row)
+```
+
+Without the first condition, products with no allergen information would be reported as milk-free, which is exactly the kind of mistake that matters for allergies: unknown is not the same as none.
+
+</Solution>
+
+**3. (standard)** Search for "chocolate cake" as an exact phrase, and then for products mentioning either butter or cinnamon, using `websearch_to_tsquery` and the `search` column.
+
+<Solution>
+
+```sql
+SELECT name FROM products WHERE search @@ websearch_to_tsquery('english', '"chocolate cake"');
+
+SELECT name FROM products WHERE search @@ websearch_to_tsquery('english', 'butter or cinnamon') ORDER BY name;
+```
+
+```text
+      name      
+----------------
+ Chocolate cake
+(1 row)
+
+     name     
+--------------
+ Cinnamon bun
+(1 row)
+```
+
+The croissant's description says "buttery", which stems to `butteri`, so it does not match "butter": stemming joins forms of one word, not every related word. Synonym dictionaries or trigram similarity (`pg_trgm`) cover such cases.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **`jsonb`** stores documents; `->` gives JSON, `->>` gives text, `#>`/`#>>` follow paths; `@>` and `?` test containment and keys; `jsonb_array_elements` turns arrays into rows; GIN and expression indexes make queries fast.
+- Keep queried, constrained data in columns; use JSONB for genuinely variable data.
+- **Arrays** hold short lists; `ANY`, `@>`, `&&` and `unnest` query them.
+- **Full-text search** matches stemmed words: `to_tsvector`, `websearch_to_tsquery`, `@@` and `ts_rank`, with a generated `tsvector` column and a GIN index.
+
+## Go deeper
+
+- [PostgreSQL: JSON types](https://www.postgresql.org/docs/current/datatype-json.html), the PostgreSQL project. json versus jsonb, containment and indexing.
+- [PostgreSQL: JSON functions and operators](https://www.postgresql.org/docs/current/functions-json.html), the PostgreSQL project. Every operator, function and the SQL/JSON path language.
+- [PostgreSQL: full text search](https://www.postgresql.org/docs/current/textsearch.html), the PostgreSQL project. Documents, queries, ranking, dictionaries and indexes.

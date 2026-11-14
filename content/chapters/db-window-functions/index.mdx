@@ -1,0 +1,336 @@
+---
+title: "Window functions"
+summary: "Ranking, running totals, moving averages, and comparing rows with LAG and LEAD."
+prerequisites: [db-subqueries-ctes]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will use **window functions**, the feature that most separates intermediate from advanced SQL: rank rows within groups, compute running totals and moving averages, compare each row with the one before it, and pick the top rows per group, all without losing the individual rows the way `GROUP BY` does. Questions such as "each customer's biggest order", "revenue growth week on week" and "the second-highest salary" become one short query.
+
+## Aggregates that keep the rows
+
+`GROUP BY` collapses rows into one per group. A **window function** computes across a set of related rows (the **window**) but returns a value **for every row**. The window is defined by **`OVER (...)`**:
+
+```sql
+SELECT name, category, price_pence,
+       avg(price_pence) OVER (PARTITION BY category)::integer AS category_average,
+       price_pence - avg(price_pence) OVER (PARTITION BY category)::integer AS difference
+FROM products
+WHERE category IN ('bread', 'pastry')
+ORDER BY category, price_pence DESC;
+```
+
+```text
+       name       | category | price_pence | category_average | difference 
+------------------+----------+-------------+------------------+------------
+ Sourdough        | bread    |         520 |              308 |        212
+ Rye loaf         | bread    |         450 |              308 |        142
+ Sesame bagel     | bread    |         140 |              308 |       -168
+ Bagel            | bread    |         120 |              308 |       -188
+ Almond croissant | pastry   |         340 |              308 |         32
+ Cinnamon bun     | pastry   |         310 |              308 |          2
+ Croissant        | pastry   |         275 |              308 |        -33
+(7 rows)
+```
+
+- **`PARTITION BY category`** splits the rows into groups, like `GROUP BY`, but each row stays in the result.
+- `OVER ()` with nothing inside makes the whole result one window: `price_pence * 100.0 / sum(price_pence) OVER ()` is each row's share of the total.
+
+## Ranking
+
+**`row_number()`**, **`rank()`** and **`dense_rank()`** number rows in the order given by `ORDER BY` inside `OVER`:
+
+```sql
+SELECT name, role, salary_pence / 100 AS salary,
+       row_number() OVER (ORDER BY salary_pence DESC) AS row_number,
+       rank() OVER (ORDER BY salary_pence DESC) AS rank,
+       dense_rank() OVER (ORDER BY salary_pence DESC) AS dense_rank,
+       rank() OVER (PARTITION BY role ORDER BY salary_pence DESC) AS rank_in_role
+FROM staff
+WHERE role IN ('baker', 'manager', 'counter')
+ORDER BY salary_pence DESC;
+```
+
+```text
+     name      |  role   | salary | row_number | rank | dense_rank | rank_in_role 
+---------------+---------+--------+------------+------+------------+--------------
+ Kojo Asante   | manager |  38000 |          1 |    1 |          1 |            1
+ Efua Darko    | manager |  37000 |          2 |    2 |          2 |            2
+ Ama Serwaa    | manager |  36000 |          3 |    3 |          3 |            3
+ Adwoa Ofori   | baker   |  30000 |          4 |    4 |          4 |            1
+ Akua Frimpong | baker   |  29500 |          5 |    5 |          5 |            2
+ Yaw Boateng   | baker   |  29000 |          6 |    6 |          6 |            3
+ Kwesi Appiah  | counter |  24000 |          7 |    7 |          7 |            1
+ Fiifi Mensah  | counter |  23500 |          8 |    8 |          8 |            2
+(8 rows)
+```
+
+They differ only on ties: `row_number` always gives 1, 2, 3, ...; `rank` gives tied rows the same number and then skips (1, 2, 2, 4); `dense_rank` does not skip (1, 2, 2, 3). Here no salaries tie, so they agree; `rank_in_role` restarts in each partition.
+
+### Top N per group
+
+A classic question: each customer's largest order. Number the orders within each customer, then keep number 1. Window functions cannot appear in `WHERE` (it runs before them), so use a CTE:
+
+```sql
+WITH order_totals AS (
+  SELECT o.id, o.customer_id, sum(l.quantity * l.unit_price_pence) AS total_pence
+  FROM orders AS o
+  JOIN order_lines AS l ON l.order_id = o.id
+  GROUP BY o.id, o.customer_id
+),
+ranked AS (
+  SELECT *, row_number() OVER (PARTITION BY customer_id ORDER BY total_pence DESC, id) AS position
+  FROM order_totals
+)
+SELECT c.name, r.id AS order_id, r.total_pence
+FROM ranked AS r
+JOIN customers AS c ON c.id = r.customer_id
+WHERE r.position = 1
+ORDER BY r.total_pence DESC;
+```
+
+```text
+  name  | order_id | total_pence 
+--------+----------+-------------
+ Kwame  |       12 |        3900
+ Kobina |       10 |        3160
+ Yaa    |        5 |        2850
+ Esi    |        4 |        2400
+ Akosua |       13 |        1795
+ Ama    |       19 |        1590
+ Kofi   |        7 |        1040
+ Afua   |       16 |         900
+(8 rows)
+```
+
+Adding `id` to the window's `ORDER BY` breaks ties the same way every time, so the answer is stable. Use `rank()` instead if tied orders should all be returned. (PostgreSQL's `DISTINCT ON (customer_id)` is a shorter, PostgreSQL-only way to get the first row per group.)
+
+## Running totals and frames
+
+With `ORDER BY` inside `OVER`, an aggregate becomes **cumulative**: each row sees the rows from the start of its partition up to itself. Daily revenue from orders that went ahead, with a running total:
+
+```sql
+WITH daily AS (
+  SELECT o.placed_at::date AS day, sum(l.quantity * l.unit_price_pence) AS revenue
+  FROM orders AS o
+  JOIN order_lines AS l ON l.order_id = o.id
+  WHERE o.status <> 'cancelled'
+  GROUP BY day
+)
+SELECT day, revenue,
+       sum(revenue) OVER (ORDER BY day) AS running_total,
+       round(avg(revenue) OVER (ORDER BY day ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)) AS moving_avg_3
+FROM daily
+WHERE day < '2026-10-20'
+ORDER BY day;
+```
+
+```text
+    day     | revenue | running_total | moving_avg_3 
+------------+---------+---------------+--------------
+ 2026-10-01 |    2350 |          2350 |         2350
+ 2026-10-03 |     720 |          3070 |         1535
+ 2026-10-06 |    2850 |          5920 |         1973
+ 2026-10-08 |    1380 |          7300 |         1650
+ 2026-10-11 |    1040 |          8340 |         1757
+ 2026-10-12 |    1780 |         10120 |         1400
+ 2026-10-15 |     930 |         11050 |         1250
+ 2026-10-18 |    3160 |         14210 |         1957
+(8 rows)
+```
+
+The rows a window function sees are its **frame**. **`ROWS BETWEEN 2 PRECEDING AND CURRENT ROW`** makes a moving window of the current row and the two before it: a three-row moving average. Frames can be `ROWS` (counting rows), `RANGE` (by value, such as `RANGE BETWEEN interval '6 days' PRECEDING AND CURRENT ROW` for a true seven-day window when some days have no rows) or `GROUPS`.
+
+One subtlety catches everyone: with `ORDER BY` and no frame clause, the default frame is `RANGE ... CURRENT ROW`, which includes all rows **tied** with the current one. A running total over a column with duplicate values jumps by the whole tie at once. Write `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` when you want a strict row-by-row total.
+
+## Comparing rows: LAG and LEAD
+
+**`lag(value)`** returns the value from the previous row in the window, and **`lead(value)`** from the next. Days between each customer's orders:
+
+```sql
+SELECT c.name, o.id, o.placed_at::date AS placed_on,
+       lag(o.placed_at::date) OVER w AS previous_order,
+       o.placed_at::date - lag(o.placed_at::date) OVER w AS days_since_previous
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+WHERE c.name IN ('Ama', 'Kofi')
+WINDOW w AS (PARTITION BY o.customer_id ORDER BY o.placed_at)
+ORDER BY c.name, o.placed_at;
+```
+
+```text
+ name | id | placed_on  | previous_order | days_since_previous 
+------+----+------------+----------------+---------------------
+ Ama  |  1 | 2026-10-01 |                |
+ Ama  |  3 | 2026-10-03 | 2026-10-01     |                   2
+ Ama  |  9 | 2026-10-15 | 2026-10-03     |                  12
+ Ama  | 14 | 2026-11-01 | 2026-10-15     |                  17
+ Ama  | 19 | 2026-11-12 | 2026-11-01     |                  11
+ Kofi |  2 | 2026-10-01 |                |
+ Kofi |  7 | 2026-10-11 | 2026-10-01     |                  10
+ Kofi | 15 | 2026-11-03 | 2026-10-11     |                  23
+(8 rows)
+```
+
+The first order of each customer has no previous one, so `lag` gives NULL (`lag(x, 1, default)` supplies another value). The **`WINDOW w AS (...)`** clause names a window once so several functions can share it. `first_value`, `last_value` and `nth_value` return values from fixed positions in the frame.
+
+## Distributions
+
+**`ntile(n)`** splits the rows into `n` roughly equal buckets, and **`percent_rank()`** and **`cume_dist()`** give each row's relative position: useful for "top 25 percent of customers".
+
+```sql
+WITH spend AS (
+  SELECT o.customer_id, sum(l.quantity * l.unit_price_pence) AS spent
+  FROM orders AS o
+  JOIN order_lines AS l ON l.order_id = o.id
+  WHERE o.status <> 'cancelled'
+  GROUP BY o.customer_id
+)
+SELECT c.name, s.spent,
+       ntile(4) OVER (ORDER BY s.spent DESC) AS quartile,
+       round(percent_rank() OVER (ORDER BY s.spent)::numeric, 2) AS percent_rank
+FROM spend AS s
+JOIN customers AS c ON c.id = s.customer_id
+ORDER BY s.spent DESC;
+```
+
+```text
+  name  | spent | quartile | percent_rank 
+--------+-------+----------+--------------
+ Ama    |  5930 |        1 |         1.00
+ Kwame  |  5280 |        1 |         0.86
+ Yaa    |  5250 |        2 |         0.71
+ Kobina |  4810 |        2 |         0.57
+ Akosua |  4595 |        3 |         0.43
+ Kofi   |  1940 |        3 |         0.29
+ Afua   |   900 |        4 |         0.14
+ Esi    |   620 |        4 |         0.00
+(8 rows)
+```
+
+## Where window functions run
+
+Window functions are computed **after** `WHERE`, `GROUP BY` and `HAVING`, and before the final `ORDER BY` and `LIMIT`. So they see only the rows that survived filtering, they can use aggregates (`sum(sum(x)) OVER ()` is valid: a window over grouped results), and to filter on their results you wrap the query in a CTE or subquery.
+
+## Common mistakes
+
+- **Filtering on a window function in `WHERE`**; wrap it in a CTE.
+- **`row_number` when ties matter** (use `rank`), or `rank` when exactly one row per group is needed.
+- **No tie-breaker in the window's `ORDER BY`**, so results change between runs.
+- **The default `RANGE` frame** making running totals jump on ties.
+- **Correlated subqueries** for "previous row" questions that `lag` answers simply and quickly.
+
+## Practice
+
+**1. (warm-up)** Rank products by price within each category, most expensive first, with `dense_rank`.
+
+<Solution>
+
+```sql
+SELECT category, name, price_pence,
+       dense_rank() OVER (PARTITION BY category ORDER BY price_pence DESC) AS rank
+FROM products
+ORDER BY category, rank;
+```
+
+```text
+ category |       name       | price_pence | rank 
+----------+------------------+-------------+------
+ bread    | Sourdough        |         520 |    1
+ bread    | Rye loaf         |         450 |    2
+ bread    | Sesame bagel     |         140 |    3
+ bread    | Bagel            |         120 |    4
+ cake     | Chocolate cake   |        2400 |    1
+ cake     | Lemon drizzle    |        1950 |    2
+ pantry   | Gift box         |        1500 |    1
+ pantry   | Breakfast tea    |         450 |    2
+ pantry   | Strawberry jam   |         380 |    3
+ pastry   | Almond croissant |         340 |    1
+ pastry   | Cinnamon bun     |         310 |    2
+ pastry   | Croissant        |         275 |    3
+(12 rows)
+```
+
+</Solution>
+
+**2. (standard)** For each shop, find the single best-selling product by quantity among orders that were not cancelled.
+
+<Solution>
+
+```sql
+WITH sales AS (
+  SELECT o.shop_id, l.product_id, sum(l.quantity) AS quantity
+  FROM orders AS o
+  JOIN order_lines AS l ON l.order_id = o.id
+  WHERE o.status <> 'cancelled'
+  GROUP BY o.shop_id, l.product_id
+),
+ranked AS (
+  SELECT *, rank() OVER (PARTITION BY shop_id ORDER BY quantity DESC) AS position
+  FROM sales
+)
+SELECT s.city, p.name, r.quantity
+FROM ranked AS r
+JOIN shops AS s ON s.id = r.shop_id
+JOIN products AS p ON p.id = r.product_id
+WHERE r.position = 1
+ORDER BY s.city, p.name;
+```
+
+```text
+ city  |     name     | quantity 
+-------+--------------+----------
+ Hull  | Cinnamon bun |        3
+ Leeds | Bagel        |       10
+ York  | Croissant    |        7
+(3 rows)
+```
+
+`rank` keeps ties, so a shop with two equal best-sellers shows both.
+
+</Solution>
+
+**3. (stretch)** Show each staff member's salary as a percentage of their shop's total salaries, and the difference from the highest-paid person in the same shop. Leave out the owner, who has no shop.
+
+<Solution>
+
+```sql
+SELECT s.city, st.name, st.salary_pence / 100 AS salary,
+       round(100.0 * st.salary_pence / sum(st.salary_pence) OVER (PARTITION BY st.shop_id), 1) AS percent_of_shop,
+       (max(st.salary_pence) OVER (PARTITION BY st.shop_id) - st.salary_pence) / 100 AS below_top
+FROM staff AS st
+JOIN shops AS s ON s.id = st.shop_id
+ORDER BY s.city, st.salary_pence DESC;
+```
+
+```text
+ city  |     name      | salary | percent_of_shop | below_top 
+-------+---------------+--------+-----------------+-----------
+ Hull  | Ama Serwaa    |  36000 |           100.0 |         0
+ Leeds | Kojo Asante   |  38000 |            31.4 |         0
+ Leeds | Adwoa Ofori   |  30000 |            24.8 |      8000
+ Leeds | Yaw Boateng   |  29000 |            24.0 |      9000
+ Leeds | Kwesi Appiah  |  24000 |            19.8 |     14000
+ York  | Efua Darko    |  37000 |            41.1 |         0
+ York  | Akua Frimpong |  29500 |            32.8 |      7500
+ York  | Fiifi Mensah  |  23500 |            26.1 |     13500
+(8 rows)
+```
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Window functions** compute over a window of related rows with **`OVER (PARTITION BY ... ORDER BY ...)`** and keep every row.
+- **`row_number`**, **`rank`** and **`dense_rank`** rank rows; filter on them in an outer query for **top N per group**.
+- Aggregates with `ORDER BY` give **running totals**; **frames** (`ROWS BETWEEN ...`) give moving windows. Beware the default `RANGE` frame on ties.
+- **`lag`** and **`lead`** compare with neighbouring rows; **`ntile`** and **`percent_rank`** describe distributions; **`WINDOW`** names shared windows.
+
+## Go deeper
+
+- [PostgreSQL tutorial: window functions](https://www.postgresql.org/docs/current/tutorial-window.html), the PostgreSQL project. An introduction with examples.
+- [PostgreSQL: window functions](https://www.postgresql.org/docs/current/functions-window.html), the PostgreSQL project. Every window function.
+- [Window functions practice](https://www.windowfunctions.com/), windowfunctions.com. Interactive exercises on window functions in the browser.

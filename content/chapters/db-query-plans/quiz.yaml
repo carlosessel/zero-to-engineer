@@ -1,0 +1,36 @@
+- question: In which order are plan nodes executed?
+  options:
+  - From the innermost (most indented) nodes outwards
+  - From the top line down
+  answer: 0
+  explanation: Children feed their parents.
+- question: What does EXPLAIN ANALYZE add to EXPLAIN?
+  options:
+  - It runs the query and shows actual rows, loops and timings
+  - It analyses the table's statistics
+  answer: 0
+  explanation: Wrap data-changing statements in a transaction you roll back.
+- question: What usually causes a bad plan?
+  options:
+  - Estimated rows far from actual rows, from missing or stale statistics
+  - Too many indexes
+  answer: 0
+  explanation: Compare estimates with actuals at each node.
+- question: When is a nested loop join a good choice?
+  options:
+  - When the outer input is small and the inner side can be looked up by index
+  - When both inputs are huge and unsorted
+  answer: 0
+  explanation: Hash joins suit large unsorted inputs.
+- question: Are cost units milliseconds?
+  options:
+  - No; they are relative units for comparing plans
+  - 'Yes'
+  answer: 0
+  explanation: Use ANALYZE for real times.
+- question: How can the planner learn that two columns are correlated?
+  options:
+  - With extended statistics created by CREATE STATISTICS
+  - By adding an index on each
+  answer: 0
+  explanation: Otherwise it assumes independence.

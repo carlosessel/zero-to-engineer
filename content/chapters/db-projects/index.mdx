@@ -1,0 +1,102 @@
+---
+title: "Database projects"
+summary: "Projects from a reporting database to a tuned, secured, backed-up production system, each with a checklist."
+prerequisites: [db-migrations]
+estimated_minutes: 60
+status: resources-verified
+---
+
+By the end of this chapter you will have five projects that turn this course into skills you can show: an analysis of a real public dataset, a schema designed from requirements, a performance investigation with before-and-after evidence, a production-ready database with security, backups and monitoring, and a small analytics stack. Each has a specification, a checklist of what done means, and the chapters to revisit. Keep each in a public Git repository with a `README` that explains your decisions; interviewers ask about decisions far more than syntax.
+
+## Project 1: questions about real data
+
+**Specification.** Load a public dataset into PostgreSQL (for example, a city's open data on transport or crime, a government statistics table, or an open sports dataset) and answer ten questions about it in SQL, from simple counts to window functions.
+
+**Done when:**
+
+- The data is loaded with `COPY` into tables with sensible types and keys, and the loading steps are a script anyone can rerun.
+- Each question is written in plain English, with its query and its result.
+- At least three questions use window functions, and one uses a recursive CTE or gaps and islands.
+- Data problems found (duplicates, NULLs, inconsistent spellings, time zones) are documented with how you handled them.
+
+**Revisit:** <Ref to="db-aggregates" />, <Ref to="db-window-functions" />, <Ref to="db-advanced-queries" />.
+
+## Project 2: design a schema
+
+**Specification.** Choose a domain with real rules: a gym's memberships and class bookings, a library's loans, or a small online shop. Write the requirements (things, facts, relationships, rules, questions) first, then the schema.
+
+**Done when:**
+
+- Every table has a primary key, every relationship a foreign key with a deliberate delete rule and an index.
+- Rules are enforced by constraints where possible: `NOT NULL`, `CHECK`, `UNIQUE`, partial unique indexes, and an exclusion constraint for bookings.
+- History is kept where it matters (prices, membership levels).
+- The schema is created by numbered migration files.
+- Sample data and the ten most important queries run against it, with results.
+- The `README` shows an entity diagram and explains two design choices you rejected.
+
+**Revisit:** <Ref to="db-tables-constraints" />, <Ref to="m-schema-design" />, <Ref to="db-modelling" />.
+
+## Project 3: a performance investigation
+
+**Specification.** Generate a large dataset (millions of rows with `generate_series`) for the schema from project 2, write a realistic workload of queries, and make the slowest five at least ten times faster.
+
+**Done when:**
+
+- Each fix is documented with the query, the plan before (`EXPLAIN (ANALYZE, BUFFERS)`), the change, and the plan after.
+- Fixes include at least one multi-column or partial index, one query rewrite, and keyset pagination replacing an `OFFSET`.
+- You measured the cost of your indexes on writes.
+- `pg_stat_statements` shows the workload's top queries before and after.
+
+**Revisit:** <Ref to="db-indexes" />, <Ref to="db-query-plans" />, <Ref to="db-performance" />.
+
+## Project 4: production-ready
+
+**Specification.** Run the project 2 database as if it were production, in Docker or a managed service's free tier.
+
+**Done when:**
+
+- Roles: an owner used only by migrations, an application role with least privilege, and a read-only role; no superuser use by applications.
+- Row-level security on at least one multi-tenant or per-user table, with a test proving a missing `WHERE` cannot leak data.
+- Backups with point-in-time recovery (pgBackRest, or the managed service), and a **tested restore** to a chosen moment, with the time it took.
+- A streaming replica, with replication lag measured.
+- Monitoring of connections, long transactions, slow queries, disk and replication lag, with at least one alert.
+- A migration that renames a column with expand and contract, and a `CREATE INDEX CONCURRENTLY`, run while a load script writes continuously, with no errors.
+- A one-page runbook: how to tell it is healthy, and what to do when it is not.
+
+**Revisit:** <Ref to="db-security" />, <Ref to="db-operations" />, <Ref to="db-migrations" />.
+
+## Project 5: a small analytics stack
+
+**Specification.** Build a star schema for the data from project 1 or 2, loaded and transformed with SQL (with dbt if you like), and a dashboard of five charts with a free tool such as Metabase or Apache Superset.
+
+**Done when:**
+
+- Fact tables state their grain; dimensions include a date dimension.
+- Transformations are version-controlled SQL with tests (unique keys, not-null, accepted values).
+- The dashboard answers real questions, including one cohort or retention chart.
+- The `README` explains how fresh the data is and how it is refreshed.
+
+**Revisit:** <Ref to="db-analytics" />.
+
+## Practice
+
+**1. (warm-up)** Write the requirements list (things, facts, relationships, rules, questions) for project 2 in your chosen domain.
+
+<Solution>
+
+For a gym: **things**: members, membership plans, classes, class sessions, bookings, instructors. **Facts**: a plan has a monthly price and a class allowance; a session has a start time, a room and a capacity. **Relationships**: a member has one active membership at a time and many bookings; a session belongs to a class and has one instructor. **Rules**: a member cannot book two sessions at overlapping times; a session cannot be overbooked; bookings close an hour before the start. **Questions**: today's sessions with spaces left; a member's bookings this month against their allowance; attendance by class over time.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Five projects: **analysing real data**, **designing a schema**, **a performance investigation**, **a production-ready database** and **a small analytics stack**.
+- Each has a specification, a definition of done, and chapters to revisit.
+- Publish each with a `README` that explains your decisions and shows evidence: results, plans, timings and tested restores.
+
+## Go deeper
+
+- [Data.gov.uk](https://www.data.gov.uk/), the UK government. Thousands of open datasets to analyse.
+- [PostgreSQL: COPY](https://www.postgresql.org/docs/current/sql-copy.html), the PostgreSQL project. Loading data quickly from files.

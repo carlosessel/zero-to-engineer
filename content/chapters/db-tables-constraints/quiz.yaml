@@ -1,0 +1,36 @@
+- question: Why prefer GENERATED ALWAYS AS IDENTITY to manually chosen ids?
+  options:
+  - The database generates unique ids and refuses manual ones that could clash
+  - It makes ids shorter
+  answer: 0
+  explanation: BY DEFAULT allows manual ids, for imports.
+- question: Why use a surrogate primary key plus UNIQUE on a product code?
+  options:
+  - Natural identifiers change; the surrogate key never needs to
+  - UNIQUE is faster than PRIMARY KEY
+  answer: 0
+  explanation: Keep both.
+- question: Does PostgreSQL index foreign key columns automatically?
+  options:
+  - No; add an index on the referencing column yourself
+  - 'Yes'
+  answer: 0
+  explanation: Otherwise deleting a parent scans the child table.
+- question: Which delete rule suits an order's lines when the order is deleted?
+  options:
+  - CASCADE
+  - SET NULL
+  answer: 0
+  explanation: Lines mean nothing without their order.
+- question: What does an exclusion constraint with during WITH && prevent?
+  options:
+  - Two rows whose ranges overlap
+  - Duplicate start times only
+  answer: 0
+  explanation: Ideal for bookings.
+- question: What does a partial unique index enforce?
+  options:
+  - Uniqueness only among rows that match its WHERE
+  - Uniqueness on part of a column
+  answer: 0
+  explanation: For example, one open voucher per customer.

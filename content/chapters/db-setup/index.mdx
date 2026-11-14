@@ -1,0 +1,311 @@
+---
+title: "Set up PostgreSQL and the sample database"
+summary: "Installing PostgreSQL, psql and a graphical client, and loading the bakery database used in every chapter."
+prerequisites: [db-the-map]
+estimated_minutes: 60
+status: resources-verified
+---
+
+By the end of this chapter you will have PostgreSQL running on your computer, be able to connect with **psql** (PostgreSQL's command-line client) and a graphical client, and have loaded the **bakery database**, the small, realistic dataset every chapter of this course queries. Every result shown in this course comes from exactly this data, so you can check your own answers against it.
+
+## Install PostgreSQL
+
+Install the current version, PostgreSQL 18. Pick one way:
+
+- **Docker** (any system, and the easiest to remove later): install Docker Desktop, then run the command below.
+- **macOS**: Postgres.app (a menu-bar app; download it from postgresapp.com), or `brew install postgresql@18`.
+- **Windows**: the installer from EDB, linked from postgresql.org/download; it includes psql and pgAdmin.
+- **Linux**: your distribution's packages, or the PostgreSQL project's own repository for the newest version (`sudo apt install postgresql` on Ubuntu).
+
+With Docker:
+
+```bash
+docker run --name bakery-db -e POSTGRES_PASSWORD=change-me-locally -p 5432:5432 -d postgres:18
+docker exec -it bakery-db psql -U postgres
+```
+
+The first command downloads PostgreSQL 18 and starts it in the background on port 5432 with the password you chose (this one is only for a database on your own machine). The second opens psql inside the container. `docker stop bakery-db` and `docker start bakery-db` stop and restart it; your data survives until you `docker rm` the container.
+
+## psql
+
+**psql** is the command-line client every PostgreSQL user should know. You type SQL ending in `;`, and **meta-commands** starting with a backslash:
+
+| Command | What it does |
+|---|---|
+| `\l` | List databases |
+| `\c bakery` | Connect to the `bakery` database |
+| `\dt` | List tables |
+| `\d orders` | Describe the `orders` table: columns, types, keys, indexes |
+| `\x` | Toggle expanded display, one column per line (for wide rows) |
+| `\timing` | Show how long each query takes |
+| `\i file.sql` | Run the SQL in a file |
+| `\?` and `\h SELECT` | Help on meta-commands, and on an SQL command |
+| `\q` | Quit |
+
+To connect from your own terminal rather than inside the container, use `psql -h localhost -U postgres` (psql comes with the macOS, Windows and Linux installers; with Docker only, keep using `docker exec`).
+
+## A graphical client
+
+A graphical client lets you browse tables, write queries with completion, and see results in a grid. Good free ones: **pgAdmin** (PostgreSQL's own), **DBeaver** (works with every database), and the **PostgreSQL extension for VS Code**. Connect with host `localhost`, port `5432`, user `postgres` and your password. Use whichever you like; this course shows queries and their results as text, exactly as psql prints them.
+
+## Create the bakery database
+
+In psql, create a database and connect to it:
+
+```text
+CREATE DATABASE bakery;
+\c bakery
+```
+
+Then run the script below: paste it into psql, or save it as `bakery.sql` and run `\i bakery.sql`. It creates six tables and fills them with a small bakery chain's data: three shops, nine staff, nine customers, twelve products, twenty orders and their lines.
+
+```sql
+CREATE TABLE shops (
+  id        integer PRIMARY KEY,
+  city      text NOT NULL,
+  opened_on date NOT NULL
+);
+
+CREATE TABLE staff (
+  id           integer PRIMARY KEY,
+  name         text NOT NULL,
+  role         text NOT NULL,
+  shop_id      integer REFERENCES shops (id),
+  manager_id   integer REFERENCES staff (id),
+  salary_pence integer NOT NULL
+);
+
+CREATE TABLE customers (
+  id        integer PRIMARY KEY,
+  name      text NOT NULL,
+  email     text NOT NULL UNIQUE,
+  city      text,
+  joined_on date NOT NULL
+);
+
+CREATE TABLE products (
+  id          integer PRIMARY KEY,
+  sku         text NOT NULL UNIQUE,
+  name        text NOT NULL,
+  category    text NOT NULL,
+  price_pence integer NOT NULL CHECK (price_pence > 0),
+  vegan       boolean NOT NULL DEFAULT false
+);
+
+CREATE TABLE orders (
+  id          integer PRIMARY KEY,
+  customer_id integer NOT NULL REFERENCES customers (id),
+  shop_id     integer NOT NULL REFERENCES shops (id),
+  placed_at   timestamptz NOT NULL,
+  channel     text NOT NULL CHECK (channel IN ('web', 'app', 'shop')),
+  status      text NOT NULL CHECK (status IN ('placed', 'paid', 'delivered', 'cancelled'))
+);
+
+CREATE TABLE order_lines (
+  order_id         integer NOT NULL REFERENCES orders (id),
+  product_id       integer NOT NULL REFERENCES products (id),
+  quantity         integer NOT NULL CHECK (quantity > 0),
+  unit_price_pence integer NOT NULL,
+  PRIMARY KEY (order_id, product_id)
+);
+
+INSERT INTO shops VALUES
+  (1, 'Leeds', '2019-03-01'),
+  (2, 'York', '2021-06-15'),
+  (3, 'Hull', '2024-09-01');
+
+INSERT INTO staff VALUES
+  (1, 'Abena Owusu', 'owner', NULL, NULL, 5200000),
+  (2, 'Kojo Asante', 'manager', 1, 1, 3800000),
+  (3, 'Efua Darko', 'manager', 2, 1, 3700000),
+  (4, 'Yaw Boateng', 'baker', 1, 2, 2900000),
+  (5, 'Adwoa Ofori', 'baker', 1, 2, 3000000),
+  (6, 'Kwesi Appiah', 'counter', 1, 2, 2400000),
+  (7, 'Akua Frimpong', 'baker', 2, 3, 2950000),
+  (8, 'Fiifi Mensah', 'counter', 2, 3, 2350000),
+  (9, 'Ama Serwaa', 'manager', 3, 1, 3600000);
+
+INSERT INTO customers VALUES
+  (1, 'Ama', 'ama@example.com', 'Leeds', '2023-01-14'),
+  (2, 'Kofi', 'kofi@example.com', 'York', '2023-05-02'),
+  (3, 'Esi', 'esi@example.com', 'Leeds', '2024-02-20'),
+  (4, 'Yaa', 'yaa@example.com', NULL, '2024-07-09'),
+  (5, 'Kwame', 'kwame@example.com', 'Hull', '2025-01-03'),
+  (6, 'Akosua', 'akosua@example.com', 'York', '2025-03-18'),
+  (7, 'Kobina', 'kobina@example.com', 'Leeds', '2025-08-30'),
+  (8, 'Afua', 'afua@example.com', 'Hull', '2026-02-11'),
+  (9, 'Kweku', 'kweku@example.com', 'York', '2026-06-01');
+
+INSERT INTO products VALUES
+  (1, 'RYE-400', 'Rye loaf', 'bread', 450, true),
+  (2, 'SOUR-800', 'Sourdough', 'bread', 520, true),
+  (3, 'BAG-250', 'Bagel', 'bread', 120, true),
+  (4, 'CRO-090', 'Croissant', 'pastry', 275, false),
+  (5, 'CIN-120', 'Cinnamon bun', 'pastry', 310, false),
+  (6, 'ALM-100', 'Almond croissant', 'pastry', 340, false),
+  (7, 'CAKE-CHOC', 'Chocolate cake', 'cake', 2400, false),
+  (8, 'CAKE-LEM', 'Lemon drizzle', 'cake', 1950, true),
+  (9, 'JAM-380', 'Strawberry jam', 'pantry', 380, true),
+  (10, 'TEA-250', 'Breakfast tea', 'pantry', 450, true),
+  (11, 'BAG-SES', 'Sesame bagel', 'bread', 140, true),
+  (12, 'GIFT-BOX', 'Gift box', 'pantry', 1500, false);
+
+INSERT INTO orders VALUES
+  (1, 1, 1, '2026-10-01 08:12:00+00', 'shop', 'delivered'),
+  (2, 2, 2, '2026-10-01 09:40:00+00', 'web', 'delivered'),
+  (3, 1, 1, '2026-10-03 07:55:00+00', 'app', 'delivered'),
+  (4, 3, 1, '2026-10-04 12:30:00+00', 'web', 'cancelled'),
+  (5, 4, 2, '2026-10-06 16:05:00+00', 'web', 'delivered'),
+  (6, 5, 3, '2026-10-08 10:20:00+00', 'shop', 'delivered'),
+  (7, 2, 2, '2026-10-11 08:45:00+00', 'app', 'delivered'),
+  (8, 6, 2, '2026-10-12 11:10:00+00', 'shop', 'delivered'),
+  (9, 1, 1, '2026-10-15 07:30:00+00', 'app', 'delivered'),
+  (10, 7, 1, '2026-10-18 13:15:00+00', 'web', 'delivered'),
+  (11, 3, 1, '2026-10-21 09:05:00+00', 'shop', 'delivered'),
+  (12, 5, 3, '2026-10-24 15:40:00+00', 'web', 'paid'),
+  (13, 6, 2, '2026-10-27 10:00:00+00', 'app', 'delivered'),
+  (14, 1, 1, '2026-11-01 08:20:00+00', 'shop', 'delivered'),
+  (15, 2, 2, '2026-11-03 17:25:00+00', 'web', 'cancelled'),
+  (16, 8, 3, '2026-11-05 09:50:00+00', 'shop', 'delivered'),
+  (17, 4, 2, '2026-11-08 12:00:00+00', 'web', 'paid'),
+  (18, 7, 1, '2026-11-10 07:45:00+00', 'app', 'paid'),
+  (19, 1, 1, '2026-11-12 08:05:00+00', 'web', 'placed'),
+  (20, 6, 2, '2026-11-12 18:30:00+00', 'web', 'placed');
+
+INSERT INTO order_lines VALUES
+  (1, 1, 2, 450), (1, 4, 2, 275),
+  (2, 2, 1, 520), (2, 9, 1, 380),
+  (3, 3, 6, 120),
+  (4, 7, 1, 2400),
+  (5, 8, 1, 1950), (5, 10, 2, 450),
+  (6, 1, 1, 450), (6, 5, 3, 310),
+  (7, 2, 2, 520),
+  (8, 4, 4, 275), (8, 6, 2, 340),
+  (9, 1, 1, 450), (9, 3, 4, 120),
+  (10, 7, 1, 2400), (10, 9, 2, 380),
+  (11, 5, 2, 310),
+  (12, 8, 2, 1950),
+  (13, 2, 1, 520), (13, 4, 3, 275), (13, 10, 1, 450),
+  (14, 1, 2, 450), (14, 6, 1, 340),
+  (15, 3, 3, 120),
+  (16, 2, 1, 520), (16, 9, 1, 380),
+  (17, 7, 1, 2400),
+  (18, 4, 6, 275),
+  (19, 1, 1, 450), (19, 2, 1, 520), (19, 5, 2, 310),
+  (20, 6, 3, 340);
+```
+
+## A first look
+
+Check that everything loaded by counting the rows in each table:
+
+```sql
+SELECT 'shops' AS table_name, count(*) AS rows FROM shops
+UNION ALL SELECT 'staff', count(*) FROM staff
+UNION ALL SELECT 'customers', count(*) FROM customers
+UNION ALL SELECT 'products', count(*) FROM products
+UNION ALL SELECT 'orders', count(*) FROM orders
+UNION ALL SELECT 'order_lines', count(*) FROM order_lines;
+```
+
+```text
+ table_name  | rows 
+-------------+------
+ shops       |    3
+ staff       |    9
+ customers   |    9
+ products    |   12
+ orders      |   20
+ order_lines |   33
+(6 rows)
+```
+
+If your counts match, you are ready. You will learn every part of that query in the next chapters. Here is what each table holds:
+
+| Table | One row is | Notable columns |
+|---|---|---|
+| `shops` | a bakery shop | `city`, `opened_on` |
+| `staff` | an employee | `role`, `shop_id`, `manager_id` (another staff member), `salary_pence` |
+| `customers` | a customer | `email` (unique), `city` (may be unknown), `joined_on` |
+| `products` | something the bakery sells | `sku` (unique product code), `category`, `price_pence`, `vegan` |
+| `orders` | an order | `customer_id`, `shop_id`, `placed_at` (a timestamp with time zone), `channel`, `status` |
+| `order_lines` | one product in an order | `order_id`, `product_id`, `quantity`, `unit_price_pence` (the price when ordered) |
+
+Money is stored as whole **pence** in `integer` columns, so sums are exact (<Ref to="db-types-functions" />). Each line keeps the price at the time of the order, because product prices change and old orders must not.
+
+The database can also describe itself. PostgreSQL's **information schema** (and psql's `\d orders`) lists each table's columns:
+
+```sql
+SELECT column_name, data_type, is_nullable
+FROM information_schema.columns
+WHERE table_name = 'orders'
+ORDER BY ordinal_position;
+```
+
+```text
+ column_name |        data_type         | is_nullable 
+-------------+--------------------------+-------------
+ id          | integer                  | NO
+ customer_id | integer                  | NO
+ shop_id     | integer                  | NO
+ placed_at   | timestamp with time zone | NO
+ channel     | text                     | NO
+ status      | text                     | NO
+(6 rows)
+```
+
+## Starting again
+
+To reset the data at any time, drop the database and create it again: in psql, `\c postgres`, then `DROP DATABASE bakery;`, `CREATE DATABASE bakery;`, `\c bakery`, and run the script again. Later chapters change data on purpose; resetting is how you get back to the results shown.
+
+## Common mistakes
+
+- **Forgetting the semicolon** in psql, so it waits for more input (the prompt changes from `bakery=#` to `bakery-#`).
+- **Running the script in the wrong database** (the default `postgres` database), so later queries cannot find the tables.
+- **Using a real password** in examples or sharing a database open to the internet; a local practice database should listen only on your machine.
+
+## Practice
+
+**1. (warm-up)** Which psql command shows the columns, keys and indexes of the `products` table?
+
+<Solution>
+
+`\d products`.
+
+</Solution>
+
+**2. (standard)** Write a query that counts the products in the bakery database whose `vegan` column is true.
+
+<Solution>
+
+```sql
+SELECT count(*) AS vegan_products
+FROM products
+WHERE vegan;
+```
+
+```text
+ vegan_products 
+----------------
+              7
+(1 row)
+```
+
+`WHERE vegan` keeps the rows where the boolean is true; it is the same as `WHERE vegan = true`.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Install PostgreSQL 18 with Docker, Postgres.app, Homebrew, the EDB installer or your Linux packages.
+- **psql** runs SQL and backslash meta-commands such as `\l`, `\c`, `\dt`, `\d`, `\x`, `\timing` and `\i`; graphical clients such as pgAdmin and DBeaver do the same in a window.
+- The **bakery database** has shops, staff, customers, products, orders and order lines; every result in this course comes from it.
+- Reset it by dropping and recreating the database and running the script again.
+
+## Go deeper
+
+- [PostgreSQL downloads](https://www.postgresql.org/download/), the PostgreSQL project. Installers and packages for every system.
+- [psql documentation](https://www.postgresql.org/docs/current/app-psql.html), the PostgreSQL project. Every option and meta-command.
+- [The official PostgreSQL Docker image](https://hub.docker.com/_/postgres), Docker. Environment variables and volumes for running PostgreSQL in a container.

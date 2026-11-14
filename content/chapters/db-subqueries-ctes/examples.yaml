@@ -1,0 +1,240 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: sql
+  check: postgres
+  output: "      name      | price_pence \n----------------+-------------\n Chocolate cake |        2400\n Lemon drizzle  |        1950\n Gift box       |        1500\n(3 rows)\n"
+  before: |
+    CREATE TABLE shops (
+      id        integer PRIMARY KEY,
+      city      text NOT NULL,
+      opened_on date NOT NULL
+    );
+
+    CREATE TABLE staff (
+      id           integer PRIMARY KEY,
+      name         text NOT NULL,
+      role         text NOT NULL,
+      shop_id      integer REFERENCES shops (id),
+      manager_id   integer REFERENCES staff (id),
+      salary_pence integer NOT NULL
+    );
+
+    CREATE TABLE customers (
+      id        integer PRIMARY KEY,
+      name      text NOT NULL,
+      email     text NOT NULL UNIQUE,
+      city      text,
+      joined_on date NOT NULL
+    );
+
+    CREATE TABLE products (
+      id          integer PRIMARY KEY,
+      sku         text NOT NULL UNIQUE,
+      name        text NOT NULL,
+      category    text NOT NULL,
+      price_pence integer NOT NULL CHECK (price_pence > 0),
+      vegan       boolean NOT NULL DEFAULT false
+    );
+
+    CREATE TABLE orders (
+      id          integer PRIMARY KEY,
+      customer_id integer NOT NULL REFERENCES customers (id),
+      shop_id     integer NOT NULL REFERENCES shops (id),
+      placed_at   timestamptz NOT NULL,
+      channel     text NOT NULL CHECK (channel IN ('web', 'app', 'shop')),
+      status      text NOT NULL CHECK (status IN ('placed', 'paid', 'delivered', 'cancelled'))
+    );
+
+    CREATE TABLE order_lines (
+      order_id         integer NOT NULL REFERENCES orders (id),
+      product_id       integer NOT NULL REFERENCES products (id),
+      quantity         integer NOT NULL CHECK (quantity > 0),
+      unit_price_pence integer NOT NULL,
+      PRIMARY KEY (order_id, product_id)
+    );
+
+    INSERT INTO shops VALUES
+      (1, 'Leeds', '2019-03-01'),
+      (2, 'York', '2021-06-15'),
+      (3, 'Hull', '2024-09-01');
+
+    INSERT INTO staff VALUES
+      (1, 'Abena Owusu', 'owner', NULL, NULL, 5200000),
+      (2, 'Kojo Asante', 'manager', 1, 1, 3800000),
+      (3, 'Efua Darko', 'manager', 2, 1, 3700000),
+      (4, 'Yaw Boateng', 'baker', 1, 2, 2900000),
+      (5, 'Adwoa Ofori', 'baker', 1, 2, 3000000),
+      (6, 'Kwesi Appiah', 'counter', 1, 2, 2400000),
+      (7, 'Akua Frimpong', 'baker', 2, 3, 2950000),
+      (8, 'Fiifi Mensah', 'counter', 2, 3, 2350000),
+      (9, 'Ama Serwaa', 'manager', 3, 1, 3600000);
+
+    INSERT INTO customers VALUES
+      (1, 'Ama', 'ama@example.com', 'Leeds', '2023-01-14'),
+      (2, 'Kofi', 'kofi@example.com', 'York', '2023-05-02'),
+      (3, 'Esi', 'esi@example.com', 'Leeds', '2024-02-20'),
+      (4, 'Yaa', 'yaa@example.com', NULL, '2024-07-09'),
+      (5, 'Kwame', 'kwame@example.com', 'Hull', '2025-01-03'),
+      (6, 'Akosua', 'akosua@example.com', 'York', '2025-03-18'),
+      (7, 'Kobina', 'kobina@example.com', 'Leeds', '2025-08-30'),
+      (8, 'Afua', 'afua@example.com', 'Hull', '2026-02-11'),
+      (9, 'Kweku', 'kweku@example.com', 'York', '2026-06-01');
+
+    INSERT INTO products VALUES
+      (1, 'RYE-400', 'Rye loaf', 'bread', 450, true),
+      (2, 'SOUR-800', 'Sourdough', 'bread', 520, true),
+      (3, 'BAG-250', 'Bagel', 'bread', 120, true),
+      (4, 'CRO-090', 'Croissant', 'pastry', 275, false),
+      (5, 'CIN-120', 'Cinnamon bun', 'pastry', 310, false),
+      (6, 'ALM-100', 'Almond croissant', 'pastry', 340, false),
+      (7, 'CAKE-CHOC', 'Chocolate cake', 'cake', 2400, false),
+      (8, 'CAKE-LEM', 'Lemon drizzle', 'cake', 1950, true),
+      (9, 'JAM-380', 'Strawberry jam', 'pantry', 380, true),
+      (10, 'TEA-250', 'Breakfast tea', 'pantry', 450, true),
+      (11, 'BAG-SES', 'Sesame bagel', 'bread', 140, true),
+      (12, 'GIFT-BOX', 'Gift box', 'pantry', 1500, false);
+
+    INSERT INTO orders VALUES
+      (1, 1, 1, '2026-10-01 08:12:00+00', 'shop', 'delivered'),
+      (2, 2, 2, '2026-10-01 09:40:00+00', 'web', 'delivered'),
+      (3, 1, 1, '2026-10-03 07:55:00+00', 'app', 'delivered'),
+      (4, 3, 1, '2026-10-04 12:30:00+00', 'web', 'cancelled'),
+      (5, 4, 2, '2026-10-06 16:05:00+00', 'web', 'delivered'),
+      (6, 5, 3, '2026-10-08 10:20:00+00', 'shop', 'delivered'),
+      (7, 2, 2, '2026-10-11 08:45:00+00', 'app', 'delivered'),
+      (8, 6, 2, '2026-10-12 11:10:00+00', 'shop', 'delivered'),
+      (9, 1, 1, '2026-10-15 07:30:00+00', 'app', 'delivered'),
+      (10, 7, 1, '2026-10-18 13:15:00+00', 'web', 'delivered'),
+      (11, 3, 1, '2026-10-21 09:05:00+00', 'shop', 'delivered'),
+      (12, 5, 3, '2026-10-24 15:40:00+00', 'web', 'paid'),
+      (13, 6, 2, '2026-10-27 10:00:00+00', 'app', 'delivered'),
+      (14, 1, 1, '2026-11-01 08:20:00+00', 'shop', 'delivered'),
+      (15, 2, 2, '2026-11-03 17:25:00+00', 'web', 'cancelled'),
+      (16, 8, 3, '2026-11-05 09:50:00+00', 'shop', 'delivered'),
+      (17, 4, 2, '2026-11-08 12:00:00+00', 'web', 'paid'),
+      (18, 7, 1, '2026-11-10 07:45:00+00', 'app', 'paid'),
+      (19, 1, 1, '2026-11-12 08:05:00+00', 'web', 'placed'),
+      (20, 6, 2, '2026-11-12 18:30:00+00', 'web', 'placed');
+
+    INSERT INTO order_lines VALUES
+      (1, 1, 2, 450), (1, 4, 2, 275),
+      (2, 2, 1, 520), (2, 9, 1, 380),
+      (3, 3, 6, 120),
+      (4, 7, 1, 2400),
+      (5, 8, 1, 1950), (5, 10, 2, 450),
+      (6, 1, 1, 450), (6, 5, 3, 310),
+      (7, 2, 2, 520),
+      (8, 4, 4, 275), (8, 6, 2, 340),
+      (9, 1, 1, 450), (9, 3, 4, 120),
+      (10, 7, 1, 2400), (10, 9, 2, 380),
+      (11, 5, 2, 310),
+      (12, 8, 2, 1950),
+      (13, 2, 1, 520), (13, 4, 3, 275), (13, 10, 1, 450),
+      (14, 1, 2, 450), (14, 6, 1, 340),
+      (15, 3, 3, 120),
+      (16, 2, 1, 520), (16, 9, 1, 380),
+      (17, 7, 1, 2400),
+      (18, 4, 6, 275),
+      (19, 1, 1, 450), (19, 2, 1, 520), (19, 5, 2, 310),
+      (20, 6, 3, 340);
+  note: The bakery sample database from the setup chapter is loaded first, as the chapter says.
+- block: 2
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 3
+  lang: sql
+  check: postgres
+  output: "  name  \n--------\n Esi\n Kobina\n Kwame\n Yaa\n(4 rows)\n"
+- block: 4
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 5
+  lang: sql
+  check: postgres
+  output: " with_not_in | with_not_exists \n-------------+-----------------\n             | t\n(1 row)\n"
+- block: 6
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 7
+  lang: sql
+  check: postgres
+  output: " name  \n-------\n Kweku\n(1 row)\n"
+- block: 8
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 9
+  lang: sql
+  check: postgres
+  output: "  name  | orders | items \n--------+--------+-------\n Ama    |      5 |    22\n Akosua |      3 |    14\n Kobina |      2 |     9\n(3 rows)\n"
+- block: 10
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 11
+  lang: sql
+  check: postgres
+  output: "  name  | orders | spent_pence | average_order_pence \n--------+--------+-------------+---------------------\n Ama    |      5 |        5930 |                1186\n Kwame  |      2 |        5280 |                2640\n Yaa    |      2 |        5250 |                2625\n Kobina |      2 |        4810 |                2405\n Akosua |      3 |        4595 |                1532\n Kofi   |      2 |        1940 |                 970\n Afua   |      1 |         900 |                 900\n Esi    |      1 |         620 |                 620\n(8 rows)\n"
+- block: 12
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 13
+  lang: sql
+  check: postgres
+  output: "     name     |  role   | depth \n--------------+---------+-------\n Adwoa Ofori  | baker   |     1\n Kwesi Appiah | counter |     1\n Yaw Boateng  | baker   |     1\n(3 rows)\n"
+- block: 14
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 15
+  lang: sql
+  check: postgres
+  output: "                   path                   \n------------------------------------------\n Abena Owusu\n Abena Owusu > Ama Serwaa\n Abena Owusu > Efua Darko\n Abena Owusu > Efua Darko > Akua Frimpong\n Abena Owusu > Efua Darko > Fiifi Mensah\n Abena Owusu > Kojo Asante\n Abena Owusu > Kojo Asante > Adwoa Ofori\n Abena Owusu > Kojo Asante > Kwesi Appiah\n Abena Owusu > Kojo Asante > Yaw Boateng\n(9 rows)\n"
+- block: 16
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 17
+  lang: sql
+  check: postgres
+  output: "    day     | orders \n------------+--------\n 2026-11-01 |      1\n 2026-11-02 |      0\n 2026-11-03 |      1\n 2026-11-04 |      0\n 2026-11-05 |      1\n 2026-11-06 |      0\n 2026-11-07 |      0\n(7 rows)\n"
+- block: 18
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 19
+  lang: sql
+  check: postgres
+  output: "      name      | price_pence \n----------------+-------------\n Chocolate cake |        2400\n Lemon drizzle  |        1950\n(2 rows)\n"
+- block: 20
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 21
+  lang: sql
+  check: postgres
+  output: " city  \n-------\n Leeds\n(1 row)\n"
+- block: 22
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 23
+  lang: sql
+  check: postgres
+  output: "  name  |             cakes             \n--------+-------------------------------\n Esi    | Chocolate cake\n Kobina | Chocolate cake\n Yaa    | Chocolate cake, Lemon drizzle\n(3 rows)\n"
+- block: 24
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 25
+  lang: sql
+  check: postgres
+  output: "    name     | people | salaries_pounds \n-------------+--------+-----------------\n Abena Owusu |      9 |          299000\n Kojo Asante |      4 |          121000\n Efua Darko  |      3 |           90000\n Ama Serwaa  |      1 |           36000\n(4 rows)\n"
+- block: 26
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.

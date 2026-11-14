@@ -1,0 +1,426 @@
+---
+title: "Joins"
+summary: "Inner, left, right, full, cross and self joins, joining many tables, and finding what is missing."
+prerequisites: [db-aggregates]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will combine tables with **joins**: inner joins for matching rows, outer joins to keep rows with no match, self joins for rows that refer to their own table, and joins across four or five tables. You will find what is missing (customers who never ordered), and avoid the join mistakes that double-count totals. Joins are where SQL's power really shows: data split into tables to stay correct is put back together for each question.
+
+## Why joins exist
+
+An order row holds `customer_id = 1`, not "Ama". To show orders with customer names, the database must match each order with its customer: a **join**.
+
+```sql
+SELECT o.id, o.placed_at::date AS placed_on, c.name, o.status
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+WHERE o.id <= 5
+ORDER BY o.id;
+```
+
+```text
+ id | placed_on  | name |  status   
+----+------------+------+-----------
+  1 | 2026-10-01 | Ama  | delivered
+  2 | 2026-10-01 | Kofi | delivered
+  3 | 2026-10-03 | Ama  | delivered
+  4 | 2026-10-04 | Esi  | cancelled
+  5 | 2026-10-06 | Yaa  | delivered
+(5 rows)
+```
+
+- **`JOIN ... ON condition`** pairs each order with every customer row for which the condition is true; here exactly one.
+- **Table aliases** (`orders AS o`, or just `orders o`) keep queries short. Once a table has an alias, refer to its columns through it: `o.id`, `c.name`. Qualify every column in a query with more than one table, even when a name is unique, so the query stays correct when a column is added.
+- `JOIN` on its own means **`INNER JOIN`**: only pairs that match are returned.
+
+## Inner joins drop non-matches
+
+An inner join keeps only rows that match on both sides. Which products have never been ordered?
+
+```sql
+SELECT p.name, count(*) AS times_ordered
+FROM products AS p
+JOIN order_lines AS l ON l.product_id = p.id
+GROUP BY p.name
+ORDER BY p.name;
+```
+
+```text
+       name       | times_ordered 
+------------------+---------------
+ Almond croissant |             3
+ Bagel            |             3
+ Breakfast tea    |             2
+ Chocolate cake   |             3
+ Cinnamon bun     |             3
+ Croissant        |             4
+ Lemon drizzle    |             2
+ Rye loaf         |             5
+ Sourdough        |             5
+ Strawberry jam   |             3
+(10 rows)
+```
+
+Twelve products exist, but only ten appear: products with no order lines had nothing to pair with, so the inner join dropped them. To keep them, use an outer join.
+
+## LEFT JOIN: keep everything on the left
+
+A **`LEFT JOIN`** keeps every row from the left table; where there is no match, the right table's columns are NULL:
+
+```sql
+SELECT p.name, count(l.order_id) AS times_ordered
+FROM products AS p
+LEFT JOIN order_lines AS l ON l.product_id = p.id
+GROUP BY p.name
+ORDER BY times_ordered, p.name;
+```
+
+```text
+       name       | times_ordered 
+------------------+---------------
+ Gift box         |             0
+ Sesame bagel     |             0
+ Breakfast tea    |             2
+ Lemon drizzle    |             2
+ Almond croissant |             3
+ Bagel            |             3
+ Chocolate cake   |             3
+ Cinnamon bun     |             3
+ Strawberry jam   |             3
+ Croissant        |             4
+ Rye loaf         |             5
+ Sourdough        |             5
+(12 rows)
+```
+
+Note `count(l.order_id)`, not `count(*)`: for a product with no lines, the joined row has a NULL `order_id`, which `count(column)` skips, giving 0. `count(*)` would count the one NULL-filled row and give 1.
+
+### Finding what is missing: the anti-join
+
+Rows with no match are found by left joining and keeping the NULLs. Customers who have never placed an order:
+
+```sql
+SELECT c.name
+FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.id
+WHERE o.id IS NULL;
+```
+
+```text
+ name  
+-------
+ Kweku
+(1 row)
+```
+
+Only Kweku has never ordered. Products never ordered:
+
+```sql
+SELECT p.name
+FROM products AS p
+LEFT JOIN order_lines AS l ON l.product_id = p.id
+WHERE l.product_id IS NULL;
+```
+
+```text
+     name     
+--------------
+ Sesame bagel
+ Gift box
+(2 rows)
+```
+
+This pattern is an **anti-join**. `NOT EXISTS`, in <Ref to="db-subqueries-ctes" />, is an equivalent and often clearer way to write it.
+
+### Where to put conditions in an outer join
+
+In a `LEFT JOIN`, a condition on the right table belongs in **`ON`** if it should decide what counts as a match, and in **`WHERE`** only if it should remove rows from the result. Compare counting each customer's cancelled orders:
+
+```sql
+SELECT c.name, count(o.id) AS cancelled_orders
+FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.id AND o.status = 'cancelled'
+GROUP BY c.name
+ORDER BY cancelled_orders DESC, c.name;
+```
+
+```text
+  name  | cancelled_orders 
+--------+------------------
+ Esi    |                1
+ Kofi   |                1
+ Afua   |                0
+ Akosua |                0
+ Ama    |                0
+ Kobina |                0
+ Kwame  |                0
+ Kweku  |                0
+ Yaa    |                0
+(9 rows)
+```
+
+Every customer appears, most with 0. Had `o.status = 'cancelled'` been in `WHERE`, customers with no cancelled orders would have NULL statuses, fail the condition, and vanish: the `LEFT JOIN` would silently become an inner join. This is one of the most common SQL bugs.
+
+## RIGHT and FULL joins
+
+**`RIGHT JOIN`** is a left join with the tables swapped; most people always write `LEFT JOIN` and put the table they want to keep first. **`FULL JOIN`** keeps unmatched rows from **both** sides:
+
+```sql
+SELECT s.city AS shop, st.name AS staff_member
+FROM shops AS s
+FULL JOIN staff AS st ON st.shop_id = s.id AND st.role = 'baker'
+ORDER BY s.city, st.name;
+```
+
+```text
+ shop  | staff_member  
+-------+---------------
+ Hull  |
+ Leeds | Adwoa Ofori
+ Leeds | Yaw Boateng
+ York  | Akua Frimpong
+       | Abena Owusu
+       | Ama Serwaa
+       | Efua Darko
+       | Fiifi Mensah
+       | Kojo Asante
+       | Kwesi Appiah
+(10 rows)
+```
+
+Hull has no baker, so its row has a NULL staff member; staff who are not bakers do not match the `ON` condition, so they appear with a NULL shop. Full joins are rare in applications but useful for comparing two lists, such as reconciling a payments export with orders.
+
+## Joining many tables
+
+A query can join as many tables as it needs. Each line of order 13, with the customer, the shop and the product:
+
+```sql
+SELECT o.id AS order_id, c.name AS customer, s.city AS shop,
+       p.name AS product, l.quantity,
+       l.quantity * l.unit_price_pence AS line_pence
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+JOIN shops AS s ON s.id = o.shop_id
+JOIN order_lines AS l ON l.order_id = o.id
+JOIN products AS p ON p.id = l.product_id
+WHERE o.id = 13
+ORDER BY p.name;
+```
+
+```text
+ order_id | customer | shop |    product    | quantity | line_pence 
+----------+----------+------+---------------+----------+------------
+       13 | Akosua   | York | Breakfast tea |        1 |        450
+       13 | Akosua   | York | Croissant     |        3 |        825
+       13 | Akosua   | York | Sourdough     |        1 |        520
+(3 rows)
+```
+
+Follow the foreign keys: each `JOIN` adds one table and the condition that links it to a table already in the query.
+
+## Self joins
+
+A table can be joined to itself, with two different aliases. Staff have a `manager_id` that points to another staff row:
+
+```sql
+SELECT e.name AS employee, e.role, m.name AS manager
+FROM staff AS e
+LEFT JOIN staff AS m ON m.id = e.manager_id
+ORDER BY m.name NULLS FIRST, e.name;
+```
+
+```text
+   employee    |  role   |   manager   
+---------------+---------+-------------
+ Abena Owusu   | owner   |
+ Ama Serwaa    | manager | Abena Owusu
+ Efua Darko    | manager | Abena Owusu
+ Kojo Asante   | manager | Abena Owusu
+ Akua Frimpong | baker   | Efua Darko
+ Fiifi Mensah  | counter | Efua Darko
+ Adwoa Ofori   | baker   | Kojo Asante
+ Kwesi Appiah  | counter | Kojo Asante
+ Yaw Boateng   | baker   | Kojo Asante
+(9 rows)
+```
+
+The left join keeps the owner, who has no manager. For whole chains of managers (a manager's manager's manager), use a recursive query (<Ref to="db-subqueries-ctes" />).
+
+## CROSS JOIN
+
+A **`CROSS JOIN`** pairs every row of one table with every row of the other, with no condition: a **Cartesian product**. Every shop with every channel, to build a report grid that shows zeros too:
+
+```sql
+SELECT s.city, ch.channel, count(o.id) AS orders
+FROM shops AS s
+CROSS JOIN (VALUES ('web'), ('app'), ('shop')) AS ch (channel)
+LEFT JOIN orders AS o ON o.shop_id = s.id AND o.channel = ch.channel
+GROUP BY s.city, ch.channel
+ORDER BY s.city, ch.channel;
+```
+
+```text
+ city  | channel | orders 
+-------+---------+--------
+ Hull  | app     |      0
+ Hull  | shop    |      2
+ Hull  | web     |      1
+ Leeds | app     |      3
+ Leeds | shop    |      3
+ Leeds | web     |      3
+ York  | app     |      2
+ York  | shop    |      1
+ York  | web     |      5
+(9 rows)
+```
+
+`VALUES` builds a small table inline. An accidental cross join, from a missing or wrong `ON` condition, multiplies rows: 20 orders joined to 8 customers without a condition gives 160 rows of nonsense.
+
+## Joins that multiply rows
+
+Joining a row to **many** rows repeats it once per match. That is correct, but it changes aggregates. Suppose you want each customer's number of orders and number of items, and join both tables at once:
+
+```sql
+SELECT c.name,
+       count(o.id) AS orders_wrong,
+       count(DISTINCT o.id) AS orders_right,
+       sum(l.quantity) AS items
+FROM customers AS c
+JOIN orders AS o ON o.customer_id = c.id
+JOIN order_lines AS l ON l.order_id = o.id
+WHERE c.name IN ('Ama', 'Akosua')
+GROUP BY c.name
+ORDER BY c.name;
+```
+
+```text
+  name  | orders_wrong | orders_right | items 
+--------+--------------+--------------+-------
+ Akosua |            6 |            3 |    14
+ Ama    |           10 |            5 |    22
+(2 rows)
+```
+
+Each order was repeated once per line, so `count(o.id)` counted lines, not orders. `count(DISTINCT ...)` fixes counts, but not sums: a sum of an order-level column (such as a delivery charge) would be inflated in the same way. The robust fix is to aggregate each child table **before** joining it, with a subquery or CTE (<Ref to="db-subqueries-ctes" />).
+
+## USING and NATURAL
+
+When the joined columns have the same name in both tables, `JOIN ... USING (column)` is shorthand for `ON a.column = b.column`. Avoid `NATURAL JOIN`, which joins on **every** pair of identically named columns: add a `name` column to two tables and a working query silently changes meaning.
+
+## Common mistakes
+
+- **A condition on the right table of a `LEFT JOIN` in `WHERE`**, turning it into an inner join.
+- **`count(*)` after a left join**, counting the NULL-filled row as 1.
+- **Summing or counting across two one-to-many joins**, multiplying rows.
+- **Fixing duplicates with `DISTINCT`** instead of fixing the join.
+- **Missing or wrong `ON` conditions**, giving accidental cross joins.
+- **Unqualified column names** in multi-table queries.
+
+## Practice
+
+**1. (warm-up)** List each order from the York shop with the customer's name, oldest first.
+
+<Solution>
+
+```sql
+SELECT o.id, c.name, o.placed_at::date AS placed_on
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+JOIN shops AS s ON s.id = o.shop_id
+WHERE s.city = 'York'
+ORDER BY o.placed_at;
+```
+
+```text
+ id |  name  | placed_on  
+----+--------+------------
+  2 | Kofi   | 2026-10-01
+  5 | Yaa    | 2026-10-06
+  7 | Kofi   | 2026-10-11
+  8 | Akosua | 2026-10-12
+ 13 | Akosua | 2026-10-27
+ 15 | Kofi   | 2026-11-03
+ 17 | Yaa    | 2026-11-08
+ 20 | Akosua | 2026-11-12
+(8 rows)
+```
+
+</Solution>
+
+**2. (standard)** For every shop, show how many staff work there and their total salary in pounds, including shops with no staff and treating missing totals as zero.
+
+<Solution>
+
+```sql
+SELECT s.city,
+       count(st.id) AS staff,
+       coalesce(sum(st.salary_pence), 0) / 100 AS salaries_pounds
+FROM shops AS s
+LEFT JOIN staff AS st ON st.shop_id = s.id
+GROUP BY s.city
+ORDER BY s.city;
+```
+
+```text
+ city  | staff | salaries_pounds 
+-------+-------+-----------------
+ Hull  |     1 |           36000
+ Leeds |     4 |          121000
+ York  |     3 |           90000
+(3 rows)
+```
+
+</Solution>
+
+**3. (stretch)** List customers who have ordered cake (any product in the `cake` category) and never ordered bread, with the cakes they ordered.
+
+<Solution>
+
+```sql
+SELECT c.name, string_agg(DISTINCT p.name, ', ') AS cakes
+FROM customers AS c
+JOIN orders AS o ON o.customer_id = c.id
+JOIN order_lines AS l ON l.order_id = o.id
+JOIN products AS p ON p.id = l.product_id AND p.category = 'cake'
+LEFT JOIN (
+  SELECT DISTINCT o2.customer_id
+  FROM orders AS o2
+  JOIN order_lines AS l2 ON l2.order_id = o2.id
+  JOIN products AS p2 ON p2.id = l2.product_id
+  WHERE p2.category = 'bread'
+) AS bread_buyers ON bread_buyers.customer_id = c.id
+WHERE bread_buyers.customer_id IS NULL
+GROUP BY c.name
+ORDER BY c.name;
+```
+
+```text
+  name  |             cakes             
+--------+-------------------------------
+ Esi    | Chocolate cake
+ Kobina | Chocolate cake
+ Yaa    | Chocolate cake, Lemon drizzle
+(3 rows)
+```
+
+The inner query lists everyone who has bought bread; the left join and `IS NULL` keep only customers not in it. <Ref to="db-subqueries-ctes" /> shows a shorter way with `NOT EXISTS`.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **`JOIN ... ON`** (an inner join) pairs matching rows; non-matches are dropped.
+- **`LEFT JOIN`** keeps every left row, with NULLs where nothing matched; `IS NULL` on the right side finds what is missing (an **anti-join**). Conditions on the right table go in `ON`.
+- **`FULL JOIN`** keeps unmatched rows from both sides; **`CROSS JOIN`** pairs everything with everything.
+- **Self joins** relate rows of one table, such as staff and their managers.
+- Joining to many rows repeats rows: aggregate before joining when you need correct counts and sums.
+
+## Go deeper
+
+- [PostgreSQL tutorial: joins between tables](https://www.postgresql.org/docs/current/tutorial-join.html), the PostgreSQL project. Inner, outer and self joins.
+- [A visual explanation of SQL joins](https://blog.codinghorror.com/a-visual-explanation-of-sql-joins/), Jeff Atwood. The classic diagrams, with their limits discussed in the comments.
+- [Use The Index, Luke: joins](https://use-the-index-luke.com/sql/join), Markus Winand. How databases execute joins and how indexes help.

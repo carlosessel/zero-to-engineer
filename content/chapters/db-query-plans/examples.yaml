@@ -1,0 +1,65 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: sql
+  check: postgres
+  output: ''
+- block: 2
+  lang: sql
+  check: postgres
+  output: "                                      QUERY PLAN                                      \n--------------------------------------------------------------------------------------\n HashAggregate  (cost=615.34..615.38 rows=4 width=13)\n   Group Key: c.city\n   ->  Hash Join  (cost=140.50..598.08 rows=3453 width=5)\n         Hash Cond: (o.customer_id = c.id)\n         ->  Seq Scan on plan_orders o  (cost=0.00..448.50 rows=3453 width=4)\n               Filter: (placed_on >= '2026-06-01'::date)\n         ->  Hash  (cost=78.00..78.00 rows=5000 width=9)\n               ->  Seq Scan on plan_customers c  (cost=0.00..78.00 rows=5000 width=9)\n(8 rows)\n"
+- block: 3
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 4
+  lang: sql
+  check: postgres
+  output: "                                  QUERY PLAN                                  \n------------------------------------------------------------------------------\n HashAggregate (actual rows=4.00 loops=1)\n   Group Key: c.city\n   Batches: 1  Memory Usage: 32kB\n   ->  Hash Join (actual rows=3444.00 loops=1)\n         Hash Cond: (o.customer_id = c.id)\n         ->  Seq Scan on plan_orders o (actual rows=3444.00 loops=1)\n               Filter: (placed_on >= '2026-06-01'::date)\n               Rows Removed by Filter: 21556\n         ->  Hash (actual rows=5000.00 loops=1)\n               Buckets: 8192  Batches: 1  Memory Usage: 208kB\n               ->  Seq Scan on plan_customers c (actual rows=5000.00 loops=1)\n(11 rows)\n"
+- block: 5
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 6
+  lang: sql
+  check: postgres
+  output: "                       QUERY PLAN                       \n--------------------------------------------------------\n Bitmap Heap Scan on plan_orders\n   Recheck Cond: (customer_id = 7)\n   ->  Bitmap Index Scan on plan_orders_customer_id_idx\n         Index Cond: (customer_id = 7)\n(4 rows)\n\n           QUERY PLAN           \n--------------------------------\n Seq Scan on plan_orders\n   Filter: (customer_id < 4000)\n(2 rows)\n"
+- block: 7
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 8
+  lang: sql
+  check: postgres
+  output: "                             QUERY PLAN                              \n---------------------------------------------------------------------\n Nested Loop\n   ->  Index Only Scan using plan_customers_pkey on plan_customers c\n         Index Cond: (id = 42)\n   ->  Bitmap Heap Scan on plan_orders o\n         Recheck Cond: (customer_id = 42)\n         ->  Bitmap Index Scan on plan_orders_customer_id_idx\n               Index Cond: (customer_id = 42)\n(7 rows)\n\n                   QUERY PLAN                   \n------------------------------------------------\n HashAggregate\n   Group Key: c.city\n   ->  Hash Join\n         Hash Cond: (o.customer_id = c.id)\n         ->  Seq Scan on plan_orders o\n         ->  Hash\n               ->  Seq Scan on plan_customers c\n(7 rows)\n"
+- block: 9
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 10
+  lang: sql
+  check: postgres
+  output: "                                             QUERY PLAN                                              \n-----------------------------------------------------------------------------------------------------\n Limit (actual rows=3.00 loops=1)\n   ->  Index Scan Backward using plan_orders_placed_on_idx on plan_orders (actual rows=3.00 loops=1)\n         Index Searches: 1\n(3 rows)\n"
+- block: 11
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 12
+  lang: sql
+  check: postgres
+  output: " attname | n_distinct |    most_common_vals    |   most_common_freqs   \n---------+------------+------------------------+-----------------------\n city    |          4 | {Bath,Hull,Leeds,York} | {0.25,0.25,0.25,0.25}\n premium |          2 | {f,t}                  | {0.98,0.02}\n(2 rows)\n"
+- block: 13
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 14
+  lang: text
+  check: illustration
+  note: A plan shape for the exercise to read; it is the shape of the second plan in the joins section, which is run above.
+- block: 15
+  lang: sql
+  check: postgres
+  output: "                              QUERY PLAN                               \n-----------------------------------------------------------------------\n Hash Join (actual rows=61.00 loops=1)\n   Hash Cond: (o.customer_id = c.id)\n   ->  Seq Scan on plan_orders o (actual rows=3049.00 loops=1)\n         Filter: (total_pence > 8000)\n         Rows Removed by Filter: 21951\n   ->  Hash (actual rows=100.00 loops=1)\n         Buckets: 1024  Batches: 1  Memory Usage: 7kB\n         ->  Seq Scan on plan_customers c (actual rows=100.00 loops=1)\n               Filter: premium\n               Rows Removed by Filter: 4900\n(10 rows)\n"
+- block: 16
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.

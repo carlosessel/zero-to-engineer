@@ -1,0 +1,30 @@
+- question: What must a subquery used as a single value return?
+  options:
+  - At most one row and one column
+  - Exactly one column, any number of rows
+  answer: 0
+  explanation: Otherwise PostgreSQL reports an error.
+- question: Why prefer NOT EXISTS to NOT IN with a subquery?
+  options:
+  - NOT IN is never true if the subquery returns a NULL
+  - NOT EXISTS is shorter
+  answer: 0
+  explanation: x NOT IN (1, NULL) is unknown.
+- question: What is a correlated subquery?
+  options:
+  - A subquery that refers to the current row of the outer query
+  - A subquery in FROM
+  answer: 0
+  explanation: EXISTS subqueries usually are.
+- question: What do the two parts of a recursive CTE do?
+  options:
+  - A starting query, and a recursive query that adds rows from those found so far
+  - A query and its index
+  answer: 0
+  explanation: They are joined by UNION ALL.
+- question: Do simple CTEs make a PostgreSQL query slower?
+  options:
+  - No; since version 12 they are inlined unless marked MATERIALIZED
+  - Yes; each is always computed separately
+  answer: 0
+  explanation: Use them freely for readability.

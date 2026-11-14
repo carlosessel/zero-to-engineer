@@ -1,0 +1,36 @@
+- question: Which condition finds customers whose city is unknown?
+  options:
+  - city IS NULL
+  - city = NULL
+  answer: 0
+  explanation: Any comparison with NULL is unknown, never true.
+- question: Does WHERE city <> 'Leeds' return customers whose city is NULL?
+  options:
+  - No; the comparison is unknown, so the row is left out
+  - 'Yes'
+  answer: 0
+  explanation: Use IS DISTINCT FROM or add OR city IS NULL.
+- question: What does BETWEEN 400 AND 2000 include?
+  options:
+  - Both 400 and 2000
+  - Neither end
+  answer: 0
+  explanation: BETWEEN means >= and <=.
+- question: Why can an alias from SELECT be used in ORDER BY but not in WHERE?
+  options:
+  - WHERE is evaluated before SELECT computes the alias
+  - Aliases only work in ORDER BY by convention
+  answer: 0
+  explanation: The evaluation order explains it.
+- question: What does 450 / 100 give in PostgreSQL?
+  options:
+  - '4'
+  - '4.5'
+  answer: 0
+  explanation: Dividing two integers drops the fraction.
+- question: Why must LIMIT and OFFSET be paired with a unique ORDER BY?
+  options:
+  - Without it the same row can appear on two pages
+  - LIMIT does not work without ORDER BY
+  answer: 0
+  explanation: Order is only guaranteed by ORDER BY.

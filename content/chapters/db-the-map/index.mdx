@@ -1,0 +1,159 @@
+---
+title: "What databases are and what this course covers"
+summary: "Tables, rows and SQL; relational and other databases; who works with them; how the course is organised."
+prerequisites: []
+estimated_minutes: 40
+status: resources-verified
+---
+
+By the end of this chapter you will know what a database is and why almost every piece of software has one, what makes **relational** databases and **SQL** so durable, how other kinds of database differ, who works with databases and what they do, and how this course takes you from your first query to running databases in production. No programming or database experience is needed.
+
+## Why databases exist
+
+Every app remembers things: your account, your orders, your messages, the stock in a shop. You could keep that in files, and very small programs do. But as soon as data matters, files fall short:
+
+- **Many people at once.** Two customers buy the last loaf at the same moment. Who gets it, and does the stock end at zero or at minus one?
+- **Questions.** "Which customers in Leeds ordered cake last month?" With files, you write a program for every question.
+- **Safety.** The power fails halfway through saving an order. Is the order half-saved, saved, or lost?
+- **Rules.** Every order must belong to a real customer; prices cannot be negative; email addresses must be unique.
+- **Size and speed.** Finding one customer among ten million should take milliseconds, not minutes.
+
+A **database management system** (DBMS, usually just called a database) solves all of these. You describe your data, the database stores it safely, enforces your rules, lets thousands of users read and change it at once without corrupting it, and answers questions you ask in a query language.
+
+## Tables, rows and columns
+
+A **relational database** stores data in **tables**. Each table holds one kind of thing; each **row** is one of those things; each **column** is one fact about it, with a **type**:
+
+| id | name | email | city |
+|---|---|---|---|
+| 1 | Ama | ama@example.com | Leeds |
+| 2 | Kofi | kofi@example.com | York |
+| 3 | Esi | esi@example.com | Leeds |
+
+Tables refer to each other by **keys**. Each customer has a unique `id` (the **primary key**); each order records its `customer_id`, which must match a real customer (a **foreign key**). Splitting data into related tables, rather than repeating a customer's details on every order, keeps each fact in one place, so it can never disagree with itself.
+
+## SQL
+
+You talk to a relational database in **SQL** (Structured Query Language, said "S-Q-L" or "sequel"). SQL is **declarative**: you describe the result you want, and the database works out how to get it.
+
+```sql
+SELECT name, city
+FROM customers
+WHERE city = 'Leeds'
+ORDER BY name;
+```
+
+```text
+  name  | city  
+--------+-------
+ Ama    | Leeds
+ Esi    | Leeds
+ Kobina | Leeds
+(3 rows)
+```
+
+Reading it aloud explains it: select the name and city, from the customers table, where the city is Leeds, ordered by name. You did not say how to find those rows (read every row, or use an index); the database decided. That separation is why SQL, invented in the 1970s, is still one of the most used and most valuable languages in software: the same query keeps working as the data grows a thousandfold and the database finds a faster way to answer it.
+
+SQL is standardised (ISO/IEC 9075), and every relational database speaks it, with small differences in **dialect**. Learn it well once, and you can use PostgreSQL, MySQL, SQL Server, SQLite, Oracle and the SQL interfaces of data warehouses.
+
+## The main relational databases
+
+| Database | Licence | Typical use |
+|---|---|---|
+| **PostgreSQL** | Open source | The most popular choice for new applications; feature-rich, standards-minded, extensible |
+| **MySQL** and MariaDB | Open source | Web applications; very widely deployed |
+| **SQL Server** | Commercial (free editions) | Microsoft and .NET shops, enterprises |
+| **Oracle Database** | Commercial | Large enterprises, banks, governments |
+| **SQLite** | Public domain | Embedded in apps, phones, browsers and tests; a whole database in one file |
+
+Cloud providers run these for you as managed services (Amazon RDS and Aurora, Azure SQL Database, Google Cloud SQL, and many others), and some, such as CockroachDB and Google Spanner, spread one SQL database across many machines.
+
+This course uses **PostgreSQL**. It is free, it runs everywhere, it has the richest SQL of the open-source databases, and employers increasingly ask for it. <Ref to="db-other-engines" /> shows what changes on the others.
+
+## Other kinds of database
+
+Relational databases are the default, but not the only kind (<Ref to="m-nosql" />):
+
+- **Key-value stores** (Redis, DynamoDB): look up a value by its key, extremely fast; caches, sessions, counters.
+- **Document databases** (MongoDB, Firestore): store JSON-like documents; flexible shapes.
+- **Wide-column stores** (Cassandra): huge write volumes across many machines.
+- **Graph databases** (Neo4j): relationships first; social networks, recommendations.
+- **Search engines** (Elasticsearch, OpenSearch): full-text search and log analytics.
+- **Analytical warehouses** (BigQuery, Snowflake, Redshift, ClickHouse): scanning billions of rows for reports, with SQL (<Ref to="db-analytics" />).
+- **Vector databases**: finding similar items by meaning, for AI applications (<Ref to="db-vectors" />).
+
+Many of these now overlap: PostgreSQL stores JSON documents, searches text and vectors, and often removes the need for a second database.
+
+## Who works with databases
+
+- **Back-end and full-stack engineers** design tables, write queries and migrations, and make their services fast and correct. Every developer benefits from strong SQL.
+- **Database administrators** (DBAs) and **database reliability engineers** keep databases running: backups, replication, upgrades, tuning and security.
+- **Data engineers** build pipelines that move and transform data between systems and into warehouses.
+- **Analytics engineers and data analysts** model data for reporting and answer business questions with SQL.
+- **Data scientists** pull and prepare data for models.
+
+All of them use SQL every day. <Ref to="db-careers" /> describes each role and how to get there.
+
+## How this course is organised
+
+1. **Start here**: this map and setting up PostgreSQL with the bakery sample database used throughout.
+2. **SQL from zero**: reading, filtering, grouping, joining, subqueries, changing data, and the types and functions you need.
+3. **Advanced SQL**: window functions, advanced grouping and joins, JSON, arrays and full-text search.
+4. **Designing databases**: tables and constraints, normalisation, data modelling, views, functions and triggers.
+5. **Performance**: indexes, query plans and a workflow for making slow things fast.
+6. **Transactions and concurrency**: ACID, isolation, locking and the bugs they prevent.
+7. **Running databases**: security, backups, replication, monitoring and safe schema changes.
+8. **Beyond PostgreSQL**: other engines, NoSQL, caching, analytics and vector search.
+9. **Databases from code**: using databases safely from Python, C#, Java and TypeScript.
+10. **Practice and careers**: interview problems, projects and roles; then a library and a glossary.
+
+Every query in this course was run on PostgreSQL 18, and every result shown is the real output. Type the queries yourself, change them, and break them: that is how SQL sticks.
+
+## Common mistakes
+
+- **Treating the database as a dumb store** and doing all the work (filtering, joining, summing) in application code, which is slower and more error-prone.
+- **Skipping constraints**, so bad data gets in and is found months later.
+- **Learning only an ORM** without SQL, and being unable to see why the application is slow.
+- **Choosing a NoSQL database to avoid designing a schema**; the schema still exists, just in your code.
+
+## Practice
+
+**1. (warm-up)** Name three problems a database solves that a folder of files does not.
+
+<Solution>
+
+Any three of: many users changing data at once without corrupting it; asking new questions without writing a program for each; surviving crashes without half-saved data; enforcing rules such as unique emails and valid references; finding rows quickly in very large data.
+
+</Solution>
+
+**2. (warm-up)** Why is an order stored with a `customer_id` rather than a copy of the customer's name and email?
+
+<Solution>
+
+So each fact lives in one place. If Ama changes her email, it changes in one row of `customers`, and every order still points to the right, current details. Copies on every order could disagree with each other and waste space.
+
+</Solution>
+
+**3. (standard)** For each need, which kind of database would you consider first? (a) The orders and payments of an online bakery; (b) sessions and rate-limit counters; (c) searching product reviews by words they contain; (d) reports over five years of sales across all shops.
+
+<Solution>
+
+(a) A relational database: related data, rules and transactions. (b) A key-value store such as Redis. (c) A search engine, or PostgreSQL's own full-text search for modest volumes. (d) An analytical warehouse, or PostgreSQL itself while the data is modest.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **database** stores data safely, enforces rules, lets many users work at once, and answers questions.
+- **Relational** databases store **tables** of **rows** and **columns**, linked by **primary** and **foreign keys**.
+- **SQL** is declarative: you say what you want, the database decides how. It is standard across engines, with dialects.
+- PostgreSQL, MySQL, SQL Server, Oracle and SQLite are the main relational databases; key-value, document, graph, search, warehouse and vector databases serve other needs.
+- Engineers, DBAs, data engineers and analysts all use SQL daily.
+
+## Go deeper
+
+- [PostgreSQL: about](https://www.postgresql.org/about/), the PostgreSQL project. What PostgreSQL is and its history.
+- [DB-Engines ranking](https://db-engines.com/en/ranking), solid IT. How popular each database is, updated monthly.
+- [CMU 15-445: Intro to Database Systems](https://15445.courses.cs.cmu.edu/), Andy Pavlo and Carnegie Mellon University. A free university course on how databases work inside, with recorded lectures.

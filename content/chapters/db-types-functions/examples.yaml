@@ -1,0 +1,208 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: sql
+  check: postgres
+  output: " int_division | remainder |  decimal_division  |      float_sum      | numeric_sum | rounded \n--------------+-----------+--------------------+---------------------+-------------+---------\n            3 |         1 | 3.5000000000000000 | 0.30000000000000004 |         0.3 |    2.68\n(1 row)\n\nERROR:  integer out of range\n"
+  before: |
+    CREATE TABLE shops (
+      id        integer PRIMARY KEY,
+      city      text NOT NULL,
+      opened_on date NOT NULL
+    );
+
+    CREATE TABLE staff (
+      id           integer PRIMARY KEY,
+      name         text NOT NULL,
+      role         text NOT NULL,
+      shop_id      integer REFERENCES shops (id),
+      manager_id   integer REFERENCES staff (id),
+      salary_pence integer NOT NULL
+    );
+
+    CREATE TABLE customers (
+      id        integer PRIMARY KEY,
+      name      text NOT NULL,
+      email     text NOT NULL UNIQUE,
+      city      text,
+      joined_on date NOT NULL
+    );
+
+    CREATE TABLE products (
+      id          integer PRIMARY KEY,
+      sku         text NOT NULL UNIQUE,
+      name        text NOT NULL,
+      category    text NOT NULL,
+      price_pence integer NOT NULL CHECK (price_pence > 0),
+      vegan       boolean NOT NULL DEFAULT false
+    );
+
+    CREATE TABLE orders (
+      id          integer PRIMARY KEY,
+      customer_id integer NOT NULL REFERENCES customers (id),
+      shop_id     integer NOT NULL REFERENCES shops (id),
+      placed_at   timestamptz NOT NULL,
+      channel     text NOT NULL CHECK (channel IN ('web', 'app', 'shop')),
+      status      text NOT NULL CHECK (status IN ('placed', 'paid', 'delivered', 'cancelled'))
+    );
+
+    CREATE TABLE order_lines (
+      order_id         integer NOT NULL REFERENCES orders (id),
+      product_id       integer NOT NULL REFERENCES products (id),
+      quantity         integer NOT NULL CHECK (quantity > 0),
+      unit_price_pence integer NOT NULL,
+      PRIMARY KEY (order_id, product_id)
+    );
+
+    INSERT INTO shops VALUES
+      (1, 'Leeds', '2019-03-01'),
+      (2, 'York', '2021-06-15'),
+      (3, 'Hull', '2024-09-01');
+
+    INSERT INTO staff VALUES
+      (1, 'Abena Owusu', 'owner', NULL, NULL, 5200000),
+      (2, 'Kojo Asante', 'manager', 1, 1, 3800000),
+      (3, 'Efua Darko', 'manager', 2, 1, 3700000),
+      (4, 'Yaw Boateng', 'baker', 1, 2, 2900000),
+      (5, 'Adwoa Ofori', 'baker', 1, 2, 3000000),
+      (6, 'Kwesi Appiah', 'counter', 1, 2, 2400000),
+      (7, 'Akua Frimpong', 'baker', 2, 3, 2950000),
+      (8, 'Fiifi Mensah', 'counter', 2, 3, 2350000),
+      (9, 'Ama Serwaa', 'manager', 3, 1, 3600000);
+
+    INSERT INTO customers VALUES
+      (1, 'Ama', 'ama@example.com', 'Leeds', '2023-01-14'),
+      (2, 'Kofi', 'kofi@example.com', 'York', '2023-05-02'),
+      (3, 'Esi', 'esi@example.com', 'Leeds', '2024-02-20'),
+      (4, 'Yaa', 'yaa@example.com', NULL, '2024-07-09'),
+      (5, 'Kwame', 'kwame@example.com', 'Hull', '2025-01-03'),
+      (6, 'Akosua', 'akosua@example.com', 'York', '2025-03-18'),
+      (7, 'Kobina', 'kobina@example.com', 'Leeds', '2025-08-30'),
+      (8, 'Afua', 'afua@example.com', 'Hull', '2026-02-11'),
+      (9, 'Kweku', 'kweku@example.com', 'York', '2026-06-01');
+
+    INSERT INTO products VALUES
+      (1, 'RYE-400', 'Rye loaf', 'bread', 450, true),
+      (2, 'SOUR-800', 'Sourdough', 'bread', 520, true),
+      (3, 'BAG-250', 'Bagel', 'bread', 120, true),
+      (4, 'CRO-090', 'Croissant', 'pastry', 275, false),
+      (5, 'CIN-120', 'Cinnamon bun', 'pastry', 310, false),
+      (6, 'ALM-100', 'Almond croissant', 'pastry', 340, false),
+      (7, 'CAKE-CHOC', 'Chocolate cake', 'cake', 2400, false),
+      (8, 'CAKE-LEM', 'Lemon drizzle', 'cake', 1950, true),
+      (9, 'JAM-380', 'Strawberry jam', 'pantry', 380, true),
+      (10, 'TEA-250', 'Breakfast tea', 'pantry', 450, true),
+      (11, 'BAG-SES', 'Sesame bagel', 'bread', 140, true),
+      (12, 'GIFT-BOX', 'Gift box', 'pantry', 1500, false);
+
+    INSERT INTO orders VALUES
+      (1, 1, 1, '2026-10-01 08:12:00+00', 'shop', 'delivered'),
+      (2, 2, 2, '2026-10-01 09:40:00+00', 'web', 'delivered'),
+      (3, 1, 1, '2026-10-03 07:55:00+00', 'app', 'delivered'),
+      (4, 3, 1, '2026-10-04 12:30:00+00', 'web', 'cancelled'),
+      (5, 4, 2, '2026-10-06 16:05:00+00', 'web', 'delivered'),
+      (6, 5, 3, '2026-10-08 10:20:00+00', 'shop', 'delivered'),
+      (7, 2, 2, '2026-10-11 08:45:00+00', 'app', 'delivered'),
+      (8, 6, 2, '2026-10-12 11:10:00+00', 'shop', 'delivered'),
+      (9, 1, 1, '2026-10-15 07:30:00+00', 'app', 'delivered'),
+      (10, 7, 1, '2026-10-18 13:15:00+00', 'web', 'delivered'),
+      (11, 3, 1, '2026-10-21 09:05:00+00', 'shop', 'delivered'),
+      (12, 5, 3, '2026-10-24 15:40:00+00', 'web', 'paid'),
+      (13, 6, 2, '2026-10-27 10:00:00+00', 'app', 'delivered'),
+      (14, 1, 1, '2026-11-01 08:20:00+00', 'shop', 'delivered'),
+      (15, 2, 2, '2026-11-03 17:25:00+00', 'web', 'cancelled'),
+      (16, 8, 3, '2026-11-05 09:50:00+00', 'shop', 'delivered'),
+      (17, 4, 2, '2026-11-08 12:00:00+00', 'web', 'paid'),
+      (18, 7, 1, '2026-11-10 07:45:00+00', 'app', 'paid'),
+      (19, 1, 1, '2026-11-12 08:05:00+00', 'web', 'placed'),
+      (20, 6, 2, '2026-11-12 18:30:00+00', 'web', 'placed');
+
+    INSERT INTO order_lines VALUES
+      (1, 1, 2, 450), (1, 4, 2, 275),
+      (2, 2, 1, 520), (2, 9, 1, 380),
+      (3, 3, 6, 120),
+      (4, 7, 1, 2400),
+      (5, 8, 1, 1950), (5, 10, 2, 450),
+      (6, 1, 1, 450), (6, 5, 3, 310),
+      (7, 2, 2, 520),
+      (8, 4, 4, 275), (8, 6, 2, 340),
+      (9, 1, 1, 450), (9, 3, 4, 120),
+      (10, 7, 1, 2400), (10, 9, 2, 380),
+      (11, 5, 2, 310),
+      (12, 8, 2, 1950),
+      (13, 2, 1, 520), (13, 4, 3, 275), (13, 10, 1, 450),
+      (14, 1, 2, 450), (14, 6, 1, 340),
+      (15, 3, 3, 120),
+      (16, 2, 1, 520), (16, 9, 1, 380),
+      (17, 7, 1, 2400),
+      (18, 4, 6, 275),
+      (19, 1, 1, 450), (19, 2, 1, 520), (19, 5, 2, 310),
+      (20, 6, 3, 340);
+  note: The bakery sample database from the setup chapter is loaded first, as the chapter says.
+- block: 2
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 3
+  lang: sql
+  check: postgres
+  output: "       name       | length |      lower       | prefix | suffix |       slug       | first_o |           sentence           \n------------------+--------+------------------+--------+--------+------------------+---------+------------------------------\n Almond croissant |     16 | almond croissant | ALM    | 100    | Almond_croissant |       4 | Almond croissant costs £3.40\n Cinnamon bun     |     12 | cinnamon bun     | CIN    | 120    | Cinnamon_bun     |       7 | Cinnamon bun costs £3.10\n Croissant        |      9 | croissant        | CRO    | 090    | Croissant        |       3 | Croissant costs £2.75\n(3 rows)\n"
+- block: 4
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 5
+  lang: sql
+  check: postgres
+  output: "       placed_at        |  london_wall_clock  | new_york_wall_clock |  utc_date  | day_of_week |       formatted       \n------------------------+---------------------+---------------------+------------+-------------+-----------------------\n 2026-10-01 08:12:00+00 | 2026-10-01 09:12:00 | 2026-10-01 04:12:00 | 2026-10-01 |           4 | Thu 01 Oct 2026 08:12\n 2026-11-03 17:25:00+00 | 2026-11-03 17:25:00 | 2026-11-03 12:25:00 | 2026-11-03 |           2 | Tue 03 Nov 2026 17:25\n(2 rows)\n"
+- block: 6
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 7
+  lang: sql
+  check: postgres
+  output: " plus_30_days | month_after_jan_31  | days_between |       age       |      month_start       | after_new_year \n--------------+---------------------+--------------+-----------------+------------------------+----------------\n 2026-12-14   | 2026-02-28 00:00:00 |          304 | 3 years 10 mons | 2026-11-01 00:00:00+00 | t\n(1 row)\n"
+- block: 8
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 9
+  lang: sql
+  check: postgres
+  output: "       name       | price_pence | price_band |    baking    \n------------------+-------------+------------+--------------\n Bagel            |         120 | budget     | baked daily\n Croissant        |         275 | budget     | baked weekly\n Cinnamon bun     |         310 | standard   | baked weekly\n Almond croissant |         340 | standard   | baked weekly\n Rye loaf         |         450 | standard   | baked daily\n Sourdough        |         520 | standard   | baked daily\n Lemon drizzle    |        1950 | treat      | baked weekly\n Chocolate cake   |        2400 | treat      | baked weekly\n(8 rows)\n"
+- block: 10
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 11
+  lang: sql
+  check: postgres
+  output: " number |    date    | interval | exact | pounds | flag \n--------+------------+----------+-------+--------+------\n     43 | 2026-11-15 | 6 days   |   0.3 | 150.00 | t\n(1 row)\n"
+- block: 12
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 13
+  lang: sql
+  check: postgres
+  output: "      name      | price  \n----------------+--------\n Chocolate cake | £24.00\n Lemon drizzle  | £19.50\n(2 rows)\n"
+- block: 14
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 15
+  lang: sql
+  check: postgres
+  output: " london_hour | orders \n-------------+--------\n           7 |      1\n           8 |      4\n           9 |      3\n          10 |      3\n          11 |      1\n          12 |      2\n          13 |      1\n          14 |      1\n          16 |      1\n          17 |      2\n          18 |      1\n(11 rows)\n"
+- block: 16
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 17
+  lang: sql
+  check: postgres
+  output: "  name  | days |  label  \n--------+------+---------\n Ama    | 1400 | loyal\n Kofi   | 1292 | loyal\n Esi    |  998 | loyal\n Yaa    |  858 | loyal\n Kwame  |  680 | regular\n Akosua |  606 | regular\n Kobina |  441 | regular\n Afua   |  276 | new\n Kweku  |  166 | new\n(9 rows)\n"
+- block: 18
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.

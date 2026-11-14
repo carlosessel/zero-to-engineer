@@ -1,0 +1,37 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: illustration
+  note: Docker commands; they need Docker, which was not running where the checks ran. The image name and variables are from the official image's page linked below.
+- block: 2
+  lang: text
+  check: illustration
+  note: psql input mixing SQL and a meta-command; the script that follows is run by the next check.
+- block: 3
+  lang: sql
+  check: postgres
+  output: ''
+- block: 4
+  lang: sql
+  check: postgres
+  output: " table_name  | rows \n-------------+------\n shops       |    3\n staff       |    9\n customers   |    9\n products    |   12\n orders      |   20\n order_lines |   33\n(6 rows)\n"
+- block: 5
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 6
+  lang: sql
+  check: postgres
+  output: " column_name |        data_type         | is_nullable \n-------------+--------------------------+-------------\n id          | integer                  | NO\n customer_id | integer                  | NO\n shop_id     | integer                  | NO\n placed_at   | timestamp with time zone | NO\n channel     | text                     | NO\n status      | text                     | NO\n(6 rows)\n"
+- block: 7
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 8
+  lang: sql
+  check: postgres
+  output: " vegan_products \n----------------\n              7\n(1 row)\n"
+- block: 9
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.

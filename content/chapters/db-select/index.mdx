@@ -1,0 +1,390 @@
+---
+title: "SELECT: reading rows"
+summary: "Choosing columns, filtering with WHERE, sorting, limiting, expressions and NULL."
+prerequisites: [db-setup]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will read data with `SELECT`: choose and rename columns, compute new values, filter rows with `WHERE` (comparisons, `AND`, `OR`, `IN`, `BETWEEN`, `LIKE`), handle missing values (`NULL`) correctly, sort with `ORDER BY`, remove duplicates with `DISTINCT`, and page through results with `LIMIT` and `OFFSET`. Every query runs on the bakery database from <Ref to="db-setup" />; type each one yourself.
+
+## Choosing columns
+
+A query starts with `SELECT`, the columns you want, and `FROM`, the table:
+
+```sql
+SELECT name, category, price_pence
+FROM products;
+```
+
+```text
+       name       | category | price_pence 
+------------------+----------+-------------
+ Rye loaf         | bread    |         450
+ Sourdough        | bread    |         520
+ Bagel            | bread    |         120
+ Croissant        | pastry   |         275
+ Cinnamon bun     | pastry   |         310
+ Almond croissant | pastry   |         340
+ Chocolate cake   | cake     |        2400
+ Lemon drizzle    | cake     |        1950
+ Strawberry jam   | pantry   |         380
+ Breakfast tea    | pantry   |         450
+ Sesame bagel     | bread    |         140
+ Gift box         | pantry   |        1500
+(12 rows)
+```
+
+- Keywords such as `SELECT` and `FROM` are not case-sensitive; writing them in capitals is a common convention that makes queries easy to scan. Table and column names are written in lower case.
+- A query ends with `;`. Line breaks and indentation are only for people.
+- Without `ORDER BY`, the database returns rows in whatever order is convenient for it. Here they happen to come out in the order they were inserted; never rely on that.
+- `SELECT *` returns every column. It is handy for exploring, but in application code list the columns you need, so a new column does not change your results and you read no more than necessary.
+
+## Computing values
+
+The select list can contain **expressions**: arithmetic, functions and text. `AS` names the result column (an **alias**):
+
+```sql
+SELECT name,
+       round(price_pence / 100.0, 2) AS price_pounds,
+       price_pence * 120 / 100 AS price_with_vat_pence,
+       upper(sku) AS code,
+       name || ' (' || category || ')' AS label
+FROM products
+WHERE category = 'cake';
+```
+
+```text
+      name      | price_pounds | price_with_vat_pence |   code    |         label         
+----------------+--------------+----------------------+-----------+-----------------------
+ Chocolate cake |        24.00 |                 2880 | CAKE-CHOC | Chocolate cake (cake)
+ Lemon drizzle  |        19.50 |                 2340 | CAKE-LEM  | Lemon drizzle (cake)
+(2 rows)
+```
+
+- `price_pence / 100.0` divides by a decimal, so the result keeps the fraction, and `round(..., 2)` keeps two decimal places (without it PostgreSQL shows `24.0000000000000000`). Dividing two whole numbers, `price_pence / 100`, would drop the fraction: `450 / 100` is `4` (<Ref to="db-types-functions" />).
+- `||` joins text. `upper` is one of many built-in functions.
+- An alias with spaces or capitals needs double quotes: `AS "Price (£)"`. Prefer simple lower-case names.
+
+## Filtering with WHERE
+
+`WHERE` keeps only the rows for which a condition is true:
+
+```sql
+SELECT name, price_pence
+FROM products
+WHERE price_pence >= 400 AND vegan;
+```
+
+```text
+     name      | price_pence 
+---------------+-------------
+ Rye loaf      |         450
+ Sourdough     |         520
+ Lemon drizzle |        1950
+ Breakfast tea |         450
+(4 rows)
+```
+
+Comparisons are `=`, `<>` (not equal; `!=` also works), `<`, `<=`, `>`, `>=`. Combine conditions with `AND`, `OR` and `NOT`. `AND` binds more tightly than `OR`, so use brackets whenever you mix them:
+
+```sql
+SELECT id, channel, status
+FROM orders
+WHERE (channel = 'web' OR channel = 'app')
+  AND status = 'cancelled';
+```
+
+```text
+ id | channel |  status   
+----+---------+-----------
+  4 | web     | cancelled
+ 15 | web     | cancelled
+(2 rows)
+```
+
+Without the brackets, `channel = 'web' OR channel = 'app' AND status = 'cancelled'` would mean "web orders of any status, or cancelled app orders": a classic bug.
+
+Text values go in **single quotes**. Double quotes are for names of tables and columns, never for text: `WHERE city = "Leeds"` looks for a column called Leeds.
+
+### IN, BETWEEN and LIKE
+
+```sql
+SELECT name, category, price_pence
+FROM products
+WHERE category IN ('cake', 'pantry')
+  AND price_pence BETWEEN 400 AND 2000
+  AND name LIKE '%a%';
+```
+
+```text
+     name      | category | price_pence 
+---------------+----------+-------------
+ Breakfast tea | pantry   |         450
+(1 row)
+```
+
+- **`IN (...)`** matches any value in the list.
+- **`BETWEEN a AND b`** includes both ends: it means `>= a AND <= b`.
+- **`LIKE`** matches text patterns: `%` stands for any number of characters, `_` for exactly one. `LIKE` is case-sensitive; PostgreSQL's **`ILIKE`** is not.
+
+## NULL: the missing value
+
+**`NULL`** means "unknown" or "not applicable": Yaa's city is not recorded. NULL is not zero and not an empty string, and it behaves unlike any other value: any comparison with NULL is neither true nor false but **unknown**, and `WHERE` keeps only rows where the condition is true.
+
+```sql
+SELECT name, city
+FROM customers
+WHERE city <> 'Leeds';
+```
+
+```text
+  name  | city 
+--------+------
+ Kofi   | York
+ Kwame  | Hull
+ Akosua | York
+ Afua   | Hull
+ Kweku  | York
+(5 rows)
+```
+
+Yaa is missing: for her, `city <> 'Leeds'` is unknown, not true. To test for NULL, use **`IS NULL`** and **`IS NOT NULL`**; `= NULL` is never true:
+
+```sql
+SELECT name, city,
+       city IS NULL AS city_unknown,
+       coalesce(city, 'not given') AS city_shown
+FROM customers
+WHERE city IS NULL OR city <> 'Leeds'
+ORDER BY name;
+```
+
+```text
+  name  | city | city_unknown | city_shown 
+--------+------+--------------+------------
+ Afua   | Hull | f            | Hull
+ Akosua | York | f            | York
+ Kofi   | York | f            | York
+ Kwame  | Hull | f            | Hull
+ Kweku  | York | f            | York
+ Yaa    |      | t            | not given
+(6 rows)
+```
+
+**`coalesce(a, b, ...)`** returns its first argument that is not NULL, which is the usual way to show a default. PostgreSQL also has `IS DISTINCT FROM`, a comparison that treats two NULLs as equal and NULL as different from any value: `city IS DISTINCT FROM 'Leeds'` includes Yaa.
+
+## Sorting with ORDER BY
+
+```sql
+SELECT name, category, price_pence
+FROM products
+ORDER BY category, price_pence DESC;
+```
+
+```text
+       name       | category | price_pence 
+------------------+----------+-------------
+ Sourdough        | bread    |         520
+ Rye loaf         | bread    |         450
+ Sesame bagel     | bread    |         140
+ Bagel            | bread    |         120
+ Chocolate cake   | cake     |        2400
+ Lemon drizzle    | cake     |        1950
+ Gift box         | pantry   |        1500
+ Breakfast tea    | pantry   |         450
+ Strawberry jam   | pantry   |         380
+ Almond croissant | pastry   |         340
+ Cinnamon bun     | pastry   |         310
+ Croissant        | pastry   |         275
+(12 rows)
+```
+
+Rows are sorted by the first expression, then ties by the next. `ASC` (ascending) is the default; `DESC` reverses. You can sort by an alias or an expression (`ORDER BY price_pence / 100.0`). NULLs sort **last** in ascending order in PostgreSQL (first in some other databases); say `NULLS FIRST` or `NULLS LAST` to be explicit.
+
+## DISTINCT
+
+`DISTINCT` removes duplicate rows from the result:
+
+```sql
+SELECT DISTINCT channel, status
+FROM orders
+ORDER BY channel, status;
+```
+
+```text
+ channel |  status   
+---------+-----------
+ app     | delivered
+ app     | paid
+ shop    | delivered
+ web     | cancelled
+ web     | delivered
+ web     | paid
+ web     | placed
+(7 rows)
+```
+
+`DISTINCT` applies to the whole row, not one column. If you find yourself adding it to "fix" duplicates from a join, the join is usually wrong (<Ref to="db-joins" />).
+
+## LIMIT and OFFSET
+
+`LIMIT` returns at most a number of rows, and `OFFSET` skips some first. Together they give pages of results:
+
+```sql
+SELECT id, placed_at, status
+FROM orders
+ORDER BY placed_at DESC
+LIMIT 5 OFFSET 5;
+```
+
+```text
+ id |       placed_at        |  status   
+----+------------------------+-----------
+ 15 | 2026-11-03 17:25:00+00 | cancelled
+ 14 | 2026-11-01 08:20:00+00 | delivered
+ 13 | 2026-10-27 10:00:00+00 | delivered
+ 12 | 2026-10-24 15:40:00+00 | paid
+ 11 | 2026-10-21 09:05:00+00 | delivered
+(5 rows)
+```
+
+That is the second page of five, newest first. Always combine `LIMIT` with an `ORDER BY` that gives a unique order, or the same row can appear on two pages. Large offsets are slow, because the database still reads and discards the skipped rows; <Ref to="db-performance" /> shows **keyset pagination**, which is fast at any depth. The standard SQL spelling, `FETCH FIRST 5 ROWS ONLY`, also works.
+
+## How a query is evaluated
+
+SQL is written in one order but evaluated in another, which explains several rules you will meet:
+
+1. `FROM` (and joins): which rows exist.
+2. `WHERE`: which rows to keep.
+3. `GROUP BY` and `HAVING`: grouping (<Ref to="db-aggregates" />).
+4. `SELECT`: compute the output columns and aliases.
+5. `DISTINCT`.
+6. `ORDER BY`.
+7. `LIMIT` and `OFFSET`.
+
+That is why an alias defined in `SELECT` can be used in `ORDER BY` but not in `WHERE`: `WHERE` runs before the alias exists.
+
+## Common mistakes
+
+- **Comparing with `= NULL`** instead of `IS NULL`.
+- **Forgetting that `<>` excludes NULLs**, so rows with unknown values silently disappear.
+- **Mixing `AND` and `OR` without brackets.**
+- **Double quotes around text values.**
+- **Relying on the order rows come back in** without `ORDER BY`.
+- **Integer division** when you wanted a fraction.
+- **`SELECT *` in application code.**
+
+## Practice
+
+**1. (warm-up)** List the names and prices of pastries, cheapest first.
+
+<Solution>
+
+```sql
+SELECT name, price_pence
+FROM products
+WHERE category = 'pastry'
+ORDER BY price_pence;
+```
+
+```text
+       name       | price_pence 
+------------------+-------------
+ Croissant        |         275
+ Cinnamon bun     |         310
+ Almond croissant |         340
+(3 rows)
+```
+
+</Solution>
+
+**2. (warm-up)** List customers who joined in 2025, with the date they joined.
+
+<Solution>
+
+```sql
+SELECT name, joined_on
+FROM customers
+WHERE joined_on >= '2025-01-01' AND joined_on < '2026-01-01'
+ORDER BY joined_on;
+```
+
+```text
+  name  | joined_on  
+--------+------------
+ Kwame  | 2025-01-03
+ Akosua | 2025-03-18
+ Kobina | 2025-08-30
+(3 rows)
+```
+
+A half-open range (`>=` the start, `<` the next start) is the safest way to select a period: it works for dates and for timestamps with times of day, where `BETWEEN '2025-01-01' AND '2025-12-31'` would miss anything after midnight on the last day.
+
+</Solution>
+
+**3. (standard)** Show the three most expensive vegan products, with their price in pounds rounded to two decimal places, labelled `pounds`.
+
+<Solution>
+
+```sql
+SELECT name, round(price_pence / 100.0, 2) AS pounds
+FROM products
+WHERE vegan
+ORDER BY price_pence DESC
+LIMIT 3;
+```
+
+```text
+     name      | pounds 
+---------------+--------
+ Lemon drizzle |  19.50
+ Sourdough     |   5.20
+ Rye loaf      |   4.50
+(3 rows)
+```
+
+</Solution>
+
+**4. (standard)** List every customer not known to be in Leeds, including those whose city is unknown, using one comparison operator rather than `OR`.
+
+<Solution>
+
+```sql
+SELECT name, city
+FROM customers
+WHERE city IS DISTINCT FROM 'Leeds'
+ORDER BY id;
+```
+
+```text
+  name  | city 
+--------+------
+ Kofi   | York
+ Yaa    |
+ Kwame  | Hull
+ Akosua | York
+ Afua   | Hull
+ Kweku  | York
+(6 rows)
+```
+
+`IS DISTINCT FROM` treats NULL as an ordinary value, so Yaa is included.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- `SELECT columns FROM table` reads rows; expressions and `AS` aliases compute and name new columns.
+- `WHERE` filters with comparisons, `AND`, `OR`, `NOT` (bracket them), `IN`, `BETWEEN` and `LIKE`/`ILIKE`. Text goes in single quotes.
+- **NULL** means unknown: comparisons with it are unknown, so use `IS NULL`, `IS DISTINCT FROM` and `coalesce`.
+- `ORDER BY` sorts (`DESC`, `NULLS FIRST/LAST`); `DISTINCT` removes duplicate rows; `LIMIT` and `OFFSET` page, always with a unique order.
+- Queries are evaluated `FROM`, `WHERE`, `GROUP BY`, `HAVING`, `SELECT`, `DISTINCT`, `ORDER BY`, `LIMIT`.
+
+## Go deeper
+
+- [PostgreSQL tutorial: querying a table](https://www.postgresql.org/docs/current/tutorial-select.html), the PostgreSQL project. The official introduction to SELECT.
+- [PostgreSQL: SELECT](https://www.postgresql.org/docs/current/sql-select.html), the PostgreSQL project. The full reference for every clause.
+- [SQLBolt](https://sqlbolt.com/), SQLBolt. Short interactive lessons with exercises in the browser.

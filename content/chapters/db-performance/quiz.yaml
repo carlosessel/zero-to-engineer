@@ -1,0 +1,36 @@
+- question: Which query deserves attention first?
+  options:
+  - The one with the largest total time across all its calls
+  - The slowest single query, always
+  answer: 0
+  explanation: pg_stat_statements sorts by total_exec_time.
+- question: Why is LIMIT 20 OFFSET 20000 slow?
+  options:
+  - The database reads and discards 20,000 rows first
+  - OFFSET disables indexes
+  answer: 0
+  explanation: Keyset pagination avoids it.
+- question: Why use a row comparison such as (created_at, id) > (x, y) for keyset pages?
+  options:
+  - It handles ties in created_at and matches a two-column index
+  - It is required by SQL
+  answer: 0
+  explanation: Order by the same columns.
+- question: What does VACUUM do?
+  options:
+  - Makes the space of dead row versions reusable
+  - Deletes old rows by date
+  answer: 0
+  explanation: Autovacuum runs it automatically.
+- question: What stops VACUUM from cleaning up dead rows?
+  options:
+  - Long-running or idle-in-transaction sessions
+  - Indexes
+  answer: 0
+  explanation: The database keeps versions they might still see.
+- question: Why put PgBouncer in front of PostgreSQL?
+  options:
+  - To share a few server connections among many clients
+  - To cache query results
+  answer: 0
+  explanation: Each connection is a process using memory.

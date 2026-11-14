@@ -1,0 +1,33 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: sql
+  check: postgres
+  output: " column_name \n-------------\n id\n status\n note\n(3 rows)\n"
+- block: 2
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 3
+  lang: sql
+  check: postgres
+  output: "       indexname        |                                    indexdef                                    \n------------------------+--------------------------------------------------------------------------------\n orders_demo_pkey       | CREATE UNIQUE INDEX orders_demo_pkey ON public.orders_demo USING btree (id)\n orders_demo_status_idx | CREATE INDEX orders_demo_status_idx ON public.orders_demo USING btree (status)\n(2 rows)\n"
+- block: 4
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 5
+  lang: sql
+  check: postgres
+  output: "ERROR:  new row for relation \"orders_demo\" violates check constraint \"orders_demo_status_check\"\nDETAIL:  Failing row contains (1001, lost, null).\n         conname          | convalidated \n--------------------------+--------------\n orders_demo_status_check | t\n(1 row)\n"
+- block: 6
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 7
+  lang: sql
+  check: postgres
+  output: " rows_left_to_copy | notes_copied \n-------------------+--------------\n                 0 |           10\n(1 row)\n"
+- block: 8
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.

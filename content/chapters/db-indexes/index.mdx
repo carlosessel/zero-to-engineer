@@ -1,0 +1,365 @@
+---
+title: "Indexes in depth"
+summary: "B-tree, multi-column, partial, expression and covering indexes, GIN, GiST and BRIN, and their costs."
+prerequisites: [db-views-functions]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will design indexes like an expert: know what a **B-tree** index can and cannot do, order the columns of **multi-column** indexes correctly, use **partial**, **expression** and **covering** indexes, choose **GIN**, **GiST** or **BRIN** for other kinds of data, and weigh the costs every index adds to writes. You will see each one change the query plan. <Ref to="m-relational" /> explains how B-trees work inside; this chapter is how to use them.
+
+## A table worth indexing
+
+Indexes only matter when there is data. This creates a table of 25,000 bakery orders, made deterministically from row numbers so your results match these:
+
+```sql
+CREATE TABLE big_orders (
+  id          integer PRIMARY KEY,
+  customer_id integer NOT NULL,
+  shop_id     integer NOT NULL,
+  status      text NOT NULL,
+  placed_at   timestamptz NOT NULL,
+  total_pence integer NOT NULL,
+  email       text NOT NULL
+);
+
+INSERT INTO big_orders
+SELECT n,
+       n % 5000 + 1,
+       n % 3 + 1,
+       CASE WHEN n % 100 = 0 THEN 'placed' WHEN n % 20 = 0 THEN 'cancelled' ELSE 'delivered' END,
+       timestamptz '2025-01-01 00:00+00' + n * interval '25 minutes',
+       200 + (n * 37) % 5000,
+       'Customer' || (n % 5000 + 1) || '@Example.com'
+FROM generate_series(1, 25000) AS n;
+
+ANALYZE big_orders;
+
+SELECT count(*), min(placed_at)::date AS first, max(placed_at)::date AS last FROM big_orders;
+```
+
+```text
+ count |   first    |    last    
+-------+------------+------------
+ 25000 | 2025-01-01 | 2026-03-11
+(1 row)
+```
+
+`ANALYZE` gathers **statistics** (how many rows, how values are distributed) that the planner uses to choose plans (<Ref to="db-query-plans" />).
+
+## Without an index: a sequential scan
+
+`EXPLAIN` shows how PostgreSQL will run a query. `COSTS OFF` hides the cost estimates, to keep the output short:
+
+```sql
+EXPLAIN (COSTS OFF)
+SELECT * FROM big_orders WHERE customer_id = 42;
+```
+
+```text
+          QUERY PLAN          
+------------------------------
+ Seq Scan on big_orders
+   Filter: (customer_id = 42)
+(2 rows)
+```
+
+A **sequential scan** reads every row and keeps the matches: fine for small tables, slow for large ones, and it gets slower as the table grows.
+
+## B-tree indexes
+
+A **B-tree** index keeps a sorted copy of the indexed values, each pointing to its row, in a shallow tree that finds any value in a few steps. It is the default index type, and it serves `=`, `<`, `<=`, `>`, `>=`, `BETWEEN`, `IN`, `IS NULL`, `ORDER BY`, and `LIKE 'prefix%'` (with the right collation or operator class).
+
+```sql
+CREATE INDEX big_orders_customer_id_idx ON big_orders (customer_id);
+
+EXPLAIN (COSTS OFF)
+SELECT * FROM big_orders WHERE customer_id = 42;
+```
+
+```text
+                      QUERY PLAN                       
+-------------------------------------------------------
+ Bitmap Heap Scan on big_orders
+   Recheck Cond: (customer_id = 42)
+   ->  Bitmap Index Scan on big_orders_customer_id_idx
+         Index Cond: (customer_id = 42)
+(4 rows)
+```
+
+A **bitmap** scan first collects the matching rows' locations from the index, sorts them by position in the table, then reads each table page once: efficient when a query matches several rows scattered across the table. For one row, PostgreSQL uses a plain **index scan**:
+
+```sql
+EXPLAIN (COSTS OFF)
+SELECT * FROM big_orders WHERE id = 42;
+```
+
+```text
+                   QUERY PLAN                   
+------------------------------------------------
+ Index Scan using big_orders_pkey on big_orders
+   Index Cond: (id = 42)
+(2 rows)
+```
+
+The primary key already has an index, created automatically, as does every `UNIQUE` constraint.
+
+### When an index is not used
+
+An index is a shortcut to **few** rows. For a condition that matches a large share of the table, reading the whole table in order is faster than jumping around through the index, and the planner knows it:
+
+```sql
+EXPLAIN (COSTS OFF)
+SELECT * FROM big_orders WHERE customer_id > 100;
+```
+
+```text
+          QUERY PLAN           
+-------------------------------
+ Seq Scan on big_orders
+   Filter: (customer_id > 100)
+(2 rows)
+```
+
+An index on a column also cannot help when the query transforms the column, because the index stores the column's values, not the transformed ones: `WHERE lower(email) = '...'` cannot use an index on `email`, and neither can `WHERE placed_at::date = '2026-01-01'`. Rewrite the condition to compare the raw column (`placed_at >= '2026-01-01' AND placed_at < '2026-01-02'`), or index the expression.
+
+## Multi-column indexes
+
+An index on several columns is sorted by the first column, then the second within it, and so on, like a phone book sorted by surname then first name. It serves conditions on a **leading prefix** of its columns:
+
+```sql
+CREATE INDEX big_orders_shop_status_placed_idx ON big_orders (shop_id, status, placed_at);
+
+EXPLAIN (COSTS OFF)
+SELECT id, placed_at FROM big_orders
+WHERE shop_id = 2 AND status = 'placed' AND placed_at >= '2025-06-01'
+ORDER BY placed_at;
+
+EXPLAIN (COSTS OFF)
+SELECT id FROM big_orders WHERE status = 'placed';
+```
+
+```text
+                                                                  QUERY PLAN                                                                   
+-----------------------------------------------------------------------------------------------------------------------------------------------
+ Sort
+   Sort Key: placed_at
+   ->  Bitmap Heap Scan on big_orders
+         Recheck Cond: ((shop_id = 2) AND (status = 'placed'::text) AND (placed_at >= '2025-06-01 00:00:00+00'::timestamp with time zone))
+         ->  Bitmap Index Scan on big_orders_shop_status_placed_idx
+               Index Cond: ((shop_id = 2) AND (status = 'placed'::text) AND (placed_at >= '2025-06-01 00:00:00+00'::timestamp with time zone))
+(6 rows)
+
+                          QUERY PLAN                          
+--------------------------------------------------------------
+ Bitmap Heap Scan on big_orders
+   Recheck Cond: (status = 'placed'::text)
+   ->  Bitmap Index Scan on big_orders_shop_status_placed_idx
+         Index Cond: (status = 'placed'::text)
+(4 rows)
+```
+
+The first query uses all three columns of the index to find its few rows; with so few, PostgreSQL chose a bitmap scan followed by a quick sort (with a `LIMIT`, it can read an index in order instead and skip the sort, as the partial index example below shows). The second query filters only on `status`, the index's second column. PostgreSQL still used the index here, scanning all of it, which is cheap on a small table; on a large one that is far slower than an index whose **first** column is `status`. The rule of thumb for ordering columns: **equality conditions first, then the range or sort column**. An index on `(a, b)` makes a separate index on `(a)` redundant.
+
+## Partial indexes
+
+A **partial index** covers only rows matching a condition. Open orders are a tiny share of all orders but are queried constantly:
+
+```sql
+CREATE INDEX big_orders_open_idx ON big_orders (placed_at) WHERE status = 'placed';
+
+EXPLAIN (COSTS OFF)
+SELECT id, placed_at FROM big_orders WHERE status = 'placed' ORDER BY placed_at DESC LIMIT 10;
+
+SELECT pg_size_pretty(pg_relation_size('big_orders_open_idx')) AS partial_index,
+       pg_size_pretty(pg_relation_size('big_orders_customer_id_idx')) AS full_index;
+```
+
+```text
+                            QUERY PLAN                             
+-------------------------------------------------------------------
+ Limit
+   ->  Index Scan Backward using big_orders_open_idx on big_orders
+(2 rows)
+
+ partial_index | full_index 
+---------------+------------
+ 16 kB         | 304 kB
+(1 row)
+```
+
+The partial index is a fraction of the size of a full one and stays small as the table grows. The query must include the index's condition for the planner to use it. Partial **unique** indexes enforce rules such as "one open voucher per customer" (<Ref to="db-tables-constraints" />).
+
+## Expression indexes
+
+An **expression index** indexes the result of an expression, so queries using that same expression can use it. Case-insensitive email lookups:
+
+```sql
+CREATE INDEX big_orders_email_lower_idx ON big_orders (lower(email));
+
+EXPLAIN (COSTS OFF)
+SELECT id FROM big_orders WHERE lower(email) = 'customer42@example.com';
+```
+
+```text
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Bitmap Heap Scan on big_orders
+   Recheck Cond: (lower(email) = 'customer42@example.com'::text)
+   ->  Bitmap Index Scan on big_orders_email_lower_idx
+         Index Cond: (lower(email) = 'customer42@example.com'::text)
+(4 rows)
+```
+
+The expression in the query must match the index's exactly. The functions used must be `IMMUTABLE` (<Ref to="db-views-functions" />).
+
+## Covering indexes and index-only scans
+
+If an index contains **every** column a query needs, PostgreSQL can answer from the index alone, without visiting the table: an **index-only scan**. `INCLUDE` adds extra columns to an index's leaf entries without making them part of the sort key:
+
+```sql
+CREATE INDEX big_orders_customer_covering_idx ON big_orders (customer_id) INCLUDE (total_pence);
+VACUUM big_orders;
+
+EXPLAIN (COSTS OFF)
+SELECT customer_id, sum(total_pence) FROM big_orders WHERE customer_id BETWEEN 100 AND 110 GROUP BY customer_id;
+```
+
+```text
+                                 QUERY PLAN                                 
+----------------------------------------------------------------------------
+ GroupAggregate
+   Group Key: customer_id
+   ->  Index Only Scan using big_orders_customer_covering_idx on big_orders
+         Index Cond: ((customer_id >= 100) AND (customer_id <= 110))
+(4 rows)
+```
+
+Index-only scans need the table's **visibility map** to be up to date, which `VACUUM` maintains (<Ref to="db-performance" />). Covering indexes are a precise tool for a hot query, not a default.
+
+## Other index types
+
+| Type | Good for | Example |
+|---|---|---|
+| **B-tree** | equality, ranges, sorting on ordinary values | almost everything |
+| Hash | equality only | rarely better than B-tree |
+| **GIN** | values containing many items: arrays, `jsonb`, full-text `tsvector`, trigrams | `tags @> ARRAY['gift']`, `search @@ query` (<Ref to="db-json-search" />) |
+| **GiST** | geometric data, ranges, nearest-neighbour, exclusion constraints | overlapping bookings, `ORDER BY location <-> point` |
+| **SP-GiST** | unbalanced data such as IP addresses and phone prefixes | network ranges |
+| **BRIN** | huge tables whose physical order follows a column, such as append-only logs by time | `placed_at` on billions of rows |
+
+A **BRIN** (block range) index stores only the minimum and maximum of each range of table pages, so it is tiny; it works when rows are physically stored roughly in the order of the column, as `big_orders` is by `placed_at`:
+
+The example drops the earlier multi-column index first, so the planner considers only the BRIN index for `placed_at`:
+
+```sql
+DROP INDEX big_orders_shop_status_placed_idx;
+CREATE INDEX big_orders_placed_brin ON big_orders USING brin (placed_at);
+
+EXPLAIN (COSTS OFF)
+SELECT count(*) FROM big_orders WHERE placed_at >= '2025-03-01' AND placed_at < '2025-03-02';
+
+SELECT pg_size_pretty(pg_relation_size('big_orders_placed_brin')) AS brin_size;
+```
+
+```text
+                                                                             QUERY PLAN                                                                             
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ Aggregate
+   ->  Bitmap Heap Scan on big_orders
+         Recheck Cond: ((placed_at >= '2025-03-01 00:00:00+00'::timestamp with time zone) AND (placed_at < '2025-03-02 00:00:00+00'::timestamp with time zone))
+         ->  Bitmap Index Scan on big_orders_placed_brin
+               Index Cond: ((placed_at >= '2025-03-01 00:00:00+00'::timestamp with time zone) AND (placed_at < '2025-03-02 00:00:00+00'::timestamp with time zone))
+(5 rows)
+
+ brin_size 
+-----------
+ 24 kB
+(1 row)
+```
+
+## The cost of indexes
+
+Every index makes **writes slower** (each insert, and each update of an indexed column, must update every index), uses **disk and memory**, and adds work for `VACUUM`. A table with fifteen indexes on a write-heavy workload can spend more time maintaining indexes than storing data. So:
+
+- Index for the queries you actually run, especially frequent and slow ones; measure first (<Ref to="db-performance" />).
+- Index foreign key columns that are joined on or whose parents are deleted.
+- Remove duplicate, redundant (a prefix of another) and unused indexes; PostgreSQL's `pg_stat_user_indexes` view shows how often each index has been scanned.
+- On a live production table, create indexes with `CREATE INDEX CONCURRENTLY`, which does not block writes (<Ref to="db-migrations" />).
+
+## Common mistakes
+
+- **Indexing every column "just in case"**, slowing every write.
+- **Wrong column order** in multi-column indexes.
+- **Functions or casts on indexed columns** in `WHERE`, so the index cannot be used.
+- **Expecting an index to help** a condition that matches most of the table.
+- **Missing indexes on foreign keys.**
+- **Creating indexes without `CONCURRENTLY`** on busy production tables.
+
+## Practice
+
+**1. (warm-up)** Which of these queries can use an index on `(shop_id, placed_at)`? (a) `WHERE shop_id = 3`; (b) `WHERE placed_at > now() - interval '1 day'`; (c) `WHERE shop_id = 3 ORDER BY placed_at DESC LIMIT 20`; (d) `WHERE shop_id IN (1, 2) AND placed_at >= '2025-06-01'`.
+
+<Solution>
+
+(a), (c) and (d). Each constrains the leading column `shop_id`; (c) also reads rows already sorted by `placed_at`, and (d) uses the range within each shop. (b) constrains only the second column, so this index cannot find its rows efficiently; it needs an index on `placed_at`.
+
+</Solution>
+
+**2. (standard)** The query below is slow. Write the index that fixes it, and show the plan using it.
+
+```sql
+SELECT id, total_pence FROM big_orders
+WHERE status = 'cancelled' AND customer_id = 21
+ORDER BY placed_at DESC;
+```
+
+```text
+  id   | total_pence 
+-------+-------------
+ 20020 |         940
+ 15020 |         940
+ 10020 |         940
+  5020 |         940
+    20 |         940
+(5 rows)
+```
+
+<Solution>
+
+```sql
+CREATE INDEX big_orders_customer_status_placed_idx ON big_orders (customer_id, status, placed_at);
+
+EXPLAIN (COSTS OFF)
+SELECT id, total_pence FROM big_orders
+WHERE status = 'cancelled' AND customer_id = 21
+ORDER BY placed_at DESC;
+```
+
+```text
+                                  QUERY PLAN                                   
+-------------------------------------------------------------------------------
+ Index Scan Backward using big_orders_customer_status_placed_idx on big_orders
+   Index Cond: ((customer_id = 21) AND (status = 'cancelled'::text))
+(2 rows)
+```
+
+Both equality columns come first, then the sort column; PostgreSQL reads the index backwards to get the newest first, with no sort step. A partial index, `ON big_orders (customer_id, placed_at) WHERE status = 'cancelled'`, would be smaller still if this is the only status queried this way.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Without an index, a query scans the whole table; an index finds **few** rows fast and keeps them **sorted**.
+- **B-tree** indexes serve equality, ranges, sorting and prefixes; transformations of the column defeat them unless you index the **expression**.
+- **Multi-column** indexes: equality columns first, then the range or sort column; they serve leading prefixes only.
+- **Partial** indexes cover hot subsets; **covering** indexes with `INCLUDE` allow index-only scans; **GIN**, **GiST** and **BRIN** serve containment, ranges and huge ordered tables.
+- Every index slows writes and costs space: index for real queries, remove unused ones, and build them `CONCURRENTLY` in production.
+
+## Go deeper
+
+- [Use The Index, Luke](https://use-the-index-luke.com/), Markus Winand. The best free book on indexing for developers.
+- [PostgreSQL: indexes](https://www.postgresql.org/docs/current/indexes.html), the PostgreSQL project. Index types, multi-column, partial, expression and index-only scans.
+- [PostgreSQL: CREATE INDEX](https://www.postgresql.org/docs/current/sql-createindex.html), the PostgreSQL project. Every option, including CONCURRENTLY and INCLUDE.

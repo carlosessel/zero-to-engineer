@@ -1,0 +1,30 @@
+- question: How does a window function differ from GROUP BY?
+  options:
+  - It computes over a group of rows but keeps every row
+  - It is faster
+  answer: 0
+  explanation: GROUP BY collapses each group to one row.
+- question: Ranking scores 90, 80, 80, 70 with rank() gives what?
+  options:
+  - 1, 2, 2, 4
+  - 1, 2, 3, 4
+  answer: 0
+  explanation: dense_rank gives 1, 2, 2, 3; row_number gives 1, 2, 3, 4.
+- question: Why can't you filter on row_number() in WHERE?
+  options:
+  - Window functions are computed after WHERE
+  - row_number is not allowed with WHERE
+  answer: 0
+  explanation: Wrap the query in a CTE and filter outside.
+- question: What does lag(x) return for the first row of a partition?
+  options:
+  - NULL, unless a default is given
+  - The first row's own value
+  answer: 0
+  explanation: There is no previous row.
+- question: What does ROWS BETWEEN 2 PRECEDING AND CURRENT ROW define?
+  options:
+  - A frame of the current row and the two before it
+  - The two rows after the current one
+  answer: 0
+  explanation: Use it for moving averages.

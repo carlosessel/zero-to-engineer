@@ -1,0 +1,356 @@
+---
+title: "Views, functions and triggers"
+summary: "Views and materialised views, SQL and PL/pgSQL functions, procedures, triggers, and when to keep logic out of the database."
+prerequisites: [db-modelling]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will put reusable logic inside the database: **views** that name a query, **materialised views** that store an expensive result, **functions** written in SQL and PL/pgSQL, **procedures** that control transactions, and **triggers** that run automatically when data changes, such as an audit log. You will also know when not to, because logic in the database is powerful but harder to test, version and debug than application code.
+
+## Views
+
+A **view** is a named query that you can select from like a table. It stores no data: each query against it runs its definition.
+
+```sql
+CREATE VIEW order_summaries AS
+SELECT o.id AS order_id, c.name AS customer, s.city AS shop, o.placed_at, o.status,
+       sum(l.quantity * l.unit_price_pence) AS total_pence,
+       sum(l.quantity) AS items
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+JOIN shops AS s ON s.id = o.shop_id
+JOIN order_lines AS l ON l.order_id = o.id
+GROUP BY o.id, c.name, s.city;
+
+SELECT order_id, customer, shop, total_pence
+FROM order_summaries
+WHERE status = 'placed'
+ORDER BY order_id;
+```
+
+```text
+ order_id | customer | shop  | total_pence 
+----------+----------+-------+-------------
+       19 | Ama      | Leeds |        1590
+       20 | Akosua   | York  |        1020
+(2 rows)
+```
+
+Views give complicated queries a name everyone can reuse, keep a stable interface while tables change underneath, and limit what users can see (grant access to a view of some columns, not the table; <Ref to="db-security" />). PostgreSQL pushes the outer `WHERE` into the view's query, so filtering a view is as efficient as writing the query out. Simple views over one table are **updatable**: inserts and updates through them reach the table.
+
+## Materialised views
+
+A **materialised view** runs its query once and **stores** the result, which can then be read quickly and indexed. It is out of date until refreshed:
+
+```sql
+CREATE MATERIALIZED VIEW daily_revenue AS
+SELECT o.placed_at::date AS day, o.shop_id, sum(l.quantity * l.unit_price_pence) AS revenue_pence
+FROM orders AS o
+JOIN order_lines AS l ON l.order_id = o.id
+WHERE o.status <> 'cancelled'
+GROUP BY day, o.shop_id;
+
+CREATE UNIQUE INDEX daily_revenue_key ON daily_revenue (day, shop_id);
+
+SELECT sum(revenue_pence) AS total FROM daily_revenue;
+
+INSERT INTO orders VALUES (21, 2, 2, '2026-11-13 09:00+00', 'shop', 'paid');
+INSERT INTO order_lines VALUES (21, 7, 2, 2400);
+
+SELECT sum(revenue_pence) AS before_refresh FROM daily_revenue;
+REFRESH MATERIALIZED VIEW CONCURRENTLY daily_revenue;
+SELECT sum(revenue_pence) AS after_refresh FROM daily_revenue;
+```
+
+```text
+ total 
+-------
+ 29325
+(1 row)
+
+ before_refresh 
+----------------
+          29325
+(1 row)
+
+ after_refresh 
+---------------
+         34125
+(1 row)
+```
+
+Use materialised views for dashboards and reports that are expensive to compute and can be a little stale; refresh them on a schedule. `CONCURRENTLY` lets readers keep using the old contents during the refresh, and needs a unique index.
+
+## Functions
+
+A **function** takes arguments and returns a value, a row or a set of rows. The simplest are written in **SQL**:
+
+```sql
+CREATE FUNCTION order_total(p_order_id integer) RETURNS integer
+LANGUAGE sql STABLE
+RETURN (SELECT coalesce(sum(quantity * unit_price_pence), 0) FROM order_lines WHERE order_id = p_order_id);
+
+CREATE FUNCTION delivery_charge(p_total integer) RETURNS integer
+LANGUAGE sql IMMUTABLE
+RETURN CASE WHEN p_total >= 3000 THEN 0 ELSE 350 END;
+
+SELECT id, order_total(id) AS total, delivery_charge(order_total(id)) AS delivery
+FROM orders
+WHERE id IN (5, 12, 19)
+ORDER BY id;
+```
+
+```text
+ id | total | delivery 
+----+-------+----------
+  5 |  2850 |      350
+ 12 |  3900 |        0
+ 19 |  1590 |      350
+(3 rows)
+```
+
+The **volatility** label tells the planner what it may assume: `IMMUTABLE` functions always give the same result for the same arguments (and can be used in indexes); `STABLE` ones give the same result within one statement (they may read tables); `VOLATILE`, the default, may change anything. Label honestly: a wrong `IMMUTABLE` gives wrong answers.
+
+**PL/pgSQL** adds variables, conditions, loops and error handling, for logic that SQL alone expresses awkwardly:
+
+```sql
+CREATE FUNCTION spend_points(p_customer integer, p_points integer) RETURNS integer
+LANGUAGE plpgsql AS $$
+DECLARE
+  balance integer;
+BEGIN
+  IF p_points <= 0 THEN
+    RAISE EXCEPTION 'points to spend must be positive, got %', p_points;
+  END IF;
+  SELECT coalesce(sum(points), 0) INTO balance FROM points WHERE customer_id = p_customer;
+  IF balance < p_points THEN
+    RAISE EXCEPTION 'customer % has % points, cannot spend %', p_customer, balance, p_points
+      USING ERRCODE = 'check_violation';
+  END IF;
+  INSERT INTO points (customer_id, points) VALUES (p_customer, -p_points);
+  RETURN balance - p_points;
+END;
+$$;
+
+CREATE TABLE points (customer_id integer NOT NULL, points integer NOT NULL);
+INSERT INTO points VALUES (1, 30), (1, 12);
+
+SELECT spend_points(1, 25) AS remaining;
+SELECT spend_points(1, 25) AS remaining;
+```
+
+```text
+ remaining 
+-----------
+        17
+(1 row)
+
+ERROR:  customer 1 has 17 points, cannot spend 25
+CONTEXT:  PL/pgSQL function spend_points(integer,integer) line 10 at RAISE
+```
+
+`RAISE EXCEPTION` aborts the statement (and the transaction), with a message and an error code applications can recognise. Note that the function was created before the table existed: PL/pgSQL checks names only when it runs.
+
+Functions can also **return tables**, which makes them parameterised views:
+
+```sql
+CREATE FUNCTION top_products(p_since date, p_limit integer DEFAULT 3)
+RETURNS TABLE (product text, items bigint)
+LANGUAGE sql STABLE AS $$
+  SELECT p.name, sum(l.quantity)
+  FROM order_lines AS l
+  JOIN orders AS o ON o.id = l.order_id
+  JOIN products AS p ON p.id = l.product_id
+  WHERE o.placed_at >= p_since AND o.status <> 'cancelled'
+  GROUP BY p.name
+  ORDER BY sum(l.quantity) DESC, p.name
+  LIMIT p_limit
+$$;
+
+SELECT * FROM top_products('2026-11-01');
+```
+
+```text
+     product      | items 
+------------------+-------
+ Croissant        |     6
+ Almond croissant |     4
+ Chocolate cake   |     3
+(3 rows)
+```
+
+**Procedures** (`CREATE PROCEDURE`, run with `CALL`) are like functions without a return value that may `COMMIT` and `ROLLBACK` inside them, for long batch jobs that process work in chunks.
+
+## Triggers
+
+A **trigger** runs a function automatically before or after rows are inserted, updated or deleted. Two classic uses: keeping a column such as `updated_at` correct, and writing an **audit log**:
+
+```sql
+CREATE TABLE audit_log (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  table_name text NOT NULL,
+  row_id     integer NOT NULL,
+  action     text NOT NULL,
+  old_values jsonb,
+  new_values jsonb,
+  changed_by text NOT NULL DEFAULT current_user
+);
+
+CREATE FUNCTION audit_products() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO audit_log (table_name, row_id, action, old_values, new_values)
+  VALUES (TG_TABLE_NAME, coalesce(NEW.id, OLD.id), TG_OP,
+          CASE WHEN TG_OP <> 'INSERT' THEN to_jsonb(OLD) END,
+          CASE WHEN TG_OP <> 'DELETE' THEN to_jsonb(NEW) END);
+  RETURN NULL;
+END;
+$$;
+
+CREATE TRIGGER products_audit
+AFTER INSERT OR UPDATE OR DELETE ON products
+FOR EACH ROW EXECUTE FUNCTION audit_products();
+
+UPDATE products SET price_pence = 540 WHERE sku = 'SOUR-800';
+
+SELECT action, row_id, old_values ->> 'price_pence' AS old_price, new_values ->> 'price_pence' AS new_price, changed_by
+FROM audit_log;
+```
+
+```text
+ action | row_id | old_price | new_price | changed_by 
+--------+--------+-----------+-----------+------------
+ UPDATE |      2 | 520       | 540       | postgres
+(1 row)
+```
+
+In a trigger function, `NEW` and `OLD` are the row after and before the change, and `TG_OP` says which operation fired it. A `BEFORE` trigger can change `NEW` (for example, set `NEW.updated_at = now()`) or return NULL to skip the row; an `AFTER` trigger sees the final row. Every change to products, from any application or person, is now recorded.
+
+## When to put logic in the database
+
+Logic in the database applies to **every** client and runs next to the data. Logic in the application is easier to test, review, version, debug, scale out and read for most developers. A sensible division:
+
+- **In the database**: constraints (always), integrity that must hold whatever writes the data, audit trails, derived columns, views for reporting, and set-based operations that would otherwise move large amounts of data to the application.
+- **In the application**: business workflows, calls to other systems, anything that changes often, and anything that needs rich testing.
+- **Be wary of**: chains of triggers that fire other triggers, business rules hidden in triggers that developers do not know about, and heavy procedural code in PL/pgSQL.
+
+Whatever lives in the database must be in version control and deployed with migrations, like any code (<Ref to="db-migrations" />).
+
+## Common mistakes
+
+- **Views on views on views**, hard to understand and sometimes slow.
+- **Forgetting to refresh materialised views**, or refreshing without `CONCURRENTLY` and blocking readers.
+- **Wrong volatility labels**, especially `IMMUTABLE` on functions that read tables.
+- **Hidden triggers** that surprise developers, or that recursively fire each other.
+- **Database code edited by hand on servers** instead of through migrations.
+
+## Practice
+
+**1. (warm-up)** Create a view `vegan_menu` listing vegan products' names, categories and prices in pounds, and select the breads from it.
+
+<Solution>
+
+```sql
+CREATE VIEW vegan_menu AS
+SELECT name, category, round(price_pence / 100.0, 2) AS price_pounds
+FROM products
+WHERE vegan;
+
+SELECT * FROM vegan_menu WHERE category = 'bread' ORDER BY price_pounds DESC;
+```
+
+```text
+     name     | category | price_pounds 
+--------------+----------+--------------
+ Sourdough    | bread    |         5.40
+ Rye loaf     | bread    |         4.50
+ Sesame bagel | bread    |         1.40
+ Bagel        | bread    |         1.20
+(4 rows)
+```
+
+</Solution>
+
+**2. (standard)** Write a SQL function `customer_spend(customer_id)` returning the total a customer has spent on orders that were not cancelled, and use it to list customers who have spent over £50.
+
+<Solution>
+
+```sql
+CREATE FUNCTION customer_spend(p_customer integer) RETURNS bigint
+LANGUAGE sql STABLE
+RETURN (
+  SELECT coalesce(sum(l.quantity * l.unit_price_pence), 0)
+  FROM orders AS o JOIN order_lines AS l ON l.order_id = o.id
+  WHERE o.customer_id = p_customer AND o.status <> 'cancelled'
+);
+
+SELECT name, customer_spend(id) AS spent_pence
+FROM customers
+WHERE customer_spend(id) > 5000
+ORDER BY spent_pence DESC;
+```
+
+```text
+ name  | spent_pence 
+-------+-------------
+ Kofi  |        6740
+ Ama   |        5930
+ Kwame |        5280
+ Yaa   |        5250
+(4 rows)
+```
+
+Calling the function per row runs its query per row: fine for small tables, but a join with `GROUP BY` scales better for large ones.
+
+</Solution>
+
+**3. (stretch)** Add an `updated_at` column to customers and a `BEFORE UPDATE` trigger that sets it to the transaction's time whenever a row changes.
+
+<Solution>
+
+```sql
+ALTER TABLE customers ADD COLUMN updated_at timestamptz;
+
+CREATE FUNCTION set_updated_at() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.updated_at := now();
+  RETURN NEW;
+END;
+$$;
+
+CREATE TRIGGER customers_updated_at
+BEFORE UPDATE ON customers
+FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+UPDATE customers SET city = 'Leeds' WHERE name = 'Yaa';
+SELECT name, city, updated_at IS NOT NULL AS stamped FROM customers WHERE name IN ('Yaa', 'Kofi') ORDER BY name;
+```
+
+```text
+ name | city  | stamped 
+------+-------+---------
+ Kofi | York  | f
+ Yaa  | Leeds | t
+(2 rows)
+```
+
+The same function can serve every table with an `updated_at` column.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Views** name queries, keep stable interfaces and limit access; **materialised views** store results for fast reads and are refreshed (`CONCURRENTLY` with a unique index).
+- **Functions** in SQL or PL/pgSQL return values, rows or tables; label their **volatility** honestly; **procedures** can commit inside.
+- **Triggers** run functions on inserts, updates and deletes: audit logs, `updated_at` columns, integrity rules.
+- Keep constraints and data integrity in the database; keep workflows and fast-changing rules in the application; version all database code with migrations.
+
+## Go deeper
+
+- [PostgreSQL: CREATE VIEW](https://www.postgresql.org/docs/current/sql-createview.html), the PostgreSQL project. Views, updatable views and security options.
+- [PostgreSQL: PL/pgSQL](https://www.postgresql.org/docs/current/plpgsql.html), the PostgreSQL project. The procedural language in full.
+- [PostgreSQL: triggers](https://www.postgresql.org/docs/current/triggers.html), the PostgreSQL project. How triggers work and how to write them.

@@ -1,0 +1,30 @@
+- question: Why can an ALTER TABLE that runs in a millisecond still cause an outage?
+  options:
+  - While waiting for its lock, it queues every new query on the table behind it
+  - Because ALTER TABLE always rewrites the table
+  answer: 0
+  explanation: Set lock_timeout and retry.
+- question: What does CREATE INDEX CONCURRENTLY avoid?
+  options:
+  - Blocking writes during the index build
+  - Using disk space
+  answer: 0
+  explanation: It takes longer and cannot run in a transaction block.
+- question: What does adding a constraint NOT VALID do?
+  options:
+  - Enforces it for new and changed rows without checking existing ones yet
+  - Disables it
+  answer: 0
+  explanation: VALIDATE CONSTRAINT checks old rows without blocking writes.
+- question: How do you rename a column without downtime?
+  options:
+  - Add the new column, write both, backfill, switch reads, then drop the old one
+  - ALTER TABLE ... RENAME COLUMN during a rolling deployment
+  answer: 0
+  explanation: Expand and contract.
+- question: Why backfill in batches?
+  options:
+  - Short transactions avoid long locks, bloat and replica lag
+  - PostgreSQL limits UPDATE to 500 rows
+  answer: 0
+  explanation: Commit between batches.

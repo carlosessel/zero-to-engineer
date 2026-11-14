@@ -1,0 +1,160 @@
+---
+title: "MySQL, SQL Server, SQLite and Oracle"
+summary: "What changes between the major engines, and how to learn a new one quickly."
+prerequisites: [db-advanced-queries]
+estimated_minutes: 90
+status: resources-verified
+---
+
+By the end of this chapter you will move between relational databases with confidence: know what is the same everywhere (most of what you have learnt), the differences that catch people out between **PostgreSQL**, **MySQL**, **SQL Server**, **SQLite** and **Oracle**, and a method for learning any new engine in a day. Jobs often use a different database from the one you learnt on; the concepts carry over completely, the dialect takes a week.
+
+## What stays the same
+
+Tables, keys and constraints; `SELECT` with joins, grouping, subqueries, CTEs and window functions; `INSERT`, `UPDATE`, `DELETE`; transactions and isolation; B-tree indexes and query plans; normalisation and modelling. All five engines implement the SQL standard's core, and all modern versions support CTEs and window functions.
+
+## The differences that matter
+
+| Topic | PostgreSQL | MySQL (InnoDB) | SQL Server | SQLite | Oracle |
+|---|---|---|---|---|---|
+| Auto ids | `GENERATED ... AS IDENTITY` | `AUTO_INCREMENT` | `IDENTITY(1,1)` | `INTEGER PRIMARY KEY` | `GENERATED ... AS IDENTITY` |
+| First N rows | `LIMIT n` | `LIMIT n` | `TOP (n)` or `OFFSET ... FETCH` | `LIMIT n` | `FETCH FIRST n ROWS ONLY` |
+| Text joining | `\|\|` | `CONCAT()` (`\|\|` is OR by default) | `+` or `CONCAT()` | `\|\|` | `\|\|` |
+| Identifier quotes | `"name"` | `` `name` `` | `[name]` or `"name"` | `"name"` | `"name"` |
+| Booleans | `boolean` | `TINYINT(1)` | `BIT` | integers 0 and 1 | `BOOLEAN` since 23ai; `NUMBER(1)` before |
+| Upsert | `ON CONFLICT` | `ON DUPLICATE KEY UPDATE` | `MERGE` | `ON CONFLICT` | `MERGE` |
+| Returning changed rows | `RETURNING` | not available | `OUTPUT` | `RETURNING` | `RETURNING INTO` |
+| Empty string and NULL | different | different | different | different | **the same**: `''` is NULL |
+| Default isolation | Read Committed | Repeatable Read | Read Committed (locking) | Serializable | Read Committed |
+| Types | strict | lenient unless strict mode is on | strict | **flexible**: any value in any column unless the table is `STRICT` | strict |
+| Case of unquoted names | folded to lower case | depends on platform for tables | case-insensitive by default | case-insensitive | folded to upper case |
+
+A few deserve emphasis:
+
+- **Oracle treats `''` as NULL**, so `WHERE name = ''` never matches and `'a' || NULL` is `'a'`. Code ported from elsewhere breaks quietly.
+- **MySQL** historically accepted invalid data (truncating strings, zero dates) unless **strict mode** is on; it is the default in modern versions, but check old systems. MySQL's `utf8` is a three-byte subset that cannot store emoji; use `utf8mb4`.
+- **SQL Server** compares text case-insensitively by default (it depends on the collation), so `'Leeds' = 'LEEDS'` is true.
+- **SQLite** stores any value in any column unless the table is declared `STRICT`, has no separate date type (dates are text or numbers), and allows only one writer at a time. It is superb as an embedded database, for tests, and for read-heavy small sites.
+
+## SQLite in practice
+
+SQLite is everywhere: in every phone, every browser, and countless applications. The same query, written for SQLite, with its own date functions:
+
+```sql
+-- SQLite
+CREATE TABLE orders (id INTEGER PRIMARY KEY, customer TEXT NOT NULL, placed_at TEXT NOT NULL, total_pence INTEGER NOT NULL);
+INSERT INTO orders (customer, placed_at, total_pence) VALUES
+  ('Ama', '2026-10-01 08:12:00', 1450), ('Kofi', '2026-10-01 09:40:00', 900),
+  ('Ama', '2026-11-01 08:20:00', 1240), ('Esi', '2026-11-03 17:25:00', 360);
+
+CREATE TABLE monthly AS
+SELECT strftime('%Y-%m', placed_at) AS month, count(*) AS orders, sum(total_pence) AS revenue,
+       sum(sum(total_pence)) OVER (ORDER BY strftime('%Y-%m', placed_at)) AS running
+FROM orders
+GROUP BY month;
+```
+
+`strftime` replaces PostgreSQL's `to_char` and `date_trunc`, and the window function works just the same. Dates are stored as ISO 8601 text, which sorts correctly. The `STRICT` table option and the `RETURNING` clause (since 3.35) bring SQLite closer to PostgreSQL.
+
+## The same query in each dialect
+
+"The three most recent orders, with the customer's name in upper case":
+
+```sql
+SELECT o.id, upper(c.name) AS customer, o.placed_at
+FROM orders AS o JOIN customers AS c ON c.id = o.customer_id
+ORDER BY o.placed_at DESC
+LIMIT 3;
+```
+
+```text
+ id | customer |       placed_at        
+----+----------+------------------------
+ 20 | AKOSUA   | 2026-11-12 18:30:00+00
+ 19 | AMA      | 2026-11-12 08:05:00+00
+ 18 | KOBINA   | 2026-11-10 07:45:00+00
+(3 rows)
+```
+
+```sql
+-- MySQL: the same, except that quoting identifiers would use backticks
+SELECT o.id, UPPER(c.name) AS customer, o.placed_at
+FROM orders AS o JOIN customers AS c ON c.id = o.customer_id
+ORDER BY o.placed_at DESC
+LIMIT 3;
+```
+
+```sql
+-- SQL Server: TOP instead of LIMIT
+SELECT TOP (3) o.id, UPPER(c.name) AS customer, o.placed_at
+FROM orders AS o JOIN customers AS c ON c.id = o.customer_id
+ORDER BY o.placed_at DESC;
+```
+
+```sql
+-- Oracle: FETCH FIRST, and no AS before table aliases
+SELECT o.id, UPPER(c.name) AS customer, o.placed_at
+FROM orders o JOIN customers c ON c.id = o.customer_id
+ORDER BY o.placed_at DESC
+FETCH FIRST 3 ROWS ONLY;
+```
+
+`OFFSET ... FETCH FIRST ... ROWS ONLY` is the SQL standard and also works in PostgreSQL, SQL Server and modern Oracle, so portable code can use it everywhere except MySQL and SQLite.
+
+## Choosing an engine
+
+- **PostgreSQL**: the best default for new applications; rich SQL, JSON, full-text search, extensions, strong correctness.
+- **MySQL**: when the team, the hosting or the ecosystem (WordPress, many PHP applications) already uses it; excellent for simple, read-heavy workloads.
+- **SQL Server**: Microsoft-centred organisations; strong tooling and business intelligence integration.
+- **Oracle**: existing enterprise systems; rarely chosen for new projects outside them because of cost.
+- **SQLite**: embedded, mobile, desktop, tests, prototypes, and small sites with few writers.
+
+Within a team, staying on one engine is worth more than a small feature advantage.
+
+## Learning a new engine in a day
+
+1. Install it with Docker and load a sample database.
+2. Learn the client tool and how to list tables, describe a table and see a plan (`DESCRIBE` and `EXPLAIN` in MySQL; `sp_help` and the graphical plan in SQL Server; `.schema` and `EXPLAIN QUERY PLAN` in SQLite).
+3. Rewrite ten of your everyday queries, noting each difference.
+4. Read the sections of its documentation on data types, transactions and isolation, and locking, since those differ most in behaviour.
+5. Learn how it does auto ids, upserts, pagination and date arithmetic.
+
+## Common mistakes
+
+- **Assuming PostgreSQL behaviour** for NULL and empty strings in Oracle, case sensitivity in SQL Server, or type checking in SQLite and old MySQL.
+- **MySQL `utf8`** instead of `utf8mb4`.
+- **Different isolation defaults** surprising code moved between engines.
+- **Picking an engine for one feature** instead of for the team and the workload.
+
+## Practice
+
+**1. (warm-up)** Rewrite `SELECT name FROM customers ORDER BY joined_on DESC LIMIT 5` for SQL Server and for Oracle.
+
+<Solution>
+
+SQL Server: `SELECT TOP (5) name FROM customers ORDER BY joined_on DESC;`. Oracle: `SELECT name FROM customers ORDER BY joined_on DESC FETCH FIRST 5 ROWS ONLY;`. The standard `FETCH FIRST` form also works in SQL Server after an `OFFSET 0 ROWS`.
+
+</Solution>
+
+**2. (standard)** An application moves from PostgreSQL to Oracle, and a search for customers with no middle name, `WHERE middle_name = ''`, now returns nothing. Why, and what is the fix?
+
+<Solution>
+
+Oracle stores the empty string as NULL, and `= ''` is a comparison with NULL, which is never true. Use `WHERE middle_name IS NULL`, and review every place the code distinguishes empty strings from NULLs, since Oracle cannot.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The relational model, SQL's core, transactions and indexing are the same everywhere; dialects differ in ids, limits, text, quoting, booleans, upserts and returning rows.
+- Watch the traps: Oracle's `''` is NULL; SQL Server compares text case-insensitively by default; SQLite's types are flexible unless `STRICT`; MySQL needs strict mode and `utf8mb4`; default isolation levels differ.
+- PostgreSQL is the best default; choose others for the team, the existing systems or embedding (SQLite).
+- Learn a new engine by rewriting your everyday queries and reading its type, transaction and locking documentation.
+
+## Go deeper
+
+- [MariaDB knowledge base](https://mariadb.com/kb/en/documentation/), the MariaDB Foundation. Documentation for MariaDB, MySQL's open-source fork, with notes where the two differ.
+- [SQL Server: Transact-SQL reference](https://learn.microsoft.com/en-us/sql/t-sql/language-reference), Microsoft. The T-SQL language.
+- [SQLite: quirks, caveats and gotchas](https://www.sqlite.org/quirks.html), the SQLite project. How SQLite differs from other databases.
+- [Oracle Database SQL language reference](https://docs.oracle.com/en/database/oracle/oracle-database/23/sqlrf/), Oracle. Oracle's SQL.

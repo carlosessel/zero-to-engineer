@@ -1,0 +1,400 @@
+---
+title: "Subqueries and common table expressions"
+summary: "Subqueries, IN and EXISTS, WITH clauses, and recursive queries over hierarchies."
+prerequisites: [db-joins]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will build queries out of other queries: **subqueries** that return a single value, a list or a whole table; **`EXISTS`** and **`NOT EXISTS`** for "is there any matching row?"; **common table expressions** (`WITH`) that name intermediate results so long queries read top to bottom; and **recursive** queries that walk hierarchies such as a management chain. These are how complex questions become clear, correct SQL.
+
+## Scalar subqueries
+
+A **subquery** is a query in brackets inside another query. One that returns a single value can be used anywhere a value can. Products dearer than the average price:
+
+```sql
+SELECT name, price_pence
+FROM products
+WHERE price_pence > (SELECT avg(price_pence) FROM products)
+ORDER BY price_pence DESC;
+```
+
+```text
+      name      | price_pence 
+----------------+-------------
+ Chocolate cake |        2400
+ Lemon drizzle  |        1950
+ Gift box       |        1500
+(3 rows)
+```
+
+The inner query runs once, giving one number, and the outer query compares each product with it. A subquery used as a value must return at most one row and one column, or PostgreSQL reports an error.
+
+## IN with a subquery
+
+A subquery that returns one column of many rows can feed `IN`. Customers who have ordered cake:
+
+```sql
+SELECT name
+FROM customers
+WHERE id IN (
+  SELECT o.customer_id
+  FROM orders AS o
+  JOIN order_lines AS l ON l.order_id = o.id
+  JOIN products AS p ON p.id = l.product_id
+  WHERE p.category = 'cake'
+)
+ORDER BY name;
+```
+
+```text
+  name  
+--------
+ Esi
+ Kobina
+ Kwame
+ Yaa
+(4 rows)
+```
+
+Unlike a join, `IN` never repeats a customer, however many cakes they bought.
+
+### The NOT IN trap
+
+`NOT IN` looks like the opposite, but it hides a trap: if the subquery returns **any NULL**, `NOT IN` is never true, because `x NOT IN (1, NULL)` means "x is not 1 and x is not the unknown value", which is unknown. Customer cities include a NULL (Yaa's), so asking whether nobody lives in Bath goes wrong:
+
+```sql
+SELECT 'Bath' NOT IN (SELECT city FROM customers) AS with_not_in,
+       NOT EXISTS (SELECT 1 FROM customers WHERE city = 'Bath') AS with_not_exists;
+```
+
+```text
+ with_not_in | with_not_exists 
+-------------+-----------------
+             | t
+(1 row)
+```
+
+`NOT IN` gives NULL (shown as empty), which a `WHERE` treats as false, so any query filtering this way silently returns nothing. `NOT EXISTS` gives the right answer. Prefer `NOT EXISTS`, which has no such trap.
+
+## EXISTS and NOT EXISTS
+
+**`EXISTS (subquery)`** is true if the subquery returns at least one row. The subquery usually refers to the outer row, which makes it a **correlated subquery**:
+
+```sql
+SELECT c.name
+FROM customers AS c
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM orders AS o
+  WHERE o.customer_id = c.id AND o.status <> 'cancelled'
+)
+ORDER BY c.name;
+```
+
+```text
+ name  
+-------
+ Kweku
+(1 row)
+```
+
+Customers with no order that went ahead. What the subquery selects does not matter (`SELECT 1` is the convention); only whether any row exists. PostgreSQL turns `EXISTS` and `NOT EXISTS` into efficient **semi-joins** and **anti-joins**, and stops looking at the first match.
+
+## Subqueries in FROM
+
+A subquery in `FROM` (a **derived table**) produces a table that the outer query uses like any other. It must have an alias. This is the fix for the row-multiplying join in <Ref to="db-joins" />: aggregate first, then join:
+
+```sql
+SELECT c.name, totals.orders, totals.items
+FROM customers AS c
+JOIN (
+  SELECT o.customer_id,
+         count(DISTINCT o.id) AS orders,
+         sum(l.quantity) AS items
+  FROM orders AS o
+  JOIN order_lines AS l ON l.order_id = o.id
+  GROUP BY o.customer_id
+) AS totals ON totals.customer_id = c.id
+ORDER BY totals.items DESC
+LIMIT 3;
+```
+
+```text
+  name  | orders | items 
+--------+--------+-------
+ Ama    |      5 |    22
+ Akosua |      3 |    14
+ Kobina |      2 |     9
+(3 rows)
+```
+
+## Common table expressions
+
+A **common table expression** (CTE) names a subquery with `WITH`, before the main query. Long queries then read as a series of steps, each building on the previous:
+
+```sql
+WITH order_totals AS (
+  SELECT order_id, sum(quantity * unit_price_pence) AS total_pence
+  FROM order_lines
+  GROUP BY order_id
+),
+customer_spend AS (
+  SELECT o.customer_id, sum(t.total_pence) AS spent_pence, count(*) AS orders
+  FROM orders AS o
+  JOIN order_totals AS t ON t.order_id = o.id
+  WHERE o.status <> 'cancelled'
+  GROUP BY o.customer_id
+)
+SELECT c.name, s.orders, s.spent_pence,
+       round(s.spent_pence::numeric / s.orders) AS average_order_pence
+FROM customer_spend AS s
+JOIN customers AS c ON c.id = s.customer_id
+ORDER BY s.spent_pence DESC;
+```
+
+```text
+  name  | orders | spent_pence | average_order_pence 
+--------+--------+-------------+---------------------
+ Ama    |      5 |        5930 |                1186
+ Kwame  |      2 |        5280 |                2640
+ Yaa    |      2 |        5250 |                2625
+ Kobina |      2 |        4810 |                2405
+ Akosua |      3 |        4595 |                1532
+ Kofi   |      2 |        1940 |                 970
+ Afua   |      1 |         900 |                 900
+ Esi    |      1 |         620 |                 620
+(8 rows)
+```
+
+Each CTE can use the ones before it, and the final query uses them all. CTEs make SQL far easier to read, test (run the query up to any step) and review. Since PostgreSQL 12, simple CTEs are **inlined** into the main query, so they cost nothing extra; add `MATERIALIZED` to force one to be computed once and kept, or `NOT MATERIALIZED` to force inlining.
+
+## Recursive CTEs
+
+A **recursive CTE** refers to itself, which lets SQL walk hierarchies and graphs of any depth. It has two parts joined by `UNION ALL`: a **starting** query, and a **recursive** query that adds rows using the rows found so far, until it adds none. Everyone who reports, directly or indirectly, to Kojo Asante:
+
+```sql
+WITH RECURSIVE reports AS (
+  SELECT id, name, role, 1 AS depth
+  FROM staff
+  WHERE manager_id = (SELECT id FROM staff WHERE name = 'Kojo Asante')
+  UNION ALL
+  SELECT s.id, s.name, s.role, r.depth + 1
+  FROM staff AS s
+  JOIN reports AS r ON s.manager_id = r.id
+)
+SELECT name, role, depth
+FROM reports
+ORDER BY depth, name;
+```
+
+```text
+     name     |  role   | depth 
+--------------+---------+-------
+ Adwoa Ofori  | baker   |     1
+ Kwesi Appiah | counter |     1
+ Yaw Boateng  | baker   |     1
+(3 rows)
+```
+
+And the other direction, the chain of managers above each person, building a path as text:
+
+```sql
+WITH RECURSIVE chain AS (
+  SELECT id, name, manager_id, name AS path
+  FROM staff
+  WHERE manager_id IS NULL
+  UNION ALL
+  SELECT s.id, s.name, s.manager_id, c.path || ' > ' || s.name
+  FROM staff AS s
+  JOIN chain AS c ON s.manager_id = c.id
+)
+SELECT path
+FROM chain
+ORDER BY path;
+```
+
+```text
+                   path                   
+------------------------------------------
+ Abena Owusu
+ Abena Owusu > Ama Serwaa
+ Abena Owusu > Efua Darko
+ Abena Owusu > Efua Darko > Akua Frimpong
+ Abena Owusu > Efua Darko > Fiifi Mensah
+ Abena Owusu > Kojo Asante
+ Abena Owusu > Kojo Asante > Adwoa Ofori
+ Abena Owusu > Kojo Asante > Kwesi Appiah
+ Abena Owusu > Kojo Asante > Yaw Boateng
+(9 rows)
+```
+
+Recursive CTEs also generate sequences, walk category trees, find routes in graphs and expand bills of materials. Guard against cycles in data that might contain them, with a depth limit (`WHERE depth < 20`) or PostgreSQL's `CYCLE` clause, or the query never ends.
+
+For simple sequences, PostgreSQL's **`generate_series`** is easier: every day in a range, for example, which lets a report show days with no orders:
+
+```sql
+SELECT d::date AS day, count(o.id) AS orders
+FROM generate_series('2026-11-01'::date, '2026-11-07'::date, interval '1 day') AS d
+LEFT JOIN orders AS o ON o.placed_at::date = d::date
+GROUP BY d
+ORDER BY d;
+```
+
+```text
+    day     | orders 
+------------+--------
+ 2026-11-01 |      1
+ 2026-11-02 |      0
+ 2026-11-03 |      1
+ 2026-11-04 |      0
+ 2026-11-05 |      1
+ 2026-11-06 |      0
+ 2026-11-07 |      0
+(7 rows)
+```
+
+## Common mistakes
+
+- **`NOT IN` with a subquery that can return NULL**, giving no rows.
+- **A scalar subquery that returns more than one row.**
+- **Correlated subqueries in the select list** that run once per row on large tables when a join or a window function would do (<Ref to="db-window-functions" />).
+- **Deeply nested subqueries** where a chain of CTEs would read clearly.
+- **Recursive CTEs without a stopping condition** on data that may contain cycles.
+
+## Practice
+
+**1. (warm-up)** List the products in the most expensive category on average, using a subquery.
+
+<Solution>
+
+```sql
+SELECT name, price_pence
+FROM products
+WHERE category = (
+  SELECT category
+  FROM products
+  GROUP BY category
+  ORDER BY avg(price_pence) DESC
+  LIMIT 1
+)
+ORDER BY price_pence DESC;
+```
+
+```text
+      name      | price_pence 
+----------------+-------------
+ Chocolate cake |        2400
+ Lemon drizzle  |        1950
+(2 rows)
+```
+
+</Solution>
+
+**2. (standard)** With `EXISTS`, list the shops that have at least one order placed through the app that is not yet delivered.
+
+<Solution>
+
+```sql
+SELECT s.city
+FROM shops AS s
+WHERE EXISTS (
+  SELECT 1 FROM orders AS o
+  WHERE o.shop_id = s.id AND o.channel = 'app' AND o.status <> 'delivered'
+)
+ORDER BY s.city;
+```
+
+```text
+ city  
+-------
+ Leeds
+(1 row)
+```
+
+</Solution>
+
+**3. (standard)** Rewrite the "cake but never bread" question from <Ref to="db-joins" /> with a CTE and `NOT EXISTS`.
+
+<Solution>
+
+```sql
+WITH purchases AS (
+  SELECT o.customer_id, p.category, p.name
+  FROM orders AS o
+  JOIN order_lines AS l ON l.order_id = o.id
+  JOIN products AS p ON p.id = l.product_id
+)
+SELECT c.name, string_agg(DISTINCT cake.name, ', ') AS cakes
+FROM customers AS c
+JOIN purchases AS cake ON cake.customer_id = c.id AND cake.category = 'cake'
+WHERE NOT EXISTS (
+  SELECT 1 FROM purchases AS b
+  WHERE b.customer_id = c.id AND b.category = 'bread'
+)
+GROUP BY c.name
+ORDER BY c.name;
+```
+
+```text
+  name  |             cakes             
+--------+-------------------------------
+ Esi    | Chocolate cake
+ Kobina | Chocolate cake
+ Yaa    | Chocolate cake, Lemon drizzle
+(3 rows)
+```
+
+The same three customers, with a query that says what it means.
+
+</Solution>
+
+**4. (stretch)** Using a recursive CTE, total the salaries of everyone under each manager, including the manager, for the owner and the three managers.
+
+<Solution>
+
+```sql
+WITH RECURSIVE tree AS (
+  SELECT id AS top_id, id, salary_pence
+  FROM staff
+  WHERE role IN ('owner', 'manager')
+  UNION ALL
+  SELECT t.top_id, s.id, s.salary_pence
+  FROM staff AS s
+  JOIN tree AS t ON s.manager_id = t.id
+)
+SELECT st.name, count(*) AS people, sum(t.salary_pence) / 100 AS salaries_pounds
+FROM tree AS t
+JOIN staff AS st ON st.id = t.top_id
+GROUP BY st.name
+ORDER BY salaries_pounds DESC;
+```
+
+```text
+    name     | people | salaries_pounds 
+-------------+--------+-----------------
+ Abena Owusu |      9 |          299000
+ Kojo Asante |      4 |          121000
+ Efua Darko  |      3 |           90000
+ Ama Serwaa  |      1 |           36000
+(4 rows)
+```
+
+Each starting row carries its `top_id` down the tree, so every person below is counted under each manager above them.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **scalar subquery** returns one value; a subquery returning a column feeds **`IN`**; one in `FROM` is a **derived table** with an alias.
+- **`EXISTS`** and **`NOT EXISTS`** test whether matching rows exist; prefer `NOT EXISTS` to `NOT IN`, which returns nothing if the list contains NULL.
+- **CTEs** (`WITH`) name steps so long queries read top to bottom; simple ones are inlined at no cost.
+- **Recursive CTEs** walk hierarchies and graphs; guard against cycles. **`generate_series`** makes sequences such as every day in a range.
+
+## Go deeper
+
+- [PostgreSQL: WITH queries](https://www.postgresql.org/docs/current/queries-with.html), the PostgreSQL project. CTEs, recursion, cycle detection and materialisation.
+- [PostgreSQL: subquery expressions](https://www.postgresql.org/docs/current/functions-subquery.html), the PostgreSQL project. EXISTS, IN, ANY and ALL, including how NULLs behave.
+- [Modern SQL: WITH](https://modern-sql.com/feature/with), Markus Winand. CTEs across databases, with history and portability notes.

@@ -1,0 +1,30 @@
+- question: What does a many-to-many relationship need?
+  options:
+  - A link table with a foreign key to each side
+  - An array column on one side
+  answer: 0
+  explanation: The link table can carry its own facts too.
+- question: Why does a soft-delete design need a partial unique index on email?
+  options:
+  - So a deleted customer's email can be reused by a live one
+  - To make deleted rows faster to find
+  answer: 0
+  explanation: Uniqueness should apply only to live rows.
+- question: What does the exclusion constraint on a price history table guarantee?
+  options:
+  - A product's validity periods never overlap
+  - Prices are unique
+  answer: 0
+  explanation: So each date has exactly one price.
+- question: In shared multi-tenant tables, where must tenant_id appear?
+  options:
+  - In tenant-owned tables, unique constraints, most indexes and every query
+  - Only in the tenants table
+  answer: 0
+  explanation: Row-level security makes forgetting it safer.
+- question: Why avoid entity-attribute-value tables?
+  options:
+  - They lose types, constraints and readable, fast queries
+  - PostgreSQL does not allow them
+  answer: 0
+  explanation: Use columns, or jsonb for variable data.

@@ -1,0 +1,326 @@
+---
+title: "Advanced query techniques"
+summary: "ROLLUP and grouping sets, FILTER, LATERAL joins, set operations, pivoting, and gaps and islands."
+prerequisites: [db-window-functions]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will have the remaining tools of an expert SQL writer: subtotals and grand totals with **`ROLLUP`**, **`CUBE`** and **grouping sets**; combining results with **`UNION`**, **`INTERSECT`** and **`EXCEPT`**; **`LATERAL`** joins that run a subquery per row; **pivoting** rows into columns; **`DISTINCT ON`**; and the famous **gaps and islands** pattern for finding runs in data.
+
+## Subtotals: ROLLUP, CUBE and GROUPING SETS
+
+Reports often need totals at several levels at once: revenue by shop and channel, each shop's total, and the grand total. **`ROLLUP`** produces all of them in one query:
+
+```sql
+SELECT s.city, o.channel, sum(l.quantity * l.unit_price_pence) AS revenue
+FROM orders AS o
+JOIN shops AS s ON s.id = o.shop_id
+JOIN order_lines AS l ON l.order_id = o.id
+WHERE o.status <> 'cancelled'
+GROUP BY ROLLUP (s.city, o.channel)
+ORDER BY s.city NULLS LAST, o.channel NULLS LAST;
+```
+
+```text
+ city  | channel | revenue 
+-------+---------+---------
+ Hull  | shop    |    2280
+ Hull  | web     |    3900
+ Hull  |         |    6180
+ Leeds | app     |    3300
+ Leeds | shop    |    3310
+ Leeds | web     |    4750
+ Leeds |         |   11360
+ York  | app     |    2835
+ York  | shop    |    1780
+ York  | web     |    7170
+ York  |         |   11785
+       |         |   29325
+(12 rows)
+```
+
+`ROLLUP (a, b)` groups by `(a, b)`, then `(a)`, then `()`. The rows for higher levels show NULL in the rolled-up columns. **`CUBE (a, b)`** adds every combination, including `(b)` alone; **`GROUPING SETS ((a, b), (b), ())`** lists exactly the levels you want. The **`grouping(column)`** function returns 1 when a column was rolled up, which distinguishes a subtotal's NULL from a real NULL in the data:
+
+```sql
+SELECT CASE WHEN grouping(p.category) = 1 THEN 'All categories' ELSE p.category END AS category,
+       count(DISTINCT l.order_id) AS orders,
+       sum(l.quantity) AS items
+FROM order_lines AS l
+JOIN products AS p ON p.id = l.product_id
+GROUP BY GROUPING SETS ((p.category), ())
+ORDER BY grouping(p.category), items DESC;
+```
+
+```text
+    category    | orders | items 
+----------------+--------+-------
+ pastry         |      9 |    28
+ bread          |     11 |    26
+ pantry         |      5 |     7
+ cake           |      5 |     6
+ All categories |     20 |    67
+(5 rows)
+```
+
+## Set operations
+
+**`UNION`**, **`INTERSECT`** and **`EXCEPT`** combine the results of two queries with the same number and types of columns:
+
+- `UNION` returns rows from either, removing duplicates; **`UNION ALL`** keeps them (and is faster, so use it unless you need deduplication).
+- `INTERSECT` returns rows in both.
+- `EXCEPT` returns rows in the first but not the second.
+
+Cities where the bakery has customers but no shop, and both:
+
+```sql
+SELECT city FROM customers WHERE city IS NOT NULL
+EXCEPT
+SELECT city FROM shops;
+
+SELECT city FROM customers
+INTERSECT
+SELECT city FROM shops
+ORDER BY city;
+```
+
+```text
+ city 
+------
+(0 rows)
+
+ city  
+-------
+ Hull
+ Leeds
+ York
+(3 rows)
+```
+
+Every customer city has a shop. Set operations treat NULLs as equal to each other, unlike `=`, which is one reason `EXCEPT` is a neat way to compare two tables' contents: `(SELECT * FROM a EXCEPT SELECT * FROM b) UNION ALL (SELECT * FROM b EXCEPT SELECT * FROM a)` lists every row that differs.
+
+## LATERAL joins
+
+A subquery in `FROM` normally cannot refer to the tables before it. Marked **`LATERAL`**, it can: it runs once for each row on its left, like a loop. The two most recent orders of each customer from York:
+
+```sql
+SELECT c.name, recent.id, recent.placed_at::date AS placed_on
+FROM customers AS c
+CROSS JOIN LATERAL (
+  SELECT o.id, o.placed_at
+  FROM orders AS o
+  WHERE o.customer_id = c.id
+  ORDER BY o.placed_at DESC
+  LIMIT 2
+) AS recent
+WHERE c.city = 'York'
+ORDER BY c.name, recent.placed_at DESC;
+```
+
+```text
+  name  | id | placed_on  
+--------+----+------------
+ Akosua | 20 | 2026-11-12
+ Akosua | 13 | 2026-10-27
+ Kofi   | 15 | 2026-11-03
+ Kofi   |  7 | 2026-10-11
+(4 rows)
+```
+
+`LATERAL` is the natural tool for "top N per row" when N is small and an index can find each row's matches quickly, and for calling a function per row. Use `LEFT JOIN LATERAL (...) ON true` to keep left rows that have no matches (Kweku has none, so the cross join dropped him).
+
+## DISTINCT ON
+
+PostgreSQL's **`DISTINCT ON (expression)`** keeps the first row for each distinct value, in the query's `ORDER BY` order: a compact answer to "the latest order per customer":
+
+```sql
+SELECT DISTINCT ON (o.customer_id)
+       c.name, o.id AS latest_order, o.placed_at::date AS placed_on, o.status
+FROM orders AS o
+JOIN customers AS c ON c.id = o.customer_id
+ORDER BY o.customer_id, o.placed_at DESC;
+```
+
+```text
+  name  | latest_order | placed_on  |  status   
+--------+--------------+------------+-----------
+ Ama    |           19 | 2026-11-12 | placed
+ Kofi   |           15 | 2026-11-03 | cancelled
+ Esi    |           11 | 2026-10-21 | delivered
+ Yaa    |           17 | 2026-11-08 | paid
+ Kwame  |           12 | 2026-10-24 | paid
+ Akosua |           20 | 2026-11-12 | placed
+ Kobina |           18 | 2026-11-10 | paid
+ Afua   |           16 | 2026-11-05 | delivered
+(8 rows)
+```
+
+The `ORDER BY` must start with the `DISTINCT ON` expressions. It is PostgreSQL-only; the `row_number()` pattern from <Ref to="db-window-functions" /> works everywhere.
+
+## Pivoting
+
+**Pivoting** turns rows into columns: one row per shop with a column per channel. With `FILTER`, each column is an aggregate over its own rows:
+
+```sql
+SELECT s.city,
+       count(*) FILTER (WHERE o.channel = 'web') AS web,
+       count(*) FILTER (WHERE o.channel = 'app') AS app,
+       count(*) FILTER (WHERE o.channel = 'shop') AS in_shop,
+       count(*) AS total
+FROM orders AS o
+JOIN shops AS s ON s.id = o.shop_id
+GROUP BY s.city
+ORDER BY s.city;
+```
+
+```text
+ city  | web | app | in_shop | total 
+-------+-----+-----+---------+-------
+ Hull  |   1 |   0 |       2 |     3
+ Leeds |   3 |   3 |       3 |     9
+ York  |   5 |   2 |       1 |     8
+(3 rows)
+```
+
+The columns must be known when you write the query. When they are not (a column per month, for any range), build the table in the application or a reporting tool, or use PostgreSQL's `crosstab` function from the `tablefunc` extension. **Unpivoting**, the reverse, is a `CROSS JOIN LATERAL (VALUES ...)` that turns columns back into rows.
+
+## Gaps and islands
+
+A **gaps and islands** problem finds runs of consecutive values: streaks of days with orders, ranges of free seats, sessions in a click log. The trick: in a run of consecutive dates, the date minus its row number is the **same** for every row in the run. Runs of consecutive days on which the bakery received orders:
+
+```sql
+WITH days AS (
+  SELECT DISTINCT placed_at::date AS day
+  FROM orders
+),
+grouped AS (
+  SELECT day, day - (row_number() OVER (ORDER BY day))::integer AS island
+  FROM days
+)
+SELECT min(day) AS run_start, max(day) AS run_end, count(*) AS days
+FROM grouped
+GROUP BY island
+HAVING count(*) > 1
+ORDER BY run_start;
+```
+
+```text
+ run_start  |  run_end   | days 
+------------+------------+------
+ 2026-10-03 | 2026-10-04 |    2
+ 2026-10-11 | 2026-10-12 |    2
+(2 rows)
+```
+
+Each `island` value identifies one run; grouping by it gives each run's start, end and length (keeping runs longer than a day). The **gaps** are the spaces between: `lead(run_start) OVER (ORDER BY run_start)` against each run's end. The same idea, with `lag` to flag where a new run starts and a running `sum` of the flags as the island number, handles data where "consecutive" means "within 30 minutes", which is how web analytics splits clicks into sessions.
+
+## Common mistakes
+
+- **`UNION` where `UNION ALL` would do**, paying for an unneeded sort or hash.
+- **Reading subtotal NULLs as data**; use `grouping()`.
+- **A `LATERAL` subquery without an index to support it**, which runs a slow scan once per row.
+- **`DISTINCT ON` without a matching `ORDER BY`**, giving an arbitrary row per group.
+- **Self-joining or correlated subqueries for runs** that the gaps-and-islands pattern solves in one pass.
+
+## Practice
+
+**1. (warm-up)** List the id of every product that appears in the products table but has never been ordered, with a set operation.
+
+<Solution>
+
+```sql
+SELECT id FROM products
+EXCEPT
+SELECT product_id FROM order_lines
+ORDER BY id;
+```
+
+```text
+ id 
+----
+ 11
+ 12
+(2 rows)
+```
+
+</Solution>
+
+**2. (standard)** For each product category, show the number of items sold through each channel as columns, with a total row at the bottom from `ROLLUP`.
+
+<Solution>
+
+```sql
+SELECT coalesce(p.category, 'total') AS category,
+       sum(l.quantity) FILTER (WHERE o.channel = 'web') AS web,
+       sum(l.quantity) FILTER (WHERE o.channel = 'app') AS app,
+       sum(l.quantity) FILTER (WHERE o.channel = 'shop') AS in_shop
+FROM order_lines AS l
+JOIN orders AS o ON o.id = l.order_id
+JOIN products AS p ON p.id = l.product_id
+GROUP BY ROLLUP (p.category)
+ORDER BY grouping(p.category), p.category;
+```
+
+```text
+ category | web | app | in_shop 
+----------+-----+-----+---------
+ bread    |   6 |  14 |       6
+ cake     |   6 |     |
+ pantry   |   5 |   1 |       1
+ pastry   |   5 |   9 |      14
+ total    |  22 |  24 |      21
+(5 rows)
+```
+
+Using `coalesce` here is safe only because `category` is never NULL in the data; `grouping()` is the general solution.
+
+</Solution>
+
+**3. (stretch)** For each customer with more than one order, show their longest gap in days between consecutive orders, using a window function and no self join.
+
+<Solution>
+
+```sql
+WITH gaps AS (
+  SELECT customer_id,
+         placed_at::date - lag(placed_at::date) OVER (PARTITION BY customer_id ORDER BY placed_at) AS gap
+  FROM orders
+)
+SELECT c.name, max(g.gap) AS longest_gap_days
+FROM gaps AS g
+JOIN customers AS c ON c.id = g.customer_id
+WHERE g.gap IS NOT NULL
+GROUP BY c.name
+ORDER BY longest_gap_days DESC, c.name;
+```
+
+```text
+  name  | longest_gap_days 
+--------+------------------
+ Yaa    |               33
+ Kobina |               23
+ Kofi   |               23
+ Ama    |               17
+ Esi    |               17
+ Akosua |               16
+ Kwame  |               16
+(7 rows)
+```
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **`ROLLUP`**, **`CUBE`** and **`GROUPING SETS`** compute subtotals and totals in one query; **`grouping()`** marks rolled-up columns.
+- **`UNION ALL`**, `UNION`, **`INTERSECT`** and **`EXCEPT`** combine query results; prefer `UNION ALL`.
+- **`LATERAL`** runs a subquery per row, for top N per row; **`DISTINCT ON`** keeps the first row per group in PostgreSQL.
+- **Pivot** with `FILTER` aggregates; unpivot with `LATERAL (VALUES ...)`.
+- **Gaps and islands**: a value minus its row number is constant within a run.
+
+## Go deeper
+
+- [PostgreSQL: GROUPING SETS, CUBE and ROLLUP](https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-GROUPING-SETS), the PostgreSQL project. Subtotals in full.
+- [PostgreSQL: combining queries](https://www.postgresql.org/docs/current/queries-union.html), the PostgreSQL project. UNION, INTERSECT and EXCEPT.
+- [PostgreSQL: LATERAL subqueries](https://www.postgresql.org/docs/current/queries-table-expressions.html#QUERIES-LATERAL), the PostgreSQL project. How LATERAL works, with examples.

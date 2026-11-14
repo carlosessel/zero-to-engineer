@@ -1,0 +1,229 @@
+---
+title: "Database security"
+summary: "Roles and privileges, least privilege, row-level security, SQL injection, encryption and auditing."
+prerequisites: [db-views-functions]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will secure a PostgreSQL database the way production systems need: **roles** with only the privileges they need, **row-level security** that enforces who sees which rows inside the database, defence against **SQL injection** in SQL itself, **encryption** in transit and at rest, safe handling of **passwords and personal data**, and **auditing**. A database usually holds an organisation's most valuable and most regulated data; most breaches come from simple gaps: a shared superuser password, an injection, a backup left public.
+
+## Roles and privileges
+
+In PostgreSQL, users and groups are both **roles**. A role that can log in is a user; roles can be members of other roles and inherit their privileges. **Privileges** are granted on objects: `SELECT`, `INSERT`, `UPDATE`, `DELETE` on tables (even on single columns), `USAGE` on schemas, `EXECUTE` on functions, `CONNECT` on databases.
+
+The rule is **least privilege**: each application and person gets exactly what they need, and nothing runs as a superuser. A typical set-up for the bakery:
+
+```sql
+CREATE ROLE bakery_readonly NOLOGIN;
+GRANT USAGE ON SCHEMA public TO bakery_readonly;
+GRANT SELECT ON products, shops TO bakery_readonly;
+
+CREATE ROLE bakery_app NOLOGIN;
+GRANT USAGE ON SCHEMA public TO bakery_app;
+GRANT SELECT, INSERT, UPDATE ON orders, order_lines, customers TO bakery_app;
+GRANT SELECT ON products, shops TO bakery_app;
+
+CREATE ROLE web_service LOGIN PASSWORD 'change-me-in-the-secret-store' IN ROLE bakery_app;
+CREATE ROLE analyst LOGIN PASSWORD 'change-me-too' IN ROLE bakery_readonly;
+
+SET ROLE analyst;
+SELECT count(*) AS products FROM products;
+SELECT count(*) AS customers FROM customers;
+DELETE FROM products;
+RESET ROLE;
+```
+
+```text
+ products 
+----------
+       12
+(1 row)
+
+ERROR:  permission denied for table customers
+ERROR:  permission denied for table products
+```
+
+- **Group roles** (`NOLOGIN`) hold privileges; **login roles** are members of them. Change what an application can do by changing its group, not each user.
+- The analyst can read products but not customers (personal data), and cannot delete anything.
+- The application can insert orders but has no `DELETE` on them and cannot change products' prices, so even a compromised web service is limited in the damage it can do.
+- Schema changes are run by a separate **migration role** that owns the tables, used only during deployments (<Ref to="db-migrations" />).
+- `ALTER DEFAULT PRIVILEGES` grants privileges on tables created in the future, so new tables do not need to be granted one by one.
+
+Real passwords never appear in scripts or repositories: they come from a secret store, or are replaced by IAM authentication on managed services (<Ref to="m-appsec" />).
+
+## Row-level security
+
+Privileges control which **tables** a role may use. **Row-level security** (RLS) controls which **rows**: a policy is a condition added automatically to every query on the table. It is the database-enforced safety net for multi-tenant applications (<Ref to="db-modelling" />):
+
+```sql
+CREATE TABLE notes (
+  id      integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  shop_id integer NOT NULL,
+  body    text NOT NULL
+);
+INSERT INTO notes (shop_id, body) VALUES (1, 'Leeds: oven 2 needs a service'), (2, 'York: new flour supplier'), (1, 'Leeds: rota for December');
+
+ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY notes_by_shop ON notes
+  USING (shop_id = current_setting('app.shop_id')::integer)
+  WITH CHECK (shop_id = current_setting('app.shop_id')::integer);
+GRANT SELECT, INSERT ON notes TO bakery_app;
+
+SET ROLE web_service;
+SET app.shop_id = '1';
+SELECT shop_id, body FROM notes ORDER BY id;
+INSERT INTO notes (shop_id, body) VALUES (2, 'Trying to write to York');
+RESET ROLE;
+```
+
+```text
+ shop_id |             body              
+---------+-------------------------------
+       1 | Leeds: oven 2 needs a service
+       1 | Leeds: rota for December
+(2 rows)
+
+ERROR:  new row violates row-level security policy for table "notes"
+```
+
+The application sets `app.shop_id` for each request (or transaction, with `SET LOCAL`), and every query sees only that shop's rows, even one where a developer forgot the `WHERE`. `WITH CHECK` also stops rows being written for another shop. Table owners and superusers bypass RLS unless the table is set to `FORCE ROW LEVEL SECURITY`, which is one more reason applications must not connect as the owner.
+
+## SQL injection inside the database
+
+<Ref to="m-appsec" /> covers SQL injection from application code: always use parameters. The same bug can hide in database code that builds SQL with **dynamic SQL** (`EXECUTE`):
+
+```sql
+CREATE FUNCTION count_where_unsafe(p_city text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE result bigint;
+BEGIN
+  EXECUTE 'SELECT count(*) FROM customers WHERE city = ''' || p_city || '''' INTO result;
+  RETURN result;
+END;
+$$;
+
+CREATE FUNCTION count_where_safe(p_city text) RETURNS bigint
+LANGUAGE plpgsql AS $$
+DECLARE result bigint;
+BEGIN
+  EXECUTE 'SELECT count(*) FROM customers WHERE city = $1' INTO result USING p_city;
+  RETURN result;
+END;
+$$;
+
+SELECT count_where_unsafe('Leeds') AS unsafe_normal,
+       count_where_unsafe($$x' OR 'a' = 'a$$) AS unsafe_injected,
+       count_where_safe($$x' OR 'a' = 'a$$) AS safe_injected;
+```
+
+```text
+ unsafe_normal | unsafe_injected | safe_injected 
+---------------+-----------------+---------------
+             3 |               9 |             0
+(1 row)
+```
+
+The unsafe function counted every customer when given a crafted value; the safe one passes the value as a parameter with `USING`, so it is only ever a value. When an identifier (a table or column name) must be dynamic, use `format('%I', name)` for identifiers and `format('%L', value)` for literals, which quote correctly. Functions declared `SECURITY DEFINER` run with their owner's privileges, so they need extra care: set a safe `search_path` on them and validate every input.
+
+## Passwords and sensitive data
+
+- **Users' passwords** are hashed with a slow algorithm (Argon2id, bcrypt, scrypt) in the application, or in the database with `pgcrypto`'s `crypt(password, gen_salt('bf'))`. Never store them reversibly (<Ref to="m-crypto" />).
+- **Database role passwords** use `scram-sha-256` (the default), never `md5`.
+- **Personal data**: collect less; restrict which roles can read it (column privileges, views); mask it in non-production copies; delete it when it is no longer needed.
+- **Column encryption** with `pgcrypto` or in the application protects especially sensitive values (national insurance numbers, health data) even from people with database access, at the cost of not being able to query them easily. Keep keys out of the database.
+
+## Encryption in transit and at rest
+
+- **In transit**: require TLS for every connection (`hostssl` lines in `pg_hba.conf`, `ssl = on`), and make clients verify the server's certificate with **`sslmode=verify-full`**. Without verification, TLS can be intercepted.
+- **At rest**: disk encryption (provided by managed services and cloud volumes), and encrypted **backups**: a stolen backup is a stolen database (<Ref to="db-operations" />).
+- **Network**: databases should never be reachable from the internet; put them in private networks, reachable only from the applications and administrators that need them. `pg_hba.conf` controls which hosts, users and databases may connect, and how they authenticate.
+
+## Auditing
+
+Knowing who did what is required by many regulations and essential after an incident:
+
+- Log connections and disconnections (`log_connections`, `log_disconnections`).
+- Use the **`pgaudit`** extension for detailed, structured audit logs of reads and writes on chosen tables or roles.
+- Keep application-level audit trails of business actions (<Ref to="db-views-functions" />).
+- Send logs somewhere the database's own administrators cannot quietly change them.
+
+## A security checklist
+
+- No application or person uses a superuser; each has a role with the least privilege it needs.
+- The application role does not own the tables; a separate migration role does.
+- Row-level security on multi-tenant tables.
+- Parameters everywhere; no SQL built by concatenation, in the application or the database.
+- TLS with certificate verification; the database is not on the public internet.
+- Backups encrypted, access-controlled and regularly test-restored.
+- Personal data minimised, restricted and masked outside production.
+- Patching: run a supported PostgreSQL version and apply minor releases promptly.
+
+## Common mistakes
+
+- **One shared superuser login** for applications and people.
+- **Applications connecting as the table owner**, bypassing RLS and able to drop tables.
+- **Dynamic SQL with concatenated values.**
+- **`sslmode=require` without verification**, or no TLS at all.
+- **Production data copied to laptops and test environments** unmasked.
+- **Public backups** or database ports open to the internet.
+
+## Practice
+
+**1. (warm-up)** A reporting tool needs to read orders and order lines but not customers' emails. What would you grant?
+
+<Solution>
+
+A group role with `USAGE` on the schema and `SELECT` on `orders` and `order_lines` only, and a login role for the tool in that group. If it needs customer names, grant `SELECT (id, name, city) ON customers`, a column-level privilege, or a view without the email column.
+
+</Solution>
+
+**2. (standard)** Grant `bakery_readonly` access to customers' names and cities but not their emails, and show what the analyst can and cannot read.
+
+<Solution>
+
+```sql
+GRANT SELECT (id, name, city) ON customers TO bakery_readonly;
+
+SET ROLE analyst;
+SELECT name, city FROM customers WHERE id <= 2 ORDER BY id;
+SELECT email FROM customers WHERE id = 1;
+RESET ROLE;
+```
+
+```text
+ name | city  
+------+-------
+ Ama  | Leeds
+ Kofi | York
+(2 rows)
+
+ERROR:  permission denied for table customers
+```
+
+</Solution>
+
+**3. (standard)** Why must the application role not own its tables when row-level security is used?
+
+<Solution>
+
+A table's owner bypasses its RLS policies by default, so an application connected as the owner would see every tenant's rows and the safety net would do nothing. The owner can also alter or drop the tables. Use a separate role that owns the tables (for migrations), grant the application only the privileges it needs, and use `FORCE ROW LEVEL SECURITY` if owners must also be subject to policies.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Roles** are users and groups; grant privileges to group roles and make login roles members. Apply **least privilege**; no superusers in applications.
+- **Row-level security** adds per-row policies, the database's safety net for tenants and shops; owners bypass it unless forced.
+- Prevent **injection** in dynamic SQL with `EXECUTE ... USING` and `format('%I', ...)`/`%L`.
+- Hash passwords slowly, restrict and minimise personal data, and encrypt especially sensitive columns.
+- Require **TLS with verification**, keep databases off the internet, encrypt backups, and **audit** access.
+
+## Go deeper
+
+- [PostgreSQL: database roles](https://www.postgresql.org/docs/current/user-manag.html), the PostgreSQL project. Roles, membership and predefined roles.
+- [PostgreSQL: row security policies](https://www.postgresql.org/docs/current/ddl-rowsecurity.html), the PostgreSQL project. RLS in full.
+- [OWASP: SQL injection prevention cheat sheet](https://cheatsheetseries.owasp.org/cheatsheets/SQL_Injection_Prevention_Cheat_Sheet.html), OWASP. Parameters, stored procedures and escaping, for every language.
+- [PostgreSQL: secure TCP/IP connections with SSL](https://www.postgresql.org/docs/current/ssl-tcp.html), the PostgreSQL project. Setting up TLS and certificate verification.

@@ -1,0 +1,328 @@
+---
+title: "Reading query plans"
+summary: "EXPLAIN and EXPLAIN ANALYZE, scans, joins and sorts, statistics, and why the planner chooses what it does."
+prerequisites: [db-indexes]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will read PostgreSQL **query plans** with confidence: what each node means, how `EXPLAIN` estimates differ from what `EXPLAIN ANALYZE` measures, how the planner chooses between scans and between the three **join algorithms**, why it sometimes guesses wrong, and how **statistics** fix it. Reading plans is the core skill of database performance: everything in <Ref to="db-performance" /> depends on it.
+
+## The test data
+
+Two tables big enough for the planner to make interesting choices, generated deterministically:
+
+```sql
+CREATE TABLE plan_customers (
+  id      integer PRIMARY KEY,
+  city    text NOT NULL,
+  premium boolean NOT NULL
+);
+
+CREATE TABLE plan_orders (
+  id          integer PRIMARY KEY,
+  customer_id integer NOT NULL REFERENCES plan_customers (id),
+  total_pence integer NOT NULL,
+  placed_on   date NOT NULL
+);
+
+INSERT INTO plan_customers
+SELECT n, (ARRAY['Leeds', 'York', 'Hull', 'Bath'])[n % 4 + 1], n % 50 = 0
+FROM generate_series(1, 5000) AS n;
+
+INSERT INTO plan_orders
+SELECT n, n % 5000 + 1, 100 + (n * 53) % 9000, date '2025-01-01' + (n % 600)
+FROM generate_series(1, 25000) AS n;
+
+CREATE INDEX plan_orders_customer_id_idx ON plan_orders (customer_id);
+ANALYZE plan_customers, plan_orders;
+```
+
+## EXPLAIN: the plan and its estimates
+
+`EXPLAIN` shows the plan without running the query. Each line is a node; indented nodes feed their results to the node above, so plans are read **from the inside out**:
+
+```sql
+EXPLAIN
+SELECT c.city, count(*)
+FROM plan_orders AS o
+JOIN plan_customers AS c ON c.id = o.customer_id
+WHERE o.placed_on >= '2026-06-01'
+GROUP BY c.city;
+```
+
+```text
+                                      QUERY PLAN                                      
+--------------------------------------------------------------------------------------
+ HashAggregate  (cost=615.34..615.38 rows=4 width=13)
+   Group Key: c.city
+   ->  Hash Join  (cost=140.50..598.08 rows=3453 width=5)
+         Hash Cond: (o.customer_id = c.id)
+         ->  Seq Scan on plan_orders o  (cost=0.00..448.50 rows=3453 width=4)
+               Filter: (placed_on >= '2026-06-01'::date)
+         ->  Hash  (cost=78.00..78.00 rows=5000 width=9)
+               ->  Seq Scan on plan_customers c  (cost=0.00..78.00 rows=5000 width=9)
+(8 rows)
+```
+
+Each node shows estimates in brackets:
+
+- **`cost=start..total`**: the planner's cost units for producing the first row and all rows. They are relative numbers (based on settings such as the cost of reading a page), useful for comparing plans, not milliseconds.
+- **`rows`**: the estimated number of rows the node returns.
+- **`width`**: the estimated average row size in bytes.
+
+Reading this plan from the bottom: scan all orders, keeping those from June 2026 on; scan customers and build a **hash table** of them; for each order, look its customer up in the hash table (a **hash join**); then group by city with a hash table (**HashAggregate**).
+
+## EXPLAIN ANALYZE: what really happened
+
+**`EXPLAIN ANALYZE`** runs the query and adds what actually happened to each node. Comparing estimates with reality is the most important skill in reading plans. (It really runs the query, so wrap data-changing statements in `BEGIN` and `ROLLBACK`.) The options below turn off timings and buffer counts, which differ on every run, so your output can match this exactly; leave them on when tuning real queries:
+
+```sql
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT c.city, count(*)
+FROM plan_orders AS o
+JOIN plan_customers AS c ON c.id = o.customer_id
+WHERE o.placed_on >= '2026-06-01'
+GROUP BY c.city;
+```
+
+```text
+                                  QUERY PLAN                                  
+------------------------------------------------------------------------------
+ HashAggregate (actual rows=4.00 loops=1)
+   Group Key: c.city
+   Batches: 1  Memory Usage: 32kB
+   ->  Hash Join (actual rows=3444.00 loops=1)
+         Hash Cond: (o.customer_id = c.id)
+         ->  Seq Scan on plan_orders o (actual rows=3444.00 loops=1)
+               Filter: (placed_on >= '2026-06-01'::date)
+               Rows Removed by Filter: 21556
+         ->  Hash (actual rows=5000.00 loops=1)
+               Buckets: 8192  Batches: 1  Memory Usage: 208kB
+               ->  Seq Scan on plan_customers c (actual rows=5000.00 loops=1)
+(11 rows)
+```
+
+- **`actual rows`** is how many rows each node really produced (per loop), and **`loops`** how many times it ran. Multiply them for the total.
+- **`Rows Removed by Filter`** shows work wasted reading rows that were thrown away: a sign that an index might help.
+- With timings on, `actual time=first..last` shows milliseconds per node, and **`BUFFERS`** shows how many 8 kB pages came from memory (`shared hit`) or disk (`read`), the truest measure of I/O.
+
+When `rows` (estimated) and `actual rows` differ by orders of magnitude, the planner chose its plan on wrong information, and that is usually the root cause of a bad plan.
+
+## Scans
+
+| Node | What it does | Chosen when |
+|---|---|---|
+| **Seq Scan** | reads every row of the table | many rows match, or no usable index |
+| **Index Scan** | follows the index, fetching each row from the table | few rows match, or rows are needed in index order |
+| **Index Only Scan** | answers from the index alone | the index covers all needed columns and pages are all-visible |
+| **Bitmap Heap Scan** with **Bitmap Index Scan** | collects row locations from one or more indexes, then reads table pages in order | a moderate number of rows, or combining indexes with AND/OR |
+
+The planner estimates how many rows a condition matches (its **selectivity**) from statistics, prices each possible scan, and picks the cheapest. The same query with different values can get different plans:
+
+```sql
+EXPLAIN (COSTS OFF) SELECT * FROM plan_orders WHERE customer_id = 7;
+
+EXPLAIN (COSTS OFF) SELECT * FROM plan_orders WHERE customer_id < 4000;
+```
+
+```text
+                       QUERY PLAN                       
+--------------------------------------------------------
+ Bitmap Heap Scan on plan_orders
+   Recheck Cond: (customer_id = 7)
+   ->  Bitmap Index Scan on plan_orders_customer_id_idx
+         Index Cond: (customer_id = 7)
+(4 rows)
+
+           QUERY PLAN           
+--------------------------------
+ Seq Scan on plan_orders
+   Filter: (customer_id < 4000)
+(2 rows)
+```
+
+Five orders for one customer: use the index. Four-fifths of the table: read it all.
+
+## Joins
+
+PostgreSQL has three ways to join, and picks one per join:
+
+- **Nested loop**: for each row of the outer input, find matching rows in the inner input, ideally with an index. Best when the outer side is **small**.
+- **Hash join**: build a hash table from the smaller input, then probe it with each row of the other. Best for **large unsorted** inputs joined on equality.
+- **Merge join**: sort both inputs on the join key (or read them already sorted from indexes) and walk through them together. Good for **large inputs already in order**.
+
+```sql
+EXPLAIN (COSTS OFF)
+SELECT o.id, o.total_pence
+FROM plan_customers AS c
+JOIN plan_orders AS o ON o.customer_id = c.id
+WHERE c.id = 42;
+
+EXPLAIN (COSTS OFF)
+SELECT c.city, sum(o.total_pence)
+FROM plan_customers AS c
+JOIN plan_orders AS o ON o.customer_id = c.id
+GROUP BY c.city;
+```
+
+```text
+                             QUERY PLAN                              
+---------------------------------------------------------------------
+ Nested Loop
+   ->  Index Only Scan using plan_customers_pkey on plan_customers c
+         Index Cond: (id = 42)
+   ->  Bitmap Heap Scan on plan_orders o
+         Recheck Cond: (customer_id = 42)
+         ->  Bitmap Index Scan on plan_orders_customer_id_idx
+               Index Cond: (customer_id = 42)
+(7 rows)
+
+                   QUERY PLAN                   
+------------------------------------------------
+ HashAggregate
+   Group Key: c.city
+   ->  Hash Join
+         Hash Cond: (o.customer_id = c.id)
+         ->  Seq Scan on plan_orders o
+         ->  Hash
+               ->  Seq Scan on plan_customers c
+(7 rows)
+```
+
+One customer: a nested loop, finding that customer's orders through the index. All customers: a hash join over the whole tables. Neither is "better"; each is right for its size.
+
+## Sorting, grouping and limits
+
+**Sort** nodes order rows (in memory, or spilling to disk when they exceed `work_mem`: look for `Sort Method: external merge`); **HashAggregate** and **GroupAggregate** group rows; **Limit** stops early. A query with `ORDER BY ... LIMIT` and a matching index can read just the first few index entries and stop, which is why such queries can be instant on huge tables:
+
+```sql
+CREATE INDEX plan_orders_placed_on_idx ON plan_orders (placed_on);
+
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT id, placed_on FROM plan_orders ORDER BY placed_on DESC LIMIT 3;
+```
+
+```text
+                                             QUERY PLAN                                              
+-----------------------------------------------------------------------------------------------------
+ Limit (actual rows=3.00 loops=1)
+   ->  Index Scan Backward using plan_orders_placed_on_idx on plan_orders (actual rows=3.00 loops=1)
+         Index Searches: 1
+(3 rows)
+```
+
+The index scan produced only 3 rows: it stopped as soon as the limit was satisfied.
+
+## Statistics and bad estimates
+
+The planner's estimates come from **statistics** that `ANALYZE` gathers (and autovacuum refreshes automatically): the number of rows, the most common values and their frequencies, a histogram of the rest, and how many distinct values each column has. You can read them in the `pg_stats` view:
+
+```sql
+SELECT attname, n_distinct, most_common_vals, most_common_freqs
+FROM pg_stats
+WHERE tablename = 'plan_customers' AND attname IN ('city', 'premium')
+ORDER BY attname;
+```
+
+```text
+ attname | n_distinct |    most_common_vals    |   most_common_freqs   
+---------+------------+------------------------+-----------------------
+ city    |          4 | {Bath,Hull,Leeds,York} | {0.25,0.25,0.25,0.25}
+ premium |          2 | {f,t}                  | {0.98,0.02}
+(2 rows)
+```
+
+Estimates go wrong in a few typical ways:
+
+- **Stale statistics** after a large load or delete, before autovacuum has analysed the table: run `ANALYZE`.
+- **Correlated columns**: the planner assumes conditions are independent, so `WHERE city = 'Leeds' AND postcode LIKE 'LS%'` is estimated far too low. **Extended statistics** (`CREATE STATISTICS ... (dependencies) ON city, postcode FROM ...`) teach it the relationship.
+- **Skewed data** beyond what the most-common-values list captures: raise the column's statistics target (`ALTER TABLE ... ALTER COLUMN ... SET STATISTICS 1000`).
+- **Expressions and functions**, whose selectivity it cannot know without an expression index or extended statistics on the expression.
+
+A wrong estimate low in the plan multiplies upwards: think it will get 10 rows instead of 100,000, choose a nested loop, and run an index lookup 100,000 times.
+
+## A method for slow queries
+
+1. Run **`EXPLAIN (ANALYZE, BUFFERS)`** on the real query with real parameters, on production-like data.
+2. Find where the **time** goes: the node with the largest actual time (times include their children; subtract them).
+3. Compare **estimated and actual rows** at each node; a large mismatch points to statistics.
+4. Look for **wasted work**: large `Rows Removed by Filter`, sequential scans on big tables for a few rows, sorts spilling to disk, nested loops with huge loop counts.
+5. Fix the cause: an index, a rewritten condition, fresher or richer statistics, or a different query shape; then measure again.
+
+Visualisers such as **explain.dalibo.com** and **explain.depesz.com** make large plans easier to read.
+
+## Common mistakes
+
+- **Reading plans top-down** instead of from the innermost nodes out.
+- **Trusting `EXPLAIN` alone**: estimates are not measurements; use `ANALYZE`.
+- **Running `EXPLAIN ANALYZE` on a `DELETE` or `UPDATE`** outside a transaction you roll back.
+- **Testing on tiny development data**, where every plan is a sequential scan and every query is fast.
+- **Treating cost units as milliseconds.**
+- **Tuning with hints or disabling planner features** globally (`enable_seqscan = off`) instead of fixing statistics or indexes.
+
+## Practice
+
+**1. (warm-up)** In the plan below, which node runs first, and what kind of join is used?
+
+```text
+ Hash Join
+   Hash Cond: (o.customer_id = c.id)
+   ->  Seq Scan on plan_orders o
+   ->  Hash
+         ->  Seq Scan on plan_customers c
+```
+
+<Solution>
+
+The innermost nodes run first: the sequential scan of `plan_customers` feeds the Hash node, which builds a hash table; the sequential scan of `plan_orders` is then probed against it. The join is a **hash join**, on `customer_id = id`.
+
+</Solution>
+
+**2. (standard)** Show the plan with real row counts for "premium customers' orders over £80", and say whether the estimates were accurate.
+
+<Solution>
+
+```sql
+EXPLAIN (ANALYZE, COSTS OFF, TIMING OFF, BUFFERS OFF, SUMMARY OFF)
+SELECT o.id, o.total_pence
+FROM plan_orders AS o
+JOIN plan_customers AS c ON c.id = o.customer_id
+WHERE c.premium AND o.total_pence > 8000;
+```
+
+```text
+                              QUERY PLAN                               
+-----------------------------------------------------------------------
+ Hash Join (actual rows=61.00 loops=1)
+   Hash Cond: (o.customer_id = c.id)
+   ->  Seq Scan on plan_orders o (actual rows=3049.00 loops=1)
+         Filter: (total_pence > 8000)
+         Rows Removed by Filter: 21951
+   ->  Hash (actual rows=100.00 loops=1)
+         Buckets: 1024  Batches: 1  Memory Usage: 7kB
+         ->  Seq Scan on plan_customers c (actual rows=100.00 loops=1)
+               Filter: premium
+               Rows Removed by Filter: 4900
+(10 rows)
+```
+
+Compare each node's actual rows with what plain `EXPLAIN` estimates for it (run `EXPLAIN` without `COSTS OFF` to see the estimates). Premium is exactly 2 percent of customers and the planner's statistics record that, so its estimates are close and its plan is sensible.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **`EXPLAIN`** shows the plan with estimated costs and rows; **`EXPLAIN ANALYZE`** runs it and shows actual rows, loops, times and buffers. Read plans from the inside out.
+- Scans: **sequential**, **index**, **index-only** and **bitmap**; the planner picks by estimated selectivity.
+- Joins: **nested loop** (small outer side, indexed inner), hash (large, unsorted, equality) and **merge** (large, sorted).
+- **Statistics** from `ANALYZE` drive estimates; fix bad estimates with `ANALYZE`, extended statistics or higher statistics targets.
+- Method: measure, find where time goes, compare estimates with actuals, remove wasted work, measure again.
+
+## Go deeper
+
+- [PostgreSQL: using EXPLAIN](https://www.postgresql.org/docs/current/using-explain.html), the PostgreSQL project. Reading plans, with worked examples.
+- [PostgreSQL: statistics used by the planner](https://www.postgresql.org/docs/current/planner-stats.html), the PostgreSQL project. Including extended statistics.
+- [explain.dalibo.com](https://explain.dalibo.com/), Dalibo. A free visualiser for PostgreSQL plans.

@@ -1,0 +1,223 @@
+---
+title: "Analytics and data warehouses"
+summary: "OLTP and OLAP, star schemas, columnar storage, warehouses and lakehouses, and analytical SQL."
+prerequisites: [db-window-functions, db-modelling]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will understand how analytical databases differ from the ones applications run on, model data for reporting with **star schemas** of **facts** and **dimensions**, know why **columnar** warehouses scan billions of rows quickly, move data from applications into a warehouse with **ELT** pipelines, and write the analytical SQL that answers business questions: cohorts, retention and period-over-period growth.
+
+## OLTP and OLAP
+
+Databases serve two very different workloads:
+
+| Aspect | **OLTP** (online transaction processing) | **OLAP** (online analytical processing) |
+|---|---|---|
+| Example | placing an order, updating stock | revenue by month, shop and product for three years |
+| Queries | many small reads and writes of a few rows | few large reads scanning millions of rows |
+| Schema | normalised, to keep writes correct | denormalised, to make reads simple and fast |
+| Storage | row-oriented (PostgreSQL, MySQL) | column-oriented (BigQuery, Snowflake, Redshift, ClickHouse, DuckDB) |
+| Freshness | live | minutes to a day behind |
+
+Running heavy reports on the application's database competes with customers for the same resources, and its normalised schema makes analytical queries long. So organisations copy data into a separate **analytical** store, shaped for analysis. Smaller teams can go a long way with PostgreSQL itself (a read replica, materialised views and the SQL below), and move to a warehouse when data or queries outgrow it.
+
+## Columnar storage
+
+A row store keeps each row's values together, which is perfect for "fetch order 42". A **column store** keeps each column's values together, which is perfect for "sum the revenue column across 2 billion rows": it reads only the columns the query needs, and similar values next to each other **compress** extremely well (a status column with four distinct values becomes a few bits per row). Columnar engines also process values in batches with vectorised CPU instructions. The result: scans one to two orders of magnitude faster than a row store, at the cost of slow single-row updates, which analytics rarely needs.
+
+## Star schemas
+
+The standard analytical model is the **star schema** (dimensional modelling, from Ralph Kimball):
+
+- A **fact table** records events or measurements at a stated **grain** ("one row per order line"), with numeric **measures** (quantity, revenue) and keys to dimensions.
+- **Dimension tables** describe the who, what, where and when (customer, product, shop, date), with many descriptive attributes, deliberately denormalised.
+
+Built from the bakery's data:
+
+```sql
+CREATE TABLE dim_date AS
+SELECT d::date AS date_key, extract(year FROM d)::integer AS year, extract(month FROM d)::integer AS month,
+       to_char(d, 'YYYY-MM') AS year_month, extract(isodow FROM d)::integer AS day_of_week,
+       extract(isodow FROM d) IN (6, 7) AS is_weekend
+FROM generate_series('2026-01-01'::date, '2026-12-31'::date, interval '1 day') AS d;
+
+CREATE TABLE dim_product AS
+SELECT id AS product_key, sku, name, category, vegan FROM products;
+
+CREATE TABLE fact_sales AS
+SELECT o.id AS order_id, (o.placed_at AT TIME ZONE 'Europe/London')::date AS date_key,
+       o.shop_id AS shop_key, o.customer_id AS customer_key, l.product_id AS product_key,
+       o.channel, l.quantity, l.quantity * l.unit_price_pence AS revenue_pence
+FROM orders AS o
+JOIN order_lines AS l ON l.order_id = o.id
+WHERE o.status <> 'cancelled';
+
+SELECT d.year_month, p.category, d.is_weekend,
+       sum(f.quantity) AS items, sum(f.revenue_pence) AS revenue
+FROM fact_sales AS f
+JOIN dim_date AS d ON d.date_key = f.date_key
+JOIN dim_product AS p ON p.product_key = f.product_key
+GROUP BY d.year_month, p.category, d.is_weekend
+ORDER BY d.year_month, p.category, d.is_weekend;
+```
+
+```text
+ year_month | category | is_weekend | items | revenue 
+------------+----------+------------+-------+---------
+ 2026-10    | bread    | f          |    10 |    3320
+ 2026-10    | bread    | t          |     8 |    1760
+ 2026-10    | cake     | f          |     1 |    1950
+ 2026-10    | cake     | t          |     3 |    6300
+ 2026-10    | pantry   | f          |     4 |    1730
+ 2026-10    | pantry   | t          |     2 |     760
+ 2026-10    | pastry   | f          |    16 |    4705
+ 2026-11    | bread    | f          |     3 |    1490
+ 2026-11    | bread    | t          |     2 |     900
+ 2026-11    | cake     | t          |     1 |    2400
+ 2026-11    | pantry   | f          |     1 |     380
+ 2026-11    | pastry   | f          |    11 |    3290
+ 2026-11    | pastry   | t          |     1 |     340
+(13 rows)
+```
+
+Every question becomes "join the fact table to the dimensions you need, filter and group by their attributes". A **date dimension** turns calendar logic (weekends, fiscal years, holidays) into simple columns. Dimensions whose attributes change over time (a customer moves city) are handled as **slowly changing dimensions**: type 1 overwrites, type 2 keeps a new row per version with validity dates, like the price history in <Ref to="db-modelling" />.
+
+## Getting data into the warehouse
+
+Data moves from applications to the warehouse in pipelines:
+
+- **ELT** (extract, load, transform) is the modern pattern: copy raw data into the warehouse first, with a tool such as Fivetran, Airbyte or a change-data-capture stream (Debezium reading PostgreSQL's WAL), then **transform** it inside the warehouse with SQL.
+- **dbt** (data build tool) manages those transformations as version-controlled SQL `SELECT` statements with tests and documentation, building staging models, then facts and dimensions. This is the job of the **analytics engineer** (<Ref to="db-careers" />).
+- Orchestrators (Airflow, Dagster) schedule and monitor the pipelines.
+
+**Lakehouses** store data as open columnar files (Parquet, with table formats such as Apache Iceberg or Delta Lake) in cheap object storage, queried by many engines. **DuckDB** is an in-process columnar database (like SQLite for analytics) that queries Parquet and CSV files on a laptop at remarkable speed.
+
+## Analytical SQL
+
+The analytical queries you will write most often combine grouping and window functions (<Ref to="db-window-functions" />).
+
+**Period-over-period growth**: weekly revenue and the change from the previous week:
+
+```sql
+WITH weekly AS (
+  SELECT date_trunc('week', date_key)::date AS week, sum(revenue_pence) AS revenue
+  FROM fact_sales
+  GROUP BY week
+)
+SELECT week, revenue,
+       lag(revenue) OVER (ORDER BY week) AS previous_week,
+       round(100.0 * (revenue - lag(revenue) OVER (ORDER BY week)) / lag(revenue) OVER (ORDER BY week), 1) AS change_percent
+FROM weekly
+ORDER BY week;
+```
+
+```text
+    week    | revenue | previous_week | change_percent 
+------------+---------+---------------+----------------
+ 2026-09-28 |    3070 |               |
+ 2026-10-05 |    5270 |          3070 |           71.7
+ 2026-10-12 |    5870 |          5270 |           11.4
+ 2026-10-19 |    4520 |          5870 |          -23.0
+ 2026-10-26 |    3035 |          4520 |          -32.9
+ 2026-11-02 |    3300 |          3035 |            8.7
+ 2026-11-09 |    4260 |          3300 |           29.1
+(7 rows)
+```
+
+**Cohorts and retention**: group customers by the month of their first order, and count how many ordered again in each later month:
+
+```sql
+WITH firsts AS (
+  SELECT customer_key, min(date_trunc('month', date_key))::date AS cohort
+  FROM fact_sales
+  GROUP BY customer_key
+),
+activity AS (
+  SELECT DISTINCT f.customer_key, date_trunc('month', f.date_key)::date AS month
+  FROM fact_sales AS f
+)
+SELECT fi.cohort,
+       count(DISTINCT fi.customer_key) AS customers,
+       count(DISTINCT a.customer_key) FILTER (WHERE a.month = fi.cohort + interval '1 month') AS ordered_next_month
+FROM firsts AS fi
+LEFT JOIN activity AS a ON a.customer_key = fi.customer_key
+GROUP BY fi.cohort
+ORDER BY fi.cohort;
+```
+
+```text
+   cohort   | customers | ordered_next_month 
+------------+-----------+--------------------
+ 2026-10-01 |         7 |                  4
+ 2026-11-01 |         1 |                  0
+(2 rows)
+```
+
+Four of the seven customers whose first order was in October ordered again in November: a one-month retention of 57 percent for the October cohort, the number a growth team watches above almost any other.
+
+## Common mistakes
+
+- **Running heavy reports on the primary application database** during busy hours.
+- **No stated grain** for a fact table, so measures are double-counted.
+- **Joining facts to facts** directly instead of through shared dimensions.
+- **Local and UTC dates mixed** in daily reports (<Ref to="db-types-functions" />).
+- **Building a warehouse before there are questions**; start from the decisions the business wants to make.
+
+## Practice
+
+**1. (warm-up)** What is the grain of `fact_sales`, and why does summing `revenue_pence` grouped by `order_id` give each order's total?
+
+<Solution>
+
+One row per order line (a product within an order) for orders that were not cancelled. Each order's lines together make up its total, so summing the measure over an order's rows gives the order total; summing a measure that was stored per order on every line would double-count.
+
+</Solution>
+
+**2. (standard)** Using the star schema, show revenue by channel and product category, with each channel's share of its category's revenue as a percentage.
+
+<Solution>
+
+```sql
+SELECT p.category, f.channel, sum(f.revenue_pence) AS revenue,
+       round(100.0 * sum(f.revenue_pence) / sum(sum(f.revenue_pence)) OVER (PARTITION BY p.category), 1) AS share_percent
+FROM fact_sales AS f
+JOIN dim_product AS p ON p.product_key = f.product_key
+GROUP BY p.category, f.channel
+ORDER BY p.category, revenue DESC;
+```
+
+```text
+ category | channel | revenue | share_percent 
+----------+---------+---------+---------------
+ bread    | app     |    3210 |          43.0
+ bread    | shop    |    2770 |          37.1
+ bread    | web     |    1490 |          19.9
+ cake     | web     |   10650 |         100.0
+ pantry   | web     |    2040 |          71.1
+ pantry   | app     |     450 |          15.7
+ pantry   | shop    |     380 |          13.2
+ pastry   | shop    |    4220 |          50.6
+ pastry   | app     |    2475 |          29.7
+ pastry   | web     |    1640 |          19.7
+(10 rows)
+```
+
+`sum(sum(...)) OVER (PARTITION BY ...)` is a window over the grouped results: the category total.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **OLTP** systems serve the application with normalised, row-oriented data; **OLAP** systems serve analysis with denormalised, usually **columnar** data.
+- **Star schemas**: fact tables of measures at a stated **grain**, joined to descriptive **dimensions** (with a date dimension, and slowly changing dimensions for history).
+- **ELT** pipelines load raw data and transform it inside the warehouse, typically with **dbt**; lakehouses and DuckDB query open columnar files.
+- Analytical SQL combines grouping and windows: growth with `lag`, shares with windows over aggregates, **cohorts** and **retention**.
+
+## Go deeper
+
+- [Kimball techniques: dimensional modelling](https://www.kimballgroup.com/data-warehouse-business-intelligence-resources/kimball-techniques/dimensional-modeling-techniques/), the Kimball Group. Facts, dimensions, grain and slowly changing dimensions.
+- [dbt: what is dbt?](https://docs.getdbt.com/docs/introduction), dbt Labs. Transforming data in the warehouse with SQL.
+- [DuckDB documentation](https://duckdb.org/docs/), the DuckDB Foundation. An in-process analytical database.

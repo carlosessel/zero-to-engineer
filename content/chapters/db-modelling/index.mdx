@@ -1,0 +1,270 @@
+---
+title: "Data modelling in practice"
+summary: "From requirements to tables; many-to-many, hierarchies, history and auditing, soft deletes, and multi-tenancy."
+prerequisites: [m-schema-design]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will turn requirements into a schema, and know the standard designs for the situations every real system meets: **many-to-many** relationships, **hierarchies**, keeping **history** of how data changed, **soft deletes**, **multi-tenant** data, and the "flexible" designs (entity-attribute-value, polymorphic links) that cause trouble later. <Ref to="m-schema-design" /> covered normalisation, keys and constraints; this chapter is the patterns built from them.
+
+## From requirements to tables
+
+Modelling starts with the language of the business, not with tables. For a new feature, the bakery says: *customers can join a loyalty scheme; they earn points on each order; points can be spent on rewards; staff can see a customer's history of points.*
+
+1. **Find the things** (nouns that have their own identity and lifecycle): customer, loyalty membership, points transaction, reward.
+2. **Find the facts about each** (attributes): a membership has a start date and a tier; a points transaction has an amount, a reason and a time.
+3. **Find the relationships and their cardinality**: a customer has at most one membership (one-to-one); a membership has many transactions (one-to-many); an order can earn points (one transaction per order, optional).
+4. **Find the rules**: points balances never go below zero; each order earns points at most once; tiers are bronze, silver or gold.
+5. **Find the questions** the data must answer, and how often: "what is this customer's balance?" (every page load), "points issued last month" (monthly).
+
+Then write tables, keys and constraints, and test the design against the questions with real queries before writing application code. The rule that is easiest to get wrong is the one in step 5: a design is only good relative to the questions asked of it.
+
+## Many-to-many
+
+A product can have many tags and a tag many products. A many-to-many relationship needs a **link table** (also called a junction or join table) with a foreign key to each side and a composite primary key:
+
+```sql
+CREATE TABLE tags (
+  id   integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name text NOT NULL UNIQUE
+);
+
+CREATE TABLE product_tags (
+  product_id integer NOT NULL REFERENCES products (id) ON DELETE CASCADE,
+  tag_id     integer NOT NULL REFERENCES tags (id) ON DELETE CASCADE,
+  PRIMARY KEY (product_id, tag_id)
+);
+CREATE INDEX product_tags_tag_id_idx ON product_tags (tag_id);
+
+INSERT INTO tags (name) VALUES ('breakfast'), ('gift'), ('bestseller');
+INSERT INTO product_tags
+SELECT p.id, t.id FROM products AS p, tags AS t
+WHERE (p.sku, t.name) IN (('CRO-090', 'breakfast'), ('CRO-090', 'bestseller'), ('BAG-250', 'breakfast'),
+                          ('CAKE-CHOC', 'gift'), ('GIFT-BOX', 'gift'), ('TEA-250', 'breakfast'));
+
+SELECT t.name AS tag, string_agg(p.name, ', ' ORDER BY p.name) AS products
+FROM tags AS t
+JOIN product_tags AS pt ON pt.tag_id = t.id
+JOIN products AS p ON p.id = pt.product_id
+GROUP BY t.name
+ORDER BY t.name;
+```
+
+```text
+    tag     |            products             
+------------+---------------------------------
+ bestseller | Croissant
+ breakfast  | Bagel, Breakfast tea, Croissant
+ gift       | Chocolate cake, Gift box
+(3 rows)
+```
+
+The primary key stops a product being tagged twice with the same tag and serves lookups by product; the extra index serves lookups by tag. A link table can carry its own facts, such as when the tag was added or a product's position in a list. Order lines are exactly this: a link between orders and products with a quantity and a price.
+
+## Hierarchies
+
+Categories within categories, staff and managers, comment threads: trees are everywhere. The common designs:
+
+| Design | How | Good at | Weak at |
+|---|---|---|---|
+| **Adjacency list** | each row has a `parent_id` | simple; easy to move a subtree | whole subtrees need a recursive query |
+| **Materialised path** | each row stores its path, such as `bakery.bread.rye` | finding descendants with a prefix match | moving subtrees rewrites paths |
+| **Closure table** | a separate table with every ancestor-descendant pair | any ancestry question with a plain join | more rows and more work on writes |
+
+The staff table's `manager_id` is an adjacency list, queried with recursive CTEs (<Ref to="db-subqueries-ctes" />). For deep, read-heavy trees, PostgreSQL's `ltree` extension implements materialised paths with indexes. Start with an adjacency list; it is enough for most applications.
+
+## Keeping history
+
+"What was the price of a sourdough on 1 October?" A table that is simply updated forgets. Three ways to remember:
+
+1. **Copy values at the time of use**, as `order_lines.unit_price_pence` does: the order keeps the price it was sold at. Simple, and right for facts that are part of the transaction.
+2. **A history table with validity periods**, for when you need the state at any moment:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+CREATE TABLE price_history (
+  product_id  integer NOT NULL REFERENCES products (id),
+  price_pence integer NOT NULL CHECK (price_pence > 0),
+  valid       daterange NOT NULL,
+  EXCLUDE USING gist (product_id WITH =, valid WITH &&)
+);
+
+INSERT INTO price_history VALUES
+  (2, 480, '[2025-01-01, 2026-06-01)'),
+  (2, 500, '[2026-06-01, 2026-11-01)'),
+  (2, 520, '[2026-11-01,)');
+
+SELECT p.name, h.price_pence
+FROM price_history AS h
+JOIN products AS p ON p.id = h.product_id
+WHERE h.valid @> date '2026-10-01';
+```
+
+```text
+   name    | price_pence 
+-----------+-------------
+ Sourdough |         500
+(1 row)
+```
+
+The exclusion constraint guarantees periods for the same product never overlap; `'[2026-11-01,)'` has no end, meaning "still current"; `@>` asks which period contains a date. The `btree_gist` extension, which ships with PostgreSQL, lets the constraint use `=` on an ordinary integer column.
+
+3. **An audit log** of every change, usually written by a trigger, recording who changed what, when, and the old and new values (<Ref to="db-views-functions" />). Audit logs answer "who did this?"; history tables answer "what was true then?". Regulated industries often need both.
+
+## Soft deletes
+
+Deleting rows loses information and breaks references, so many systems **mark** rows as deleted instead:
+
+```sql
+ALTER TABLE customers ADD COLUMN deleted_at timestamptz;
+
+ALTER TABLE customers DROP CONSTRAINT customers_email_key;
+CREATE UNIQUE INDEX customers_email_live_idx ON customers (lower(email)) WHERE deleted_at IS NULL;
+
+CREATE VIEW live_customers AS
+SELECT * FROM customers WHERE deleted_at IS NULL;
+
+UPDATE customers SET deleted_at = '2026-11-14 10:00+00' WHERE name = 'Kweku';
+
+SELECT count(*) AS all_rows, count(*) FILTER (WHERE deleted_at IS NULL) AS live FROM customers;
+SELECT name FROM live_customers WHERE city = 'York' ORDER BY name;
+```
+
+```text
+ all_rows | live 
+----------+------
+        9 |    8
+(1 row)
+
+  name  
+--------
+ Akosua
+ Kofi
+(2 rows)
+```
+
+Two details make soft deletes work: the unique email rule must apply only to live rows (a **partial unique index**, here also case-insensitive), or a deleted customer's email can never be reused; and queries must not forget the filter, which a **view** such as `live_customers` makes easy. Soft deletion is not erasure: personal data that must be removed by law (such as under GDPR's right to erasure) needs anonymising or truly deleting.
+
+## Multi-tenant data
+
+A **multi-tenant** application serves many customers (tenants) from one system, such as a bakery-management product used by many bakeries. The options:
+
+| Design | Isolation | Cost and effort |
+|---|---|---|
+| A **database per tenant** | strongest | most operational work; hard beyond hundreds of tenants |
+| A **schema per tenant** | strong | migrations run per schema; moderate scale |
+| **Shared tables with a `tenant_id`** | enforced by queries (or row-level security) | cheapest and simplest to operate; the usual choice |
+
+With shared tables, `tenant_id` goes in every tenant-owned table, in every primary key or unique constraint that must be unique per tenant (`UNIQUE (tenant_id, sku)`), at the front of most indexes, and in every query. Forgetting it in one query leaks one tenant's data to another, so many teams add PostgreSQL's **row-level security** as a safety net that filters by tenant automatically (<Ref to="db-security" />).
+
+## Designs to avoid
+
+**Entity-attribute-value (EAV)**: one table of `(entity_id, attribute_name, value)` rows to store "any attribute". It loses types, constraints and readable queries, and is slow to query. Use real columns for known attributes and `jsonb` for genuinely variable ones (<Ref to="db-json-search" />).
+
+**Polymorphic foreign keys**: a `comments` table with `subject_type` ('order' or 'product') and `subject_id`, where `subject_id` points at a different table depending on the type. No foreign key can enforce it, so orphans appear. Prefer one nullable foreign key column per target with a `CHECK` that exactly one is set, or a separate link table per target.
+
+**One giant table** with dozens of nullable columns serving several kinds of thing, and **comma-separated lists in a column** (`'1,4,9'`), which cannot be joined, indexed or constrained.
+
+## Common mistakes
+
+- **Designing tables before knowing the questions** the data must answer.
+- **Overwriting values that history depends on**, such as prices.
+- **Soft deletes without a partial unique index or a view**, so deleted rows block reuse or leak into results.
+- **`tenant_id` missing** from unique constraints or queries.
+- **EAV and polymorphic links** for "flexibility".
+- **Premature denormalisation** before measuring a real performance problem (<Ref to="m-schema-design" />).
+
+## Practice
+
+**1. (warm-up)** Which relationship needs a link table: (a) a customer and their orders; (b) staff and the shops they can work at, when staff cover several shops; (c) an order and its delivery address?
+
+<Solution>
+
+(b): many staff can work at many shops, so it needs a `staff_shops` link table. (a) is one-to-many (`orders.customer_id`); (c) is one-to-one or many-to-one (`orders.address_id`, or address columns on the order).
+
+</Solution>
+
+**2. (standard)** Using `price_history`, find the price of sourdough on each of these dates: 1 March 2026, 1 July 2026 and today, 14 November 2026.
+
+<Solution>
+
+```sql
+SELECT d AS on_date, h.price_pence
+FROM unnest(ARRAY[date '2026-03-01', date '2026-07-01', date '2026-11-14']) AS d
+JOIN price_history AS h ON h.product_id = 2 AND h.valid @> d
+ORDER BY d;
+```
+
+```text
+  on_date   | price_pence 
+------------+-------------
+ 2026-03-01 |         480
+ 2026-07-01 |         500
+ 2026-11-14 |         520
+(3 rows)
+```
+
+</Solution>
+
+**3. (stretch)** Design tables for the loyalty scheme described at the start of the chapter, with the rules enforced by the database where possible, and show a customer's balance.
+
+<Solution>
+
+```sql
+CREATE TABLE loyalty_members (
+  customer_id integer PRIMARY KEY REFERENCES customers (id),
+  joined_on   date NOT NULL,
+  tier        text NOT NULL DEFAULT 'bronze' CHECK (tier IN ('bronze', 'silver', 'gold'))
+);
+
+CREATE TABLE points_transactions (
+  id          bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  customer_id integer NOT NULL REFERENCES loyalty_members (customer_id),
+  points      integer NOT NULL CHECK (points <> 0),
+  reason      text NOT NULL,
+  order_id    integer UNIQUE REFERENCES orders (id),
+  created_at  timestamptz NOT NULL
+);
+
+INSERT INTO loyalty_members VALUES (1, '2026-10-01', 'silver');
+INSERT INTO points_transactions (customer_id, points, reason, order_id, created_at) VALUES
+  (1, 14, 'order', 1, '2026-10-01 08:12+00'),
+  (1, 7, 'order', 3, '2026-10-03 07:55+00'),
+  (1, -15, 'reward: free croissant', NULL, '2026-10-20 09:00+00');
+INSERT INTO points_transactions (customer_id, points, reason, order_id, created_at)
+VALUES (1, 14, 'order', 1, '2026-10-02 08:00+00');
+
+SELECT customer_id, sum(points) AS balance FROM points_transactions GROUP BY customer_id;
+```
+
+```text
+ERROR:  duplicate key value violates unique constraint "points_transactions_order_id_key"
+DETAIL:  Key (order_id)=(1) already exists.
+ customer_id | balance 
+-------------+---------
+           1 |       6
+(1 row)
+```
+
+Using the customer's id as the membership's primary key makes membership one-to-one; `UNIQUE (order_id)` makes each order earn points at most once (the repeated insert was refused), while allowing many transactions with no order. The balance is the sum of a **ledger** of transactions rather than a stored number, which keeps a full history. "Never below zero" cannot be a `CHECK` on one row; enforce it when spending, by locking the member's row and checking the sum in the same transaction (<Ref to="db-transactions-locking" />).
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Model from the business's language: things, facts, relationships, rules, and the **questions** the data must answer.
+- **Many-to-many** needs a link table with a composite key and an index on the second column.
+- **Hierarchies**: adjacency lists with recursive CTEs by default; materialised paths or closure tables for heavy tree queries.
+- **History**: copy values at the time of use, keep history tables with non-overlapping validity ranges, and audit logs for who changed what.
+- **Soft deletes** need partial unique indexes and views; **multi-tenancy** needs `tenant_id` everywhere, ideally backed by row-level security.
+- Avoid EAV, polymorphic foreign keys and comma-separated lists.
+
+## Go deeper
+
+- [PostgreSQL: data definition](https://www.postgresql.org/docs/current/ddl.html), the PostgreSQL project. Tables, constraints, schemas and partitioning, which these patterns build on.
+- [PostgreSQL: range types](https://www.postgresql.org/docs/current/rangetypes.html), the PostgreSQL project. Range types and exclusion constraints for validity periods.
+- [SQL Antipatterns, Volume 1](https://pragprog.com/titles/bksap1/sql-antipatterns-volume-1/), Bill Karwin. EAV, polymorphic associations and two dozen more traps, each with a better design (a paid book).

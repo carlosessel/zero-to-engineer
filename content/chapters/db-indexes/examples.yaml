@@ -1,0 +1,98 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: sql
+  check: postgres
+  output: " count |   first    |    last    \n-------+------------+------------\n 25000 | 2025-01-01 | 2026-03-11\n(1 row)\n"
+- block: 2
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 3
+  lang: sql
+  check: postgres
+  output: "          QUERY PLAN          \n------------------------------\n Seq Scan on big_orders\n   Filter: (customer_id = 42)\n(2 rows)\n"
+- block: 4
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 5
+  lang: sql
+  check: postgres
+  output: "                      QUERY PLAN                       \n-------------------------------------------------------\n Bitmap Heap Scan on big_orders\n   Recheck Cond: (customer_id = 42)\n   ->  Bitmap Index Scan on big_orders_customer_id_idx\n         Index Cond: (customer_id = 42)\n(4 rows)\n"
+- block: 6
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 7
+  lang: sql
+  check: postgres
+  output: "                   QUERY PLAN                   \n------------------------------------------------\n Index Scan using big_orders_pkey on big_orders\n   Index Cond: (id = 42)\n(2 rows)\n"
+- block: 8
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 9
+  lang: sql
+  check: postgres
+  output: "          QUERY PLAN           \n-------------------------------\n Seq Scan on big_orders\n   Filter: (customer_id > 100)\n(2 rows)\n"
+- block: 10
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 11
+  lang: sql
+  check: postgres
+  output: "                                                                  QUERY PLAN                                                                   \n-----------------------------------------------------------------------------------------------------------------------------------------------\n Sort\n   Sort Key: placed_at\n   ->  Bitmap Heap Scan on big_orders\n         Recheck Cond: ((shop_id = 2) AND (status = 'placed'::text) AND (placed_at >= '2025-06-01 00:00:00+00'::timestamp with time zone))\n         ->  Bitmap Index Scan on big_orders_shop_status_placed_idx\n               Index Cond: ((shop_id = 2) AND (status = 'placed'::text) AND (placed_at >= '2025-06-01 00:00:00+00'::timestamp with time zone))\n(6 rows)\n\n                          QUERY PLAN                          \n--------------------------------------------------------------\n Bitmap Heap Scan on big_orders\n   Recheck Cond: (status = 'placed'::text)\n   ->  Bitmap Index Scan on big_orders_shop_status_placed_idx\n\
+    \         Index Cond: (status = 'placed'::text)\n(4 rows)\n"
+- block: 12
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 13
+  lang: sql
+  check: postgres
+  output: "                            QUERY PLAN                             \n-------------------------------------------------------------------\n Limit\n   ->  Index Scan Backward using big_orders_open_idx on big_orders\n(2 rows)\n\n partial_index | full_index \n---------------+------------\n 16 kB         | 304 kB\n(1 row)\n"
+- block: 14
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 15
+  lang: sql
+  check: postgres
+  output: "                             QUERY PLAN                              \n---------------------------------------------------------------------\n Bitmap Heap Scan on big_orders\n   Recheck Cond: (lower(email) = 'customer42@example.com'::text)\n   ->  Bitmap Index Scan on big_orders_email_lower_idx\n         Index Cond: (lower(email) = 'customer42@example.com'::text)\n(4 rows)\n"
+- block: 16
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 17
+  lang: sql
+  check: postgres
+  output: "                                 QUERY PLAN                                 \n----------------------------------------------------------------------------\n GroupAggregate\n   Group Key: customer_id\n   ->  Index Only Scan using big_orders_customer_covering_idx on big_orders\n         Index Cond: ((customer_id >= 100) AND (customer_id <= 110))\n(4 rows)\n"
+- block: 18
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 19
+  lang: sql
+  check: postgres
+  output: "                                                                             QUERY PLAN                                                                             \n--------------------------------------------------------------------------------------------------------------------------------------------------------------------\n Aggregate\n   ->  Bitmap Heap Scan on big_orders\n         Recheck Cond: ((placed_at >= '2025-03-01 00:00:00+00'::timestamp with time zone) AND (placed_at < '2025-03-02 00:00:00+00'::timestamp with time zone))\n         ->  Bitmap Index Scan on big_orders_placed_brin\n               Index Cond: ((placed_at >= '2025-03-01 00:00:00+00'::timestamp with time zone) AND (placed_at < '2025-03-02 00:00:00+00'::timestamp with time zone))\n(5 rows)\n\n brin_size \n-----------\n 24 kB\n(1 row)\n"
+- block: 20
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 21
+  lang: sql
+  check: postgres
+  output: "  id   | total_pence \n-------+-------------\n 20020 |         940\n 15020 |         940\n 10020 |         940\n  5020 |         940\n    20 |         940\n(5 rows)\n"
+- block: 22
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 23
+  lang: sql
+  check: postgres
+  output: "                                  QUERY PLAN                                   \n-------------------------------------------------------------------------------\n Index Scan Backward using big_orders_customer_status_placed_idx on big_orders\n   Index Cond: ((customer_id = 21) AND (status = 'cancelled'::text))\n(2 rows)\n"
+- block: 24
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.

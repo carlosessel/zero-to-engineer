@@ -1,0 +1,36 @@
+- question: Which conditions can an index on (shop_id, placed_at) serve?
+  options:
+  - Conditions on shop_id, or on shop_id and placed_at
+  - Conditions on placed_at alone
+  answer: 0
+  explanation: Multi-column indexes serve leading prefixes.
+- question: Why can't WHERE lower(email) = 'x' use an index on email?
+  options:
+  - The index stores email, not lower(email); index the expression instead
+  - lower is too slow
+  answer: 0
+  explanation: Transformations of a column defeat its index.
+- question: When does PostgreSQL prefer a sequential scan despite an index?
+  options:
+  - When the condition matches a large share of the table
+  - Never
+  answer: 0
+  explanation: Reading everything in order is then cheaper.
+- question: What makes an index-only scan possible?
+  options:
+  - The index holds every column the query needs, and the visibility map is up to date
+  - A unique index
+  answer: 0
+  explanation: INCLUDE adds columns; VACUUM maintains the visibility map.
+- question: When is a BRIN index a good choice?
+  options:
+  - Huge tables whose physical order follows the indexed column
+  - Small tables with random values
+  answer: 0
+  explanation: It stores only minimum and maximum per block range.
+- question: What does every extra index cost?
+  options:
+  - Slower writes, more space and more VACUUM work
+  - Nothing once created
+  answer: 0
+  explanation: Index for real queries and remove unused ones.

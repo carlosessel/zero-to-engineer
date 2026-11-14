@@ -1,0 +1,330 @@
+---
+title: "Inserting, updating and deleting"
+summary: "INSERT, UPDATE and DELETE, RETURNING, upserts with ON CONFLICT, MERGE, and doing it safely."
+prerequisites: [db-subqueries-ctes]
+estimated_minutes: 90
+status: resources-verified
+---
+
+By the end of this chapter you will change data: add rows with `INSERT`, change them with `UPDATE`, remove them with `DELETE`, get back what changed with `RETURNING`, insert-or-update in one statement with `ON CONFLICT` and `MERGE`, and do all of this safely, inside transactions you can check before committing. Reading data can never hurt it; changing data can, so habits matter here.
+
+## INSERT
+
+`INSERT INTO table (columns) VALUES (...)` adds rows. Always list the columns, so the statement keeps working when columns are added:
+
+```sql
+INSERT INTO products (id, sku, name, category, price_pence, vegan)
+VALUES (13, 'FOC-300', 'Rosemary focaccia', 'bread', 380, true),
+       (14, 'BRW-080', 'Brownie', 'cake', 290, false);
+
+SELECT id, sku, name, price_pence FROM products WHERE id >= 13;
+```
+
+```text
+ id |   sku   |       name        | price_pence 
+----+---------+-------------------+-------------
+ 13 | FOC-300 | Rosemary focaccia |         380
+ 14 | BRW-080 | Brownie           |         290
+(2 rows)
+```
+
+Columns you leave out get their **default** (`vegan` defaults to false here), or NULL if there is none. The database checks every constraint on the way in, and refuses the whole statement if any row breaks one:
+
+```sql
+INSERT INTO products (id, sku, name, category, price_pence)
+VALUES (15, 'RYE-400', 'Another rye', 'bread', 460);
+
+INSERT INTO products (id, sku, name, category, price_pence)
+VALUES (15, 'FREE-001', 'Free sample', 'bread', 0);
+```
+
+```text
+ERROR:  duplicate key value violates unique constraint "products_sku_key"
+DETAIL:  Key (sku)=(RYE-400) already exists.
+ERROR:  new row for relation "products" violates check constraint "products_price_pence_check"
+DETAIL:  Failing row contains (15, FREE-001, Free sample, bread, 0, f).
+```
+
+The first breaks the unique product code; the second breaks the rule that prices are positive. Constraints like these are the database protecting your data from bugs anywhere in any program that uses it (<Ref to="db-tables-constraints" />).
+
+`INSERT ... SELECT` inserts the result of a query, which is how data is copied, archived and transformed in bulk:
+
+```sql
+CREATE TABLE price_list AS
+SELECT sku, name, price_pence FROM products WHERE false;
+
+INSERT INTO price_list (sku, name, price_pence)
+SELECT sku, name, price_pence FROM products WHERE category = 'cake';
+
+SELECT * FROM price_list ORDER BY price_pence DESC;
+```
+
+```text
+    sku    |      name      | price_pence 
+-----------+----------------+-------------
+ CAKE-CHOC | Chocolate cake |        2400
+ CAKE-LEM  | Lemon drizzle  |        1950
+ BRW-080   | Brownie        |         290
+(3 rows)
+```
+
+`CREATE TABLE ... AS SELECT ... WHERE false` copies only the column names and types: a quick way to make an empty table of the right shape.
+
+## RETURNING
+
+PostgreSQL's **`RETURNING`** clause makes `INSERT`, `UPDATE` and `DELETE` return the rows they changed, including values the database filled in. Applications use it to get generated ids without a second query:
+
+```sql
+INSERT INTO customers (id, name, email, city, joined_on)
+VALUES (10, 'Nana', 'nana@example.com', 'Hull', '2026-11-14')
+RETURNING id, name, joined_on;
+```
+
+```text
+ id | name | joined_on  
+----+------+------------
+ 10 | Nana | 2026-11-14
+(1 row)
+```
+
+## UPDATE
+
+`UPDATE table SET column = value WHERE condition` changes the rows the condition selects:
+
+```sql
+UPDATE products
+SET price_pence = price_pence + 20
+WHERE category = 'bread' AND vegan
+RETURNING sku, price_pence;
+```
+
+```text
+   sku    | price_pence 
+----------+-------------
+ RYE-400  |         470
+ SOUR-800 |         540
+ BAG-250  |         140
+ BAG-SES  |         160
+ FOC-300  |         400
+(5 rows)
+```
+
+The new value can be any expression, including the old value. **The `WHERE` is everything**: without it, every row in the table is changed. Before running an `UPDATE` or `DELETE` on important data, run the same `WHERE` with a `SELECT` first and check the rows, or work inside a transaction (below).
+
+To update using another table, PostgreSQL has `UPDATE ... FROM`. Mark as paid every placed order whose customer is from York:
+
+```sql
+UPDATE orders AS o
+SET status = 'paid'
+FROM customers AS c
+WHERE c.id = o.customer_id AND c.city = 'York' AND o.status = 'placed'
+RETURNING o.id, c.name, o.status;
+```
+
+```text
+ id |  name  | status 
+----+--------+--------
+ 20 | Akosua | paid
+(1 row)
+```
+
+## DELETE
+
+`DELETE FROM table WHERE condition` removes rows. Foreign keys protect related data: a customer with orders cannot be deleted while those orders point at them:
+
+```sql
+DELETE FROM customers WHERE name = 'Ama';
+
+DELETE FROM customers WHERE name = 'Nana' RETURNING id, name;
+```
+
+```text
+ERROR:  update or delete on table "customers" violates foreign key constraint "orders_customer_id_fkey" on table "orders"
+DETAIL:  Key (id)=(1) is still referenced from table "orders".
+ id | name 
+----+------
+ 10 | Nana
+(1 row)
+```
+
+Ama has orders, so the database refuses; Nana has none, so she is removed. A foreign key can instead be declared to delete or nullify the child rows automatically (`ON DELETE CASCADE`, `ON DELETE SET NULL`); use cascades only where the children truly mean nothing without the parent. Many applications never delete important rows at all, and mark them instead (a **soft delete**, <Ref to="db-modelling" />). To empty a whole table quickly, `TRUNCATE table` is faster than `DELETE` without `WHERE`.
+
+## Upserts: INSERT ... ON CONFLICT
+
+"Insert this row, or update it if it already exists" is an **upsert**. Checking first and then inserting is wrong under concurrency (two requests can both see "not there" and both insert); PostgreSQL does it in one atomic statement with **`ON CONFLICT`**:
+
+```sql
+CREATE TABLE stock (
+  sku      text PRIMARY KEY,
+  quantity integer NOT NULL CHECK (quantity >= 0)
+);
+
+INSERT INTO stock (sku, quantity) VALUES ('RYE-400', 12), ('BAG-250', 30);
+
+INSERT INTO stock (sku, quantity)
+VALUES ('RYE-400', 5), ('CRO-090', 18)
+ON CONFLICT (sku) DO UPDATE SET quantity = stock.quantity + excluded.quantity
+RETURNING sku, quantity;
+```
+
+```text
+   sku   | quantity 
+---------+----------
+ RYE-400 |       17
+ CRO-090 |       18
+(2 rows)
+```
+
+The rye loaf existed, so its quantity was increased; the croissant did not, so it was inserted. **`excluded`** is the row that was proposed for insertion. `ON CONFLICT DO NOTHING` simply skips rows that already exist, which makes repeated imports harmless.
+
+## MERGE
+
+**`MERGE`** (standard SQL, in PostgreSQL since version 15) compares a source with a target table and inserts, updates or deletes in one statement. Apply a delivery file to the stock table:
+
+```sql
+MERGE INTO stock AS s
+USING (VALUES ('BAG-250', -30), ('CRO-090', 6), ('JAM-380', 24)) AS d (sku, change)
+ON s.sku = d.sku
+WHEN MATCHED AND s.quantity + d.change = 0 THEN DELETE
+WHEN MATCHED THEN UPDATE SET quantity = s.quantity + d.change
+WHEN NOT MATCHED THEN INSERT (sku, quantity) VALUES (d.sku, d.change);
+
+SELECT * FROM stock ORDER BY sku;
+```
+
+```text
+   sku   | quantity 
+---------+----------
+ CRO-090 |       24
+ JAM-380 |       24
+ RYE-400 |       17
+(3 rows)
+```
+
+Bagels went to zero and were removed, croissants were topped up, and jam was added. Use `ON CONFLICT` for simple upserts on a unique key; use `MERGE` for richer synchronisation logic.
+
+## Doing it safely: transactions
+
+A **transaction** groups statements so they all happen or none do (<Ref to="m-relational" />). It is also your safety net when changing data by hand: start one, make the change, check it, and then `COMMIT` to keep it or `ROLLBACK` to undo it:
+
+```sql
+BEGIN;
+
+DELETE FROM order_lines WHERE quantity >= 4;
+
+SELECT count(*) AS lines_left FROM order_lines;
+
+ROLLBACK;
+
+SELECT count(*) AS lines_after_rollback FROM order_lines;
+```
+
+```text
+ lines_left 
+------------
+         29
+(1 row)
+
+ lines_after_rollback 
+----------------------
+                   33
+(1 row)
+```
+
+Inside the transaction, the delete had happened; after `ROLLBACK`, it never did. In psql, every statement outside a `BEGIN` commits immediately (**autocommit**), so there is no undo: make `BEGIN` a habit before any manual change to real data.
+
+## Common mistakes
+
+- **`UPDATE` or `DELETE` without `WHERE`**, or with the wrong one.
+- **`INSERT` without a column list**, which breaks when columns are added or reordered.
+- **Check-then-insert** instead of `ON CONFLICT`, which fails under concurrency.
+- **Cascading deletes** that remove far more than intended.
+- **Manual changes to production data outside a transaction**, with no way back.
+- **Building statements by pasting values into SQL strings** instead of parameters (<Ref to="db-security" />).
+
+## Practice
+
+**1. (warm-up)** Add a product `SCN-090`, "Cheese scone", category `pastry`, 260 pence, not vegan, with id 15, and return its id and name.
+
+<Solution>
+
+```sql
+INSERT INTO products (id, sku, name, category, price_pence, vegan)
+VALUES (15, 'SCN-090', 'Cheese scone', 'pastry', 260, false)
+RETURNING id, name;
+```
+
+```text
+ id |     name     
+----+--------------
+ 15 | Cheese scone
+(1 row)
+```
+
+</Solution>
+
+**2. (standard)** Inside a transaction, raise the price of every pastry by 5 percent, rounded to whole pence; check the new prices; then roll back.
+
+<Solution>
+
+```sql
+BEGIN;
+
+UPDATE products
+SET price_pence = round(price_pence * 1.05)
+WHERE category = 'pastry'
+RETURNING name, price_pence;
+
+ROLLBACK;
+```
+
+```text
+       name       | price_pence 
+------------------+-------------
+ Croissant        |         289
+ Cinnamon bun     |         326
+ Almond croissant |         357
+ Cheese scone     |         273
+(4 rows)
+```
+
+`round` returns a numeric, which PostgreSQL converts back to an integer for the column. After `ROLLBACK`, the prices are as before.
+
+</Solution>
+
+**3. (standard)** Record a stock count with an upsert: set `TEA-250` to 40 and `RYE-400` to 10, replacing any existing quantity rather than adding to it.
+
+<Solution>
+
+```sql
+INSERT INTO stock (sku, quantity)
+VALUES ('TEA-250', 40), ('RYE-400', 10)
+ON CONFLICT (sku) DO UPDATE SET quantity = excluded.quantity
+RETURNING sku, quantity;
+```
+
+```text
+   sku   | quantity 
+---------+----------
+ TEA-250 |       40
+ RYE-400 |       10
+(2 rows)
+```
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **`INSERT`** with a column list adds rows; `INSERT ... SELECT` copies query results; constraints are checked on every change.
+- **`UPDATE ... SET ... WHERE`** changes rows and **`DELETE ... WHERE`** removes them: check the `WHERE` with a `SELECT` first. `UPDATE ... FROM` uses another table.
+- **`RETURNING`** gives back the changed rows, including generated values.
+- **`ON CONFLICT`** makes atomic upserts; **`MERGE`** applies a source to a target with insert, update and delete rules.
+- Use **`BEGIN`**, check, then `COMMIT` or **`ROLLBACK`** for any manual change.
+
+## Go deeper
+
+- [PostgreSQL: data manipulation](https://www.postgresql.org/docs/current/dml.html), the PostgreSQL project. Inserting, updating, deleting and returning data.
+- [PostgreSQL: INSERT](https://www.postgresql.org/docs/current/sql-insert.html), the PostgreSQL project. Including ON CONFLICT in full.
+- [PostgreSQL: MERGE](https://www.postgresql.org/docs/current/sql-merge.html), the PostgreSQL project. Every MERGE clause.

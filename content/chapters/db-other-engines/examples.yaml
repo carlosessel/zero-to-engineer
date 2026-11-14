@@ -1,0 +1,34 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: sql
+  check: sql
+  verify: |
+    rows = db.execute('SELECT * FROM monthly ORDER BY month').fetchall()
+    assert rows == [('2026-10', 2, 2350, 2350), ('2026-11', 2, 1600, 3950)], rows
+- block: 2
+  lang: sql
+  check: postgres
+  output: " id | customer |       placed_at        \n----+----------+------------------------\n 20 | AKOSUA   | 2026-11-12 18:30:00+00\n 19 | AMA      | 2026-11-12 08:05:00+00\n 18 | KOBINA   | 2026-11-10 07:45:00+00\n(3 rows)\n"
+  before: "CREATE TABLE shops (\n  id        integer PRIMARY KEY,\n  city      text NOT NULL,\n  opened_on date NOT NULL\n);\n\nCREATE TABLE staff (\n  id           integer PRIMARY KEY,\n  name         text NOT NULL,\n  role         text NOT NULL,\n  shop_id      integer REFERENCES shops (id),\n  manager_id   integer REFERENCES staff (id),\n  salary_pence integer NOT NULL\n);\n\nCREATE TABLE customers (\n  id        integer PRIMARY KEY,\n  name      text NOT NULL,\n  email     text NOT NULL UNIQUE,\n  city      text,\n  joined_on date NOT NULL\n);\n\nCREATE TABLE products (\n  id          integer PRIMARY KEY,\n  sku         text NOT NULL UNIQUE,\n  name        text NOT NULL,\n  category    text NOT NULL,\n  price_pence integer NOT NULL CHECK (price_pence > 0),\n  vegan       boolean NOT NULL DEFAULT false\n);\n\nCREATE TABLE orders (\n  id          integer PRIMARY KEY,\n  customer_id integer NOT NULL REFERENCES customers (id),\n  shop_id     integer NOT NULL REFERENCES shops (id),\n  placed_at\
+    \   timestamptz NOT NULL,\n  channel     text NOT NULL CHECK (channel IN ('web', 'app', 'shop')),\n  status      text NOT NULL CHECK (status IN ('placed', 'paid', 'delivered', 'cancelled'))\n);\n\nCREATE TABLE order_lines (\n  order_id         integer NOT NULL REFERENCES orders (id),\n  product_id       integer NOT NULL REFERENCES products (id),\n  quantity         integer NOT NULL CHECK (quantity > 0),\n  unit_price_pence integer NOT NULL,\n  PRIMARY KEY (order_id, product_id)\n);\n\nINSERT INTO shops VALUES\n  (1, 'Leeds', '2019-03-01'),\n  (2, 'York', '2021-06-15'),\n  (3, 'Hull', '2024-09-01');\n\nINSERT INTO staff VALUES\n  (1, 'Abena Owusu', 'owner', NULL, NULL, 5200000),\n  (2, 'Kojo Asante', 'manager', 1, 1, 3800000),\n  (3, 'Efua Darko', 'manager', 2, 1, 3700000),\n  (4, 'Yaw Boateng', 'baker', 1, 2, 2900000),\n  (5, 'Adwoa Ofori', 'baker', 1, 2, 3000000),\n  (6, 'Kwesi Appiah', 'counter', 1, 2, 2400000),\n  (7, 'Akua Frimpong', 'baker', 2, 3, 2950000),\n  (8, 'Fiifi Mensah',\
+    \ 'counter', 2, 3, 2350000),\n  (9, 'Ama Serwaa', 'manager', 3, 1, 3600000);\n\nINSERT INTO customers VALUES\n  (1, 'Ama', 'ama@example.com', 'Leeds', '2023-01-14'),\n  (2, 'Kofi', 'kofi@example.com', 'York', '2023-05-02'),\n  (3, 'Esi', 'esi@example.com', 'Leeds', '2024-02-20'),\n  (4, 'Yaa', 'yaa@example.com', NULL, '2024-07-09'),\n  (5, 'Kwame', 'kwame@example.com', 'Hull', '2025-01-03'),\n  (6, 'Akosua', 'akosua@example.com', 'York', '2025-03-18'),\n  (7, 'Kobina', 'kobina@example.com', 'Leeds', '2025-08-30'),\n  (8, 'Afua', 'afua@example.com', 'Hull', '2026-02-11'),\n  (9, 'Kweku', 'kweku@example.com', 'York', '2026-06-01');\n\nINSERT INTO products VALUES\n  (1, 'RYE-400', 'Rye loaf', 'bread', 450, true),\n  (2, 'SOUR-800', 'Sourdough', 'bread', 520, true),\n  (3, 'BAG-250', 'Bagel', 'bread', 120, true),\n  (4, 'CRO-090', 'Croissant', 'pastry', 275, false),\n  (5, 'CIN-120', 'Cinnamon bun', 'pastry', 310, false),\n  (6, 'ALM-100', 'Almond croissant', 'pastry', 340, false),\n  (7,\
+    \ 'CAKE-CHOC', 'Chocolate cake', 'cake', 2400, false),\n  (8, 'CAKE-LEM', 'Lemon drizzle', 'cake', 1950, true),\n  (9, 'JAM-380', 'Strawberry jam', 'pantry', 380, true),\n  (10, 'TEA-250', 'Breakfast tea', 'pantry', 450, true),\n  (11, 'BAG-SES', 'Sesame bagel', 'bread', 140, true),\n  (12, 'GIFT-BOX', 'Gift box', 'pantry', 1500, false);\n\nINSERT INTO orders VALUES\n  (1, 1, 1, '2026-10-01 08:12:00+00', 'shop', 'delivered'),\n  (2, 2, 2, '2026-10-01 09:40:00+00', 'web', 'delivered'),\n  (3, 1, 1, '2026-10-03 07:55:00+00', 'app', 'delivered'),\n  (4, 3, 1, '2026-10-04 12:30:00+00', 'web', 'cancelled'),\n  (5, 4, 2, '2026-10-06 16:05:00+00', 'web', 'delivered'),\n  (6, 5, 3, '2026-10-08 10:20:00+00', 'shop', 'delivered'),\n  (7, 2, 2, '2026-10-11 08:45:00+00', 'app', 'delivered'),\n  (8, 6, 2, '2026-10-12 11:10:00+00', 'shop', 'delivered'),\n  (9, 1, 1, '2026-10-15 07:30:00+00', 'app', 'delivered'),\n  (10, 7, 1, '2026-10-18 13:15:00+00', 'web', 'delivered'),\n  (11, 3, 1, '2026-10-21\
+    \ 09:05:00+00', 'shop', 'delivered'),\n  (12, 5, 3, '2026-10-24 15:40:00+00', 'web', 'paid'),\n  (13, 6, 2, '2026-10-27 10:00:00+00', 'app', 'delivered'),\n  (14, 1, 1, '2026-11-01 08:20:00+00', 'shop', 'delivered'),\n  (15, 2, 2, '2026-11-03 17:25:00+00', 'web', 'cancelled'),\n  (16, 8, 3, '2026-11-05 09:50:00+00', 'shop', 'delivered'),\n  (17, 4, 2, '2026-11-08 12:00:00+00', 'web', 'paid'),\n  (18, 7, 1, '2026-11-10 07:45:00+00', 'app', 'paid'),\n  (19, 1, 1, '2026-11-12 08:05:00+00', 'web', 'placed'),\n  (20, 6, 2, '2026-11-12 18:30:00+00', 'web', 'placed');\n\nINSERT INTO order_lines VALUES\n  (1, 1, 2, 450), (1, 4, 2, 275),\n  (2, 2, 1, 520), (2, 9, 1, 380),\n  (3, 3, 6, 120),\n  (4, 7, 1, 2400),\n  (5, 8, 1, 1950), (5, 10, 2, 450),\n  (6, 1, 1, 450), (6, 5, 3, 310),\n  (7, 2, 2, 520),\n  (8, 4, 4, 275), (8, 6, 2, 340),\n  (9, 1, 1, 450), (9, 3, 4, 120),\n  (10, 7, 1, 2400), (10, 9, 2, 380),\n  (11, 5, 2, 310),\n  (12, 8, 2, 1950),\n  (13, 2, 1, 520), (13, 4, 3, 275), (13, 10, 1,\
+    \ 450),\n  (14, 1, 2, 450), (14, 6, 1, 340),\n  (15, 3, 3, 120),\n  (16, 2, 1, 520), (16, 9, 1, 380),\n  (17, 7, 1, 2400),\n  (18, 4, 6, 275),\n  (19, 1, 1, 450), (19, 2, 1, 520), (19, 5, 2, 310),\n  (20, 6, 3, 340);\n"
+  note: The bakery sample database from the setup chapter is loaded first, as the chapter says.
+- block: 3
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 4
+  lang: sql
+  check: not-run
+  reason: MySQL dialect, shown for comparison; the course's checks run PostgreSQL and SQLite only. It is the PostgreSQL query above, which is run, with MySQL's function name casing.
+- block: 5
+  lang: sql
+  check: not-run
+  reason: SQL Server dialect, shown for comparison; TOP (n) is documented in the T-SQL reference linked below.
+- block: 6
+  lang: sql
+  check: not-run
+  reason: Oracle dialect, shown for comparison; FETCH FIRST is documented in the Oracle SQL reference linked below.

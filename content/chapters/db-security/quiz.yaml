@@ -1,0 +1,36 @@
+- question: What is least privilege for a database role?
+  options:
+  - Exactly the privileges its job needs, and nothing more
+  - Read access to everything
+  answer: 0
+  explanation: No application should run as a superuser.
+- question: Why grant privileges to group roles rather than to each user?
+  options:
+  - Changing a group changes what every member can do
+  - PostgreSQL does not allow grants to login roles
+  answer: 0
+  explanation: Login roles inherit from their groups.
+- question: What does a row-level security policy do?
+  options:
+  - Adds a condition on which rows a role can see or write to every query
+  - Encrypts rows
+  answer: 0
+  explanation: It is a safety net for tenants.
+- question: Who bypasses row-level security by default?
+  options:
+  - The table owner and superusers
+  - Nobody
+  answer: 0
+  explanation: Use FORCE ROW LEVEL SECURITY or a separate owner role.
+- question: How do you pass a value safely to dynamic SQL in PL/pgSQL?
+  options:
+  - EXECUTE ... USING, with $1 placeholders
+  - Concatenate it inside quotes
+  answer: 0
+  explanation: format('%L') quotes literals when needed.
+- question: Which client setting verifies the server's TLS certificate?
+  options:
+  - sslmode=verify-full
+  - sslmode=require
+  answer: 0
+  explanation: require encrypts but does not verify who you are talking to.

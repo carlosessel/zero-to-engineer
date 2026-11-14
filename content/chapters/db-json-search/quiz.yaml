@@ -1,0 +1,30 @@
+- question: What is the difference between details -> 'weight_g' and details ->> 'weight_g'?
+  options:
+  - -> returns JSON; ->> returns text
+  - They are the same
+  answer: 0
+  explanation: Cast the text result to compare numbers.
+- question: Which operator asks whether a jsonb document contains another?
+  options:
+  - '@>'
+  - '?'
+  answer: 0
+  explanation: '? tests whether a key or array element exists.'
+- question: When should a field live in an ordinary column rather than in JSONB?
+  options:
+  - When you filter, join or enforce rules on it
+  - Never; JSONB is always better
+  answer: 0
+  explanation: Columns get types, constraints and statistics.
+- question: Why use websearch_to_tsquery for a search box?
+  options:
+  - It understands what people type and never errors on odd input
+  - It is the only function that ranks results
+  answer: 0
+  explanation: to_tsquery raises errors on unexpected syntax.
+- question: What makes full-text search fast on a large table?
+  options:
+  - A GIN index on a tsvector column
+  - A B-tree index on the text column
+  answer: 0
+  explanation: Store the vector in a generated column and index it.

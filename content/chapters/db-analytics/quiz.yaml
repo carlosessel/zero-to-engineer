@@ -1,0 +1,30 @@
+- question: Why are analytical queries often run on a separate store?
+  options:
+  - Heavy scans compete with the application, and normalised schemas make reports long
+  - Application databases cannot run SELECT
+  answer: 0
+  explanation: OLTP and OLAP are different workloads.
+- question: Why are column stores fast for analytics?
+  options:
+  - They read only the needed columns and compress similar values well
+  - They keep everything in one row
+  answer: 0
+  explanation: Single-row updates are slow in exchange.
+- question: What is the grain of a fact table?
+  options:
+  - What one row represents, such as one order line
+  - The number of dimensions
+  answer: 0
+  explanation: State it, or measures get double-counted.
+- question: What does ELT do differently from ETL?
+  options:
+  - Loads raw data first and transforms it inside the warehouse
+  - Transforms data on the application server
+  answer: 0
+  explanation: dbt manages the transformations.
+- question: What does a cohort analysis group customers by?
+  options:
+  - When they first became customers or first ordered
+  - Their city
+  answer: 0
+  explanation: Then it tracks each group over time.

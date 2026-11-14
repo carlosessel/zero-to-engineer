@@ -1,0 +1,36 @@
+- question: What does an inner join do with a row that has no match?
+  options:
+  - Drops it
+  - Keeps it with NULLs
+  answer: 0
+  explanation: Use a LEFT JOIN to keep it.
+- question: How do you find customers who have never ordered with a join?
+  options:
+  - LEFT JOIN orders and keep rows where the order's id IS NULL
+  - INNER JOIN orders and keep rows where the order's id IS NULL
+  answer: 0
+  explanation: This is an anti-join.
+- question: In a LEFT JOIN, what happens if a condition on the right table is put in WHERE?
+  options:
+  - Rows without a match are removed, turning it into an inner join
+  - Nothing changes
+  answer: 0
+  explanation: Put such conditions in ON.
+- question: After a LEFT JOIN, why count(o.id) rather than count(*)?
+  options:
+  - count(*) counts the NULL-filled row of an unmatched left row as 1
+  - count(*) is slower
+  answer: 0
+  explanation: count(column) skips NULLs.
+- question: Why can counting orders after joining both orders and order_lines give too large a number?
+  options:
+  - Each order is repeated once per line
+  - Joins always double rows
+  answer: 0
+  explanation: Aggregate before joining, or count DISTINCT.
+- question: What does a self join relate?
+  options:
+  - Rows of one table to other rows of the same table, such as staff and managers
+  - A table to its copy in another database
+  answer: 0
+  explanation: Use two aliases.

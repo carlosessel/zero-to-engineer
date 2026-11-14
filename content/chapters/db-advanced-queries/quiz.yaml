@@ -1,0 +1,30 @@
+- question: What does GROUP BY ROLLUP (city, channel) produce?
+  options:
+  - Groups by city and channel, by city alone, and a grand total
+  - Every combination including channel alone
+  answer: 0
+  explanation: CUBE adds channel alone.
+- question: How do you tell a subtotal's NULL from a NULL in the data?
+  options:
+  - grouping(column) returns 1 for rolled-up columns
+  - Subtotal NULLs are written as the text NULL
+  answer: 0
+  explanation: Use grouping() in CASE or ORDER BY.
+- question: Why prefer UNION ALL to UNION when duplicates are impossible or wanted?
+  options:
+  - UNION removes duplicates, which costs a sort or hash
+  - UNION ALL sorts the result
+  answer: 0
+  explanation: Only deduplicate when needed.
+- question: What can a LATERAL subquery do that an ordinary one in FROM cannot?
+  options:
+  - Refer to columns of tables to its left, running once per row
+  - Return more than one column
+  answer: 0
+  explanation: It works like a loop.
+- question: In gaps and islands, what is constant within a run of consecutive dates?
+  options:
+  - The date minus its row number
+  - The row number
+  answer: 0
+  explanation: Group by that difference.

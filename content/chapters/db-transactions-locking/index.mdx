@@ -1,0 +1,358 @@
+---
+title: "Transactions and locking in practice"
+summary: "Isolation levels in PostgreSQL, row and table locks, SELECT FOR UPDATE, SKIP LOCKED queues, deadlocks and advisory locks."
+prerequisites: [m-relational, db-modifying-data]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will write SQL that stays correct when many users change data at once: choose an **isolation level** in PostgreSQL and know what each one prevents, lock rows with **`SELECT ... FOR UPDATE`**, build a job queue with **`SKIP LOCKED`**, recognise and avoid **deadlocks**, coordinate work with **advisory locks**, and handle the errors that concurrency produces. <Ref to="m-relational" /> explains ACID, MVCC and isolation in theory; this chapter is PostgreSQL in practice.
+
+## Transactions in PostgreSQL
+
+Every statement runs in a transaction. Outside `BEGIN`, each statement is its own transaction and commits immediately. Inside `BEGIN ... COMMIT`, all statements succeed or fail together, and **any error aborts the whole transaction**: further statements are refused until `ROLLBACK`:
+
+```sql
+CREATE TABLE stock (sku text PRIMARY KEY, quantity integer NOT NULL CHECK (quantity >= 0));
+INSERT INTO stock VALUES ('RYE-400', 5), ('CRO-090', 2);
+
+BEGIN;
+UPDATE stock SET quantity = quantity - 1 WHERE sku = 'RYE-400';
+UPDATE stock SET quantity = quantity - 3 WHERE sku = 'CRO-090';
+UPDATE stock SET quantity = quantity - 1 WHERE sku = 'RYE-400';
+ROLLBACK;
+
+SELECT * FROM stock ORDER BY sku;
+```
+
+```text
+ERROR:  new row for relation "stock" violates check constraint "stock_quantity_check"
+DETAIL:  Failing row contains (CRO-090, -1).
+ERROR:  current transaction is aborted, commands ignored until end of transaction block
+   sku   | quantity 
+---------+----------
+ CRO-090 |        2
+ RYE-400 |        5
+(2 rows)
+```
+
+Taking three croissants from a stock of two broke the `CHECK`, the transaction became aborted, the next statement was refused, and after `ROLLBACK` neither rye loaf was taken either. **Savepoints** (`SAVEPOINT name`, `ROLLBACK TO SAVEPOINT name`) undo part of a transaction without abandoning it, which is how ORMs implement nested transactions.
+
+## The lost update
+
+The bug that concurrency causes most often: two transactions read a value, both compute a new value from what they read, and both write. One change is lost. Two staff each sell the last two rye loaves:
+
+| Time | Session A | Session B |
+|---|---|---|
+| 1 | `SELECT quantity FROM stock WHERE sku = 'RYE-400'` returns 5 | |
+| 2 | | `SELECT quantity FROM stock WHERE sku = 'RYE-400'` returns 5 |
+| 3 | `UPDATE stock SET quantity = 3 WHERE sku = 'RYE-400'` (5 - 2) | |
+| 4 | | `UPDATE stock SET quantity = 3 WHERE sku = 'RYE-400'` waits for A's row lock |
+| 5 | `COMMIT` | |
+| 6 | | the update now runs, writing 3; `COMMIT` |
+
+Four loaves were sold but the stock says two were. PostgreSQL's default isolation level, **Read Committed**, does not prevent this, because each session computed the new value in the application from an old read. Three ways to fix it:
+
+1. **Let the database do the arithmetic, atomically**: `UPDATE stock SET quantity = quantity - 2 WHERE sku = 'RYE-400' AND quantity >= 2`. At step 4, B waits for A's lock, then re-reads the row's new value (3), and writes 1. If no row is updated, there was not enough stock.
+2. **Lock the row when reading** with `SELECT ... FOR UPDATE`, so the second reader waits until the first commits.
+3. **Use a stricter isolation level**, so the database detects the conflict and makes one transaction fail and retry.
+
+The first is the simplest and fastest whenever the change can be written as one statement:
+
+```sql
+UPDATE stock SET quantity = quantity - 2 WHERE sku = 'RYE-400' AND quantity >= 2 RETURNING quantity;
+UPDATE stock SET quantity = quantity - 2 WHERE sku = 'RYE-400' AND quantity >= 2 RETURNING quantity;
+UPDATE stock SET quantity = quantity - 2 WHERE sku = 'RYE-400' AND quantity >= 2 RETURNING quantity;
+```
+
+```text
+ quantity 
+----------
+        3
+(1 row)
+
+ quantity 
+----------
+        1
+(1 row)
+
+ quantity 
+----------
+(0 rows)
+```
+
+The third sale returned no row: only one loaf was left, so the application tells the customer it is sold out. No race can oversell, whatever the timing.
+
+## Row locks: SELECT FOR UPDATE
+
+When the decision needs several statements or application logic between the read and the write, lock the rows as you read them:
+
+```sql
+BEGIN;
+SELECT sku, quantity FROM stock WHERE sku = 'CRO-090' FOR UPDATE;
+-- ...the application checks the quantity, prices the order, and so on...
+UPDATE stock SET quantity = quantity - 1 WHERE sku = 'CRO-090';
+COMMIT;
+
+SELECT * FROM stock ORDER BY sku;
+```
+
+```text
+   sku   | quantity 
+---------+----------
+ CRO-090 |        2
+(1 row)
+
+   sku   | quantity 
+---------+----------
+ CRO-090 |        1
+ RYE-400 |        1
+(2 rows)
+```
+
+While this transaction holds the lock, any other transaction that tries to `UPDATE`, `DELETE` or `SELECT ... FOR UPDATE` the same row waits until it commits or rolls back. Plain `SELECT`s are never blocked: thanks to MVCC, readers see the last committed version. The lock strengths are `FOR UPDATE` (I will change or delete this row), `FOR NO KEY UPDATE` (I will change it but not its key; this is what an ordinary `UPDATE` takes), `FOR SHARE` and `FOR KEY SHARE` (nobody may change it while I rely on it). Add **`NOWAIT`** to fail at once instead of waiting.
+
+Keep transactions that hold locks **short**: never wait for a user, a network call or an email inside one.
+
+## Job queues with SKIP LOCKED
+
+**`SKIP LOCKED`** makes `FOR UPDATE` skip rows another transaction has locked instead of waiting for them. That turns a table into a reliable job queue that many workers can share without ever taking the same job:
+
+```sql
+CREATE TABLE jobs (
+  id         bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  kind       text NOT NULL,
+  payload    jsonb NOT NULL,
+  status     text NOT NULL DEFAULT 'ready',
+  run_after  timestamptz NOT NULL DEFAULT '2026-11-14 00:00+00'
+);
+CREATE INDEX jobs_ready_idx ON jobs (run_after, id) WHERE status = 'ready';
+
+INSERT INTO jobs (kind, payload) VALUES
+  ('receipt', '{"order_id": 19}'), ('receipt', '{"order_id": 20}'), ('report', '{"day": "2026-11-13"}');
+
+WITH next_job AS (
+  SELECT id FROM jobs
+  WHERE status = 'ready' AND run_after <= '2026-11-14 12:00+00'
+  ORDER BY run_after, id
+  LIMIT 1
+  FOR UPDATE SKIP LOCKED
+)
+UPDATE jobs SET status = 'running'
+FROM next_job
+WHERE jobs.id = next_job.id
+RETURNING jobs.id, jobs.kind, jobs.payload;
+
+SELECT id, kind, status FROM jobs ORDER BY id;
+```
+
+```text
+ id |  kind   |     payload      
+----+---------+------------------
+  1 | receipt | {"order_id": 19}
+(1 row)
+
+ id |  kind   | status  
+----+---------+---------
+  1 | receipt | running
+  2 | receipt | ready
+  3 | report  | ready
+(3 rows)
+```
+
+Each worker runs the claiming statement in its own transaction. A second worker running it at the same moment skips job 1 (locked by the first) and claims job 2. When a worker finishes, it marks the job done (or deletes it) and commits; if it crashes mid-transaction, the lock is released and the job is still `ready`. This pattern powers durable job queues such as pg-boss and Solid Queue (<Ref to="be-background-jobs" />).
+
+## Isolation levels
+
+| Level | Each statement sees | Prevents | PostgreSQL notes |
+|---|---|---|---|
+| **Read Committed** (default) | data committed before **the statement** began | dirty reads | Updates re-check the latest committed row version |
+| **Repeatable Read** | data committed before **the transaction's first statement** | also non-repeatable reads and phantoms | Concurrent updates to the same row fail with a serialisation error |
+| **Serializable** | as Repeatable Read | **every** anomaly: the result is as if transactions ran one at a time | Detects dangerous patterns of reads and writes and fails one transaction |
+
+```sql
+BEGIN ISOLATION LEVEL REPEATABLE READ;
+SELECT current_setting('transaction_isolation') AS level;
+SELECT sum(quantity) AS total_stock FROM stock;
+COMMIT;
+```
+
+```text
+      level      
+-----------------
+ repeatable read
+(1 row)
+
+ total_stock 
+-------------
+           2
+(1 row)
+```
+
+At Repeatable Read and Serializable, PostgreSQL may abort a transaction with **`could not serialize access`** (SQLSTATE `40001`) when it conflicts with another. That is not a bug but the price of correctness: **the application must retry the whole transaction**. Serializable isolation is the easiest way to make complex multi-statement logic correct (it catches **write skew**, such as two doctors both going off call because each saw the other still on call), at some cost in retries.
+
+A good default: Read Committed with atomic single-statement updates and `FOR UPDATE` where needed; Serializable with automatic retries for complex invariants.
+
+## Deadlocks
+
+A **deadlock** happens when two transactions each hold a lock the other needs:
+
+| Time | Session A | Session B |
+|---|---|---|
+| 1 | `UPDATE stock ... WHERE sku = 'RYE-400'` (locks rye) | |
+| 2 | | `UPDATE stock ... WHERE sku = 'CRO-090'` (locks croissant) |
+| 3 | `UPDATE stock ... WHERE sku = 'CRO-090'` waits for B | |
+| 4 | | `UPDATE stock ... WHERE sku = 'RYE-400'` waits for A: a cycle |
+| 5 | | after `deadlock_timeout` (1 second), PostgreSQL aborts one: `ERROR: deadlock detected` |
+
+PostgreSQL detects the cycle and aborts one transaction, which the application should retry. Prevent most deadlocks by **always locking rows in the same order** (for example, sorted by key: update an order's stock rows `ORDER BY sku`), and by keeping transactions short.
+
+## Table locks and DDL
+
+Every statement takes a **table-level lock** as well, mostly weak ones that do not conflict with each other. `ALTER TABLE`, `DROP`, `TRUNCATE` and some `CREATE INDEX` forms take strong locks that block readers and writers, and while they **wait** for their lock, they block everything queued behind them. On a busy database, an innocent `ALTER TABLE` waiting behind a long query can stop the whole application. Always set a **`lock_timeout`** before DDL on busy tables (<Ref to="db-migrations" />). The `pg_locks` and `pg_stat_activity` views show who is waiting for whom:
+
+```sql
+-- On a real server, to see blocked sessions and what blocks them
+SELECT pid, pg_blocking_pids(pid) AS blocked_by, wait_event_type, state, left(query, 50) AS query
+FROM pg_stat_activity
+WHERE cardinality(pg_blocking_pids(pid)) > 0;
+```
+
+## Advisory locks
+
+**Advisory locks** are locks on numbers that mean whatever the application decides. They coordinate work that is not about one row, such as making sure only one instance runs the nightly report:
+
+```sql
+SELECT pg_try_advisory_lock(42) AS got_lock;
+SELECT pg_try_advisory_lock(42) AS got_it_again;
+SELECT pg_advisory_unlock(42) AS released, pg_advisory_unlock(42) AS released_again;
+```
+
+```text
+ got_lock 
+----------
+ t
+(1 row)
+
+ got_it_again 
+--------------
+ t
+(1 row)
+
+ released | released_again 
+----------+----------------
+ t        | t
+(1 row)
+```
+
+Session-level advisory locks are **re-entrant**: the same session can take one twice, and must release it as many times. Another session trying `pg_try_advisory_lock(42)` would get `false` and skip the work. `pg_advisory_xact_lock` is released automatically at the end of the transaction, which is safer.
+
+## Common mistakes
+
+- **Read-modify-write in the application** without atomic updates or locks: lost updates.
+- **Long transactions** holding locks while waiting for users or networks.
+- **Not retrying** serialisation failures and deadlocks.
+- **Locking rows in different orders** in different code paths.
+- **DDL on busy tables without `lock_timeout`.**
+- **Using a table as a queue without `SKIP LOCKED`**, so workers block each other or take the same job.
+
+## Practice
+
+**1. (warm-up)** Rewrite this application logic as one safe SQL statement: read a voucher; if it is not redeemed, mark it redeemed.
+
+<Solution>
+
+```sql
+CREATE TABLE vouchers (code text PRIMARY KEY, redeemed_at timestamptz);
+INSERT INTO vouchers VALUES ('GIFT-7K2Q', NULL);
+
+UPDATE vouchers SET redeemed_at = '2026-11-14 10:00+00'
+WHERE code = 'GIFT-7K2Q' AND redeemed_at IS NULL
+RETURNING code;
+
+UPDATE vouchers SET redeemed_at = '2026-11-14 10:01+00'
+WHERE code = 'GIFT-7K2Q' AND redeemed_at IS NULL
+RETURNING code;
+```
+
+```text
+   code    
+-----------
+ GIFT-7K2Q
+(1 row)
+
+ code 
+------
+(0 rows)
+```
+
+The second attempt changes no row, so the application knows the voucher was already used. Two simultaneous attempts cannot both succeed: the second waits for the first's row lock, then re-checks `redeemed_at IS NULL`, which is now false.
+
+</Solution>
+
+**2. (standard)** Two workers claim jobs with the `SKIP LOCKED` statement at the same instant, and the queue holds jobs 1, 2 and 3. Describe what each worker gets, and what happens to job 1 if worker A crashes before committing.
+
+<Solution>
+
+Worker A locks and claims job 1. Worker B's query skips job 1, which is locked, and claims job 2. Neither waits for the other. If A crashes before committing, its transaction is rolled back: the status change to `running` is undone and the row lock is released, so job 1 is `ready` again and the next worker claims it. (For jobs that commit `running` before doing long work, add a `started_at` and a timeout after which stuck jobs are reset.)
+
+</Solution>
+
+**3. (stretch)** Explain why this transfer between two stock rows can deadlock, and fix it.
+
+```sql
+-- Session code, run by many requests at once with different pairs of SKUs
+BEGIN;
+UPDATE stock SET quantity = quantity - 1 WHERE sku = :from_sku;
+UPDATE stock SET quantity = quantity + 1 WHERE sku = :to_sku;
+COMMIT;
+```
+
+<Solution>
+
+One request moves stock from rye to croissant while another moves from croissant to rye: each locks its first row, then waits for the other's. Fix it by locking both rows in a consistent order first, then updating:
+
+```sql
+BEGIN;
+SELECT sku FROM stock WHERE sku IN ('RYE-400', 'CRO-090') ORDER BY sku FOR UPDATE;
+UPDATE stock SET quantity = quantity - 1 WHERE sku = 'RYE-400';
+UPDATE stock SET quantity = quantity + 1 WHERE sku = 'CRO-090';
+COMMIT;
+
+SELECT * FROM stock ORDER BY sku;
+```
+
+```text
+   sku   
+---------
+ CRO-090
+ RYE-400
+(2 rows)
+
+   sku   | quantity 
+---------+----------
+ CRO-090 |        2
+ RYE-400 |        0
+(2 rows)
+```
+
+Every transaction now locks the two rows in alphabetical order, so no cycle can form.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- An error **aborts** a PostgreSQL transaction until `ROLLBACK`; savepoints undo part of one.
+- Prevent **lost updates** with atomic updates (`SET x = x - 1 WHERE x >= 1`), **`SELECT ... FOR UPDATE`**, or a stricter isolation level.
+- **`FOR UPDATE SKIP LOCKED`** builds safe multi-worker job queues.
+- **Read Committed** is the default; **Repeatable Read** and **Serializable** give stronger guarantees and require **retrying** serialisation failures.
+- Avoid **deadlocks** by locking in a consistent order and keeping transactions short; retry when they happen.
+- Strong **table locks** from DDL can stop an application: use `lock_timeout`. **Advisory locks** coordinate application-level work.
+
+## Go deeper
+
+- [PostgreSQL: transaction isolation](https://www.postgresql.org/docs/current/transaction-iso.html), the PostgreSQL project. What each level guarantees, with examples.
+- [PostgreSQL: explicit locking](https://www.postgresql.org/docs/current/explicit-locking.html), the PostgreSQL project. Table, row and advisory locks, and deadlocks.
+- [PostgreSQL: SELECT, the locking clause](https://www.postgresql.org/docs/current/sql-select.html#SQL-FOR-UPDATE-SHARE), the PostgreSQL project. FOR UPDATE, NOWAIT and SKIP LOCKED.

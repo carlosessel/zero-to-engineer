@@ -1,0 +1,269 @@
+---
+title: "Vector search with pgvector"
+summary: "Embeddings, similarity search, vector indexes, and combining vector and keyword search."
+prerequisites: [db-json-search]
+estimated_minutes: 90
+status: resources-verified
+---
+
+By the end of this chapter you will store **embeddings** in PostgreSQL with the **pgvector** extension, find the most similar items with **distance operators**, speed searches up with **HNSW** and **IVFFlat** indexes, filter and combine vector search with ordinary SQL, and merge it with keyword search into **hybrid search**. This is the database half of retrieval for AI applications (<Ref to="rag" />): "find the product descriptions most relevant to this question".
+
+## Embeddings in one paragraph
+
+An **embedding** is a list of numbers (a **vector**) that a machine-learning model produces from text, an image or anything else, such that **similar meanings get nearby vectors**: "flaky buttery pastry" lands close to "croissant" and far from "breakfast tea" (<Ref to="tokens-embeddings" />). Real embeddings have hundreds or thousands of dimensions and come from a model API or a local model. To keep the examples readable and exactly reproducible, this chapter uses tiny hand-made vectors with four dimensions, roughly meaning *bread*, *sweet*, *buttery* and *drink*.
+
+## Storing vectors
+
+```sql
+CREATE EXTENSION IF NOT EXISTS vector;
+
+CREATE TABLE product_embeddings (
+  product_id integer PRIMARY KEY REFERENCES products (id),
+  embedding  vector(4) NOT NULL
+);
+
+INSERT INTO product_embeddings VALUES
+  (1, '[0.9, 0.1, 0.1, 0]'),   -- Rye loaf
+  (2, '[0.9, 0.1, 0.2, 0]'),   -- Sourdough
+  (3, '[0.8, 0.1, 0.1, 0]'),   -- Bagel
+  (4, '[0.3, 0.3, 0.9, 0]'),   -- Croissant
+  (5, '[0.2, 0.8, 0.5, 0]'),   -- Cinnamon bun
+  (6, '[0.3, 0.6, 0.8, 0]'),   -- Almond croissant
+  (7, '[0.1, 0.9, 0.4, 0]'),   -- Chocolate cake
+  (8, '[0.1, 0.8, 0.3, 0]'),   -- Lemon drizzle
+  (9, '[0, 0.7, 0, 0.2]'),     -- Strawberry jam
+  (10, '[0, 0.1, 0, 0.9]');    -- Breakfast tea
+
+SELECT p.name, e.embedding FROM product_embeddings AS e JOIN products AS p ON p.id = e.product_id WHERE p.id <= 3;
+```
+
+```text
+   name    |    embedding    
+-----------+-----------------
+ Rye loaf  | [0.9,0.1,0.1,0]
+ Sourdough | [0.9,0.1,0.2,0]
+ Bagel     | [0.8,0.1,0.1,0]
+(3 rows)
+```
+
+The column type `vector(4)` fixes the number of dimensions; every embedding in a column must come from the same model, because vectors from different models are not comparable.
+
+## Similarity search
+
+pgvector adds **distance operators**, smaller meaning more similar:
+
+| Operator | Distance | Typical use |
+|---|---|---|
+| `<->` | Euclidean (L2) | general |
+| `<=>` | cosine distance (1 minus cosine similarity) | text embeddings, the usual choice |
+| `<#>` | negative inner product | normalised vectors, fastest |
+
+A customer asks for "something sweet and buttery". Its embedding (here, hand-made again) is compared with every product's, and the nearest come first:
+
+```sql
+SELECT p.name, round((e.embedding <=> '[0.2, 0.7, 0.7, 0]')::numeric, 3) AS cosine_distance
+FROM product_embeddings AS e
+JOIN products AS p ON p.id = e.product_id
+ORDER BY e.embedding <=> '[0.2, 0.7, 0.7, 0]'
+LIMIT 4;
+```
+
+```text
+       name       | cosine_distance 
+------------------+-----------------
+ Almond croissant |           0.014
+ Cinnamon bun     |           0.025
+ Chocolate cake   |           0.070
+ Lemon drizzle    |           0.091
+(4 rows)
+```
+
+Pastries and cakes fill the top four; the breads and the tea are much further away. This is **semantic search**: no word in the query had to match the products' names. **Similar items** work the same way, with an item's own embedding as the query: "customers who liked the croissant might like...":
+
+```sql
+SELECT p.name
+FROM product_embeddings AS e
+JOIN products AS p ON p.id = e.product_id
+WHERE e.product_id <> 4
+ORDER BY e.embedding <=> (SELECT embedding FROM product_embeddings WHERE product_id = 4)
+LIMIT 3;
+```
+
+```text
+       name       
+------------------
+ Almond croissant
+ Cinnamon bun
+ Chocolate cake
+(3 rows)
+```
+
+## Filtering
+
+Because embeddings live next to the rest of the data, search can combine meaning with ordinary conditions in one query: only vegan products under £5:
+
+```sql
+SELECT p.name, p.price_pence
+FROM product_embeddings AS e
+JOIN products AS p ON p.id = e.product_id
+WHERE p.vegan AND p.price_pence < 500
+ORDER BY e.embedding <=> '[0.2, 0.7, 0.7, 0]'
+LIMIT 3;
+```
+
+```text
+      name      | price_pence 
+----------------+-------------
+ Strawberry jam |         380
+ Bagel          |         120
+ Rye loaf       |         450
+(3 rows)
+```
+
+This is a major reason to keep vectors in PostgreSQL rather than a separate vector database: filters, joins, permissions (including row-level security) and transactions all apply to vector search too.
+
+## Indexes for vectors
+
+Without an index, a similarity search compares the query with every row: fine for thousands of rows, too slow for millions. Vector indexes are **approximate**: they trade a little accuracy (recall) for a lot of speed.
+
+```sql
+CREATE INDEX product_embeddings_hnsw ON product_embeddings USING hnsw (embedding vector_cosine_ops);
+
+SET enable_seqscan = off;
+EXPLAIN (COSTS OFF)
+SELECT product_id FROM product_embeddings ORDER BY embedding <=> '[0.2, 0.7, 0.7, 0]' LIMIT 4;
+RESET enable_seqscan;
+```
+
+```text
+                              QUERY PLAN                              
+----------------------------------------------------------------------
+ Limit
+   ->  Index Scan using product_embeddings_hnsw on product_embeddings
+         Order By: (embedding <=> '[0.2,0.7,0.7,0]'::vector)
+(3 rows)
+```
+
+(`enable_seqscan = off` only persuades the planner to show the index on a table this small; never set it in production.)
+
+- **HNSW** (hierarchical navigable small world) builds a layered graph: excellent speed and recall, slower to build, more memory. The usual choice. Tune with `m` and `ef_construction` when building, and `hnsw.ef_search` when querying (higher means more accurate and slower).
+- **IVFFlat** groups vectors into lists around centroids and searches only the nearest lists: quicker to build and smaller, but needs data present before building, and `ivfflat.probes` tuning.
+- The operator class must match the operator you query with (`vector_cosine_ops` for `<=>`, `vector_l2_ops` for `<->`).
+- Filters combined with approximate indexes can return fewer rows than the `LIMIT`; pgvector's iterative index scans (`hnsw.iterative_scan`) keep searching until enough rows pass the filter.
+
+## Hybrid search
+
+Embeddings capture meaning but can miss exact terms (a product code, a rare name); keyword search does the opposite. **Hybrid search** runs both and merges the rankings, commonly with **reciprocal rank fusion** (RRF): each result scores `1 / (k + rank)` in each list, summed:
+
+```sql
+WITH semantic AS (
+  SELECT e.product_id, row_number() OVER (ORDER BY e.embedding <=> '[0.3, 0.5, 0.8, 0]') AS rank
+  FROM product_embeddings AS e
+  ORDER BY e.embedding <=> '[0.3, 0.5, 0.8, 0]'
+  LIMIT 5
+),
+keyword AS (
+  SELECT id AS product_id, row_number() OVER (ORDER BY ts_rank(to_tsvector('english', name), query) DESC) AS rank
+  FROM products, websearch_to_tsquery('english', 'almond') AS query
+  WHERE to_tsvector('english', name) @@ query
+)
+SELECT p.name,
+       round(coalesce(1.0 / (60 + s.rank), 0) + coalesce(1.0 / (60 + k.rank), 0), 4) AS rrf_score
+FROM semantic AS s
+FULL JOIN keyword AS k ON k.product_id = s.product_id
+JOIN products AS p ON p.id = coalesce(s.product_id, k.product_id)
+ORDER BY rrf_score DESC
+LIMIT 3;
+```
+
+```text
+       name       | rrf_score 
+------------------+-----------
+ Almond croissant |    0.0328
+ Croissant        |    0.0161
+ Cinnamon bun     |    0.0159
+(3 rows)
+```
+
+The almond croissant is near the top of both lists, so it wins clearly; the constant 60 is the conventional `k`. Hybrid search is the standard retrieval step in good AI applications.
+
+## In production
+
+- Generate embeddings once per item when it is created or changed (a background job, <Ref to="be-background-jobs" />), and store the model's name with them; re-embed everything when you change models.
+- Text is usually split into **chunks** (paragraphs) before embedding, with one row per chunk (<Ref to="rag" />).
+- `halfvec` stores vectors in half precision, halving storage and memory, usually with little loss in quality.
+- Check **recall** against exact search on a sample of queries when tuning indexes.
+
+## Common mistakes
+
+- **Mixing embeddings from different models** in one column.
+- **The wrong operator class** for the index, so it is never used.
+- **No index** on large vector tables, or approximate indexes without checking recall.
+- **Vector search alone** where exact matches matter; use hybrid search.
+- **Forgetting filters and permissions**, so search returns items a user may not see.
+
+## Practice
+
+**1. (warm-up)** Find the two products nearest to "a warm drink" with the embedding `[0, 0.2, 0, 1]`, by cosine distance.
+
+<Solution>
+
+```sql
+SELECT p.name
+FROM product_embeddings AS e
+JOIN products AS p ON p.id = e.product_id
+ORDER BY e.embedding <=> '[0, 0.2, 0, 1]'
+LIMIT 2;
+```
+
+```text
+      name      
+----------------
+ Breakfast tea
+ Strawberry jam
+(2 rows)
+```
+
+</Solution>
+
+**2. (standard)** Show each category's product whose embedding is nearest the "sweet and buttery" query, using a window function.
+
+<Solution>
+
+```sql
+WITH ranked AS (
+  SELECT p.category, p.name,
+         row_number() OVER (PARTITION BY p.category ORDER BY e.embedding <=> '[0.2, 0.7, 0.7, 0]') AS position
+  FROM product_embeddings AS e
+  JOIN products AS p ON p.id = e.product_id
+)
+SELECT category, name FROM ranked WHERE position = 1 ORDER BY category;
+```
+
+```text
+ category |       name       
+----------+------------------
+ bread    | Sourdough
+ cake     | Chocolate cake
+ pantry   | Strawberry jam
+ pastry   | Almond croissant
+(4 rows)
+```
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Embeddings** are vectors where similar meanings are close; **pgvector** stores them in `vector(n)` columns.
+- Search with **distance operators**: `<=>` (cosine), `<->` (Euclidean), `<#>` (inner product), ordering by distance with a `LIMIT`.
+- Combine similarity with **filters, joins and permissions** in ordinary SQL.
+- **HNSW** and **IVFFlat** indexes make search fast and approximate; match the operator class, tune for recall.
+- **Hybrid search** merges vector and keyword rankings, for example with **reciprocal rank fusion**.
+
+## Go deeper
+
+- [pgvector](https://github.com/pgvector/pgvector), Andrew Kane. The extension's documentation: types, operators, indexes and tuning.
+- [Supabase: semantic search](https://supabase.com/docs/guides/ai/semantic-search), Supabase. Building semantic search with pgvector, step by step.
+- [Supabase: hybrid search](https://supabase.com/docs/guides/ai/hybrid-search), Supabase. Combining full-text and vector search with reciprocal rank fusion.

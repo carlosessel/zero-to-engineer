@@ -23,6 +23,11 @@ Kinds of check (the `check:` field):
   shell            Bash, in an empty temporary folder. `script:` is what runs;
                    `$BLOCK` is a file holding the block. Default: the block itself.
   sql              Run in SQLite (in memory, or the file named by `database`); `verify` gets `db`.
+  postgres         Run in PostgreSQL (PGlite, PostgreSQL compiled to WebAssembly, by
+                   pg_runner.mjs), printed as psql prints it. Blocks in one chapter share one
+                   database, like Python cells; `database: name` uses a separate one.
+                   Fields: output (exact) | output_contains, before (SQL run first, unseen;
+                   `note` must say why), verify (gets `out`).
   Any kind may say `needs: network` to run only when EXAMPLES_NETWORK=1, or
                    `needs: claude-cli` to run only where Claude Code is installed.
   pip              `pip install` lines: checks the packages can be resolved.
@@ -77,8 +82,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[2]
 CHAPTERS = ROOT / "content" / "chapters"
 FENCE = re.compile(r"^(`{3,})(\w+)\n(.*?)\n\1[ \t]*$", re.S | re.M)
-KINDS = {"python", "python-fake-api", "heavy", "shell", "sql", "pip", "docker", "vitest", "web", "browser", "js", "react", "ts", "vitest-run", "java", "csharp", "illustration", "not-run"}
-AUTOMATED = {"python", "shell", "sql", "pip", "docker", "vitest"}
+KINDS = {"python", "python-fake-api", "heavy", "shell", "sql", "pip", "docker", "vitest", "web", "browser", "js", "react", "ts", "vitest-run", "java", "csharp", "postgres", "illustration", "not-run"}
+AUTOMATED = {"python", "shell", "sql", "postgres", "pip", "docker", "vitest"}
 
 
 class Skip(Exception):
@@ -157,6 +162,7 @@ class Chapter:
         self.runner = _load_runner()
         self.results: dict[int, str | None | Skip] = {}
         self.fake = None
+        self.pg: dict[str, subprocess.Popen] = {}
 
     # -- running ---------------------------------------------------------
     def result(self, n: int):
@@ -210,6 +216,8 @@ class Chapter:
         if kind == "pip":
             pkgs = [w for line in code.splitlines() if line.startswith("pip install") for w in line.split("#")[0].split()[2:]]
             return self._shell({**e, "script": f"python -m pip install --dry-run --quiet {' '.join(pkgs)}"}, code)
+        if kind == "postgres":
+            return self._postgres(e, code)
         if kind == "sql":
             db = sqlite3.connect(str(self.tmp / e["database"]) if e.get("database") else ":memory:")
             try:
@@ -314,6 +322,30 @@ class Chapter:
             if part not in p.stderr:
                 return f"stderr does not contain {part!r}\n--- got\n{p.stderr[-2000:]}"
         return self._verify(e, code, p.stdout, {"stderr": p.stderr})
+
+    def _postgres(self, e: dict, code: str) -> str | None:
+        name = e.get("database", "main")
+        proc = self.pg.get(name)
+        if proc is None:
+            if not (ROOT / "node_modules" / "@electric-sql" / "pglite").exists():
+                raise Skip("needs PGlite; run npm ci")
+            proc = subprocess.Popen(["node", str(Path(__file__).with_name("pg_runner.mjs"))], cwd=ROOT,
+                                    stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+            self.pg[name] = proc
+        proc.stdin.write(json.dumps({"setup": e.get("before", ""), "sql": code}) + "\n")
+        proc.stdin.flush()
+        lines = []
+        while (line := proc.stdout.readline()) and line != "\x00END\n":
+            lines.append(line)
+        out = "".join(lines)
+        if "SETUP FAILED" in out:
+            return out
+        if "output" in e and _clean(out) != _clean(e["output"]):
+            return f"output differs\n--- expected\n{_clean(e['output'])}\n--- got\n{_clean(out)}"
+        for part in e.get("output_contains") or []:
+            if part not in out:
+                return f"output does not contain {part!r}\n--- got\n{out[-3000:]}"
+        return self._verify(e, code, out, {})
 
     def _verify(self, e: dict, code: str, out: str, extra: dict) -> str | None:
         if not e.get("verify"):

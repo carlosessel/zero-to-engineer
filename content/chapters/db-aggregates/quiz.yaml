@@ -1,0 +1,30 @@
+- question: What does count(city) count?
+  options:
+  - Rows where city is not NULL
+  - All rows
+  answer: 0
+  explanation: count(*) counts rows; count(column) skips NULLs.
+- question: Where does a condition on count(*) go?
+  options:
+  - HAVING
+  - WHERE
+  answer: 0
+  explanation: WHERE runs before grouping, so no counts exist yet.
+- question: What does sum return when there are no rows?
+  options:
+  - 'NULL'
+  - '0'
+  answer: 0
+  explanation: Use coalesce(sum(x), 0) when you need a number.
+- question: Why is SELECT product_id, sum(quantity) FROM order_lines GROUP BY order_id an error?
+  options:
+  - product_id is neither grouped nor aggregated
+  - sum needs DISTINCT
+  answer: 0
+  explanation: Each group has many products.
+- question: What does count(*) FILTER (WHERE status = 'cancelled') do?
+  options:
+  - Counts only cancelled rows within each group
+  - Removes cancelled rows from the whole query
+  answer: 0
+  explanation: FILTER applies to one aggregate.

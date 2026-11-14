@@ -1,0 +1,300 @@
+---
+title: "Tables, keys and constraints"
+summary: "CREATE and ALTER TABLE, identity columns, primary and foreign keys, CHECK, UNIQUE and generated columns."
+prerequisites: [db-types-functions]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will create and change tables with **DDL** (data definition language): choose column types, generate ids with **identity** columns, and declare the **constraints** that make the database refuse bad data: `NOT NULL`, `PRIMARY KEY`, `UNIQUE`, `FOREIGN KEY` with its delete rules, `CHECK`, exclusion constraints and generated columns. Constraints are the cheapest bug prevention there is: one line in the schema protects the data from every program, script and person that will ever touch it.
+
+## CREATE TABLE
+
+The bakery is adding gift vouchers. A first version of the table:
+
+```sql
+CREATE TABLE vouchers (
+  id           bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  code         text NOT NULL UNIQUE,
+  value_pence  integer NOT NULL CHECK (value_pence BETWEEN 500 AND 20000),
+  issued_to    integer REFERENCES customers (id),
+  issued_at    timestamptz NOT NULL DEFAULT now(),
+  expires_on   date NOT NULL,
+  redeemed_at  timestamptz,
+  CHECK (expires_on > issued_at::date)
+);
+
+INSERT INTO vouchers (code, value_pence, issued_to, issued_at, expires_on)
+VALUES ('GIFT-7K2Q', 2500, 1, '2026-11-14 09:00+00', '2027-06-30'),
+       ('GIFT-9P4M', 1000, NULL, '2026-11-14 09:05+00', '2027-01-31')
+RETURNING id, code, value_pence;
+```
+
+```text
+ id |   code    | value_pence 
+----+-----------+-------------
+  1 | GIFT-7K2Q |        2500
+  2 | GIFT-9P4M |        1000
+(2 rows)
+```
+
+Each column has a name, a type and optional constraints; constraints that involve several columns go at the end (**table constraints**). Let us look at each.
+
+## Identity columns and keys
+
+A **primary key** identifies each row: unique and never NULL. Most tables use a **surrogate key**, a meaningless number the database generates: **`GENERATED ALWAYS AS IDENTITY`** (the standard way; older code uses `serial`). `ALWAYS` refuses manually supplied ids, which prevents clashes with the sequence; `BY DEFAULT` allows them, which is handy when importing data.
+
+```sql
+INSERT INTO vouchers (id, code, value_pence, issued_at, expires_on)
+VALUES (99, 'GIFT-HACK', 1000, '2026-11-14', '2027-01-01');
+```
+
+```text
+ERROR:  cannot insert a non-DEFAULT value into column "id"
+DETAIL:  Column "id" is an identity column defined as GENERATED ALWAYS.
+HINT:  Use OVERRIDING SYSTEM VALUE to override.
+```
+
+A **natural key** is a real-world identifier, such as a product code. Natural keys change (products are renamed, people change email addresses), so the usual design is a surrogate primary key plus a **`UNIQUE`** constraint on the natural key, as `code` has here. Use `uuid` keys when ids are created outside the database or must not reveal how many rows exist; PostgreSQL 18's `uuidv7()` generates time-ordered UUIDs that index well.
+
+**`UNIQUE`** allows several NULLs by default, because NULLs are not equal to each other; write `UNIQUE NULLS NOT DISTINCT` when at most one NULL is allowed.
+
+## NOT NULL and DEFAULT
+
+**`NOT NULL`** says a value is required. Make every column `NOT NULL` unless "unknown" is a real, meaningful state; nullable columns spread three-valued logic through every query (<Ref to="db-select" />). **`DEFAULT`** supplies a value when an insert leaves the column out, such as `now()` for creation times.
+
+## CHECK constraints
+
+A **`CHECK`** constraint is any condition every row must satisfy. It can involve several columns of the same row:
+
+```sql
+INSERT INTO vouchers (code, value_pence, issued_at, expires_on)
+VALUES ('GIFT-BIG', 50000, '2026-11-14', '2027-01-01');
+
+INSERT INTO vouchers (code, value_pence, issued_at, expires_on)
+VALUES ('GIFT-OLD', 1000, '2026-11-14', '2026-11-01');
+```
+
+```text
+ERROR:  new row for relation "vouchers" violates check constraint "vouchers_value_pence_check"
+DETAIL:  Failing row contains (3, GIFT-BIG, 50000, null, 2026-11-14 00:00:00+00, 2027-01-01, null).
+ERROR:  new row for relation "vouchers" violates check constraint "vouchers_check"
+DETAIL:  Failing row contains (4, GIFT-OLD, 1000, null, 2026-11-14 00:00:00+00, 2026-11-01, null).
+```
+
+Name constraints so error messages explain themselves: `CONSTRAINT voucher_value_range CHECK (...)`. A `CHECK` sees one row only; rules across rows ("a customer may hold at most three vouchers") need other tools: unique indexes, exclusion constraints, triggers (<Ref to="db-views-functions" />), or application logic inside a transaction.
+
+## Foreign keys
+
+A **foreign key** says a column's value must exist in another table's key. `issued_to` must be a real customer:
+
+```sql
+INSERT INTO vouchers (code, value_pence, issued_to, issued_at, expires_on)
+VALUES ('GIFT-NOBODY', 1000, 999, '2026-11-14', '2027-01-01');
+```
+
+```text
+ERROR:  insert or update on table "vouchers" violates foreign key constraint "vouchers_issued_to_fkey"
+DETAIL:  Key (issued_to)=(999) is not present in table "customers".
+```
+
+The **delete rule** decides what happens to referencing rows when the referenced row is deleted:
+
+| Rule | When a customer is deleted, their vouchers... |
+|---|---|
+| `NO ACTION` / `RESTRICT` (default) | ...block the delete |
+| `CASCADE` | ...are deleted too |
+| `SET NULL` | ...keep existing, with `issued_to` set to NULL |
+| `SET DEFAULT` | ...get the column's default |
+
+Choose deliberately: `CASCADE` for children that mean nothing alone (an order's lines), `RESTRICT` for records that must be kept (orders, payments), `SET NULL` where the link is optional. PostgreSQL does **not** index foreign key columns automatically; add an index on them, or deleting a parent scans the whole child table, and joins on them are slow (<Ref to="db-indexes" />).
+
+## Exclusion constraints
+
+An **exclusion constraint** generalises `UNIQUE`: no two rows may have values that "conflict" by some operator. The classic use is "no overlapping bookings". A table of oven bookings in which no oven can be booked twice at once:
+
+```sql
+CREATE EXTENSION IF NOT EXISTS btree_gist;
+
+CREATE TABLE oven_bookings (
+  oven    integer NOT NULL,
+  baker   text NOT NULL,
+  during  tstzrange NOT NULL,
+  EXCLUDE USING gist (oven WITH =, during WITH &&)
+);
+
+INSERT INTO oven_bookings VALUES (1, 'Yaw', '[2026-11-15 05:00+00, 2026-11-15 07:00+00)');
+INSERT INTO oven_bookings VALUES (2, 'Adwoa', '[2026-11-15 06:00+00, 2026-11-15 08:00+00)');
+INSERT INTO oven_bookings VALUES (1, 'Adwoa', '[2026-11-15 06:30+00, 2026-11-15 07:30+00)');
+INSERT INTO oven_bookings VALUES (1, 'Adwoa', '[2026-11-15 07:00+00, 2026-11-15 08:00+00)');
+
+SELECT oven, baker, during FROM oven_bookings ORDER BY oven, during;
+```
+
+```text
+ERROR:  conflicting key value violates exclusion constraint "oven_bookings_oven_during_excl"
+DETAIL:  Key (oven, during)=(1, ["2026-11-15 06:30:00+00","2026-11-15 07:30:00+00")) conflicts with existing key (oven, during)=(1, ["2026-11-15 05:00:00+00","2026-11-15 07:00:00+00")).
+ oven | baker |                       during                        
+------+-------+-----------------------------------------------------
+    1 | Yaw   | ["2026-11-15 05:00:00+00","2026-11-15 07:00:00+00")
+    1 | Adwoa | ["2026-11-15 07:00:00+00","2026-11-15 08:00:00+00")
+    2 | Adwoa | ["2026-11-15 06:00:00+00","2026-11-15 08:00:00+00")
+(3 rows)
+```
+
+`tstzrange` is a **range type**: `[` includes the start and `)` excludes the end, so a booking ending at 07:00 and one starting at 07:00 do not overlap. The constraint refused the third booking (oven 1, overlapping Yaw's) and accepted the fourth. Enforcing this in application code is surprisingly hard under concurrency; the database gets it right every time.
+
+## Generated columns
+
+A **generated column** is computed from other columns of the same row and kept up to date by the database. It cannot be written directly:
+
+```sql
+ALTER TABLE order_lines
+  ADD COLUMN line_total_pence integer GENERATED ALWAYS AS (quantity * unit_price_pence) STORED;
+
+SELECT order_id, product_id, quantity, unit_price_pence, line_total_pence
+FROM order_lines
+WHERE order_id = 1;
+```
+
+```text
+ order_id | product_id | quantity | unit_price_pence | line_total_pence 
+----------+------------+----------+------------------+------------------
+        1 |          1 |        2 |              450 |              900
+        1 |          4 |        2 |              275 |              550
+(2 rows)
+```
+
+`STORED` columns are computed on write and stored; PostgreSQL 18 also supports `VIRTUAL` generated columns, computed when read.
+
+## ALTER TABLE
+
+Schemas change. **`ALTER TABLE`** adds, removes, renames and changes columns and constraints:
+
+```sql
+ALTER TABLE vouchers ADD COLUMN note text;
+ALTER TABLE vouchers RENAME COLUMN note TO internal_note;
+ALTER TABLE vouchers ALTER COLUMN internal_note SET DEFAULT '';
+ALTER TABLE vouchers ADD CONSTRAINT voucher_code_format CHECK (code ~ '^GIFT-[A-Z0-9]{4,}$');
+ALTER TABLE vouchers DROP COLUMN internal_note;
+
+SELECT conname AS constraint_name, pg_get_constraintdef(oid) AS definition
+FROM pg_constraint
+WHERE conrelid = 'vouchers'::regclass
+ORDER BY conname;
+```
+
+```text
+        constraint_name        |                        definition                         
+-------------------------------+-----------------------------------------------------------
+ voucher_code_format           | CHECK ((code ~ '^GIFT-[A-Z0-9]{4,}$'::text))
+ vouchers_check                | CHECK ((expires_on > (issued_at)::date))
+ vouchers_code_key             | UNIQUE (code)
+ vouchers_code_not_null        | NOT NULL code
+ vouchers_expires_on_not_null  | NOT NULL expires_on
+ vouchers_id_not_null          | NOT NULL id
+ vouchers_issued_at_not_null   | NOT NULL issued_at
+ vouchers_issued_to_fkey       | FOREIGN KEY (issued_to) REFERENCES customers(id)
+ vouchers_pkey                 | PRIMARY KEY (id)
+ vouchers_value_pence_check    | CHECK (((value_pence >= 500) AND (value_pence <= 20000)))
+ vouchers_value_pence_not_null | NOT NULL value_pence
+(11 rows)
+```
+
+Adding a constraint checks every existing row first, and is refused if any row breaks it. Many `ALTER TABLE` forms lock the table while they run, which matters a great deal on a busy production database; <Ref to="db-migrations" /> shows how to change large tables safely (adding constraints as `NOT VALID` and validating them later, for example). The `pg_constraint` catalogue query above lists every constraint, including the ones PostgreSQL named automatically, such as `vouchers_value_pence_check`; since PostgreSQL 18, `NOT NULL` constraints are listed there too.
+
+## Common mistakes
+
+- **Nullable columns by default**, and NULL creeping into every query.
+- **No foreign keys** "for performance" or "for flexibility", and orphaned rows that nobody notices until a report is wrong.
+- **No index on foreign key columns.**
+- **Cascading deletes** on data that must be kept.
+- **Natural keys as primary keys** that later have to change.
+- **Rules enforced only in application code**, bypassed by the next script or service.
+- **Unnamed constraints** with unhelpful generated names in error messages.
+
+## Practice
+
+**1. (warm-up)** Create a table `suppliers` with an identity primary key, a required unique name, an optional email that must contain `@` when present, and a required country code of exactly two capital letters.
+
+<Solution>
+
+```sql
+CREATE TABLE suppliers (
+  id      integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+  name    text NOT NULL UNIQUE,
+  email   text CHECK (email LIKE '%@%'),
+  country char(2) NOT NULL CHECK (country ~ '^[A-Z]{2}$')
+);
+
+INSERT INTO suppliers (name, email, country) VALUES ('Northern Mills', 'orders@northern.example', 'GB');
+INSERT INTO suppliers (name, email, country) VALUES ('Bad Data Ltd', 'no-at-sign', 'gb');
+```
+
+```text
+ERROR:  new row for relation "suppliers" violates check constraint "suppliers_country_check"
+DETAIL:  Failing row contains (2, Bad Data Ltd, no-at-sign, gb).
+```
+
+A `CHECK` passes when its condition is NULL, so an empty email is allowed, as intended. The second insert fails on the first constraint checked.
+
+</Solution>
+
+**2. (standard)** Add a link from products to suppliers: an optional `supplier_id` that must refer to a real supplier, set to NULL if the supplier is deleted, with an index.
+
+<Solution>
+
+```sql
+ALTER TABLE products ADD COLUMN supplier_id integer REFERENCES suppliers (id) ON DELETE SET NULL;
+CREATE INDEX products_supplier_id_idx ON products (supplier_id);
+
+UPDATE products SET supplier_id = 1 WHERE category = 'bread';
+DELETE FROM suppliers WHERE id = 1;
+SELECT count(*) AS breads_without_supplier FROM products WHERE category = 'bread' AND supplier_id IS NULL;
+```
+
+```text
+ breads_without_supplier 
+-------------------------
+                       4
+(1 row)
+```
+
+</Solution>
+
+**3. (stretch)** Allow each customer at most one **unredeemed** voucher at a time, enforced by the database.
+
+<Solution>
+
+```sql
+CREATE UNIQUE INDEX one_open_voucher_per_customer
+  ON vouchers (issued_to)
+  WHERE redeemed_at IS NULL AND issued_to IS NOT NULL;
+
+INSERT INTO vouchers (code, value_pence, issued_to, issued_at, expires_on)
+VALUES ('GIFT-2NDX', 1500, 1, '2026-11-20', '2027-03-31');
+```
+
+```text
+ERROR:  duplicate key value violates unique constraint "one_open_voucher_per_customer"
+DETAIL:  Key (issued_to)=(1) already exists.
+```
+
+A **partial unique index** enforces uniqueness only among rows matching its `WHERE`: once Ama's first voucher is redeemed, she can be issued another.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **`CREATE TABLE`** declares columns, types and constraints; **`ALTER TABLE`** changes them, checking existing rows.
+- Use **identity** surrogate primary keys, with **`UNIQUE`** on natural keys; `uuid` (such as `uuidv7()`) where ids come from outside.
+- **`NOT NULL`** by default, **`DEFAULT`** for common values, **`CHECK`** for row rules, **foreign keys** with deliberate delete rules and an index on the referencing column.
+- **Exclusion constraints** prevent overlaps; **partial unique indexes** enforce conditional uniqueness; **generated columns** keep derived values correct.
+
+## Go deeper
+
+- [PostgreSQL: constraints](https://www.postgresql.org/docs/current/ddl-constraints.html), the PostgreSQL project. Every kind of constraint, with examples.
+- [PostgreSQL: identity columns](https://www.postgresql.org/docs/current/ddl-identity-columns.html), the PostgreSQL project. GENERATED ALWAYS and BY DEFAULT.
+- [PostgreSQL: range types](https://www.postgresql.org/docs/current/rangetypes.html), the PostgreSQL project. Ranges and exclusion constraints.

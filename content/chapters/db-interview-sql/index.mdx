@@ -1,0 +1,389 @@
+---
+title: "SQL interview problems"
+summary: "The classic SQL interview questions, worked through with several solutions each."
+prerequisites: [db-window-functions, db-advanced-queries]
+estimated_minutes: 120
+status: resources-verified
+---
+
+By the end of this chapter you will have worked through the SQL questions that come up again and again in interviews for engineering, data and analytics roles, each on the bakery database, most with more than one solution and a note on which an interviewer would prefer. Try each one yourself before opening the solution: the point is to recognise the pattern behind the question, because interviewers change the tables, not the patterns.
+
+## How SQL interviews work
+
+You are usually given a schema and a question, and asked to write a query on a whiteboard, in a shared editor, or on a site such as HackerRank or LeetCode. Interviewers look for:
+
+- **Clarifying questions** first: what about ties, NULLs, empty groups, time zones?
+- **Correct results** on edge cases, not just the happy path.
+- **Readable SQL**: CTEs for steps, clear aliases, consistent formatting.
+- **Knowing the trade-offs**: why `NOT EXISTS` rather than `NOT IN`, why a window function rather than a correlated subquery, and how the query would perform on a large table.
+
+Say your reasoning aloud as you write.
+
+## 1. The second-highest salary
+
+*Find the second-highest salary among staff. If there is none, return NULL.*
+
+<Solution>
+
+```sql
+SELECT max(salary_pence) AS second_highest
+FROM staff
+WHERE salary_pence < (SELECT max(salary_pence) FROM staff);
+
+SELECT DISTINCT salary_pence AS second_highest
+FROM staff
+ORDER BY salary_pence DESC
+OFFSET 1 LIMIT 1;
+
+WITH ranked AS (
+  SELECT salary_pence, dense_rank() OVER (ORDER BY salary_pence DESC) AS r FROM staff
+)
+SELECT max(salary_pence) AS second_highest FROM ranked WHERE r = 2;
+```
+
+```text
+ second_highest 
+----------------
+        3800000
+(1 row)
+
+ second_highest 
+----------------
+        3800000
+(1 row)
+
+ second_highest 
+----------------
+        3800000
+(1 row)
+```
+
+The first and third return NULL when there is no second value (an aggregate over no rows), which the question asked for; the second returns no row instead. `dense_rank` generalises to the **N-th highest** and handles ties ("second-highest distinct salary"), so it is the answer interviewers hope for.
+
+</Solution>
+
+## 2. Customers who never ordered
+
+*List customers who have never placed an order.*
+
+<Solution>
+
+```sql
+SELECT c.name FROM customers AS c
+WHERE NOT EXISTS (SELECT 1 FROM orders AS o WHERE o.customer_id = c.id);
+
+SELECT c.name FROM customers AS c
+LEFT JOIN orders AS o ON o.customer_id = c.id
+WHERE o.id IS NULL;
+```
+
+```text
+ name  
+-------
+ Kweku
+(1 row)
+
+ name  
+-------
+ Kweku
+(1 row)
+```
+
+Both are anti-joins. Mention that `NOT IN (SELECT customer_id FROM orders)` breaks if the column can contain NULL (<Ref to="db-subqueries-ctes" />).
+
+</Solution>
+
+## 3. Duplicates
+
+*Find email addresses that appear more than once in a sign-ups table, then delete the duplicates, keeping the earliest row of each.*
+
+<Solution>
+
+```sql
+CREATE TABLE signups (id integer PRIMARY KEY, email text NOT NULL, signed_up_at timestamptz NOT NULL);
+INSERT INTO signups VALUES
+  (1, 'ama@example.com', '2026-01-01 09:00+00'), (2, 'kofi@example.com', '2026-01-02 10:00+00'),
+  (3, 'AMA@example.com', '2026-01-05 11:00+00'), (4, 'kofi@example.com', '2026-01-06 12:00+00'),
+  (5, 'esi@example.com', '2026-01-07 13:00+00');
+
+SELECT lower(email) AS email, count(*) AS copies
+FROM signups
+GROUP BY lower(email)
+HAVING count(*) > 1
+ORDER BY email;
+
+DELETE FROM signups
+WHERE id IN (
+  SELECT id FROM (
+    SELECT id, row_number() OVER (PARTITION BY lower(email) ORDER BY signed_up_at, id) AS n
+    FROM signups
+  ) AS numbered
+  WHERE n > 1
+)
+RETURNING id, email;
+```
+
+```text
+      email       | copies 
+------------------+--------
+ ama@example.com  |      2
+ kofi@example.com |      2
+(2 rows)
+
+ id |      email       
+----+------------------
+  3 | AMA@example.com
+  4 | kofi@example.com
+(2 rows)
+```
+
+Ask whether `AMA@example.com` and `ama@example.com` count as the same (here, yes). Then prevent it happening again: `CREATE UNIQUE INDEX ON signups (lower(email))`.
+
+</Solution>
+
+## 4. Top N per group
+
+*For each product category, show the two best-selling products by quantity, including ties.*
+
+<Solution>
+
+```sql
+WITH sales AS (
+  SELECT p.category, p.name, sum(l.quantity) AS quantity
+  FROM order_lines AS l
+  JOIN products AS p ON p.id = l.product_id
+  GROUP BY p.category, p.name
+),
+ranked AS (
+  SELECT *, rank() OVER (PARTITION BY category ORDER BY quantity DESC) AS r FROM sales
+)
+SELECT category, name, quantity FROM ranked WHERE r <= 2 ORDER BY category, r, name;
+```
+
+```text
+ category |      name      | quantity 
+----------+----------------+----------
+ bread    | Bagel          |       13
+ bread    | Rye loaf       |        7
+ cake     | Chocolate cake |        3
+ cake     | Lemon drizzle  |        3
+ pantry   | Strawberry jam |        4
+ pantry   | Breakfast tea  |        3
+ pastry   | Croissant      |       15
+ pastry   | Cinnamon bun   |        7
+(8 rows)
+```
+
+`rank` keeps ties ("including ties"); `row_number` would cut them arbitrarily. Mention `LATERAL` with `LIMIT` as an alternative that can use an index on large tables (<Ref to="db-advanced-queries" />).
+
+</Solution>
+
+## 5. Employees earning more than their managers
+
+*List staff who earn more than their manager.*
+
+<Solution>
+
+```sql
+SELECT e.name AS employee, e.salary_pence, m.name AS manager, m.salary_pence AS manager_salary
+FROM staff AS e
+JOIN staff AS m ON m.id = e.manager_id
+WHERE e.salary_pence > m.salary_pence;
+
+UPDATE staff SET salary_pence = 3900000 WHERE name = 'Adwoa Ofori';
+
+SELECT e.name AS employee, e.salary_pence, m.name AS manager, m.salary_pence AS manager_salary
+FROM staff AS e
+JOIN staff AS m ON m.id = e.manager_id
+WHERE e.salary_pence > m.salary_pence;
+```
+
+```text
+ employee | salary_pence | manager | manager_salary 
+----------+--------------+---------+----------------
+(0 rows)
+
+  employee   | salary_pence |   manager   | manager_salary 
+-------------+--------------+-------------+----------------
+ Adwoa Ofori |      3900000 | Kojo Asante |        3800000
+(1 row)
+```
+
+A self join. Nobody qualifies in the original data, so the solution gives Adwoa a rise to test that the query can return a row: a habit worth showing in interviews.
+
+</Solution>
+
+## 6. Running totals and month-on-month change
+
+*Show revenue per month with a running total and the percentage change from the previous month.*
+
+<Solution>
+
+```sql
+WITH monthly AS (
+  SELECT date_trunc('month', o.placed_at)::date AS month, sum(l.quantity * l.unit_price_pence) AS revenue
+  FROM orders AS o
+  JOIN order_lines AS l ON l.order_id = o.id
+  WHERE o.status <> 'cancelled'
+  GROUP BY month
+)
+SELECT month, revenue,
+       sum(revenue) OVER (ORDER BY month) AS running_total,
+       round(100.0 * (revenue - lag(revenue) OVER (ORDER BY month)) / lag(revenue) OVER (ORDER BY month), 1) AS change_percent
+FROM monthly
+ORDER BY month;
+```
+
+```text
+   month    | revenue | running_total | change_percent 
+------------+---------+---------------+----------------
+ 2026-10-01 |   20525 |         20525 |
+ 2026-11-01 |    8800 |         29325 |          -57.1
+(2 rows)
+```
+
+Mention that November is incomplete, which an analyst would flag before anyone reads the drop as a trend.
+
+</Solution>
+
+## 7. Consecutive days
+
+*Find customers who placed orders on at least two consecutive days.*
+
+<Solution>
+
+```sql
+WITH days AS (
+  SELECT DISTINCT customer_id, placed_at::date AS day FROM orders
+),
+flagged AS (
+  SELECT customer_id, day, day - lag(day) OVER (PARTITION BY customer_id ORDER BY day) AS gap
+  FROM days
+)
+SELECT c.name, f.day - 1 AS first_day, f.day AS second_day
+FROM flagged AS f
+JOIN customers AS c ON c.id = f.customer_id
+WHERE f.gap = 1
+ORDER BY c.name;
+```
+
+```text
+ name | first_day | second_day 
+------+-----------+------------
+(0 rows)
+```
+
+No customer did. For runs of three or more days, use the gaps-and-islands pattern (<Ref to="db-advanced-queries" />).
+
+</Solution>
+
+## 8. Median
+
+*Find the median order value.*
+
+<Solution>
+
+```sql
+WITH totals AS (
+  SELECT order_id, sum(quantity * unit_price_pence) AS total FROM order_lines GROUP BY order_id
+)
+SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY total) AS median,
+       percentile_disc(0.5) WITHIN GROUP (ORDER BY total) AS median_existing_value,
+       round(avg(total)) AS mean
+FROM totals;
+```
+
+```text
+ median | median_existing_value | mean 
+--------+-----------------------+------
+   1415 |                  1380 | 1604
+(1 row)
+```
+
+`percentile_cont` interpolates between the two middle values; `percentile_disc` returns an actual value. Contrast the median with the mean: a few large cake orders pull the mean up.
+
+</Solution>
+
+## 9. Pivot
+
+*Show each shop as a row with the number of delivered, paid, placed and cancelled orders as columns.*
+
+<Solution>
+
+```sql
+SELECT s.city,
+       count(*) FILTER (WHERE o.status = 'delivered') AS delivered,
+       count(*) FILTER (WHERE o.status = 'paid') AS paid,
+       count(*) FILTER (WHERE o.status = 'placed') AS placed,
+       count(*) FILTER (WHERE o.status = 'cancelled') AS cancelled
+FROM shops AS s
+LEFT JOIN orders AS o ON o.shop_id = s.id
+GROUP BY s.city
+ORDER BY s.city;
+```
+
+```text
+ city  | delivered | paid | placed | cancelled 
+-------+-----------+------+--------+-----------
+ Hull  |         2 |    1 |      0 |         0
+ Leeds |         6 |    1 |      1 |         1
+ York  |         5 |    1 |      1 |         1
+(3 rows)
+```
+
+On databases without `FILTER`, use `sum(CASE WHEN ... THEN 1 ELSE 0 END)`.
+
+</Solution>
+
+## 10. What fraction of customers ordered again within 30 days of their first order?
+
+<Solution>
+
+```sql
+WITH firsts AS (
+  SELECT customer_id, min(placed_at) AS first_at FROM orders GROUP BY customer_id
+),
+returned AS (
+  SELECT f.customer_id,
+         EXISTS (
+           SELECT 1 FROM orders AS o
+           WHERE o.customer_id = f.customer_id
+             AND o.placed_at > f.first_at
+             AND o.placed_at <= f.first_at + interval '30 days'
+         ) AS came_back
+  FROM firsts AS f
+)
+SELECT count(*) AS customers,
+       count(*) FILTER (WHERE came_back) AS came_back_within_30_days,
+       round(100.0 * count(*) FILTER (WHERE came_back) / count(*), 1) AS percent
+FROM returned;
+```
+
+```text
+ customers | came_back_within_30_days | percent 
+-----------+--------------------------+---------
+         8 |                        6 |    75.0
+(1 row)
+```
+
+Ask whether cancelled orders count, and whether a customer whose first order was less than 30 days ago should be excluded from the denominator (they have not had 30 days yet). A strong answer raises both.
+
+</Solution>
+
+## Practising further
+
+Practise on real interview sites (DataLemur, LeetCode's database problems, StrataScratch, HackerRank SQL), timing yourself, and always check edge cases: ties, NULLs, empty results, duplicates and time zones.
+
+<Exercises />
+
+## Summary
+
+- Recognise the patterns: **N-th highest** (`dense_rank`), **anti-joins** (`NOT EXISTS`), **duplicates** (`GROUP BY ... HAVING`, `row_number` to delete), **top N per group** (`rank` in a CTE), **self joins**, **running totals and growth** (`sum`, `lag` over windows), **consecutive runs** (`lag`, gaps and islands), **medians** (`percentile_cont`), **pivots** (`FILTER`) and **retention** (`EXISTS` with time windows).
+- Ask about ties, NULLs, empty groups and time zones before writing.
+- Write readable SQL with CTEs, and explain trade-offs and performance.
+
+## Go deeper
+
+- [DataLemur SQL interview questions](https://datalemur.com/questions), Nick Singh. Real interview questions from technology companies, with a free tier.
+- [HackerRank SQL](https://www.hackerrank.com/domains/sql), HackerRank. Graded SQL problems from basic to advanced, the format many companies use for screening.
+- [Select Star SQL](https://selectstarsql.com/), Zi Chong Kao. A free interactive book of SQL on a real dataset.

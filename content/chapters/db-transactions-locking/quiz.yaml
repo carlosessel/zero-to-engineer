@@ -1,0 +1,36 @@
+- question: What happens in a PostgreSQL transaction after a statement fails?
+  options:
+  - Further statements are refused until ROLLBACK
+  - The failed statement is skipped and the rest continue
+  answer: 0
+  explanation: The whole transaction is aborted.
+- question: Which statement prevents overselling without explicit locks?
+  options:
+  - UPDATE stock SET quantity = quantity - 2 WHERE sku = 'X' AND quantity >= 2
+  - SELECT quantity, then UPDATE with the computed value
+  answer: 0
+  explanation: The check and the change happen atomically.
+- question: What does FOR UPDATE SKIP LOCKED do?
+  options:
+  - Locks the selected rows, skipping rows another transaction has locked
+  - Reads rows without any locks
+  answer: 0
+  explanation: Ideal for job queues.
+- question: What must an application do when it gets SQLSTATE 40001?
+  options:
+  - Retry the whole transaction
+  - Ignore it
+  answer: 0
+  explanation: Serialisation failures are expected at stricter isolation levels.
+- question: How do you prevent most deadlocks?
+  options:
+  - Lock rows in a consistent order and keep transactions short
+  - Raise deadlock_timeout
+  answer: 0
+  explanation: PostgreSQL still detects and breaks any that happen.
+- question: Why set lock_timeout before ALTER TABLE on a busy table?
+  options:
+  - A waiting strong lock blocks every query queued behind it
+  - ALTER TABLE ignores locks without it
+  answer: 0
+  explanation: Fail fast and retry later.

@@ -1,0 +1,29 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: not-run
+  reason: Command-line tools for a real PostgreSQL server (pg_dump, pg_restore, createdb, psql); the options are from the PostgreSQL documentation on backup and restore.
+- block: 2
+  lang: bash
+  check: not-run
+  reason: Server configuration and recovery settings; the parameter names are from the PostgreSQL documentation on continuous archiving and the pgBackRest user guide.
+- block: 3
+  lang: sql
+  check: not-run
+  reason: pg_stat_replication needs a primary with streaming standbys; the columns and functions are from the PostgreSQL monitoring documentation.
+- block: 4
+  lang: sql
+  check: postgres
+  output: " state  | sessions \n--------+----------\n active |        1\n(1 row)\n\n  datname  | xid_age \n-----------+---------\n postgres  |       8\n template0 |       8\n template1 |       8\n(3 rows)\n"
+- block: 5
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 6
+  lang: sql
+  check: postgres
+  output: " state  | sessions \n--------+----------\n active |        1\n(1 row)\n"
+- block: 7
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.

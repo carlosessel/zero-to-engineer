@@ -1,0 +1,36 @@
+- question: What does RPO measure?
+  options:
+  - How much data may be lost in a disaster
+  - How long recovery may take
+  answer: 0
+  explanation: RTO is how long the service may be down.
+- question: What does point-in-time recovery need?
+  options:
+  - A base backup and the archived WAL since it
+  - Nightly pg_dump files
+  answer: 0
+  explanation: Replay the WAL to any moment.
+- question: Why test restores regularly?
+  options:
+  - A backup that has never been restored may not work, and the restore time is your real RTO
+  - Restoring speeds up the database
+  answer: 0
+  explanation: Automate it.
+- question: What can asynchronous replication lose on failover?
+  options:
+  - The last few committed transactions
+  - Nothing
+  answer: 0
+  explanation: Synchronous replication avoids it at a latency cost.
+- question: What happens if transaction ID freezing falls far behind?
+  options:
+  - PostgreSQL eventually refuses writes to protect the data
+  - Queries become slightly slower
+  answer: 0
+  explanation: Keep autovacuum healthy and alert on xid age.
+- question: Which tool upgrades a major version in minutes by reusing the data files?
+  options:
+  - pg_upgrade
+  - pg_dump
+  answer: 0
+  explanation: Logical replication gives near-zero downtime instead.

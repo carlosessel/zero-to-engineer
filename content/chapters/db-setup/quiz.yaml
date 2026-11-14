@@ -1,0 +1,30 @@
+- question: Which psql command describes a table's columns, keys and indexes?
+  options:
+  - \d tablename
+  - \dt
+  answer: 0
+  explanation: \dt lists tables; \d shows one in detail.
+- question: Why does psql show the prompt bakery-# instead of bakery=#?
+  options:
+  - It is waiting for the rest of a statement, usually a missing semicolon
+  - The database is read-only
+  answer: 0
+  explanation: Finish the statement with ;.
+- question: How is money stored in the bakery database?
+  options:
+  - As whole pence in integer columns, so sums are exact
+  - As floating-point pounds
+  answer: 0
+  explanation: Floating point cannot store most decimal fractions exactly.
+- question: Why does each order line store its own unit price?
+  options:
+  - Product prices change, and old orders must keep the price paid
+  - To make the table larger
+  answer: 0
+  explanation: The price at the time of the order is a fact about the order.
+- question: How do you get back to the original data after changing it?
+  options:
+  - Drop the database, create it again and rerun the script
+  - Restart psql
+  answer: 0
+  explanation: Later chapters change data on purpose.

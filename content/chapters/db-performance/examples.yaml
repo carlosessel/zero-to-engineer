@@ -1,0 +1,53 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: sql
+  check: not-run
+  reason: pg_stat_statements must be loaded through shared_preload_libraries on a real server, which the in-process PostgreSQL used for the checks does not do; the column names are from the extension's documentation linked below.
+- block: 2
+  lang: sql
+  check: postgres
+  output: ''
+- block: 3
+  lang: sql
+  check: postgres
+  output: "                                          QUERY PLAN                                           \n-----------------------------------------------------------------------------------------------\n Limit (actual rows=20.00 loops=1)\n   ->  Index Only Scan using events_created_at_id_idx on events (actual rows=20020.00 loops=1)\n         Heap Fetches: 20020\n         Index Searches: 1\n(4 rows)\n"
+- block: 4
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 5
+  lang: sql
+  check: postgres
+  output: "                                                 QUERY PLAN                                                 \n------------------------------------------------------------------------------------------------------------\n Limit (actual rows=20.00 loops=1)\n   ->  Index Only Scan using events_created_at_id_idx on events (actual rows=20.00 loops=1)\n         Index Cond: (ROW(created_at, id) > ROW('2026-01-14 21:20:00+00'::timestamp with time zone, 20000))\n         Heap Fetches: 20\n         Index Searches: 1\n(5 rows)\n"
+- block: 6
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 7
+  lang: sql
+  check: postgres
+  output: " id | value  \n----+--------\n  1 | first\n  2 | second\n  3 | third\n  4 | row 4\n(4 rows)\n"
+- block: 8
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 9
+  lang: sql
+  check: postgres
+  output: " before_update \n---------------\n 48 kB\n(1 row)\n\n after_two_updates \n-------------------\n 128 kB\n(1 row)\n\n after_vacuum_and_update \n-------------------------\n 128 kB\n(1 row)\n"
+- block: 10
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
+- block: 11
+  lang: sql
+  check: not-run
+  reason: Role settings for a real server's application role; the setting names are from the PostgreSQL documentation on client connection defaults.
+- block: 12
+  lang: sql
+  check: postgres
+  output: "  id   |       created_at       \n-------+------------------------\n 12962 | 2026-01-10 00:02:00+00\n 12965 | 2026-01-10 00:05:00+00\n 12968 | 2026-01-10 00:08:00+00\n(3 rows)\n\n  id   |       created_at       \n-------+------------------------\n 12971 | 2026-01-10 00:11:00+00\n 12974 | 2026-01-10 00:14:00+00\n 12977 | 2026-01-10 00:17:00+00\n(3 rows)\n"
+- block: 13
+  lang: text
+  check: illustration
+  note: The result of the query above, which its check compares.
