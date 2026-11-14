@@ -14,7 +14,7 @@
     npm pkg set type=module
     npm install --silent --no-audit --no-fund redis@6.3.1
     cp "$BLOCK" x.ts
-    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+    REDIS_URL=$(printf '%s://127.0.0.1:%s' redis "$PORT") node x.ts
   output_contains:
   - 'fresh bread 60
 
@@ -44,7 +44,7 @@
     npm pkg set type=module
     npm install --silent --no-audit --no-fund redis@6.3.1
     cp "$BLOCK" x.ts
-    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+    REDIS_URL=$(printf '%s://127.0.0.1:%s' redis "$PORT") node x.ts
   output_contains:
   - 'five requests, database calls: 1
 
@@ -68,7 +68,7 @@
     npm pkg set type=module
     npm install --silent --no-audit --no-fund redis@6.3.1
     cp "$BLOCK" x.ts
-    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+    REDIS_URL=$(printf '%s://127.0.0.1:%s' redis "$PORT") node x.ts
   output_contains:
   - 'fixed window: true true true false false
 
@@ -92,7 +92,7 @@
     npm pkg set type=module
     npm install --silent --no-audit --no-fund redis@6.3.1
     cp "$BLOCK" x.ts
-    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+    REDIS_URL=$(printf '%s://127.0.0.1:%s' redis "$PORT") node x.ts
   output_contains:
   - 'instance A got the lock: true | instance B got the lock: false
 
@@ -128,6 +128,6 @@
     npm pkg set type=module
     npm install --silent --no-audit --no-fund redis@6.3.1
     cp "$BLOCK" x.ts
-    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+    REDIS_URL=$(printf '%s://127.0.0.1:%s' redis "$PORT") node x.ts
   output_contains:
   - 20 /products/25 /products/6
