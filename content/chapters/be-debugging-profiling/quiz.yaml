@@ -1,0 +1,36 @@
+- question: An endpoint is slow but CPU is nearly idle. Where should you look first?
+  options:
+  - Traces and query plans, because the service is waiting on something
+  - A CPU flame graph
+  answer: 0
+  explanation: Idle CPU means waiting, not computing.
+- question: What does the width of a bar in a flame graph show?
+  options:
+  - The share of sampled time spent in that function and what it called
+  - How many times the function was called
+  answer: 0
+  explanation: Wide bars at the top spend time themselves.
+- question: How do you find a memory leak with heap dumps?
+  options:
+  - Compare two dumps taken apart and follow what retains the growing objects
+  - Take one dump at start-up
+  answer: 0
+  explanation: The retainer path points at the leak.
+- question: Which tool shows a JVM deadlock in a running process?
+  options:
+  - jcmd PID Thread.print
+  - jcmd PID GC.heap_dump
+  answer: 0
+  explanation: The JVM reports the lock cycle itself.
+- question: Why must heap dumps be handled as secrets?
+  options:
+  - They contain everything in memory, including personal data and tokens
+  - They are very large
+  answer: 0
+  explanation: Restrict access and delete them afterwards.
+- question: What is a conditional breakpoint for?
+  options:
+  - Pausing only when an expression is true, on lines that run often
+  - Pausing only in Debug builds
+  answer: 0
+  explanation: It saves stepping through thousands of iterations.

@@ -1,0 +1,245 @@
+---
+title: "Deploying to the cloud, end to end"
+summary: "One service on one cloud from nothing: registry, managed database, secrets, identity, pipeline, domain, monitoring and cost."
+prerequisites: [be-deploy, m-cloud-iac, m-delivery]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know every step of putting a back-end service on a real cloud, in order: an **image registry**, a **managed database**, **secrets**, a **service identity** with only the permissions it needs, the **service** itself, **migrations**, a **pipeline** that deploys every merge without stored keys, a **domain** with HTTPS, and the **monitoring** and **cost** controls that keep it healthy and cheap. The walk-through uses **Google Cloud Run**, the shortest path from a container image to a running service; a table maps every step to AWS and Azure. <Ref to="be-deploy" /> prepared the container image; <Ref to="m-cloud-iac" /> explained the cloud's building blocks and Terraform.
+
+## Before you start
+
+The commands below create real, billable resources, so they are not run when this site is built. To follow along you need a Google Cloud account with billing enabled, the `gcloud` command-line tool, Docker, and a project of your own. Set a **budget alert** first (Billing, then Budgets and alerts), so a mistake costs pounds, not hundreds. Everything here fits in a small monthly bill; the database is the main cost, and you can stop it when you are not using it.
+
+The service is the orders API from earlier chapters, in any stack, packaged as a container that listens on the port in the `PORT` environment variable, reads its database settings from environment variables, and has a health endpoint (<Ref to="be-deploy" />).
+
+## The map
+
+| Step | Google Cloud | AWS | Azure |
+|---|---|---|---|
+| Run containers without managing servers | Cloud Run | ECS on Fargate, or App Runner | Container Apps |
+| Store images | Artifact Registry | Elastic Container Registry (ECR) | Azure Container Registry |
+| Managed PostgreSQL | Cloud SQL | RDS or Aurora | Azure Database for PostgreSQL |
+| Secrets | Secret Manager | Secrets Manager | Key Vault |
+| Service identity | service account | IAM role (task role) | managed identity |
+| Keyless CI deployment | Workload Identity Federation | IAM OIDC provider and role | federated credentials |
+| Logs, metrics, traces | Cloud Logging, Monitoring, Trace | CloudWatch and X-Ray | Azure Monitor and Application Insights |
+
+The concepts are identical; the names and commands differ. Learn one cloud well and the others become translation.
+
+## Step 1: project and region
+
+```bash
+# -- Not run: needs a Google Cloud account with billing.
+gcloud config set project bakery-prod-123
+gcloud config set run/region europe-west1
+gcloud services enable run.googleapis.com sqladmin.googleapis.com \
+  artifactregistry.googleapis.com secretmanager.googleapis.com
+```
+
+Choose a region near your users (and inside the jurisdiction your data must stay in), and keep every resource in it: traffic between regions is slower and costs money. Real organisations use separate projects (or AWS accounts, or Azure subscriptions) for production and for testing, so a mistake in one cannot touch the other.
+
+## Step 2: a registry and the image
+
+```bash
+# -- Not run: needs a Google Cloud account with billing.
+gcloud artifacts repositories create bakery --repository-format=docker --location=europe-west1
+gcloud auth configure-docker europe-west1-docker.pkg.dev
+docker build -t europe-west1-docker.pkg.dev/bakery-prod-123/bakery/orders:v1 .
+docker push europe-west1-docker.pkg.dev/bakery-prod-123/bakery/orders:v1
+```
+
+Tag images with something that identifies the exact code, such as the Git commit hash; never deploy `latest` to production, because you cannot tell what is running or roll back to it. On an Apple Silicon Mac, build with `--platform linux/amd64`, because cloud machines usually run on x86.
+
+## Step 3: the database
+
+```bash
+# -- Not run: needs a Google Cloud account with billing.
+gcloud sql instances create bakery-db --database-version=POSTGRES_18 \
+  --edition=enterprise --tier=db-f1-micro --region=europe-west1
+gcloud sql databases create bakery --instance=bakery-db
+DB_PASSWORD="$(openssl rand -base64 24)"
+gcloud sql users create orders_app --instance=bakery-db --password="$DB_PASSWORD"
+```
+
+A **managed database** gives you automated backups, point-in-time recovery, patching and (on larger tiers) failover replicas, which you would otherwise run yourself (<Ref to="db-operations" />). `db-f1-micro` is a tiny shared machine for learning; production needs a dedicated tier, **high availability** (a standby in another zone), and backups whose restore you have tested. The application connects as its own user, not the administrator, with only the privileges it needs (<Ref to="db-security" />).
+
+## Step 4: secrets and the service identity
+
+```bash
+# -- Not run: needs a Google Cloud account with billing.
+printf '%s' "$DB_PASSWORD" | gcloud secrets create db-password --data-file=-
+unset DB_PASSWORD
+
+gcloud iam service-accounts create orders-run
+SA=orders-run@bakery-prod-123.iam.gserviceaccount.com
+gcloud projects add-iam-policy-binding bakery-prod-123 --member="serviceAccount:$SA" --role=roles/cloudsql.client
+gcloud secrets add-iam-policy-binding db-password --member="serviceAccount:$SA" --role=roles/secretmanager.secretAccessor
+```
+
+The password goes straight into **Secret Manager** and never into a file, an image or the repository. The service runs as its **own identity**, a service account allowed to do exactly two things: connect to Cloud SQL and read that one secret. If the service is compromised, the attacker gets those two permissions, not the whole project. This is **least privilege** (<Ref to="m-appsec" />), and it is the same idea as an AWS task role or an Azure managed identity.
+
+## Step 5: deploy the service
+
+```bash
+# -- Not run: needs a Google Cloud account with billing.
+gcloud run deploy orders \
+  --image=europe-west1-docker.pkg.dev/bakery-prod-123/bakery/orders:v1 \
+  --service-account="$SA" \
+  --add-cloudsql-instances=bakery-prod-123:europe-west1:bakery-db \
+  --set-env-vars=DB_HOST=/cloudsql/bakery-prod-123:europe-west1:bakery-db,DB_NAME=bakery,DB_USER=orders_app \
+  --set-secrets=DB_PASSWORD=db-password:latest \
+  --min-instances=0 --max-instances=10 --cpu=1 --memory=512Mi \
+  --allow-unauthenticated
+```
+
+Cloud Run starts containers when requests arrive and stops them when idle, so with `--min-instances=0` you pay almost nothing when nobody calls the API (at the cost of a **cold start** delay on the first request; set a minimum of 1 for latency-sensitive services). `--max-instances` caps the bill and protects the database from more connections than it can take. `--add-cloudsql-instances` connects the service to the database through a Unix socket under `/cloudsql/`, encrypted and authorised by the service identity, without opening the database to the internet. `--allow-unauthenticated` makes the API public; your application still checks its own tokens (<Ref to="be-auth-stacks" />).
+
+The command prints the service's URL, with HTTPS already set up. Check the health endpoint, then follow the logs while you call the API:
+
+```bash
+# -- Not run: needs a Google Cloud account with billing.
+curl -s https://orders-abc123-ew.a.run.app/health
+gcloud beta run services logs tail orders
+```
+
+## Step 6: migrations
+
+Run schema migrations as a separate step before the new version takes traffic, not when each instance starts: ten instances starting at once must not race to change the schema (<Ref to="db-migrations" />). A **Cloud Run job** runs the same image with a different command, to completion:
+
+```bash
+# -- Not run: needs a Google Cloud account with billing.
+gcloud run jobs create migrate \
+  --image=europe-west1-docker.pkg.dev/bakery-prod-123/bakery/orders:v1 \
+  --service-account="$SA" --set-cloudsql-instances=bakery-prod-123:europe-west1:bakery-db \
+  --set-env-vars=DB_HOST=/cloudsql/bakery-prod-123:europe-west1:bakery-db,DB_NAME=bakery,DB_USER=orders_app \
+  --set-secrets=DB_PASSWORD=db-password:latest \
+  --command=./migrate
+gcloud run jobs execute migrate --wait
+```
+
+`./migrate` stands for your stack's migration command (`dotnet ef database update` through a bundle, Flyway or Liquibase, or Prisma or Drizzle's migrate). Migrations must be **backward compatible** with the version still running, using expand and contract, because old and new versions overlap during every deployment.
+
+## Step 7: a pipeline without stored keys
+
+Every merge to `main` should build, test, migrate and deploy automatically (<Ref to="m-delivery" />). The pipeline must not hold a long-lived cloud key: one leaked from a CI log or a fork is a full compromise. **Workload Identity Federation** lets GitHub Actions prove which repository and branch it is running for, with a short-lived token, and exchange that for temporary cloud credentials. You set it up once (a workload identity pool and a GitHub provider restricted to your repository, and a deployer service account; the Google guide in Go deeper has the commands), and the workflow becomes:
+
+```yaml
+# .github/workflows/deploy.yml
+name: deploy
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  IMAGE: europe-west1-docker.pkg.dev/bakery-prod-123/bakery/orders:${{ github.sha }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v7
+      - id: auth
+        uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: projects/123456789/locations/global/workloadIdentityPools/github/providers/bakery
+          service_account: deployer@bakery-prod-123.iam.gserviceaccount.com
+          token_format: access_token
+      - uses: docker/login-action@v4
+        with:
+          registry: europe-west1-docker.pkg.dev
+          username: oauth2accesstoken
+          password: ${{ steps.auth.outputs.access_token }}
+      - run: docker build -t "$IMAGE" . && docker push "$IMAGE"
+      - uses: google-github-actions/setup-gcloud@v3
+      - run: gcloud run jobs update migrate --image="$IMAGE" --region=europe-west1 && gcloud run jobs execute migrate --region=europe-west1 --wait
+      - uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          service: orders
+          region: europe-west1
+          image: ${{ env.IMAGE }}
+```
+
+- `id-token: write` lets the job request GitHub's identity token; nothing secret is stored in the repository.
+- The image is tagged with the commit hash, so every running version maps to exact code, and rolling back means deploying an earlier tag (or sending traffic back to an earlier **revision**: `gcloud run services update-traffic orders --to-revisions=REVISION=100`).
+- The `production` environment can require a reviewer's approval and restricts which branches may deploy.
+- Tests run in the CI workflow before this one (<Ref to="be-integration-tests" />); in practice you would make deploy depend on them.
+
+On AWS the same pattern uses `aws-actions/configure-aws-credentials` with an IAM role trusting GitHub's OIDC provider; on Azure, `azure/login` with federated credentials.
+
+## Step 8: a domain and HTTPS
+
+The `run.app` URL works, but customers should see `api.bakery.example`. Point a domain at the service with a **global external Application Load Balancer** (which also adds a CDN, Cloud Armor's web application firewall, and serving from several regions), or with Cloud Run **domain mappings** in the regions that support them. Either way the cloud issues and renews the TLS certificate; you add the DNS records it shows you. Keep DNS in a managed service (Cloud DNS, Route 53, Azure DNS, or your registrar's) and lower the record's TTL before you change it.
+
+## Step 9: monitoring, alerts and cost
+
+- **Logs**: Cloud Run sends everything written to standard output to Cloud Logging. Write structured JSON logs with a trace id (<Ref to="be-observability-stacks" />), so you can search and correlate them.
+- **Metrics and alerts**: alert on symptoms users feel: the rate of 5xx responses, p95 latency, and database CPU and connections. Send alerts somewhere a person will see them, and write down what to do for each (<Ref to="m-reliability" />).
+- **Uptime check**: an external probe of `/health` every minute from several regions.
+- **Cost**: the budget alert from the start; labels on resources so the bill shows what costs what; `--max-instances`; stop or downsize test databases; delete old images with a registry **cleanup policy**.
+
+## Make it repeatable
+
+Typing commands is the right way to learn and the wrong way to run production: nobody can review them, and a second environment will differ. Once it works, describe the same resources in **Terraform** (or Pulumi, or the cloud's own tool) in the repository, apply changes through a reviewed pull request, and let the pipeline deploy only the application (<Ref to="m-cloud-iac" />). Removing everything when you are done is then one command; by hand, delete the Cloud Run service and job, the Cloud SQL instance, the secret, the registry and the service accounts, or delete the whole project.
+
+## Common mistakes
+
+- **No budget alert**, and a surprise bill.
+- **Secrets in environment variables typed into the console, the image or the repository**, instead of a secret manager.
+- **The service running as the default identity** with broad project permissions.
+- **A long-lived cloud key stored in CI** instead of workload identity federation.
+- **Deploying `latest`**, so nobody knows what is running or how to roll back.
+- **Migrations at start-up** racing between instances, or incompatible with the version still running.
+- **A public database IP**, open to the internet "just for now".
+- **No maximum instance count**, so a traffic spike exhausts the database's connections.
+
+## Practice
+
+**1. (warm-up)** Translate the walk-through to AWS: name the service you would use for each of the nine steps.
+
+<Solution>
+
+1. An AWS account (ideally one per environment, in an AWS Organization) and a region. 2. ECR for images. 3. RDS for PostgreSQL (or Aurora). 4. Secrets Manager for the password, and an IAM task role for the service's identity. 5. ECS on Fargate behind an Application Load Balancer (or App Runner). 6. A one-off ECS task running the migration command. 7. GitHub Actions with `aws-actions/configure-aws-credentials` and an IAM role trusting GitHub's OIDC provider. 8. Route 53 for DNS and an ACM certificate on the load balancer (or CloudFront). 9. CloudWatch logs, metrics and alarms, X-Ray or OpenTelemetry for traces, and AWS Budgets.
+
+</Solution>
+
+**2. (standard)** After a deployment, the new revision fails its health check because it cannot reach the database, and the old revision keeps serving. List what you would check, in order.
+
+<Solution>
+
+Read the new revision's logs for the exact error first. Then compare what differs from the working revision: the environment variables (`DB_HOST`, the database name and user), the Cloud SQL connection setting on the new revision, the secret reference and version, and the service account (did the deploy change it, and does it still have `roles/cloudsql.client` and access to the secret?). Check that the database user still exists and that a migration did not change its privileges. Because traffic stayed on the old revision, there is no outage: fix forward, or delete the bad revision.
+
+</Solution>
+
+**3. (stretch)** The bill doubled this month. Describe how you would find out why and three controls that would have prevented it.
+
+<Solution>
+
+Open the billing report grouped by service and by label to see which resource grew, and when; compare with deployments and traffic in monitoring. Typical causes: a test database left running at a large tier, `min-instances` raised and forgotten, a traffic spike or a retry loop scaling instances to the maximum, verbose logging ingesting gigabytes, or images piling up in the registry. Controls: budget alerts at several thresholds, labels on every resource with a reviewed Terraform definition so nothing is created by hand, a sensible `max-instances`, log exclusion filters or sampling, a registry cleanup policy, and scheduled shutdown of non-production databases.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The path is the same on every cloud: **registry**, **managed database**, **secrets**, **service identity**, **service**, **migrations**, **pipeline**, **domain**, **monitoring and cost**.
+- Tag images with the commit; never deploy `latest`.
+- Keep secrets in a secret manager, and give the service its own identity with **least privilege**.
+- Run migrations as a separate, backward-compatible step.
+- Deploy from CI with **workload identity federation** (OIDC), not stored keys.
+- Set a budget alert first, cap instances, alert on user-facing symptoms, and move to **infrastructure as code** once it works.
+
+## Go deeper
+
+- [Cloud Run documentation](https://cloud.google.com/run/docs), Google. Services, jobs, revisions, connections and pricing.
+- [Connect from Cloud Run to Cloud SQL for PostgreSQL](https://cloud.google.com/sql/docs/postgres/connect-run), Google. The connection options and their security.
+- [google-github-actions/auth](https://github.com/google-github-actions/auth), Google. Setting up Workload Identity Federation for GitHub Actions, step by step.
+- [Configuring OpenID Connect in Amazon Web Services](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws), GitHub. The same keyless pattern on AWS.
+- [Azure Container Apps documentation](https://learn.microsoft.com/en-us/azure/container-apps/), Microsoft. The Azure equivalent of Cloud Run.

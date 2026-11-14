@@ -1,0 +1,313 @@
+---
+title: "gRPC and GraphQL"
+summary: "When to use REST, gRPC or GraphQL, with a small service of each kind, schemas, streaming and the trade-offs."
+prerequisites: [be-api-node, m-api-design]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will know the two main alternatives to REST-style JSON APIs and when each is the right choice: **gRPC**, for fast, strongly typed calls between services, with streaming; and **GraphQL**, for clients that need to ask for exactly the data they want in one request. You will build a small service of each in Node, see what the .NET and Spring versions look like, and know the costs each brings. <Ref to="m-api-design" /> covers API design in general.
+
+## Three styles
+
+| Aspect | REST with JSON | gRPC | GraphQL |
+|---|---|---|---|
+| Shape | resources and HTTP methods | remote procedure calls defined in a `.proto` schema | one endpoint; clients send queries against a typed schema |
+| Encoding | JSON text | Protocol Buffers (compact binary) | JSON |
+| Transport | HTTP/1.1 or later | HTTP/2 | usually HTTP POST |
+| Contract | OpenAPI (optional) | `.proto` files (required), code generated from them | the schema (required) |
+| Streaming | limited (server-sent events, WebSockets) | built in, both directions | subscriptions (usually WebSockets) |
+| Caching | HTTP caching works naturally | none built in | hard (every query is a POST) |
+| Best for | public APIs, browsers, simple services | service-to-service calls inside a system | many client screens needing different shapes of data |
+
+REST remains the default for public APIs and most services: every tool, browser and developer understands it. Reach for the others when their strengths matter.
+
+## gRPC
+
+**gRPC** defines services and messages in **Protocol Buffers** (protobuf), a language-neutral schema. Tools generate client and server code for every major language from the same file, so services written in C#, Java and Node call each other with checked types. The bakery's order service:
+
+```protobuf
+syntax = "proto3";
+
+package bakery.v1;
+
+service Orders {
+  rpc GetOrder (GetOrderRequest) returns (Order);
+  rpc WatchOrder (GetOrderRequest) returns (stream OrderStatus);
+}
+
+message GetOrderRequest {
+  string id = 1;
+}
+
+message Line {
+  string sku = 1;
+  int32 quantity = 2;
+}
+
+message Order {
+  string id = 1;
+  string customer = 2;
+  repeated Line lines = 3;
+  int64 total_pence = 4;
+}
+
+message OrderStatus {
+  string id = 1;
+  string status = 2;
+}
+```
+
+- Each field has a **number**, which is what goes on the wire. Never change or reuse a field's number; add new fields with new numbers, and old clients ignore fields they do not know. This is how protobuf APIs evolve without breaking.
+- `repeated` is a list; `stream` makes a call return (or accept) a stream of messages.
+- Version packages (`bakery.v1`) so a future incompatible version can live alongside.
+
+A Node server and client, using the `.proto` file directly at run time with `@grpc/proto-loader` (other languages usually generate code instead):
+
+```ts
+import * as grpc from "@grpc/grpc-js";
+import * as protoLoader from "@grpc/proto-loader";
+
+const definition = protoLoader.loadSync("bakery.proto", { keepCase: false, longs: Number, defaults: true });
+const bakery = (grpc.loadPackageDefinition(definition) as any).bakery.v1;
+
+const orders = new Map([["o-19", { id: "o-19", customer: "Ama", lines: [{ sku: "RYE-400", quantity: 1 }, { sku: "CIN-120", quantity: 2 }], totalPence: 1070 }]]);
+
+const server = new grpc.Server();
+server.addService(bakery.Orders.service, {
+  GetOrder(call: any, callback: any) {
+    const order = orders.get(call.request.id);
+    if (!order) return callback({ code: grpc.status.NOT_FOUND, message: `No order ${call.request.id}` });
+    callback(null, order);
+  },
+  WatchOrder(call: any) {
+    for (const status of ["placed", "paid", "baking", "out for delivery"]) call.write({ id: call.request.id, status });
+    call.end();
+  },
+});
+
+server.bindAsync("127.0.0.1:0", grpc.ServerCredentials.createInsecure(), async (error, port) => {
+  if (error) throw error;
+  const client = new bakery.Orders(`127.0.0.1:${port}`, grpc.credentials.createInsecure());
+
+  client.GetOrder({ id: "o-19" }, { deadline: Date.now() + 2000 }, (err: any, order: any) => {
+    console.log("unary:", JSON.stringify(order));
+    client.GetOrder({ id: "o-99" }, (err2: any) => {
+      console.log("error:", grpc.status[err2.code], "-", err2.details);
+      const stream = client.WatchOrder({ id: "o-19" });
+      const seen: string[] = [];
+      stream.on("data", (s: any) => seen.push(s.status));
+      stream.on("end", () => {
+        console.log("stream:", seen.join(" -> "));
+        client.close();
+        server.forceShutdown();
+      });
+    });
+  });
+});
+```
+
+It prints:
+
+```text
+unary: {"lines":[{"sku":"RYE-400","quantity":1},{"sku":"CIN-120","quantity":2}],"id":"o-19","customer":"Ama","totalPence":1070}
+error: NOT_FOUND - No order o-99
+stream: placed -> paid -> baking -> out for delivery
+```
+
+- The client calls `GetOrder` like a local function; gRPC serialises the request, sends it over HTTP/2 and decodes the reply.
+- Errors use gRPC **status codes** (`NOT_FOUND`, `INVALID_ARGUMENT`, `UNAVAILABLE`, `DEADLINE_EXCEEDED` and others), the counterpart of HTTP status codes.
+- **Deadlines** (here two seconds) travel with the call, so every service in a chain knows how long it has left. Always set one (<Ref to="m-resilience" />).
+- **Server streaming** sends many messages in answer to one request: order status updates, here.
+
+In **.NET**, `Grpc.AspNetCore` generates C# classes from the `.proto` file at build time, and a service is a class overriding the generated base:
+
+```csharp
+public class OrdersService(IOrderStore store) : Orders.OrdersBase
+{
+    public override async Task<Order> GetOrder(GetOrderRequest request, ServerCallContext context)
+    {
+        var order = await store.FindAsync(request.Id, context.CancellationToken);
+        return order ?? throw new RpcException(new Status(StatusCode.NotFound, $"No order {request.Id}"));
+    }
+}
+
+// In Program.cs: builder.Services.AddGrpc(); app.MapGrpcService<OrdersService>();
+```
+
+In **Java**, the `protoc` plugin generates classes from the `.proto` file (usually through a Gradle or Maven plugin), and **Spring gRPC** registers services as Spring beans that extend the generated `OrdersGrpc.OrdersImplBase`.
+
+gRPC's costs: browsers cannot call it directly (gRPC-Web and a proxy, or the Connect protocol, bridge the gap), the binary messages are not human-readable (use `grpcurl` to explore services), and every client needs the generated code. It shines between internal services, especially with high call volumes and streaming.
+
+## GraphQL
+
+A **GraphQL** API publishes a typed **schema**; clients send a **query** naming exactly the fields they need, including related objects, and get back JSON of exactly that shape. A mobile order list and a desktop order detail page can each ask for what they show, in one request, without the server adding an endpoint for each.
+
+A GraphQL server in Node with GraphQL Yoga:
+
+```ts
+import { createServer } from "node:http";
+import DataLoader from "dataloader";
+import { createSchema, createYoga } from "graphql-yoga";
+
+const customers = [{ id: "1", name: "Ama" }, { id: "2", name: "Kofi" }];
+const orders = [
+  { id: "o-1", customerId: "1", totalPence: 1450 },
+  { id: "o-2", customerId: "2", totalPence: 900 },
+  { id: "o-3", customerId: "1", totalPence: 720 },
+];
+let customerQueries = 0;
+async function findCustomers(ids: readonly string[]) {
+  customerQueries++; // one "database query" per call, whatever the number of ids
+  return ids.map((id) => customers.find((c) => c.id === id) ?? null);
+}
+
+const schema = createSchema<{ customerLoader: DataLoader<string, { id: string; name: string } | null> }>({
+  typeDefs: /* GraphQL */ `
+    type Customer { id: ID!, name: String!, orders: [Order!]! }
+    type Order { id: ID!, totalPence: Int!, customer: Customer }
+    type Query { orders: [Order!]!, customer(id: ID!): Customer }
+    type Mutation { placeOrder(customerId: ID!, totalPence: Int!): Order! }
+  `,
+  resolvers: {
+    Query: {
+      orders: () => orders,
+      customer: (_parent, args: { id: string }) => customers.find((c) => c.id === args.id) ?? null,
+    },
+    Customer: {
+      orders: (customer: { id: string }) => orders.filter((o) => o.customerId === customer.id),
+    },
+    Order: {
+      customer: (order: { customerId: string }, _args, context) => context.customerLoader.load(order.customerId),
+    },
+    Mutation: {
+      placeOrder: (_parent, args: { customerId: string; totalPence: number }) => {
+        if (args.totalPence <= 0) throw new Error("totalPence must be positive");
+        const order = { id: `o-${orders.length + 1}`, customerId: args.customerId, totalPence: args.totalPence };
+        orders.push(order);
+        return order;
+      },
+    },
+  },
+});
+
+const yoga = createYoga({ schema, context: () => ({ customerLoader: new DataLoader(findCustomers) }), logging: false });
+const server = createServer(yoga);
+
+server.listen(0, async () => {
+  const address = server.address();
+  const url = `http://127.0.0.1:${typeof address === "object" && address ? address.port : 0}/graphql`;
+  const ask = async (query: string, variables?: object) => {
+    const response = await fetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ query, variables }) });
+    return JSON.stringify(await response.json());
+  };
+
+  console.log(await ask(`{ orders { id totalPence customer { name } } }`));
+  console.log("customer queries for 3 orders:", customerQueries);
+  console.log(await ask(`{ customer(id: "1") { name orders { id } } }`));
+  console.log(await ask(`mutation Place($c: ID!, $t: Int!) { placeOrder(customerId: $c, totalPence: $t) { id customer { name } } }`, { c: "2", t: 380 }));
+  console.log(await ask(`{ orders { id price } }`));
+  server.close();
+});
+```
+
+It prints:
+
+```text
+{"data":{"orders":[{"id":"o-1","totalPence":1450,"customer":{"name":"Ama"}},{"id":"o-2","totalPence":900,"customer":{"name":"Kofi"}},{"id":"o-3","totalPence":720,"customer":{"name":"Ama"}}]}}
+customer queries for 3 orders: 1
+{"data":{"customer":{"name":"Ama","orders":[{"id":"o-1"},{"id":"o-3"}]}}}
+{"data":{"placeOrder":{"id":"o-4","customer":{"name":"Kofi"}}}}
+{"errors":[{"message":"Cannot query field \"price\" on type \"Order\".","locations":[{"line":1,"column":15}],"extensions":{"code":"GRAPHQL_VALIDATION_FAILED"}}]}
+```
+
+- The **schema** declares types and their fields; `Query` lists the entry points for reading, `Mutation` for changing data.
+- **Resolvers** are functions that produce each field's value. A query is resolved field by field, so `orders { customer { name } }` calls the `customer` resolver once per order.
+- That is a built-in **N+1 problem**: three orders, three customer look-ups. **DataLoader** collects the `load` calls made during one request and runs **one** batched query for them, as the count shows. Every GraphQL server needs it (or an equivalent) for every relationship.
+- Asking for a field that does not exist is rejected before any resolver runs: the schema is the contract, and tools generate typed clients from it.
+- Errors come back in an `errors` array, often with HTTP status 200, so clients must check it.
+
+In **.NET**, **Hot Chocolate** builds the schema from C# classes; in **Java**, **Spring for GraphQL** maps schema fields to annotated controller methods:
+
+```java
+@Controller
+class OrderGraphQlController {
+    private final OrderService orders;
+
+    OrderGraphQlController(OrderService orders) {
+        this.orders = orders;
+    }
+
+    @QueryMapping
+    List<Order> orders() {
+        return orders.findAll();
+    }
+
+    @BatchMapping
+    Map<Order, Customer> customer(List<Order> orderList) {
+        return orders.customersFor(orderList);
+    }
+}
+```
+
+`@BatchMapping` is Spring's built-in DataLoader: it resolves the `customer` field for all orders in one call.
+
+GraphQL's costs: clients can write expensive queries (deeply nested, huge lists), so servers must limit **query depth and complexity** and paginate lists; HTTP caching does not work for POSTs, so caching moves to the client or to persisted queries; and authorisation must be checked in resolvers for every field and object, not just at the endpoint (<Ref to="be-auth-stacks" />).
+
+## Choosing
+
+- **Public API for third parties**: REST with OpenAPI. Everyone can use it.
+- **Calls between your own services**, especially high volume or streaming: gRPC.
+- **A product with many client screens**, mobile and web, evolving quickly: GraphQL, often as a layer in front of internal services (a **backend for frontend**).
+- **Simple service, small team**: REST. Do not add a technology to look modern.
+
+## Common mistakes
+
+- **Reusing or renumbering protobuf fields**, breaking every client already deployed.
+- **gRPC calls without deadlines.**
+- **GraphQL without DataLoader**, so every list query becomes N+1 queries.
+- **No depth, complexity or pagination limits** on a GraphQL API.
+- **Authorisation only at the GraphQL endpoint**, not per field and object.
+- **Treating GraphQL `errors` as success** because the HTTP status was 200.
+
+## Practice
+
+**1. (warm-up)** Which style would you choose for: (a) the API partners use to submit wholesale orders; (b) the stock service that the order service calls thousands of times a second; (c) the bakery's mobile app, whose screens keep changing?
+
+<Solution>
+
+(a) REST with JSON and an OpenAPI document: partners can use any tool. (b) gRPC: typed, compact and fast between internal services, with deadlines. (c) GraphQL, letting each screen request exactly what it shows, or REST endpoints shaped for the app if the team prefers simplicity.
+
+</Solution>
+
+**2. (standard)** Add a field `notes` to the `Order` message without breaking existing clients. What do old clients see?
+
+<Solution>
+
+Add `string notes = 5;` with a new, never-used number. Old clients, built from the old `.proto` file, skip the unknown field 5 when decoding, so they keep working and simply do not see notes. New clients reading orders from old servers get the default empty string. Never change the type or number of an existing field, and when removing one, mark its number `reserved` so it is never reused.
+
+</Solution>
+
+**3. (standard)** A GraphQL query `{ orders { customer { orders { customer { name } } } } }` is very slow. What is happening, and what limits would you add?
+
+<Solution>
+
+The query nests relationships repeatedly, so the work multiplies at each level (every order's customer's orders' customers), and without DataLoader each level adds N+1 queries. Add DataLoader for every relationship, a maximum query depth (say, 5), a complexity score per field with a maximum per query, required pagination arguments on lists, and timeouts; persisted queries can restrict production clients to known queries.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **REST** is the default; **gRPC** suits internal service-to-service calls; **GraphQL** suits clients needing flexible shapes of data.
+- gRPC: services and messages in **Protocol Buffers**, generated code, HTTP/2, **status codes**, **deadlines** and **streaming**; evolve messages by adding fields with new numbers.
+- GraphQL: a typed **schema**, **queries** and **mutations**, **resolvers** per field, **DataLoader** against N+1, and limits on depth, complexity and list size.
+- .NET: Grpc.AspNetCore and Hot Chocolate. Java: protoc-generated classes with Spring gRPC, and Spring for GraphQL with `@QueryMapping` and `@BatchMapping`. Node: `@grpc/grpc-js` and GraphQL Yoga.
+
+## Go deeper
+
+- [gRPC: introduction](https://grpc.io/docs/what-is-grpc/introduction/), the gRPC project. Concepts, with quick starts for every language.
+- [Protocol Buffers: language guide (proto 3)](https://protobuf.dev/programming-guides/proto3/), Google. Messages, fields, numbering and evolution rules.
+- [GraphQL: introduction](https://graphql.org/learn/), the GraphQL Foundation. Schemas, queries, mutations and best practices.
+- [GraphQL Yoga](https://the-guild.dev/graphql/yoga-server/docs), The Guild. The Node server used in this chapter.

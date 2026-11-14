@@ -1,0 +1,90 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: protobuf
+  check: illustration
+  note: The schema; the next block's check loads it with proto-loader and serves it.
+- block: 2
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund @grpc/grpc-js@1.14.7 @grpc/proto-loader@0.8.1
+    cat > bakery.proto <<'PROTO_EOF'
+    syntax = "proto3";
+
+    package bakery.v1;
+
+    service Orders {
+      rpc GetOrder (GetOrderRequest) returns (Order);
+      rpc WatchOrder (GetOrderRequest) returns (stream OrderStatus);
+    }
+
+    message GetOrderRequest {
+      string id = 1;
+    }
+
+    message Line {
+      string sku = 1;
+      int32 quantity = 2;
+    }
+
+    message Order {
+      string id = 1;
+      string customer = 2;
+      repeated Line lines = 3;
+      int64 total_pence = 4;
+    }
+
+    message OrderStatus {
+      string id = 1;
+      string status = 2;
+    }
+    PROTO_EOF
+    cp "$BLOCK" grpc.ts
+    node grpc.ts
+  output_contains:
+  - 'unary: {"lines":[{"sku":"RYE-400","quantity":1},{"sku":"CIN-120","quantity":2}],"id":"o-19","customer":"Ama","totalPence":1070}
+
+    error: NOT_FOUND - No order o-99
+
+    stream: placed -> paid -> baking -> out for delivery'
+- block: 3
+  lang: text
+  check: illustration
+  note: The output of the program above, which its check compares.
+- block: 4
+  lang: csharp
+  check: not-run
+  reason: A service class that needs a Grpc.AspNetCore project, which generates the Orders base class from the .proto file at build time, and an IOrderStore; the API is from Microsoft's gRPC documentation.
+- block: 5
+  lang: ts
+  check: shell
+  needs: network
+  script: |
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund graphql@17.1.0 graphql-yoga@6.1.0 dataloader@2.2.3
+    cp "$BLOCK" graphql.ts
+    node graphql.ts
+  output_contains:
+  - '{"data":{"orders":[{"id":"o-1","totalPence":1450,"customer":{"name":"Ama"}},{"id":"o-2","totalPence":900,"customer":{"name":"Kofi"}},{"id":"o-3","totalPence":720,"customer":{"name":"Ama"}}]}}
+
+    customer queries for 3 orders: 1
+
+    {"data":{"customer":{"name":"Ama","orders":[{"id":"o-1"},{"id":"o-3"}]}}}
+
+    {"data":{"placeOrder":{"id":"o-4","customer":{"name":"Kofi"}}}}
+
+    {"errors":[{"message":"Cannot query field \"price\" on type \"Order\".","locations":[{"line":1,"column":15}],"extensions":{"code":"GRAPHQL_VALIDATION_FAILED"}}]}'
+- block: 6
+  lang: text
+  check: illustration
+  note: The output of the program above, which its check compares.
+- block: 7
+  lang: java
+  check: not-run
+  reason: A Spring for GraphQL controller that needs a Spring Boot project with a schema file and an OrderService; @QueryMapping and @BatchMapping are from the Spring for GraphQL documentation.

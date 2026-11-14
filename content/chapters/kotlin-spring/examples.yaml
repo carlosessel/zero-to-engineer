@@ -1,0 +1,218 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: kotlin
+  check: illustration
+  note: A build file; the check on the program or curl calls that follow builds the project from it.
+- block: 2
+  lang: kotlin
+  check: shell
+  needs: network
+  script: |
+    mkdir run && cd run
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    test -n "$GRADLE" || { echo "needs Gradle"; exit 1; }
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        kotlin("jvm") version "2.4.21"
+        application
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+    }
+
+    kotlin {
+        jvmToolchain(21)
+    }
+
+    application {
+        mainClass = "MainKt"
+    }
+    SRC_EOF
+    mkdir -p $(dirname settings.gradle.kts)
+    cat > settings.gradle.kts <<'SRC_EOF'
+    rootProject.name = "kotlin-basics"
+    SRC_EOF
+    mkdir -p src/main/kotlin
+    cp "$BLOCK" src/main/kotlin/Main.kt
+    "$GRADLE" --no-daemon -q run
+  output_contains:
+  - 'Product(sku=RYE-400, name=Rye loaf, pricePence=450, vegan=true)
+
+    true
+
+    Rye loaf now costs £4.70
+
+    [Rye loaf, Croissant]
+
+    {true=1, false=2}
+
+    Chocolate cake
+
+    0
+
+    6
+
+    [card ending 4242: 1250p, voucher BREAD10]
+
+    prices and stock
+
+    together, not one after another'
+- block: 3
+  lang: text
+  check: illustration
+  note: The output of the program or calls above, which their check compares.
+- block: 4
+  lang: kotlin
+  check: illustration
+  note: A build file; the check on the program or curl calls that follow builds the project from it.
+- block: 5
+  lang: kotlin
+  check: illustration
+  note: A project file; the next block's check builds the project from it and calls the running API.
+- block: 6
+  lang: bash
+  check: shell
+  needs: network
+  script: |
+    mkdir run && cd run
+    GRADLE=$(command -v gradle || ls -d "$HOME"/.gradle/wrapper/dists/gradle-*-bin/*/gradle-*/bin/gradle 2>/dev/null | tail -1)
+    test -n "$GRADLE" || { echo "needs Gradle"; exit 1; }
+    mkdir -p $(dirname build.gradle.kts)
+    cat > build.gradle.kts <<'SRC_EOF'
+    plugins {
+        kotlin("jvm") version "2.4.21"
+        kotlin("plugin.spring") version "2.4.21"
+        id("org.springframework.boot") version "4.1.2"
+        id("io.spring.dependency-management") version "1.1.7"
+    }
+
+    repositories {
+        mavenCentral()
+    }
+
+    dependencies {
+        implementation("org.springframework.boot:spring-boot-starter-webmvc")
+        implementation("org.springframework.boot:spring-boot-starter-validation")
+        implementation("tools.jackson.module:jackson-module-kotlin")
+        implementation("org.jetbrains.kotlin:kotlin-reflect")
+    }
+
+    kotlin {
+        jvmToolchain(21)
+        compilerOptions {
+            freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+        }
+    }
+    SRC_EOF
+    mkdir -p $(dirname settings.gradle.kts)
+    cat > settings.gradle.kts <<'SRC_EOF'
+    rootProject.name = "bakery-kotlin"
+    SRC_EOF
+    mkdir -p $(dirname src/main/kotlin/com/bakery/BakeryApplication.kt)
+    cat > src/main/kotlin/com/bakery/BakeryApplication.kt <<'SRC_EOF'
+    package com.bakery
+
+    import jakarta.validation.Valid
+    import jakarta.validation.constraints.Max
+    import jakarta.validation.constraints.Min
+    import jakarta.validation.constraints.NotBlank
+    import java.net.URI
+    import java.util.concurrent.ConcurrentHashMap
+    import java.util.concurrent.atomic.AtomicInteger
+    import org.springframework.boot.autoconfigure.SpringBootApplication
+    import org.springframework.boot.runApplication
+    import org.springframework.http.ResponseEntity
+    import org.springframework.stereotype.Service
+    import org.springframework.web.bind.annotation.GetMapping
+    import org.springframework.web.bind.annotation.PathVariable
+    import org.springframework.web.bind.annotation.PostMapping
+    import org.springframework.web.bind.annotation.RequestBody
+    import org.springframework.web.bind.annotation.RequestMapping
+    import org.springframework.web.bind.annotation.RestController
+
+    @SpringBootApplication
+    class BakeryApplication
+
+    fun main(args: Array<String>) {
+        runApplication<BakeryApplication>(*args)
+    }
+
+    data class PlaceOrder(
+        @NotBlank val customer: String,
+        @Min(1) @Max(1_000_000) val totalPence: Int,
+        val note: String? = null,
+    )
+
+    data class Order(val id: String, val customer: String, val totalPence: Int, val note: String?)
+
+    @Service
+    class OrderService {
+        private val orders = ConcurrentHashMap<String, Order>()
+        private val next = AtomicInteger()
+
+        fun place(request: PlaceOrder): Order {
+            val order = Order("o-${next.incrementAndGet()}", request.customer, request.totalPence, request.note)
+            orders[order.id] = order
+            return order
+        }
+
+        fun find(id: String): Order? = orders[id]
+    }
+
+    @RestController
+    @RequestMapping("/orders")
+    class OrderController(private val service: OrderService) {
+        @PostMapping
+        fun place(@Valid @RequestBody request: PlaceOrder): ResponseEntity<Order> {
+            val order = service.place(request)
+            return ResponseEntity.created(URI.create("/orders/${order.id}")).body(order)
+        }
+
+        @GetMapping("/{id}")
+        fun get(@PathVariable id: String): ResponseEntity<Order> =
+            service.find(id)?.let { ResponseEntity.ok(it) } ?: ResponseEntity.notFound().build()
+    }
+    SRC_EOF
+    mkdir -p $(dirname src/main/resources/application.properties)
+    cat > src/main/resources/application.properties <<'SRC_EOF'
+    spring.main.banner-mode=off
+    logging.level.root=warn
+    spring.mvc.problemdetails.enabled=true
+    SRC_EOF
+    "$GRADLE" --no-daemon -q bootJar
+    SERVER_PORT=18080 java -jar build/libs/bakery-kotlin.jar > app.log 2>&1 &
+    PID=$!
+    trap "kill $PID 2>/dev/null || true" EXIT
+    for i in $(seq 1 90); do if curl -s -o /dev/null localhost:18080/orders/x; then break; fi; sleep 1; done
+    sed "s/localhost:8080/localhost:18080/g" "$BLOCK" > calls.sh
+    bash -e calls.sh
+  output_contains:
+  - '{"id":"o-1","customer":"Ama","totalPence":1250,"note":null}
+
+    201
+
+    {"id":"o-1","customer":"Ama","totalPence":1250,"note":null}
+
+    400
+
+    400
+
+    404'
+- block: 7
+  lang: text
+  check: illustration
+  note: The output of the program or calls above, which their check compares.
+- block: 8
+  lang: kotlin
+  check: illustration
+  note: A practice solution; it was compiled and run with a test list while the chapter was written (it printed example.com, unknown, and the grouped map).
+- block: 9
+  lang: kotlin
+  check: illustration
+  note: A practice solution; it was compiled and run with a test list while the chapter was written (it printed example.com, unknown, and the grouped map).

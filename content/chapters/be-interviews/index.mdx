@@ -1,0 +1,286 @@
+---
+title: "The back-end interview"
+summary: "Coding interviews in your language, a full system design interview worked through, the behavioural round, and take-home assignments."
+prerequisites: [m-problem-solving, m-system-design]
+estimated_minutes: 150
+status: resources-verified
+---
+
+By the end of this chapter you will know what each round of a back-end engineering interview tests and how to prepare for it: the **coding interview**, solved out loud in C#, Java or TypeScript; the **back-end knowledge** questions; a **system design** interview worked through from start to finish; the **behavioural** round; and **take-home assignments**. The algorithm chapters before this one (<Ref to="m-problem-solving" /> and those it builds on) supply the techniques; this chapter is about using them under interview conditions. For finding and applying for jobs, see <Ref to="career" />.
+
+## The usual process
+
+Most companies follow a similar sequence, though the number of rounds varies:
+
+1. **Recruiter screen** (20 to 30 minutes): your background, what you want, salary expectations, and logistics.
+2. **Technical screen** (45 to 60 minutes): one or two coding problems in a shared editor, or a take-home assignment.
+3. **The loop** (half a day to a day, often remote): two coding rounds, a system design round (for mid-level and above), a back-end knowledge or "deep dive" round on a project you built, and a behavioural round.
+4. **Debrief and offer**: interviewers compare written notes against a rubric.
+
+Interviewers score what they can observe: how you clarify the problem, reason, communicate, test and respond to hints, not only whether the code runs. Silence is the most common way to fail a round you could have passed.
+
+## The coding interview
+
+A typical back-end flavoured problem:
+
+> Given a list of orders, each with a customer and a timestamp, return the customers who placed at least `limit` orders within any `window` of time (say, three orders within ten minutes), so the fraud team can review them.
+
+A strong answer goes through the same steps every time (<Ref to="m-problem-solving" />):
+
+1. **Clarify.** Is the window inclusive (are orders exactly ten minutes apart in the same window)? Are the orders sorted? How many orders: a hundred, or a hundred million? Should each customer appear once, and in what order? Here: exclusive window, unsorted input, each flagged customer once, sorted by name.
+2. **Examples, including edge cases.** Three orders at 0, 4 and 9 minutes: flagged. At 0, 6 and 12: not, because no ten-minute window holds all three. No orders: an empty list. One customer with many orders at the same instant: flagged.
+3. **Brute force, then better.** For each order, count that customer's orders in the next ten minutes: O(n²). Better: group by customer, sort each customer's times, and slide a window across them with two pointers: O(n log n) for the sorting, O(n) for the scan.
+4. **Write it**, talking as you go, with clear names.
+5. **Test it** by running the examples by hand (or for real, if the editor allows), then state the complexity.
+
+In C#:
+
+```csharp
+// Customers who placed at least `limit` orders within any `window` of time.
+var t0 = new DateTime(2026, 11, 14, 9, 0, 0);
+var orders = new List<Order>
+{
+    new("ama", t0), new("ama", t0.AddMinutes(4)), new("ama", t0.AddMinutes(9)),
+    new("kofi", t0), new("kofi", t0.AddMinutes(6)), new("kofi", t0.AddMinutes(12)),
+    new("esi", t0.AddMinutes(1)),
+};
+Console.WriteLine(string.Join(", ", Fraud.Flag(orders, 3, TimeSpan.FromMinutes(10))));
+Console.WriteLine(Fraud.Flag([], 3, TimeSpan.FromMinutes(10)).Count);
+
+record Order(string Customer, DateTime At);
+
+static class Fraud
+{
+    public static List<string> Flag(IEnumerable<Order> orders, int limit, TimeSpan window)
+    {
+        var flagged = new List<string>();
+        foreach (var group in orders.GroupBy(o => o.Customer))
+        {
+            var times = group.Select(o => o.At).Order().ToList();
+            int start = 0;
+            for (int end = 0; end < times.Count; end++)
+            {
+                while (times[end] - times[start] >= window) start++;
+                if (end - start + 1 >= limit) { flagged.Add(group.Key); break; }
+            }
+        }
+        flagged.Sort(StringComparer.Ordinal);
+        return flagged;
+    }
+}
+```
+
+In Java:
+
+```java
+import java.time.Duration;
+import java.time.LocalDateTime;
+import java.util.*;
+import java.util.stream.Collectors;
+
+// Customers who placed at least `limit` orders within any `window` of time.
+public class Main {
+    record Order(String customer, LocalDateTime at) {}
+
+    static List<String> flag(List<Order> orders, int limit, Duration window) {
+        Map<String, List<LocalDateTime>> byCustomer = orders.stream().collect(
+            Collectors.groupingBy(Order::customer, TreeMap::new,
+                Collectors.mapping(Order::at, Collectors.toList())));
+        List<String> flagged = new ArrayList<>();
+        byCustomer.forEach((customer, times) -> {
+            Collections.sort(times);
+            int start = 0;
+            for (int end = 0; end < times.size(); end++) {
+                while (Duration.between(times.get(start), times.get(end)).compareTo(window) >= 0) start++;
+                if (end - start + 1 >= limit) { flagged.add(customer); break; }
+            }
+        });
+        return flagged;
+    }
+
+    public static void main(String[] args) {
+        LocalDateTime t0 = LocalDateTime.of(2026, 11, 14, 9, 0);
+        List<Order> orders = List.of(
+            new Order("ama", t0), new Order("ama", t0.plusMinutes(4)), new Order("ama", t0.plusMinutes(9)),
+            new Order("kofi", t0), new Order("kofi", t0.plusMinutes(6)), new Order("kofi", t0.plusMinutes(12)),
+            new Order("esi", t0.plusMinutes(1)));
+        System.out.println(String.join(", ", flag(orders, 3, Duration.ofMinutes(10))));
+        System.out.println(flag(List.of(), 3, Duration.ofMinutes(10)).size());
+    }
+}
+```
+
+In TypeScript:
+
+```ts
+// Customers who placed at least `limit` orders within any `windowMs` of time.
+type Order = { customer: string; at: Date };
+
+function flag(orders: Order[], limit: number, windowMs: number): string[] {
+  const byCustomer = new Map<string, Order[]>();
+  for (const o of orders) {
+    const list = byCustomer.get(o.customer);
+    if (list) list.push(o);
+    else byCustomer.set(o.customer, [o]);
+  }
+  const flagged: string[] = [];
+  for (const [customer, group] of byCustomer) {
+    const times = group.map((o) => o.at.getTime()).sort((a, b) => a - b);
+    let start = 0;
+    for (let end = 0; end < times.length; end++) {
+      while (times[end] - times[start] >= windowMs) start++;
+      if (end - start + 1 >= limit) {
+        flagged.push(customer);
+        break;
+      }
+    }
+  }
+  return flagged.sort();
+}
+
+const minute = 60_000;
+const t0 = Date.UTC(2026, 10, 14, 9, 0);
+const at = (m: number) => new Date(t0 + m * minute);
+const orders: Order[] = [
+  { customer: "ama", at: at(0) }, { customer: "ama", at: at(4) }, { customer: "ama", at: at(9) },
+  { customer: "kofi", at: at(0) }, { customer: "kofi", at: at(6) }, { customer: "kofi", at: at(12) },
+  { customer: "esi", at: at(1) },
+];
+console.log(flag(orders, 3, 10 * minute).join(", "));
+console.log(flag([], 3, 10 * minute).length);
+```
+
+All three print:
+
+```text
+ama
+0
+```
+
+- The **sliding window**: `end` moves forward one order at a time; `start` moves forward while the window is too long. Each index moves at most n times, so the scan is linear.
+- Grouping uses a **hash map** (<Ref to="m-arrays-hashing" />): `GroupBy` in C#, `Collectors.groupingBy` in Java, a `Map` in TypeScript.
+- Know your language's standard library well enough to write sorting, maps, sets, queues and string handling without searching. Interviewers allow small API slips; they notice when you cannot write a loop over a map.
+
+Practise on a platform such as LeetCode or NeetCode in the language you will interview in, by pattern (two pointers, sliding window, hashing, BFS and DFS, heaps, binary search, intervals, simple dynamic programming), not by memorising answers. Time yourself, and say your reasoning aloud even when practising alone.
+
+## Back-end knowledge questions
+
+Back-end loops usually include questions on the work itself. Each of these is covered in this course; you should be able to answer in two or three minutes, with an example from your own projects:
+
+- What happens, step by step, when a client calls `GET /orders/42` on your service? (DNS, TCP and TLS, load balancer, routing, middleware, handler, database, serialisation; <Ref to="be-http" />.)
+- How would you make `POST /payments` safe to retry? (Idempotency keys, unique constraints; <Ref to="m-api-design" />.)
+- An endpoint got slow after a release. How do you investigate? (Traces, query plans, profiles; <Ref to="be-debugging-profiling" />.)
+- When would you add an index, and what does it cost? (<Ref to="db-indexes" />.)
+- Explain transaction isolation levels and a bug each prevents. (<Ref to="db-transactions-locking" />.)
+- How do you invalidate a cache, and what can go wrong? (<Ref to="be-redis" />.)
+- How do you deploy a database schema change without downtime? (Expand and contract; <Ref to="db-migrations" />.)
+- How do you store passwords, and how do you authenticate API calls? (<Ref to="be-auth-stacks" />.)
+- How does your framework handle concurrency: the thread pool in ASP.NET Core, virtual threads in Spring, the event loop in Node? (<Ref to="m-async" />.)
+
+The **project deep dive** asks you to explain something you built: the architecture, a hard bug, a decision you would make differently. Prepare one project thoroughly (the capstone in <Ref to="be-projects" /> works well), including its numbers: requests per second, data size, latency.
+
+## A system design interview, worked through
+
+System design rounds are usually 45 to 60 minutes. The method from <Ref to="m-system-design" /> applies; here it is applied to a problem with the kind of back-end detail interviewers probe.
+
+> Design the ordering back end for a bakery chain's Christmas sale: 10,000 limited-edition cakes go on sale at 09:00, and about 200,000 people will try to buy one in the first minute.
+
+**1. Requirements (about 5 minutes).** Ask, then write down:
+
+- Functional: browse the cake, reserve one, pay within ten minutes, receive confirmation. One cake per customer.
+- Non-functional: **never sell more than 10,000** (correctness beats everything); fair (first come, first served, roughly); the site stays up under the spike; payments are not charged twice.
+- Out of scope: delivery, the rest of the shop.
+
+**2. Estimates (about 3 minutes).** 200,000 users in a minute is about 3,300 requests a second at the start, with spikes higher as people refresh; reads (the product page, stock remaining) dominate. Writes that matter are at most 10,000 successful reservations plus many failed attempts. Data is tiny; the problem is **contention** on one number, the stock count.
+
+**3. API and data (about 5 minutes).**
+
+- `GET /sale/xmas-cake`: details and approximate stock remaining (cacheable for a second or two).
+- `POST /reservations` with an **idempotency key**: returns 201 with a reservation and expiry, or 409 when sold out.
+- `POST /reservations/{id}/payment`: pays through the payment provider, idempotently.
+- Tables: `reservations(id, customer_id unique, status, expires_at)`, `stock(sku, available)`, plus orders and payments.
+
+**4. High-level design (about 10 minutes).** A CDN serves the static page; the API runs as several stateless instances behind a load balancer; PostgreSQL holds reservations and orders; Redis holds a fast counter and rate limits; a queue carries confirmation emails. Draw it, and walk one request through it.
+
+**5. Deep dives (about 20 minutes)**, which is where the interview is decided:
+
+- **Not overselling.** Option A: a single conditional update in the database, `UPDATE stock SET available = available - 1 WHERE sku = $1 AND available > 0`, which is atomic; one hot row handles a few thousand updates a second, probably enough, but it is the bottleneck. Option B: decrement a Redis counter first (`DECR`; if the result is negative, sold out), and only the 10,000 winners touch the database, which still enforces the limit with the conditional update and a unique constraint on `customer_id`. Explain the trade-off: B is faster, but Redis and the database can disagree after failures, so the database stays the source of truth and a reconciliation job fixes the counter (<Ref to="be-redis" />, <Ref to="db-transactions-locking" />).
+- **Expired reservations.** Unpaid reservations return to stock after ten minutes: a scheduled job finds expired rows (indexed on `status, expires_at`), marks them expired and increments the stock in the same transaction (<Ref to="be-background-jobs" />).
+- **Payments.** The idempotency key on the payment call, the provider's own idempotency key, and webhook handling that tolerates duplicates and out-of-order events (<Ref to="m-api-design" />).
+- **The spike.** Rate limits per customer and per IP address; a **waiting room** (a queue page that admits users at a controlled rate) if the service cannot absorb the peak; cached reads; autoscaling warmed up before 09:00, because scaling during the spike is too slow; load-tested beforehand (<Ref to="m-performance" />).
+- **Failure.** What if Redis fails mid-sale? Fall back to the database path, slower but correct. What if the database fails over? Reservations in flight retry with the same idempotency key.
+
+**6. Wrap up (about 2 minutes).** Summarise the design, name the main risk (the hot stock row or counter) and what you would monitor (reservations a second, errors, the gap between Redis and database counts), and what you would do with more time.
+
+Throughout: think aloud, offer options with trade-offs before choosing, and follow the interviewer's hints; they often steer you towards what they want to discuss.
+
+## The behavioural round
+
+Behavioural questions ask about past situations: "Tell me about a time you disagreed with a technical decision", "a production incident you handled", "a project that failed", "when you had to learn something quickly". Interviewers look for ownership, collaboration, judgement and learning.
+
+Answer with **STAR**: the **Situation** and **Task** in two sentences, the **Actions** you took (most of the answer, and "I", not "we"), and the **Result**, with numbers where possible, plus what you learned. Prepare six to eight stories from your work, study or projects that between them cover conflict, failure, an incident, leadership without authority, a hard technical problem, and a time you changed your mind. Ask your own questions at the end: how the team handles on-call, how decisions are made, what a new engineer would work on first.
+
+## Take-home assignments
+
+Some companies send a small project instead of, or before, live coding: "build an API for a library with these endpoints", in two to four hours. What earns the offer:
+
+- **It works**, and is easy to run: one command, documented in the `README`, with Docker Compose if it needs a database.
+- **Tests** for the important behaviour, including errors and edge cases.
+- **Clear structure** for the stack you chose: the idioms of ASP.NET Core, Spring Boot or Node, not a framework of your own.
+- **Correct HTTP**: status codes, validation, error bodies (<Ref to="be-http" />).
+- **A short write-up** of decisions, trade-offs and what you would do with more time.
+- **Respect the time limit**; a focused, finished solution beats an ambitious, unfinished one. Expect to discuss and extend it in a follow-up interview.
+
+## Common mistakes
+
+- **Coding before clarifying**, then solving the wrong problem.
+- **Silence**: interviewers cannot credit reasoning they cannot hear.
+- **Not testing** the code before saying it is done.
+- **Jumping to microservices and Kafka** in system design before establishing requirements and scale.
+- **"We" in behavioural answers**, hiding what you did.
+- **Memorising solutions** instead of practising patterns.
+- **Over-building a take-home** past the time limit, or leaving it without a `README` and tests.
+
+## Practice
+
+**1. (warm-up)** Write your STAR answer to "Tell me about a bug that was hard to find". Keep it under two minutes spoken.
+
+<Solution>
+
+Answers vary. A strong one: Situation and Task (one or two sentences: "Our checkout API returned 500s for about 1% of requests, only in production, and I was on call"); Actions, in the first person (how you gathered evidence from traces and logs, the hypothesis you tested, the tool that confirmed it, the fix and the test you added); Result with numbers ("errors went to zero; I added an alert and a runbook, and we found two similar bugs with the same query"); and what you learned. Time it: two minutes is about 250 spoken words.
+
+</Solution>
+
+**2. (standard)** Solve the coding problem again for a stream: orders arrive one at a time, and you must flag a customer as soon as their third order within ten minutes arrives. What data structure do you keep per customer, and what is the cost per order?
+
+<Solution>
+
+Keep a queue (a deque) of recent order times per customer in a hash map. When an order arrives, push its time on the customer's queue, pop times from the front while they are ten minutes or more older than the new one, and flag the customer if the queue then holds three or more. Each time is pushed and popped at most once, so the cost per order is O(1) amortised, and memory is bounded by the orders inside the window. In production you would expire idle customers' queues, or keep them in Redis sorted sets keyed by customer, trimmed by score, so all instances share them.
+
+</Solution>
+
+**3. (stretch)** In the flash-sale design, the interviewer asks: "Redis said a customer got a cake, but the database update failed. What happens?" Answer it.
+
+<Solution>
+
+The database is the source of truth, so the customer does not have a reservation: the API returns an error (or retries the database write with the same idempotency key) and must not tell the customer they succeeded. The Redis counter is now one lower than real stock, so give it back (`INCR`) in the failure path, and run a reconciliation job that resets the Redis counter from the database regularly during the sale. The worst case is selling slightly fewer than 10,000 for a short time, which is acceptable; selling more than 10,000 is not, and cannot happen because the database's conditional update and unique constraint enforce the limit.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- The process: recruiter screen, technical screen or take-home, a loop of coding, system design, knowledge and behavioural rounds.
+- Coding: **clarify, examples, brute force then better, write, test, complexity**, out loud, in a language whose standard library you know well.
+- Back-end knowledge: be ready to explain requests end to end, idempotency, indexes, transactions, caching, migrations, authentication and concurrency, with examples from your projects.
+- System design: requirements, estimates, API and data, high-level design, then **deep dives** on correctness, failure and scale, with trade-offs.
+- Behavioural: **STAR** stories in the first person, with results.
+- Take-homes: working, tested, documented, idiomatic, and within the time limit.
+
+## Go deeper
+
+- [NeetCode roadmap](https://neetcode.io/roadmap), NeetCode. Coding problems grouped by pattern, with video explanations.
+- [Tech Interview Handbook](https://www.techinterviewhandbook.org/), Yangshun Tay. Free, thorough guidance on every round, including behavioural.
+- [System Design Primer](https://github.com/donnemartin/system-design-primer), Donne Martin. Concepts and worked designs for system design interviews.
+- [ByteByteGo](https://bytebytego.com/), Alex Xu. System design explanations and worked interviews (partly paid).

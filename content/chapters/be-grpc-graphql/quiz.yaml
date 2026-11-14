@@ -1,0 +1,36 @@
+- question: Where does gRPC fit best?
+  options:
+  - Calls between your own services, especially high volume or streaming
+  - Public APIs for any partner
+  answer: 0
+  explanation: REST suits public APIs.
+- question: How do you add a field to a protobuf message safely?
+  options:
+  - Give it a new, never-used field number
+  - Renumber the existing fields
+  answer: 0
+  explanation: Old clients skip unknown fields.
+- question: Why set a deadline on every gRPC call?
+  options:
+  - So a slow service cannot hold the caller for ever, and every service in the chain knows the time left
+  - Deadlines make calls faster
+  answer: 0
+  explanation: DEADLINE_EXCEEDED ends the wait.
+- question: What does a GraphQL client control that a REST client usually does not?
+  options:
+  - Exactly which fields and related objects come back
+  - The HTTP method
+  answer: 0
+  explanation: One query, one response of that shape.
+- question: What problem does DataLoader solve?
+  options:
+  - N+1 queries from resolving a field once per item
+  - Slow JSON parsing
+  answer: 0
+  explanation: It batches loads made during one request.
+- question: Why must GraphQL APIs limit query depth and complexity?
+  options:
+  - Clients can write very expensive nested queries
+  - The schema requires it
+  answer: 0
+  explanation: Also paginate lists.

@@ -1,0 +1,133 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: docker
+  needs: network
+  script: |
+    NAME=zte-redis-check-$$
+    docker run -d --rm --name $NAME -p 127.0.0.1::6379 redis:8 >/dev/null
+    trap "docker rm -f $NAME >/dev/null 2>&1 || true" EXIT
+    PORT=$(docker port $NAME 6379/tcp | head -1 | sed "s/.*://")
+    for i in $(seq 1 30); do if docker exec $NAME redis-cli ping 2>/dev/null | grep -q PONG; then break; fi; sleep 1; done
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund redis@6.3.1
+    cp "$BLOCK" x.ts
+    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+  output_contains:
+  - 'fresh bread 60
+
+    visits 5
+
+    { name: ''Rye loaf'', price_pence: ''450'', stock: ''10'' }
+
+    [ ''/menu'', ''/basket'', ''/checkout'' ]
+
+    [ { value: ''Croissant'', score: 15 }, { value: ''Bagel'', score: 13 } ]'
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the program above, which its check compares, run against Redis 8 in Docker.
+- block: 3
+  lang: ts
+  check: docker
+  needs: network
+  script: |
+    NAME=zte-redis-check-$$
+    docker run -d --rm --name $NAME -p 127.0.0.1::6379 redis:8 >/dev/null
+    trap "docker rm -f $NAME >/dev/null 2>&1 || true" EXIT
+    PORT=$(docker port $NAME 6379/tcp | head -1 | sed "s/.*://")
+    for i in $(seq 1 30); do if docker exec $NAME redis-cli ping 2>/dev/null | grep -q PONG; then break; fi; sleep 1; done
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund redis@6.3.1
+    cp "$BLOCK" x.ts
+    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+  output_contains:
+  - 'five requests, database calls: 1
+
+    after invalidation, database calls: 2 first item: RYE-400'
+- block: 4
+  lang: text
+  check: illustration
+  note: The output of the program above, which its check compares, run against Redis 8 in Docker.
+- block: 5
+  lang: ts
+  check: docker
+  needs: network
+  script: |
+    NAME=zte-redis-check-$$
+    docker run -d --rm --name $NAME -p 127.0.0.1::6379 redis:8 >/dev/null
+    trap "docker rm -f $NAME >/dev/null 2>&1 || true" EXIT
+    PORT=$(docker port $NAME 6379/tcp | head -1 | sed "s/.*://")
+    for i in $(seq 1 30); do if docker exec $NAME redis-cli ping 2>/dev/null | grep -q PONG; then break; fi; sleep 1; done
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund redis@6.3.1
+    cp "$BLOCK" x.ts
+    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+  output_contains:
+  - 'fixed window: true true true false false
+
+    token bucket burst: true true true true true false false | two seconds later: true'
+- block: 6
+  lang: text
+  check: illustration
+  note: The output of the program above, which its check compares, run against Redis 8 in Docker.
+- block: 7
+  lang: ts
+  check: docker
+  needs: network
+  script: |
+    NAME=zte-redis-check-$$
+    docker run -d --rm --name $NAME -p 127.0.0.1::6379 redis:8 >/dev/null
+    trap "docker rm -f $NAME >/dev/null 2>&1 || true" EXIT
+    PORT=$(docker port $NAME 6379/tcp | head -1 | sed "s/.*://")
+    for i in $(seq 1 30); do if docker exec $NAME redis-cli ping 2>/dev/null | grep -q PONG; then break; fi; sleep 1; done
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund redis@6.3.1
+    cp "$BLOCK" x.ts
+    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+  output_contains:
+  - 'instance A got the lock: true | instance B got the lock: false
+
+    B tries to release A''s lock: false
+
+    A releases its lock: true
+
+    B tries again: true'
+- block: 8
+  lang: text
+  check: illustration
+  note: The output of the program above, which its check compares, run against Redis 8 in Docker.
+- block: 9
+  lang: csharp
+  check: not-run
+  reason: A fragment of an ASP.NET Core Program.cs that needs a MenuRepository and a Redis server; the HybridCache and AddStackExchangeRedisCache calls are from Microsoft's HybridCache documentation linked below.
+- block: 10
+  lang: java
+  check: not-run
+  reason: A Spring service fragment that needs a repository, a Spring Boot project with spring-boot-starter-data-redis and a Redis server; @Cacheable and @CacheEvict are Spring's cache annotations.
+- block: 11
+  lang: ts
+  check: docker
+  needs: network
+  script: |
+    NAME=zte-redis-check-$$
+    docker run -d --rm --name $NAME -p 127.0.0.1::6379 redis:8 >/dev/null
+    trap "docker rm -f $NAME >/dev/null 2>&1 || true" EXIT
+    PORT=$(docker port $NAME 6379/tcp | head -1 | sed "s/.*://")
+    for i in $(seq 1 30); do if docker exec $NAME redis-cli ping 2>/dev/null | grep -q PONG; then break; fi; sleep 1; done
+    mkdir w && cd w
+    npm init -y >/dev/null
+    npm pkg set type=module
+    npm install --silent --no-audit --no-fund redis@6.3.1
+    cp "$BLOCK" x.ts
+    REDIS_URL=redis://127.0.0.1:$PORT node x.ts
+  output_contains:
+  - 20 /products/25 /products/6

@@ -1,0 +1,36 @@
+- question: Why is INCR safe when two servers count at once?
+  options:
+  - Each Redis command is atomic, so no increment is lost
+  - Redis locks the whole database for each request
+  answer: 0
+  explanation: Read-modify-write in the application is not.
+- question: What does cache-aside do on a write?
+  options:
+  - Updates the database and deletes the cached copy
+  - Updates only the cache
+  answer: 0
+  explanation: Deleting avoids old values overwriting new ones.
+- question: Why run a token bucket as a Lua script?
+  options:
+  - Redis runs a script atomically, with no other command in between
+  - Lua is faster than JavaScript
+  answer: 0
+  explanation: Several reads and writes must happen together.
+- question: Why must releasing a Redis lock check the token?
+  options:
+  - Otherwise you may delete a lock someone else acquired after yours expired
+  - Redis requires it
+  answer: 0
+  explanation: Compare and delete atomically.
+- question: Which eviction policy suits a pure cache?
+  options:
+  - allkeys-lru or allkeys-lfu
+  - noeviction
+  answer: 0
+  explanation: noeviction suits data that must not vanish.
+- question: What causes a cache stampede?
+  options:
+  - Many requests missing a popular expired key at once and all querying the database
+  - Too many keys
+  answer: 0
+  explanation: Coalesce misses or refresh early.

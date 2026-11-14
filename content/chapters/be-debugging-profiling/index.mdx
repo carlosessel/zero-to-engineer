@@ -1,0 +1,275 @@
+---
+title: "Debugging and profiling in your stack"
+summary: "Debuggers, memory and CPU profilers, traces and dumps for .NET, the JVM and Node, applied to slow endpoints and leaks."
+prerequisites: [be-observability-stacks, m-performance]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will find the cause of a bug, a slow endpoint, a memory leak or a hung service methodically, with the tools each stack provides: **debuggers** for stepping through code, **CPU profilers** and **flame graphs** for finding where time goes, **memory profilers** and **heap dumps** for leaks, and **thread dumps** for hangs. You will profile a slow function in Node and fix it, find a deadlock in a running Java program, and know the equivalent commands for .NET. <Ref to="m-debugging" /> covers the general method; this chapter is the tools.
+
+## The method, briefly
+
+1. **Reproduce** the problem, ideally with a test or a script you can run repeatedly.
+2. **Gather evidence** before changing anything: error messages, stack traces, logs and traces for the failing request (<Ref to="be-observability-stacks" />), metrics around the time.
+3. **Form one hypothesis**, and test it with a tool: a breakpoint, a profile, a dump.
+4. **Fix, then prove** the fix with the same reproduction, and keep the test.
+
+Guessing and changing code until the symptom goes away wastes hours and often hides the real cause. Measure first, especially for performance: the slow part is rarely where you expect.
+
+## Debuggers
+
+A **debugger** pauses a running program so you can inspect it. Every IDE has one (Visual Studio and Rider for .NET, IntelliJ IDEA for Java and Kotlin, VS Code for all three):
+
+- A **breakpoint** pauses when a line is reached. A **conditional breakpoint** pauses only when an expression is true (`orderId == "o-19"`), which matters when the line runs thousands of times.
+- A **logpoint** (or tracepoint) prints a message without pausing or changing code: logging you can add to a running program.
+- **Step over** runs the current line; **step into** enters the function it calls; **step out** finishes the current function.
+- The **call stack** shows how you got here; the **variables** and **watch** panels show values; **evaluate** runs an expression in the paused context.
+- **Exception breakpoints** pause when an exception is thrown, before it is caught and turned into a vague error response.
+
+Debuggers can **attach** to a process that is already running, including one in a container or on another machine, provided it was started with debugging enabled:
+
+| Stack | Start with debugging enabled | Attach from |
+|---|---|---|
+| Node | `node --inspect=0.0.0.0:9229 server.ts` | VS Code, or Chrome at `chrome://inspect` |
+| JVM | `java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 -jar app.jar` | IntelliJ IDEA's "Remote JVM Debug" |
+| .NET | any build; Debug builds are easiest to step through | Visual Studio or Rider "Attach to Process", or VS Code with the C# extension |
+
+Never leave a debug port open in production: anyone who can reach it can run code in your process. In production, use the observational tools below instead; pausing a live server stops it serving everyone.
+
+## CPU profiling: where does the time go?
+
+A **CPU profiler** samples the program many times a second, recording which function is running, and adds up the samples. Functions with the most samples are where the time goes. This report function is slow:
+
+```ts
+// A report endpoint's work, made slow on purpose.
+type Line = { sku: string; pence: number };
+
+function makeLines(n: number): Line[] {
+  return Array.from({ length: n }, (_, i) => ({ sku: `SKU-${i % 500}`, pence: 100 + (i % 37) }));
+}
+
+function totalsBySku(lines: Line[]): Map<string, number> {
+  const skus = [...new Set(lines.map((l) => l.sku))];
+  const totals = new Map<string, number>();
+  for (const sku of skus) {
+    // Scans every line once per SKU: 500 SKUs x 200,000 lines.
+    totals.set(sku, lines.filter((l) => l.sku === sku).reduce((sum, l) => sum + l.pence, 0));
+  }
+  return totals;
+}
+
+const started = performance.now();
+const totals = totalsBySku(makeLines(200_000));
+console.log(`SKUs: ${totals.size}, SKU-7 total: ${totals.get("SKU-7")}`);
+console.error(`took ${Math.round(performance.now() - started)} ms`);
+```
+
+Node can record a profile while it runs, and a short script lists the hottest functions:
+
+```ts
+// Prints the functions where a CPU profile spent the most time.
+import { readFileSync, readdirSync } from "node:fs";
+
+type Node = { id: number; callFrame: { functionName: string; url: string; lineNumber: number } };
+type Profile = { nodes: Node[]; samples: number[] };
+
+const file = readdirSync(".").find((f) => f.endsWith(".cpuprofile"))!;
+const profile: Profile = JSON.parse(readFileSync(file, "utf8"));
+const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+const selfSamples = new Map<string, number>();
+for (const id of profile.samples) {
+  const { functionName, url, lineNumber } = byId.get(id)!.callFrame;
+  const name = `${functionName || "(anonymous)"} ${url.split("/").at(-1)}:${lineNumber + 1}`;
+  selfSamples.set(name, (selfSamples.get(name) ?? 0) + 1);
+}
+const top = [...selfSamples].sort((a, b) => b[1] - a[1]).slice(0, 3);
+for (const [name, n] of top) {
+  console.log(`${Math.round((100 * n) / profile.samples.length)}%  ${name}`);
+}
+```
+
+```bash
+node --cpu-prof slow.ts
+node hottest.ts
+```
+
+```text
+SKUs: 500, SKU-7 total: 47217
+took 1965 ms
+56%  totalsBySku slow.ts:8
+37%  (anonymous) slow.ts:13
+1%  (garbage collector) :0
+```
+
+Almost all the time is in `totalsBySku` and the callback on its line 13, the `filter` scan. The percentages vary a little between runs; the ranking does not. The function scans all 200,000 lines once for every one of the 500 SKUs: 100 million comparisons. One pass with a map does the same job:
+
+```ts
+type Line = { sku: string; pence: number };
+
+function makeLines(n: number): Line[] {
+  return Array.from({ length: n }, (_, i) => ({ sku: `SKU-${i % 500}`, pence: 100 + (i % 37) }));
+}
+
+function totalsBySku(lines: Line[]): Map<string, number> {
+  const totals = new Map<string, number>();
+  for (const l of lines) totals.set(l.sku, (totals.get(l.sku) ?? 0) + l.pence);
+  return totals;
+}
+
+const started = performance.now();
+const totals = totalsBySku(makeLines(200_000));
+console.log(`SKUs: ${totals.size}, SKU-7 total: ${totals.get("SKU-7")}`);
+console.error(`took ${Math.round(performance.now() - started)} ms`);
+```
+
+```text
+SKUs: 500, SKU-7 total: 47217
+took 73 ms
+```
+
+Same answer, dozens of times faster (the timings vary from run to run). In practice you would open the `.cpuprofile` file in Chrome DevTools or VS Code rather than write a script; they show it as a **flame graph**, in which each bar is a function, its width is the share of time, and the bars above it are the functions it called. Look for wide bars at the top: functions that spend the time themselves.
+
+The equivalents in other stacks:
+
+- **.NET**: `dotnet-trace collect --process-id PID --profile cpu-sampling` writes a trace that Visual Studio, PerfView or speedscope.app open as a flame graph; `dotnet-counters monitor --process-id PID` shows live CPU, garbage collection, thread pool and request counters.
+- **JVM**: **Java Flight Recorder** is built into the JDK and cheap enough for production: `jcmd PID JFR.start duration=60s filename=app.jfr`, then open the file in JDK Mission Control or IntelliJ IDEA. **async-profiler** produces flame graphs directly.
+- **Continuous profiling** services (Pyroscope, Datadog, Google Cloud Profiler and others) profile every instance in production all the time at low cost, so you can look at last Tuesday's slow hour.
+
+A profile shows CPU time. If an endpoint is slow but the CPU is idle, it is **waiting**: on the database, another service, a lock or the thread pool. Look at traces (<Ref to="be-observability-stacks" />) and query plans (<Ref to="db-query-plans" />) instead.
+
+## Memory: leaks and heap dumps
+
+A **memory leak** in a garbage-collected language is memory the program still references but will never use: a cache without a limit, a list that only grows, event listeners never removed, a static collection. Memory rises steadily until the process is killed or spends all its time collecting garbage (<Ref to="m-memory-gc" />). The symptom is a saw-tooth whose low points keep rising.
+
+To find one, take a **heap dump** (a snapshot of every object in memory) when memory is high, ideally two some minutes apart, and compare: the type whose count keeps growing, and the path of references keeping it alive (the **retainer** or **GC root** path), points at the leak.
+
+| Stack | Take a heap dump | Analyse it with |
+|---|---|---|
+| Node | `node --heapsnapshot-signal=SIGUSR2 server.ts`, then `kill -USR2 PID`; or `v8.writeHeapSnapshot()` | Chrome DevTools, Memory tab (compare snapshots) |
+| JVM | `jcmd PID GC.heap_dump /tmp/app.hprof`; `-XX:+HeapDumpOnOutOfMemoryError` takes one automatically | Eclipse MAT, IntelliJ IDEA, VisualVM |
+| .NET | `dotnet-gcdump collect --process-id PID` (lightweight) or `dotnet-dump collect --process-id PID` (full) | Visual Studio, PerfView, or `dotnet-dump analyze` |
+
+Heap dumps contain everything in memory, including customers' personal data, passwords and tokens in flight. Treat them as secrets: keep them inside the environment, restrict access, and delete them when the investigation ends.
+
+## Hangs: thread dumps
+
+When a service stops responding but is still running, take a **thread dump**: what every thread is doing right now. Two threads that each hold a lock the other needs wait for ever, a **deadlock**:
+
+```java
+public class Deadlock {
+    static final Object stock = new Object();
+    static final Object orders = new Object();
+
+    public static void main(String[] args) {
+        Thread.ofPlatform().name("place-order").start(() -> {
+            synchronized (orders) {
+                pause();
+                synchronized (stock) { System.out.println("order placed"); }
+            }
+        });
+        Thread.ofPlatform().name("restock").start(() -> {
+            synchronized (stock) {
+                pause();
+                synchronized (orders) { System.out.println("restocked"); }
+            }
+        });
+        System.out.println("started; both threads now wait for ever");
+    }
+
+    static void pause() {
+        try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+    }
+}
+```
+
+```bash
+java Deadlock.java &
+PID=$!
+sleep 3
+jcmd $PID Thread.print | grep -A 12 "Found one Java-level deadlock"
+kill $PID
+```
+
+```text
+started; both threads now wait for ever
+Found one Java-level deadlock:
+=============================
+"place-order":
+  waiting to lock monitor 0x00007fe5b60b4700 (object 0x000000061e8d4370, a java.lang.Object),
+  which is held by "restock"
+
+"restock":
+  waiting to lock monitor 0x00007fe5d58bec80 (object 0x000000061e8d4380, a java.lang.Object),
+  which is held by "place-order"
+
+Java stack information for the threads listed above:
+===================================================
+"place-order":
+```
+
+`jcmd` asks the running JVM for its threads, and the JVM detects the cycle itself: `place-order` holds `orders` and waits for `stock`; `restock` holds `stock` and waits for `orders`. The fix is to always take locks in the same order (<Ref to="m-threads-locks" />), or to avoid holding one lock while taking another. Most hangs are less dramatic: every request thread waiting on a slow database or an exhausted connection pool, which a thread dump also shows at once.
+
+- **.NET**: `dotnet-stack report --process-id PID` prints managed stacks; `dotnet-dump analyze` with `clrstack -all` and `syncblk` shows threads and the locks they hold. Thread-pool starvation (blocking calls such as `.Result` inside async code) shows as a growing queue in `dotnet-counters`.
+- **Node** runs your code on one thread, so a hang is usually a long synchronous loop blocking the **event loop**: a CPU profile shows it, and `perf_hooks.monitorEventLoopDelay` measures it.
+
+## In production
+
+- Get the **trace id** of a failing request from logs or the error response, and follow it across services before reaching for a profiler.
+- Prefer tools that observe without pausing: logs, traces, metrics, sampling profilers, dumps.
+- Containers often lack the tools; build an image with them, use the JDK's `jcmd` inside the container, or use sidecar or ephemeral containers (`kubectl debug`) that share the process namespace (<Ref to="m-kubernetes" />).
+- Record what you found and the fix in the incident write-up (<Ref to="m-reliability" />).
+
+## Common mistakes
+
+- **Changing code on a hunch** instead of measuring.
+- **Profiling a Debug build** or a cold start, and optimising the wrong thing.
+- **Pausing a production process** with a breakpoint, or leaving a debug port open.
+- **Treating heap dumps as harmless files** when they hold personal data and secrets.
+- **Looking for CPU hot spots** when the service is actually waiting on I/O or locks.
+- **Fixing the symptom** (a bigger heap, a restart schedule) and not the leak.
+
+## Practice
+
+**1. (warm-up)** For each symptom, name the first tool you would use: (a) one endpoint's p99 latency doubled after a deployment, CPU flat; (b) CPU at 100% on every instance; (c) memory climbs 50 MB an hour until the container restarts; (d) the service accepts connections but no request ever completes.
+
+<Solution>
+
+(a) Traces for slow requests to that endpoint, to see which span (often a query or downstream call) grew, then the query plan or the downstream service. (b) A CPU profile (flame graph) from one instance. (c) Two heap dumps some time apart, compared to find the growing type and what retains it. (d) A thread dump, looking for deadlocks or every thread waiting on the same resource, such as the connection pool.
+
+</Solution>
+
+**2. (standard)** A profile shows 70% of time in `JSON.stringify`, called from a logging function on every request. What would you check, and what are the fixes?
+
+<Solution>
+
+Check what is being logged: probably whole request or response objects, or a large object, serialised on every request, perhaps even when the log level would discard it. Fixes: log only the fields needed, use structured logging that serialises lazily only when the level is enabled, avoid logging large bodies, and sample high-volume debug logs. Then profile again to confirm.
+
+</Solution>
+
+**3. (stretch)** The `totalsBySku` fix made the function dozens of times faster. Explain why in terms of complexity, and what would happen to each version with 2,000 SKUs.
+
+<Solution>
+
+The slow version is O(S × N): for each of S SKUs it scans all N lines. The fast version is O(N): one pass with constant-time map updates. With 2,000 SKUs, the slow version does four times as many comparisons (about 400 million), so it takes roughly four times longer, while the fast version takes the same time, since it depends only on the number of lines (<Ref to="m-complexity" />).
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Reproduce, gather evidence, test one hypothesis, prove the fix.** Measure before optimising.
+- **Debuggers**: breakpoints (conditional and exception), logpoints, stepping, attaching; never in production.
+- **CPU profiles and flame graphs**: `node --cpu-prof`, `dotnet-trace`, Java Flight Recorder and async-profiler; continuous profiling in production.
+- **Leaks**: compare **heap dumps** (`--heapsnapshot-signal`, `jcmd GC.heap_dump`, `dotnet-gcdump`) and follow the retainer path; dumps contain personal data.
+- **Hangs**: **thread dumps** (`jcmd Thread.print`, `dotnet-stack`, `dotnet-dump`) show deadlocks and starved pools; in Node, look for a blocked event loop.
+- A slow service with idle CPU is waiting: use traces and query plans.
+
+## Go deeper
+
+- [Node.js: profiling Node.js applications](https://nodejs.org/en/learn/getting-started/profiling), the Node.js project. CPU profiles, flame graphs and heap snapshots.
+- [.NET diagnostic tools](https://learn.microsoft.com/en-us/dotnet/core/diagnostics/tools-overview), Microsoft. dotnet-counters, dotnet-trace, dotnet-dump and dotnet-gcdump.
+- [The jcmd command](https://docs.oracle.com/en/java/javase/21/docs/specs/man/jcmd.html), Oracle. Thread dumps, heap dumps and Flight Recorder from the command line.
+- [async-profiler](https://github.com/async-profiler/async-profiler), the async-profiler project. A low-overhead sampling profiler for the JVM.
+- [Flame graphs](https://www.brendangregg.com/flamegraphs.html), Brendan Gregg. How to read them, from their inventor.

@@ -1,0 +1,120 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: ts
+  check: illustration
+  note: The slow program; the check on the commands after the next block runs and profiles it.
+- block: 2
+  lang: ts
+  check: illustration
+  note: The profile summariser; the next block's check runs it on a real profile.
+- block: 3
+  lang: bash
+  check: shell
+  script: |
+    cat > slow.ts <<'SRC_EOF'
+    // A report endpoint's work, made slow on purpose.
+    type Line = { sku: string; pence: number };
+
+    function makeLines(n: number): Line[] {
+      return Array.from({ length: n }, (_, i) => ({ sku: `SKU-${i % 500}`, pence: 100 + (i % 37) }));
+    }
+
+    function totalsBySku(lines: Line[]): Map<string, number> {
+      const skus = [...new Set(lines.map((l) => l.sku))];
+      const totals = new Map<string, number>();
+      for (const sku of skus) {
+        // Scans every line once per SKU: 500 SKUs x 200,000 lines.
+        totals.set(sku, lines.filter((l) => l.sku === sku).reduce((sum, l) => sum + l.pence, 0));
+      }
+      return totals;
+    }
+
+    const started = performance.now();
+    const totals = totalsBySku(makeLines(200_000));
+    console.log(`SKUs: ${totals.size}, SKU-7 total: ${totals.get("SKU-7")}`);
+    console.error(`took ${Math.round(performance.now() - started)} ms`);
+    SRC_EOF
+    cat > hottest.ts <<'SRC_EOF'
+    // Prints the functions where a CPU profile spent the most time.
+    import { readFileSync, readdirSync } from "node:fs";
+
+    type Node = { id: number; callFrame: { functionName: string; url: string; lineNumber: number } };
+    type Profile = { nodes: Node[]; samples: number[] };
+
+    const file = readdirSync(".").find((f) => f.endsWith(".cpuprofile"))!;
+    const profile: Profile = JSON.parse(readFileSync(file, "utf8"));
+    const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+    const selfSamples = new Map<string, number>();
+    for (const id of profile.samples) {
+      const { functionName, url, lineNumber } = byId.get(id)!.callFrame;
+      const name = `${functionName || "(anonymous)"} ${url.split("/").at(-1)}:${lineNumber + 1}`;
+      selfSamples.set(name, (selfSamples.get(name) ?? 0) + 1);
+    }
+    const top = [...selfSamples].sort((a, b) => b[1] - a[1]).slice(0, 3);
+    for (const [name, n] of top) {
+      console.log(`${Math.round((100 * n) / profile.samples.length)}%  ${name}`);
+    }
+    SRC_EOF
+    bash -e "$BLOCK"
+  output_contains:
+  - 'SKUs: 500, SKU-7 total: 47217'
+  - totalsBySku slow.ts:8
+- block: 4
+  lang: text
+  check: illustration
+  note: Output of the commands above, which their check compares; percentages, timings and addresses vary between runs, so the check compares only the stable lines.
+- block: 5
+  lang: ts
+  check: shell
+  script: |
+    cp "$BLOCK" fast.ts
+    node fast.ts
+  output_contains:
+  - 'SKUs: 500, SKU-7 total: 47217'
+- block: 6
+  lang: text
+  check: illustration
+  note: Output of the commands above, which their check compares; percentages, timings and addresses vary between runs, so the check compares only the stable lines.
+- block: 7
+  lang: java
+  check: illustration
+  note: The deadlocking program; the next block's check runs it and finds the deadlock with jcmd.
+- block: 8
+  lang: bash
+  check: shell
+  script: |
+    cat > Deadlock.java <<'SRC_EOF'
+    public class Deadlock {
+        static final Object stock = new Object();
+        static final Object orders = new Object();
+
+        public static void main(String[] args) {
+            Thread.ofPlatform().name("place-order").start(() -> {
+                synchronized (orders) {
+                    pause();
+                    synchronized (stock) { System.out.println("order placed"); }
+                }
+            });
+            Thread.ofPlatform().name("restock").start(() -> {
+                synchronized (stock) {
+                    pause();
+                    synchronized (orders) { System.out.println("restocked"); }
+                }
+            });
+            System.out.println("started; both threads now wait for ever");
+        }
+
+        static void pause() {
+            try { Thread.sleep(200); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        }
+    }
+    SRC_EOF
+    bash "$BLOCK"
+  output_contains:
+  - 'Found one Java-level deadlock:'
+  - which is held by "restock"
+  - which is held by "place-order"
+- block: 9
+  lang: text
+  check: illustration
+  note: Output of the commands above, which their check compares; percentages, timings and addresses vary between runs, so the check compares only the stable lines.

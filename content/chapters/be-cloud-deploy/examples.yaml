@@ -1,0 +1,44 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: bash
+  check: not-run
+  reason: Creates billable resources in a Google Cloud project, so it cannot run when the site is built. The commands and flags were checked against Google's gcloud reference on 14 November 2026.
+- block: 2
+  lang: bash
+  check: not-run
+  reason: Creates billable resources in a Google Cloud project, so it cannot run when the site is built. The commands and flags were checked against Google's gcloud reference on 14 November 2026.
+- block: 3
+  lang: bash
+  check: not-run
+  reason: Creates billable resources in a Google Cloud project, so it cannot run when the site is built. The commands and flags were checked against Google's gcloud reference on 14 November 2026.
+- block: 4
+  lang: bash
+  check: not-run
+  reason: Creates billable resources in a Google Cloud project, so it cannot run when the site is built. The commands and flags were checked against Google's gcloud reference on 14 November 2026.
+- block: 5
+  lang: bash
+  check: not-run
+  reason: Creates billable resources in a Google Cloud project, so it cannot run when the site is built. The commands and flags were checked against Google's gcloud reference on 14 November 2026.
+- block: 6
+  lang: bash
+  check: not-run
+  reason: Creates billable resources in a Google Cloud project, so it cannot run when the site is built. The commands and flags were checked against Google's gcloud reference on 14 November 2026.
+- block: 7
+  lang: bash
+  check: not-run
+  reason: Creates billable resources in a Google Cloud project, so it cannot run when the site is built. The commands and flags were checked against Google's gcloud reference on 14 November 2026.
+- block: 8
+  lang: yaml
+  check: illustration
+  note: A deploy workflow; it needs a Google Cloud project and a workload identity pool, so the check parses it and checks its structure. The action versions and inputs were checked against each action's action.yml on 14 November 2026.
+  verify: |
+    import yaml
+    assert block.startswith("# .github/workflows/deploy.yml")
+    doc = yaml.safe_load(block)
+    triggers = doc.get("on", doc.get(True))
+    assert triggers == {"push": {"branches": ["main"]}}
+    assert doc["permissions"]["id-token"] == "write"
+    steps = doc["jobs"]["deploy"]["steps"]
+    uses = [s["uses"].split("@")[0] for s in steps if "uses" in s]
+    assert uses == ["actions/checkout", "google-github-actions/auth", "docker/login-action", "google-github-actions/setup-gcloud", "google-github-actions/deploy-cloudrun"]
+    assert "credentials_json" not in str(doc)

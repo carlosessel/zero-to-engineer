@@ -4,6 +4,20 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-14: Zero to Database Expert, a new course, and more for Zero to Backend Engineer
+
+Added
+- Zero to Database Expert: a ten-part course from a first SELECT to running PostgreSQL in production, with 29 new chapters (the map, setup, SELECT, aggregates, joins, subqueries and CTEs, changing data, types and functions, window functions, advanced queries, JSON and full-text search, tables and constraints, modelling, views and functions, indexes, query plans, performance, transactions and locking, security, operations, migrations, other engines, analytics, vectors, interview SQL, projects, careers, a checked library and a glossary) and nine chapters reused from the Mastery and Backend courses. Every example uses one bakery dataset, and almost every query's output in the chapters was produced by running it.
+- A `postgres` kind of example check: SQL blocks run in PGlite (PostgreSQL 18 compiled to WebAssembly, with the btree_gist, pg_trgm, pgcrypto, tablefunc, citext and pgvector extensions) by tests/examples/pg_runner.mjs, and their output is compared in psql's format. The CI examples job now installs Node and the npm packages for it.
+- Backend: new chapters on Kotlin and Spring Boot in Kotlin, gRPC and GraphQL, Redis from your service, deploying to the cloud end to end, debugging and profiling in each stack, and the back-end interview; Kubernetes and cloud infrastructure chapters added to Shipping and running; and three new parts made mostly of Mastery chapters: Working in a codebase, Computer science fundamentals, and Interview preparation.
+- About 110 glossary terms for the new chapters, and the Backend and Databases courses added to the terms their reused chapters use.
+
+Checked
+- The Kotlin programs and Spring Boot API are built with Gradle and called with curl; the gRPC and GraphQL services and the Node profiling, Java deadlock and interview programs run in their checks; the Redis examples run against Redis 8 in Docker (only when EXAMPLES_DOCKER=1).
+
+Not checked by running
+- The cloud deployment commands, which create billable resources (their flags and the workflow's action inputs were checked against the official references); two-session locking demonstrations, which PGlite's single connection cannot show and are given as timelines; statistics views that need a real server (pg_stat_statements, replication and activity); and the .NET and Java snippets that need a full project (gRPC, GraphQL, Redis caching).
+
 ### 2026-11-13: Zero to Backend Engineer, part 14 (Reference): the course is complete
 
 Added

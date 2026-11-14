@@ -1,0 +1,324 @@
+---
+title: "Kotlin for Java developers and Spring"
+summary: "Kotlin's syntax, null safety, data classes and coroutines, and building a Spring Boot API in Kotlin."
+prerequisites: [java-build-testing]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will read and write **Kotlin**, the JVM language many Java teams now use for new code and the default for Android: its concise syntax, **null safety** built into the type system, **data classes**, **sealed** types with `when`, **extension functions**, collection operations, and **coroutines** for concurrency. Then you will build the bakery's orders API with **Spring Boot in Kotlin**. Kotlin compiles to the same bytecode as Java and calls Java libraries directly, so everything from the Java track (<Ref to="java-objects" />, <Ref to="java-collections-streams" />) still applies.
+
+## Setting up
+
+Kotlin is built with the same tools as Java. A Gradle build for a Kotlin program:
+
+```kotlin
+plugins {
+    kotlin("jvm") version "2.4.21"
+    application
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+}
+
+kotlin {
+    jvmToolchain(21)
+}
+
+application {
+    mainClass = "MainKt"
+}
+```
+
+The `kotlin("jvm")` plugin compiles `.kt` files under `src/main/kotlin`; `application` lets `./gradlew run` start the program. IntelliJ IDEA, from the company that makes Kotlin, has the best support; it can also convert Java files to Kotlin automatically.
+
+## The language in one program
+
+`src/main/kotlin/Main.kt`:
+
+```kotlin
+import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
+import kotlin.system.measureTimeMillis
+
+data class Product(val sku: String, val name: String, val pricePence: Int, val vegan: Boolean = false)
+
+sealed interface Payment
+data class Card(val last4: String, val pence: Long) : Payment
+data class Voucher(val code: String, val pence: Long) : Payment
+
+fun describe(payment: Payment): String = when (payment) {
+    is Card -> "card ending ${payment.last4}: ${payment.pence}p"
+    is Voucher -> "voucher ${payment.code}"
+}
+
+fun Int.asPounds(): String = "£%d.%02d".format(this / 100, this % 100)
+
+suspend fun fetch(what: String, ms: Long): String {
+    delay(ms)
+    return what
+}
+
+fun main() {
+    val rye = Product("RYE-400", "Rye loaf", 450, vegan = true)
+    val dearer = rye.copy(pricePence = 470)
+    println(rye)
+    println(rye == Product("RYE-400", "Rye loaf", 450, true))
+    println("${dearer.name} now costs ${dearer.pricePence.asPounds()}")
+
+    val products = listOf(rye, Product("CRO-090", "Croissant", 275), Product("CAKE-CHOC", "Chocolate cake", 2400))
+    println(products.filter { it.pricePence < 1000 }.map { it.name })
+    println(products.groupBy { it.vegan }.mapValues { (_, list) -> list.size })
+    println(products.maxBy { it.pricePence }.name)
+
+    var middleName: String? = null
+    println(middleName?.length ?: 0)
+    middleName = "Serwaa"
+    println(middleName.length)
+
+    println(listOf(Card("4242", 1250), Voucher("BREAD10", 1000)).map(::describe))
+
+    runBlocking {
+        val took = measureTimeMillis {
+            val prices = async { fetch("prices", 300) }
+            val stock = async { fetch("stock", 300) }
+            println("${prices.await()} and ${stock.await()}")
+        }
+        println(if (took < 550) "together, not one after another" else "one after another")
+    }
+}
+```
+
+Run it with `./gradlew run`. It prints:
+
+```text
+Product(sku=RYE-400, name=Rye loaf, pricePence=450, vegan=true)
+true
+Rye loaf now costs £4.70
+[Rye loaf, Croissant]
+{true=1, false=2}
+Chocolate cake
+0
+6
+[card ending 4242: 1250p, voucher BREAD10]
+prices and stock
+together, not one after another
+```
+
+Line by line, compared with Java:
+
+- **`val`** declares a read-only variable and **`var`** a changeable one; types are inferred (`val rye = Product(...)`) or written after the name (`fun fetch(what: String, ms: Long): String`). Semicolons are optional.
+- **Data classes** are Kotlin's records: one line gives the constructor, properties, `equals`, `hashCode`, `toString` and **`copy`**, which makes a changed copy. Constructor parameters can have **default values** and be passed by **name** (`vegan = true`), so overloads are rarely needed.
+- **String templates** (`"${dearer.name} now costs ..."`) replace concatenation and `formatted`.
+- **Sealed interfaces** with **`when`** work like Java's sealed types and pattern-matching `switch`: the compiler checks every case, and `is` narrows the type automatically (**smart casts**), so `payment.last4` is allowed in the `Card` branch.
+- **Extension functions** add methods to existing types without inheriting: `fun Int.asPounds()` lets you write `470.asPounds()`.
+- **Collection operations** (`filter`, `map`, `groupBy`, `maxBy`) work directly on lists, without `stream()` and `collect`. `it` is the implicit name of a lambda's single parameter.
+- `::describe` is a **function reference**, like Java's method references.
+
+## Null safety
+
+Kotlin's most important feature: types say whether `null` is allowed. `String` can never be null; **`String?`** can, and the compiler will not let you use it as a `String` until you have handled the null:
+
+- **`?.`** calls a member only if the value is not null (`middleName?.length`).
+- **`?:`** (the "Elvis" operator) supplies a default (`?: 0`).
+- After a null check or an assignment of a non-null value, the compiler knows the value is not null, as with `middleName.length` after the assignment above.
+- **`!!`** asserts "this is not null" and throws if it is; treat each one as a bug waiting to happen.
+
+Most `NullPointerException`s become compile errors. Values coming from Java code have "platform types" whose nullability Kotlin cannot know; the compiler option `-Xjsr305=strict` makes it trust Java's `@Nullable` annotations, which Spring uses throughout.
+
+## Coroutines
+
+Kotlin's **coroutines** are lightweight concurrent tasks, similar to async and await (<Ref to="m-async" />). A **`suspend`** function can pause without blocking a thread (`delay` pauses; a database or HTTP call would too); **`async`** starts work concurrently and **`await`** waits for its result. In the program, two 300 ms fetches finished together in about 300 ms. **Structured concurrency** ties child tasks to their parent scope, so a failure or cancellation in one cancels the others and nothing leaks. Spring supports `suspend` controller functions (with WebFlux), and coroutines are standard on Android. On the JVM, **virtual threads** (<Ref to="java-errors-concurrency" />) give similar benefits to ordinary blocking code, so Spring MVC services often use those instead.
+
+## Spring Boot in Kotlin
+
+Spring has first-class Kotlin support. The build adds the Kotlin Spring plugin, which makes Spring-annotated classes `open` (Kotlin classes are `final` by default, and Spring needs to subclass them for proxies), and Jackson's Kotlin module, which understands data classes, default values and nullability:
+
+```kotlin
+plugins {
+    kotlin("jvm") version "2.4.21"
+    kotlin("plugin.spring") version "2.4.21"
+    id("org.springframework.boot") version "4.1.2"
+    id("io.spring.dependency-management") version "1.1.7"
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation("org.springframework.boot:spring-boot-starter-validation")
+    implementation("tools.jackson.module:jackson-module-kotlin")
+    implementation("org.jetbrains.kotlin:kotlin-reflect")
+}
+
+kotlin {
+    jvmToolchain(21)
+    compilerOptions {
+        freeCompilerArgs.addAll("-Xjsr305=strict", "-Xannotation-default-target=param-property")
+    }
+}
+```
+
+The whole API, in `BakeryApplication.kt`:
+
+```kotlin
+package com.bakery
+
+import jakarta.validation.Valid
+import jakarta.validation.constraints.Max
+import jakarta.validation.constraints.Min
+import jakarta.validation.constraints.NotBlank
+import java.net.URI
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
+import org.springframework.boot.autoconfigure.SpringBootApplication
+import org.springframework.boot.runApplication
+import org.springframework.http.ResponseEntity
+import org.springframework.stereotype.Service
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.RestController
+
+@SpringBootApplication
+class BakeryApplication
+
+fun main(args: Array<String>) {
+    runApplication<BakeryApplication>(*args)
+}
+
+data class PlaceOrder(
+    @NotBlank val customer: String,
+    @Min(1) @Max(1_000_000) val totalPence: Int,
+    val note: String? = null,
+)
+
+data class Order(val id: String, val customer: String, val totalPence: Int, val note: String?)
+
+@Service
+class OrderService {
+    private val orders = ConcurrentHashMap<String, Order>()
+    private val next = AtomicInteger()
+
+    fun place(request: PlaceOrder): Order {
+        val order = Order("o-${next.incrementAndGet()}", request.customer, request.totalPence, request.note)
+        orders[order.id] = order
+        return order
+    }
+
+    fun find(id: String): Order? = orders[id]
+}
+
+@RestController
+@RequestMapping("/orders")
+class OrderController(private val service: OrderService) {
+    @PostMapping
+    fun place(@Valid @RequestBody request: PlaceOrder): ResponseEntity<Order> {
+        val order = service.place(request)
+        return ResponseEntity.created(URI.create("/orders/${order.id}")).body(order)
+    }
+
+    @GetMapping("/{id}")
+    fun get(@PathVariable id: String): ResponseEntity<Order> =
+        service.find(id)?.let { ResponseEntity.ok(it) } ?: ResponseEntity.notFound().build()
+}
+```
+
+Started with `./gradlew bootRun`, it answers:
+
+```bash
+curl -s -X POST localhost:8080/orders -H "Content-Type: application/json" \
+  -d '{"customer":"Ama","totalPence":1250}' -w "\n%{http_code}\n"
+curl -s localhost:8080/orders/o-1; echo
+curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8080/orders -H "Content-Type: application/json" \
+  -d '{"customer":"","totalPence":0}'
+curl -s -o /dev/null -w "%{http_code}\n" -X POST localhost:8080/orders -H "Content-Type: application/json" \
+  -d '{"totalPence":500}'
+curl -s -o /dev/null -w "%{http_code}\n" localhost:8080/orders/o-9
+```
+
+```text
+{"id":"o-1","customer":"Ama","totalPence":1250,"note":null}
+201
+{"id":"o-1","customer":"Ama","totalPence":1250,"note":null}
+400
+400
+404
+```
+
+The same API as in <Ref to="be-api-spring" />, in about two-thirds of the code:
+
+- The **data class** `PlaceOrder` is the request body. A missing `customer` is rejected with 400 because the property is not nullable; `note` is optional because it is `String?` with a default.
+- **Constructor injection** is the primary constructor: `class OrderController(private val service: OrderService)`.
+- `service.find(id)?.let { ResponseEntity.ok(it) } ?: ResponseEntity.notFound().build()` turns a nullable result into 200 or 404 in one expression; Kotlin code uses nullable types where Java uses `Optional`.
+- The compiler option `-Xannotation-default-target=param-property` makes annotations such as `@NotBlank` apply to both the constructor parameter and the property, which validation needs.
+
+## When to choose Kotlin
+
+Kotlin suits new JVM services and Android: it is safer (null safety), shorter, and fully interoperable, so a Java codebase can adopt it one file at a time. Java has caught up in many ways (records, sealed types, pattern matching, virtual threads), has more developers and simpler tooling, and remains the safer default in many large organisations. Follow your team's choice; knowing both is common for JVM engineers.
+
+## Common mistakes
+
+- **`!!` everywhere** to silence the compiler, bringing back null-pointer crashes.
+- **Forgetting the Kotlin Spring plugin**, so Spring cannot proxy final classes.
+- **Missing the Jackson Kotlin module**, so data classes fail to deserialise.
+- **Blocking calls inside coroutines** (`Thread.sleep`, blocking JDBC) on a limited dispatcher; use `delay` and suspending or `Dispatchers.IO` calls.
+- **Writing Java in Kotlin syntax**, ignoring data classes, null safety and collection operations.
+
+## Practice
+
+**1. (warm-up)** Rewrite this Java record and method in Kotlin: `record Customer(String id, String email) {}` and a method returning the email domain, or `"unknown"` if the email is null.
+
+<Solution>
+
+```kotlin
+data class Customer(val id: String, val email: String?)
+
+fun Customer.emailDomain(): String = email?.substringAfter('@') ?: "unknown"
+```
+
+`Customer("c-1", "ama@example.com").emailDomain()` gives `example.com`, and a customer with a null email gives `unknown`. Making `email` nullable is a decision the type now records.
+
+</Solution>
+
+**2. (standard)** Given a list of `Product`s, produce a map from category name to the names of its vegan products, sorted, using Kotlin's collection functions, assuming `Product` has a `category` property.
+
+<Solution>
+
+```kotlin
+val veganByCategory: Map<String, List<String>> =
+    products.filter { it.vegan }
+        .groupBy({ it.category }, { it.name })
+        .mapValues { (_, names) -> names.sorted() }
+```
+
+`groupBy` with two lambdas chooses both the key and the value; `mapValues` sorts each list.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Kotlin runs on the JVM and calls Java directly; build it with Gradle's Kotlin plugin.
+- **`val`**/**`var`**, type inference, default and named arguments, string templates, **data classes** with `copy`, **sealed** types with exhaustive **`when`** and smart casts, **extension functions**, and collection operations.
+- **Null safety**: `String?`, `?.`, `?:`, smart casts; avoid `!!`.
+- **Coroutines**: `suspend`, `async`/`await`, structured concurrency.
+- **Spring Boot in Kotlin**: the Kotlin Spring plugin, Jackson's Kotlin module, data class requests, constructor injection, and nullable types instead of `Optional`.
+
+## Go deeper
+
+- [Kotlin docs: basic syntax](https://kotlinlang.org/docs/basic-syntax.html), JetBrains. The language tour.
+- [Kotlin docs: null safety](https://kotlinlang.org/docs/null-safety.html), JetBrains. Nullable types and their operators.
+- [Kotlin docs: coroutines guide](https://kotlinlang.org/docs/coroutines-guide.html), JetBrains. Suspending functions, scopes and structured concurrency.
+- [Spring Boot reference: Kotlin support](https://docs.spring.io/spring-boot/reference/features/kotlin.html), the Spring team. Using Kotlin with Spring Boot.

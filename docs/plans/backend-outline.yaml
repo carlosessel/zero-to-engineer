@@ -1,6 +1,6 @@
 # Outline approved 12 November 2026. Written in the order: claude, then mastery, then backend.
 # One course with three tracks (C# and .NET, Java, Node.js and TypeScript). Shared m-* chapters come from the mastery course, so each part is created only once the chapters it reuses exist.
-# Parts are created one at a time with the add-course skill. Created so far: parts 1 to 14 (complete).
+# Parts are created one at a time with the add-course skill. Created so far: parts 1 to 17 (complete). Added 14 November 2026: kotlin-spring, be-grpc-graphql, be-redis, be-cloud-deploy, m-kubernetes and m-cloud-iac in existing parts, and the parts Working in a codebase, Computer science fundamentals and Interview preparation.
 course: backend
 title: Zero to Backend Engineer
 tagline: Pick C#, Java or Node, and build real services.
@@ -68,6 +68,10 @@ parts:
     title: Java builds, dependencies and tests
     summary: Maven and Gradle, dependencies, and unit tests with JUnit.
     minutes: 180
+  - id: kotlin-spring
+    title: Kotlin for Java developers and Spring
+    summary: Kotlin's syntax, null safety, data classes and coroutines, and building a Spring Boot API in Kotlin.
+    minutes: 180
 - name: 'Track: Node.js and TypeScript'
   blurb: Programming from zero in JavaScript and TypeScript, on the server
   chapters:
@@ -102,6 +106,10 @@ parts:
     title: Building an API with Node.js
     summary: Express with TypeScript, routing, validation with Zod, errors and OpenAPI; a look at Fastify and NestJS.
     minutes: 270
+  - id: be-grpc-graphql
+    title: gRPC and GraphQL
+    summary: When to use REST, gRPC or GraphQL, with a small service of each kind, schemas, streaming and the trade-offs.
+    minutes: 180
   - id: be-dependency-injection
     title: Dependency injection and structuring a service
     summary: Layers, dependency injection in .NET, Spring and Node, configuration and the options pattern.
@@ -124,6 +132,10 @@ parts:
     title: Data in Node.js with PostgreSQL
     summary: Parameterised queries, a query builder or ORM (Drizzle or Prisma), migrations and transactions.
     minutes: 240
+  - id: be-redis
+    title: Redis from your service
+    summary: Caching, rate limiting, locks, sessions and queues with Redis from .NET, Java and Node, and their failure modes.
+    minutes: 180
   - m-caching
   - m-nosql
 - name: Security
@@ -177,6 +189,10 @@ parts:
     title: Deploying a service
     summary: Twelve-factor configuration and secrets, health checks, containerising each stack, and deploying with a database.
     minutes: 210
+  - id: be-cloud-deploy
+    title: Deploying to the cloud, end to end
+    summary: 'One service on one cloud from nothing: registry, managed database, secrets, identity, pipeline, domain, monitoring and cost.'
+    minutes: 180
   - m-delivery
   - m-observability
   - id: be-observability-stacks
@@ -186,6 +202,8 @@ parts:
   - m-memory-gc
   - m-performance
   - m-reliability
+  - m-kubernetes
+  - m-cloud-iac
 - name: AI in the back end
   blurb: Calling language models from your services
   chapters:
@@ -193,6 +211,43 @@ parts:
   - tools
   - structured-output
   - rag
+- name: Working in a codebase
+  blurb: Reading, changing, debugging and reviewing real code
+  chapters:
+  - m-clean-code
+  - m-refactoring
+  - m-debugging
+  - id: be-debugging-profiling
+    title: Debugging and profiling in your stack
+    summary: Debuggers, memory and CPU profilers, traces and dumps for .NET, the JVM and Node, applied to slow endpoints and leaks.
+    minutes: 180
+  - m-code-review
+  - m-static-quality
+  - m-design-docs
+- name: Computer science fundamentals
+  blurb: How the machine, the operating system and the network really work
+  chapters:
+  - m-operating-systems
+  - m-runtimes
+  - m-threads-locks
+  - m-networking
+  - m-linux
+  - m-crypto
+- name: Interview preparation
+  blurb: Data structures, algorithms and the back-end interview
+  chapters:
+  - m-complexity
+  - m-arrays-hashing
+  - m-lists-stacks-queues
+  - m-trees-heaps
+  - m-graphs
+  - m-sorting-searching
+  - m-recursion-dp
+  - m-problem-solving
+  - id: be-interviews
+    title: The back-end interview
+    summary: Coding interviews in your language, a full system design interview worked through, the behavioural round, and take-home assignments.
+    minutes: 150
 - name: The job
   blurb: Teams, projects and getting hired
   chapters:

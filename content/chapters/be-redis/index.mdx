@@ -1,0 +1,343 @@
+---
+title: "Redis from your service"
+summary: "Caching, rate limiting, locks, sessions and queues with Redis from .NET, Java and Node, and their failure modes."
+prerequisites: [m-caching, be-dependency-injection]
+estimated_minutes: 180
+status: resources-verified
+---
+
+By the end of this chapter you will use **Redis** for the jobs back-end services most often give it: caching with expiry and invalidation, rate limiting, distributed locks, counters and leaderboards, sessions and lightweight queues. You will know its data types, how to make operations **atomic** with transactions and Lua scripts, how each stack talks to it, and how to keep your service working when Redis is slow, full or down. <Ref to="m-caching" /> explains caching strategies; this chapter is Redis in practice.
+
+## What Redis is
+
+**Redis** is an in-memory data store: a server that keeps **data structures** (strings, hashes, lists, sets, sorted sets, streams) in memory and answers commands over the network in well under a millisecond. It is single-threaded for commands, so each command is atomic. It can persist to disk (snapshots and an append-only file) and replicate to other servers, but it is usually treated as fast, **losable** state: the source of truth stays in the database.
+
+Redis 8 is licensed under the AGPL (among other options); **Valkey**, a fork maintained by the Linux Foundation, is BSD-licensed and command-compatible, and is what several cloud providers offer. Everything in this chapter works on both. To run one locally: `docker run -d --name redis -p 6379:6379 redis:8`.
+
+The examples use Node's official `redis` client; the same commands exist in every client, and the stack sections at the end show the .NET and Spring equivalents.
+
+## Data types
+
+```ts
+import { createClient } from "redis";
+
+const redis = await createClient({ url: process.env.REDIS_URL ?? "redis://localhost:6379" }).connect();
+
+await redis.set("greeting", "fresh bread", { EX: 60 });
+console.log(await redis.get("greeting"), await redis.ttl("greeting"));
+
+await redis.incr("visits:2026-11-14");
+await redis.incrBy("visits:2026-11-14", 4);
+console.log("visits", await redis.get("visits:2026-11-14"));
+
+await redis.hSet("product:RYE-400", { name: "Rye loaf", price_pence: "450", stock: "12" });
+await redis.hIncrBy("product:RYE-400", "stock", -2);
+console.log(await redis.hGetAll("product:RYE-400"));
+
+await redis.rPush("recent:ama", ["/menu", "/basket", "/checkout"]);
+console.log(await redis.lRange("recent:ama", 0, -1));
+
+await redis.zAdd("bestsellers", [{ score: 15, value: "Croissant" }, { score: 13, value: "Bagel" }, { score: 7, value: "Rye loaf" }]);
+await redis.zIncrBy("bestsellers", 1, "Rye loaf");
+console.log(await redis.zRangeWithScores("bestsellers", 0, 1, { REV: true }));
+
+await redis.quit();
+```
+
+It prints:
+
+```text
+fresh bread 60
+visits 5
+{ name: 'Rye loaf', price_pence: '450', stock: '10' }
+[ '/menu', '/basket', '/checkout' ]
+[ { value: 'Croissant', score: 15 }, { value: 'Bagel', score: 13 } ]
+```
+
+- **Strings** hold text, numbers or serialised JSON; `EX` sets an expiry in seconds, and `TTL` shows the time left. `INCR` adds atomically: two servers incrementing at once never lose a count.
+- **Hashes** hold fields of one object, readable and changeable one field at a time.
+- **Lists** keep insertion order: recent activity, simple queues.
+- **Sorted sets** keep members ordered by a score: leaderboards, bestsellers, rate-limit windows, scheduled jobs.
+- Key names are your schema: use a consistent pattern such as `product:RYE-400` or `visits:2026-11-14`.
+
+## Caching
+
+**Cache-aside** is the standard pattern: read from the cache; on a miss, load from the database, store the result with an expiry, return it. On writes, update the database and **delete** the cached copy:
+
+```ts
+import { createClient } from "redis";
+
+const redis = await createClient({ url: process.env.REDIS_URL ?? "redis://localhost:6379" }).connect();
+
+let databaseCalls = 0;
+async function loadMenuFromDatabase(): Promise<{ sku: string; pricePence: number }[]> {
+  databaseCalls++;
+  await new Promise((resolve) => setTimeout(resolve, 50)); // stands in for a slow query
+  return [{ sku: "RYE-400", pricePence: 450 }, { sku: "CRO-090", pricePence: 275 }];
+}
+
+async function getMenu() {
+  const cached = await redis.get("menu:v1");
+  if (cached) return JSON.parse(cached) as { sku: string; pricePence: number }[];
+  const menu = await loadMenuFromDatabase();
+  const ttl = 300 + Math.floor(Math.random() * 60); // jitter, so keys do not all expire together
+  await redis.set("menu:v1", JSON.stringify(menu), { EX: ttl });
+  return menu;
+}
+
+for (let i = 0; i < 5; i++) await getMenu();
+console.log("five requests, database calls:", databaseCalls);
+
+// The price changes: update the database, then delete the cached copy.
+await redis.del("menu:v1");
+const menu = await getMenu();
+console.log("after invalidation, database calls:", databaseCalls, "first item:", menu[0].sku);
+
+await redis.quit();
+```
+
+It prints:
+
+```text
+five requests, database calls: 1
+after invalidation, database calls: 2 first item: RYE-400
+```
+
+Five requests caused one database query. Three details matter in production:
+
+- **Every key gets an expiry**, so mistakes heal themselves and memory is reclaimed.
+- **Jitter** on expiries stops many keys expiring at the same moment and flooding the database.
+- **Stampedes**: when a popular key expires, hundreds of requests may miss at once and all hit the database. Protect hot keys with a short lock so one request refreshes the value while others wait or serve the old copy, or refresh them before they expire. .NET's `HybridCache` does this for you.
+
+Deleting on write (rather than updating the cache) avoids races in which an older value overwrites a newer one. Versioning keys (`menu:v1`) lets a deployment change the cached format without clashing with old entries.
+
+## Rate limiting
+
+Redis's atomic counters make limits shared by every instance of a service:
+
+```ts
+import { createClient } from "redis";
+
+const redis = await createClient({ url: process.env.REDIS_URL ?? "redis://localhost:6379" }).connect();
+
+// Fixed window: at most 3 sign-in attempts per user per minute.
+async function allowFixedWindow(user: string, windowStart: number): Promise<boolean> {
+  const key = `signin:${user}:${windowStart}`;
+  const [count] = await redis.multi().incr(key).expire(key, 60).exec();
+  return Number(count) <= 3;
+}
+
+const results = [];
+for (let i = 1; i <= 5; i++) results.push(await allowFixedWindow("ama", 29_000_000));
+console.log("fixed window:", results.join(" "));
+
+// Token bucket in one atomic Lua script: capacity 5, refilling 1 token per second.
+const tokenBucket = `
+local tokens = tonumber(redis.call('HGET', KEYS[1], 'tokens') or ARGV[1])
+local last = tonumber(redis.call('HGET', KEYS[1], 'at') or ARGV[3])
+local now = tonumber(ARGV[3])
+tokens = math.min(tonumber(ARGV[1]), tokens + (now - last) * tonumber(ARGV[2]))
+local allowed = 0
+if tokens >= 1 then tokens = tokens - 1; allowed = 1 end
+redis.call('HSET', KEYS[1], 'tokens', tokens, 'at', now)
+redis.call('EXPIRE', KEYS[1], 3600)
+return allowed`;
+
+async function allowTokenBucket(key: string, nowSeconds: number): Promise<boolean> {
+  const allowed = await redis.eval(tokenBucket, { keys: [key], arguments: ["5", "1", String(nowSeconds)] });
+  return allowed === 1;
+}
+
+const burst = [];
+for (let i = 0; i < 7; i++) burst.push(await allowTokenBucket("bucket:api-key-17", 1000));
+const later = await allowTokenBucket("bucket:api-key-17", 1002);
+console.log("token bucket burst:", burst.join(" "), "| two seconds later:", later);
+
+await redis.quit();
+```
+
+It prints:
+
+```text
+fixed window: true true true false false
+token bucket burst: true true true true true false false | two seconds later: true
+```
+
+- The **fixed window** counts requests per user per minute with `INCR` and `EXPIRE` in one `MULTI` transaction. It is simple but allows a burst at window edges.
+- The **token bucket** refills tokens over time and allows short bursts up to its capacity. Its logic reads, computes and writes several values, so it runs as a **Lua script**: Redis executes a script atomically, with no other command in between. Here a burst of seven requests got five through; two seconds later, two tokens had refilled.
+- Return HTTP **429 Too Many Requests** with a `Retry-After` header when a limit is hit (<Ref to="be-http" />).
+
+## Distributed locks
+
+"Only one instance should run the nightly report" needs a lock all instances can see. `SET key token NX PX ttl` creates the key only if it does not exist, with an expiry so a crashed holder cannot block everyone for ever. Releasing must check that you still own the lock, atomically, or you could delete a lock someone else acquired after yours expired:
+
+```ts
+import { randomUUID } from "node:crypto";
+import { createClient } from "redis";
+
+const redis = await createClient({ url: process.env.REDIS_URL ?? "redis://localhost:6379" }).connect();
+
+async function acquire(name: string, ttlMs: number): Promise<string | null> {
+  const token = randomUUID();
+  const ok = await redis.set(`lock:${name}`, token, { NX: true, PX: ttlMs });
+  return ok === "OK" ? token : null;
+}
+
+// Release only if we still own the lock: compare and delete atomically.
+const releaseScript = `
+if redis.call('GET', KEYS[1]) == ARGV[1] then return redis.call('DEL', KEYS[1]) else return 0 end`;
+
+async function release(name: string, token: string): Promise<boolean> {
+  return (await redis.eval(releaseScript, { keys: [`lock:${name}`], arguments: [token] })) === 1;
+}
+
+const a = await acquire("nightly-report", 30_000);
+const b = await acquire("nightly-report", 30_000);
+console.log("instance A got the lock:", a !== null, "| instance B got the lock:", b !== null);
+console.log("B tries to release A's lock:", await release("nightly-report", "not-the-token"));
+console.log("A releases its lock:", await release("nightly-report", a!));
+console.log("B tries again:", (await acquire("nightly-report", 30_000)) !== null);
+
+await redis.quit();
+```
+
+It prints:
+
+```text
+instance A got the lock: true | instance B got the lock: false
+B tries to release A's lock: false
+A releases its lock: true
+B tries again: true
+```
+
+Be honest about what this lock guarantees. If the holder pauses longer than the expiry (a long garbage collection, a network partition), another instance can take the lock while the first still thinks it holds it. For efficiency (avoid doing work twice) a Redis lock is fine; for **correctness** (never charge twice), the protected resource must also reject stale holders, for example with a **fencing token** checked by the database, or use the database's own locks (<Ref to="db-transactions-locking" />, <Ref to="m-consistency-consensus" />).
+
+## Sessions and queues
+
+- **Sessions**: store server-side session data under a random session id with an expiry that slides on each request. ASP.NET Core (`AddStackExchangeRedisCache` with session middleware), Spring Session and Express session stores all support Redis.
+- **Queues**: lists (`LPUSH` and `BRPOP`) make simple queues; **streams** (`XADD`, `XREADGROUP`, `XACK`) add consumer groups, acknowledgements and replay, like a small Kafka. Libraries such as BullMQ build durable job queues on Redis (<Ref to="be-background-jobs" />).
+- **Pub/sub** broadcasts messages to connected subscribers, such as cache invalidation to every instance, but delivers nothing to subscribers that are offline.
+
+## Failure modes
+
+Plan for Redis being slow, full or unavailable:
+
+- **Memory limits and eviction**: set `maxmemory` and an eviction policy. For a cache, `allkeys-lru` (or `allkeys-lfu`) removes the least recently (or frequently) used keys; for data that must not vanish (sessions, queues), use a separate instance with `noeviction` and alerts.
+- **Persistence**: snapshots (RDB) lose the last minutes on a crash; the append-only file (AOF) with `everysec` loses about a second. Caches can have neither.
+- **Availability**: managed services and Redis Sentinel or Cluster provide failover; clients must reconnect and retry.
+- **Degrade gracefully**: if the cache is down, serve from the database (with timeouts, so a slow Redis cannot slow every request) and decide per feature whether rate limiting fails open or closed (<Ref to="m-resilience" />).
+- **Big keys and slow commands**: `KEYS *` and huge values block the single thread; use `SCAN` and keep values small. Never run `FLUSHALL` on a shared production instance.
+- **Security**: require authentication and TLS, keep Redis on a private network, and never expose it to the internet.
+
+## In your stack
+
+**.NET** uses **StackExchange.Redis** directly, or the caching abstractions on top of it. `HybridCache` combines an in-memory cache with Redis and protects against stampedes:
+
+```csharp
+builder.Services.AddStackExchangeRedisCache(options =>
+    options.Configuration = builder.Configuration.GetConnectionString("Redis"));
+builder.Services.AddHybridCache();
+
+app.MapGet("/menu", async (HybridCache cache, MenuRepository menu, CancellationToken ct) =>
+    await cache.GetOrCreateAsync("menu:v1", async token => await menu.LoadAsync(token),
+        new HybridCacheEntryOptions { Expiration = TimeSpan.FromMinutes(5) }, cancellationToken: ct));
+```
+
+**Spring Boot** uses **Spring Data Redis** (with the Lettuce client) and Spring's cache abstraction: add `spring-boot-starter-data-redis`, set `spring.data.redis.host`, enable caching, and annotate methods:
+
+```java
+@Service
+class MenuService {
+    private final MenuRepository repository;
+
+    MenuService(MenuRepository repository) {
+        this.repository = repository;
+    }
+
+    @Cacheable(cacheNames = "menu")
+    public List<MenuItem> menu() {
+        return repository.findAll();
+    }
+
+    @CacheEvict(cacheNames = "menu", allEntries = true)
+    public void changePrice(String sku, int pricePence) {
+        repository.updatePrice(sku, pricePence);
+    }
+}
+```
+
+with `@EnableCaching` on a configuration class and `spring.cache.redis.time-to-live=5m`. **Node** uses `redis` (shown throughout) or `ioredis`. In every stack, create **one client per process**, shared by all requests, and set connection and command timeouts.
+
+## Common mistakes
+
+- **Keys without expiries**, and memory that only grows.
+- **Treating Redis as the source of truth** for data that must not be lost.
+- **Read-modify-write in the application** instead of `INCR`, `MULTI` or a Lua script.
+- **Locks released without checking ownership**, or Redis locks used where correctness needs fencing.
+- **`KEYS *`** and very large values in production.
+- **No timeouts**, so a slow Redis slows every request.
+
+## Practice
+
+**1. (warm-up)** Which Redis type fits each need? (a) A product's name, price and stock, changed one field at a time; (b) the ten most viewed products today; (c) the last 20 pages a user visited; (d) a count of sign-ups today.
+
+<Solution>
+
+(a) A hash. (b) A sorted set with views as the score (`ZINCRBY`, then `ZRANGE ... REV` with a limit of 10). (c) A list, trimmed to 20 with `LTRIM` after each `LPUSH`. (d) A string counter with `INCR`, keyed by the date and given an expiry.
+
+</Solution>
+
+**2. (standard)** Write a function that keeps only the 20 most recent pages per user, newest first, and test it with 25 visits.
+
+<Solution>
+
+```ts
+import { createClient } from "redis";
+
+const redis = await createClient({ url: process.env.REDIS_URL ?? "redis://localhost:6379" }).connect();
+
+async function recordVisit(user: string, page: string): Promise<void> {
+  await redis.multi()
+    .lPush(`recent:${user}`, page)
+    .lTrim(`recent:${user}`, 0, 19)
+    .expire(`recent:${user}`, 60 * 60 * 24 * 30)
+    .exec();
+}
+
+for (let i = 1; i <= 25; i++) await recordVisit("kofi", `/products/${i}`);
+const recent = await redis.lRange("recent:kofi", 0, -1);
+console.log(recent.length, recent[0], recent.at(-1));
+
+await redis.quit();
+```
+
+It prints `20 /products/25 /products/6`: the newest first, the oldest five trimmed away, all in one atomic transaction.
+
+</Solution>
+
+**3. (stretch)** The menu cache expires at 09:00, when 500 requests a second arrive. Describe what happens without protection, and two ways to prevent it.
+
+<Solution>
+
+Every request misses at once and queries the database for the same menu: a **stampede** that can overload the database just when it is busiest. Prevent it by letting one request rebuild the value while others wait briefly or serve the old copy (a short Redis lock around the refresh, or `HybridCache` in .NET, which coalesces concurrent misses), or by refreshing popular keys in the background before they expire, with jittered expiries so keys do not all expire together.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Redis** keeps data structures in memory: strings, hashes, lists, sets, sorted sets and streams; each command is atomic.
+- **Cache-aside** with expiries, jitter, delete-on-write and stampede protection.
+- **Rate limiting** with `INCR` and `EXPIRE`, or a token bucket in a **Lua script**.
+- **Locks** with `SET NX PX` and an ownership-checked release; use fencing or database locks where correctness depends on them.
+- Sessions, list and stream queues, and pub/sub.
+- Plan for memory limits, eviction, persistence, failover, timeouts and security; use StackExchange.Redis or `HybridCache` in .NET, Spring Data Redis and `@Cacheable` in Spring, and `redis` or `ioredis` in Node.
+
+## Go deeper
+
+- [Redis documentation: data types](https://redis.io/docs/latest/develop/data-types/), Redis. Every data type and its commands.
+- [Redis: distributed locks](https://redis.io/docs/latest/develop/clients/patterns/distributed-locks/), Redis. The locking pattern and its limits.
+- [How to do distributed locking](https://martin.kleppmann.com/2016/02/08/how-to-do-distributed-locking.html), Martin Kleppmann. Why locks need fencing tokens for correctness.
+- [HybridCache library in ASP.NET Core](https://learn.microsoft.com/en-us/aspnet/core/performance/caching/hybrid), Microsoft. Two-level caching with stampede protection.
+- [Valkey](https://valkey.io/), the Linux Foundation. The open-source, Redis-compatible fork.
