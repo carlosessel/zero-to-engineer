@@ -1,0 +1,22 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    885.75
+    1003.88
+    515.73
+  verify: |
+    # The band table in the chapter: Kwesi's tax, and the tax on a full set of bands to GH₵ 50,000.
+    from decimal import Decimal
+    assert ns["tax"](5125) == Decimal("885.75")
+    assert ns["tax"](3635) == Decimal("515.73")
+    assert ns["tax"](50000) == Decimal("13621.10")
+    assert ns["tax"](500) == 0
+    assert 14 + 0.175 * 2867 == 515.7249999999999 and round(14 + 0.175 * 2867, 2) == 515.72  # the float behaviour the chapter describes
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the Python block above, which that block's check compares exactly.
+  verify: |
+    assert block.split() == ["885.75", "1003.88", "515.73"]

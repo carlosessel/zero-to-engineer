@@ -1,0 +1,24 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: text
+  check: illustration
+  note: A budget-against-actual sheet. The check recomputes each Difference formula and the totals in Python and compares them with the results shown in the next block and in the text.
+  verify: |
+    rows = {"Rent": (1200, 1200), "Food": (700, 812), "Transport": (380, 355), "Eating out": (150, 210)}
+    for name, (b, a) in rows.items():
+        assert f"{b}" in block and f"{a}" in block
+    assert sum(b for b, a in rows.values()) == 2430
+    assert sum(a for b, a in rows.values()) == 2577
+    assert "=SUM(D2:D5)" in block and "=B3-C3" in block
+- block: 2
+  lang: text
+  check: illustration
+  note: The Difference column of the sheet above, recomputed as budget minus actual.
+  verify: |
+    rows = [("Rent", 1200, 1200), ("Food", 700, 812), ("Transport", 380, 355), ("Eating out", 150, 210)]
+    shown = dict(line.rsplit(None, 1) for line in block.strip().splitlines())
+    shown = {k.strip(): int(v) for k, v in shown.items()}
+    for name, b, a in rows:
+        assert shown[name] == b - a, name
+    assert shown["Total"] == sum(b - a for _, b, a in rows) == -147
+    assert round(112 / 700 * 100) == 16

@@ -1,0 +1,212 @@
+- id: fi-saving-emergency-fund
+  title: Building an emergency fund
+  hint: Watch the fund grow by GH₵ 400 a month, take a hit from a real emergency, and recover to reach its first target.
+  steps:
+  - title: The target
+    text: Ama's essentials cost GH₵ 3,260 a month, so her starter fund is one month of that. She saves GH₵ 400 a month by standing order.
+    vars:
+      target: 3,260
+      saving: 400 a month
+    parts:
+    - kind: note
+      id: n
+      text: 'starter target: one month of essentials = GH₵ 3,260'
+      tone: compare
+    - kind: cells
+      id: c
+      label: fund at the end of each month (GH₵)
+      slots: 11
+      width: 50
+      bars: true
+      items: []
+      empty: nothing saved yet
+  - title: Months 1 to 3
+    text: 400, then 800, then 1,200. Slow, but every month the fund grows by the same amount.
+    vars:
+      fund: 1,200
+    parts:
+    - kind: cells
+      id: c
+      label: fund at the end of each month (GH₵)
+      slots: 11
+      width: 50
+      bars: true
+      indices: false
+      items:
+      - k: m1
+        v: 400
+        tone: base
+      - k: m2
+        v: 800
+        tone: base
+      - k: m3
+        v: 1200
+        tone: active
+  - title: Months 4 to 6
+    text: 1,600, 2,000, 2,400. Already enough for many everyday emergencies.
+    vars:
+      fund: 2,400
+    parts:
+    - kind: cells
+      id: c
+      label: fund at the end of each month (GH₵)
+      slots: 11
+      width: 50
+      bars: true
+      indices: false
+      items:
+      - k: m1
+        v: 400
+        tone: base
+      - k: m2
+        v: 800
+        tone: base
+      - k: m3
+        v: 1200
+        tone: base
+      - k: m4
+        v: 1600
+        tone: base
+      - k: m5
+        v: 2000
+        tone: base
+      - k: m6
+        v: 2400
+        tone: active
+  - title: 'Month 7: an emergency'
+    text: 'A medical bill of GH₵ 900. She pays it from the fund: 2,400 + 400 − 900 = 1,900. No loan, no interest. This is what the fund is for.'
+    vars:
+      fund: 1,900
+      used: 900 for a medical bill
+    parts:
+    - kind: cells
+      id: c
+      label: fund at the end of each month (GH₵)
+      slots: 11
+      width: 50
+      bars: true
+      indices: false
+      items:
+      - k: m1
+        v: 400
+        tone: dim
+      - k: m2
+        v: 800
+        tone: dim
+      - k: m3
+        v: 1200
+        tone: dim
+      - k: m4
+        v: 1600
+        tone: dim
+      - k: m5
+        v: 2000
+        tone: dim
+      - k: m6
+        v: 2400
+        tone: dim
+      - k: m7
+        v: 1900
+        tone: bad
+  - title: Rebuild
+    text: 'She keeps saving 400 a month: 2,300, 2,700, 3,100. Rebuilding comes before any other goal.'
+    vars:
+      fund: 3,100
+    parts:
+    - kind: cells
+      id: c
+      label: fund at the end of each month (GH₵)
+      slots: 11
+      width: 50
+      bars: true
+      indices: false
+      items:
+      - k: m1
+        v: 400
+        tone: dim
+      - k: m2
+        v: 800
+        tone: dim
+      - k: m3
+        v: 1200
+        tone: dim
+      - k: m4
+        v: 1600
+        tone: dim
+      - k: m5
+        v: 2000
+        tone: dim
+      - k: m6
+        v: 2400
+        tone: dim
+      - k: m7
+        v: 1900
+        tone: dim
+      - k: m8
+        v: 2300
+        tone: active
+      - k: m9
+        v: 2700
+        tone: active
+      - k: m10
+        v: 3100
+        tone: active
+  - title: 'Month 11: starter fund reached'
+    text: 3,500 is more than the 3,260 target. She has one month of essentials put aside, two months later than without the emergency.
+    vars:
+      fund: 3,500
+    parts:
+    - kind: note
+      id: n
+      text: 'starter target: one month of essentials = GH₵ 3,260'
+      tone: found
+    - kind: cells
+      id: c
+      label: fund at the end of each month (GH₵)
+      slots: 11
+      width: 50
+      bars: true
+      indices: false
+      items:
+      - k: m1
+        v: 400
+        tone: dim
+      - k: m2
+        v: 800
+        tone: dim
+      - k: m3
+        v: 1200
+        tone: dim
+      - k: m4
+        v: 1600
+        tone: dim
+      - k: m5
+        v: 2000
+        tone: dim
+      - k: m6
+        v: 2400
+        tone: dim
+      - k: m7
+        v: 1900
+        tone: dim
+      - k: m8
+        v: 2300
+        tone: dim
+      - k: m9
+        v: 2700
+        tone: dim
+      - k: m10
+        v: 3100
+        tone: dim
+      - k: m11
+        v: 3500
+        tone: found
+  - title: The next stage
+    text: Next comes paying off expensive debt, then building towards three months of essentials, GH₵ 9,780. The fund grows in stages, and it is used and rebuilt along the way.
+    vars:
+      next target: 3 × 3,260 = 9,780
+    parts:
+    - kind: note
+      id: n
+      text: 'next: three months of essentials = GH₵ 9,780'
+      tone: active

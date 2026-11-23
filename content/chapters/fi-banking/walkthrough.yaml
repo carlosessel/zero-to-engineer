@@ -1,0 +1,430 @@
+- id: fi-banking-statement
+  title: Reading a bank statement
+  hint: Follow the running balance line by line from the opening balance, and watch for the line that does not belong.
+  steps:
+  - title: Opening balance
+    text: 'The statement starts from what was in the account at the end of last month: GH₵ 2,150.00. Every later balance is built from this one.'
+    vars:
+      balance: 2,150.00
+    parts:
+    - kind: tables
+      id: t
+      slots: 10
+      tables:
+      - id: s
+        title: Ama's current account, November (GH₵)
+        columns:
+        - date
+        - description
+        - in / out
+        - balance
+        rows:
+        - k: open
+          cells:
+          - 31 Oct
+          - Opening balance
+          - ''
+          - 2,150.00
+          tone: active
+  - title: Pay day
+    text: Salary comes in (a credit) and rent goes out (a debit). The running balance after each line is the balance before it, plus or minus the amount.
+    vars:
+      balance: 4,950.00
+      check: 2,150 + 4,000 − 1,200
+    parts:
+    - kind: tables
+      id: t
+      slots: 10
+      tables:
+      - id: s
+        title: Ama's current account, November (GH₵)
+        columns:
+        - date
+        - description
+        - in / out
+        - balance
+        rows:
+        - k: open
+          cells:
+          - 31 Oct
+          - Opening balance
+          - ''
+          - 2,150.00
+          tone: dim
+        - k: l0
+          cells:
+          - 01 Nov
+          - Salary
+          - +4,000.00
+          - 6,150.00
+          tone: found
+        - k: l1
+          cells:
+          - 01 Nov
+          - Rent
+          - −1,200.00
+          - 4,950.00
+          tone: active
+  - title: Pay yourself first
+    text: The standing order moves 400 to savings the next day, before the spending starts.
+    vars:
+      balance: 4,550.00
+    parts:
+    - kind: tables
+      id: t
+      slots: 10
+      tables:
+      - id: s
+        title: Ama's current account, November (GH₵)
+        columns:
+        - date
+        - description
+        - in / out
+        - balance
+        rows:
+        - k: open
+          cells:
+          - 31 Oct
+          - Opening balance
+          - ''
+          - 2,150.00
+          tone: dim
+        - k: l0
+          cells:
+          - 01 Nov
+          - Salary
+          - +4,000.00
+          - 6,150.00
+          tone: dim
+        - k: l1
+          cells:
+          - 01 Nov
+          - Rent
+          - −1,200.00
+          - 4,950.00
+          tone: dim
+        - k: l2
+          cells:
+          - 02 Nov
+          - To savings
+          - −400.00
+          - 4,550.00
+          tone: active
+  - title: Fees appear as their own lines
+    text: Sending 300 to her mother by mobile money costs a 1.50 fee, shown as a separate debit. Small fees like this add up over a year.
+    vars:
+      balance: 4,248.50
+    parts:
+    - kind: tables
+      id: t
+      slots: 10
+      tables:
+      - id: s
+        title: Ama's current account, November (GH₵)
+        columns:
+        - date
+        - description
+        - in / out
+        - balance
+        rows:
+        - k: open
+          cells:
+          - 31 Oct
+          - Opening balance
+          - ''
+          - 2,150.00
+          tone: dim
+        - k: l0
+          cells:
+          - 01 Nov
+          - Salary
+          - +4,000.00
+          - 6,150.00
+          tone: dim
+        - k: l1
+          cells:
+          - 01 Nov
+          - Rent
+          - −1,200.00
+          - 4,950.00
+          tone: dim
+        - k: l2
+          cells:
+          - 02 Nov
+          - To savings
+          - −400.00
+          - 4,550.00
+          tone: dim
+        - k: l3
+          cells:
+          - 05 Nov
+          - MoMo to Mum
+          - −300.00
+          - 4,250.00
+          tone: active
+        - k: l4
+          cells:
+          - 05 Nov
+          - Transfer fee
+          - −1.50
+          - 4,248.50
+          tone: compare
+  - title: Card and cash
+    text: A supermarket card payment, then a cash withdrawal from another bank's machine, which costs a 5.00 fee.
+    vars:
+      balance: 3,417.10
+    parts:
+    - kind: tables
+      id: t
+      slots: 10
+      tables:
+      - id: s
+        title: Ama's current account, November (GH₵)
+        columns:
+        - date
+        - description
+        - in / out
+        - balance
+        rows:
+        - k: open
+          cells:
+          - 31 Oct
+          - Opening balance
+          - ''
+          - 2,150.00
+          tone: dim
+        - k: l0
+          cells:
+          - 01 Nov
+          - Salary
+          - +4,000.00
+          - 6,150.00
+          tone: dim
+        - k: l1
+          cells:
+          - 01 Nov
+          - Rent
+          - −1,200.00
+          - 4,950.00
+          tone: dim
+        - k: l2
+          cells:
+          - 02 Nov
+          - To savings
+          - −400.00
+          - 4,550.00
+          tone: dim
+        - k: l3
+          cells:
+          - 05 Nov
+          - MoMo to Mum
+          - −300.00
+          - 4,250.00
+          tone: dim
+        - k: l4
+          cells:
+          - 05 Nov
+          - Transfer fee
+          - −1.50
+          - 4,248.50
+          tone: dim
+        - k: l5
+          cells:
+          - 09 Nov
+          - Supermarket
+          - −326.40
+          - 3,922.10
+          tone: active
+        - k: l6
+          cells:
+          - 12 Nov
+          - ATM cash
+          - −500.00
+          - 3,422.10
+          tone: active
+        - k: l7
+          cells:
+          - 12 Nov
+          - ATM fee
+          - −5.00
+          - 3,417.10
+          tone: compare
+  - title: What is that?
+    text: ONLINE SVC 7731, 89.99. Ama has no subscription and made no online purchase that day. A line she does not recognise is exactly what reading a statement is for.
+    vars:
+      balance: 3,327.11
+    parts:
+    - kind: tables
+      id: t
+      slots: 10
+      tables:
+      - id: s
+        title: Ama's current account, November (GH₵)
+        columns:
+        - date
+        - description
+        - in / out
+        - balance
+        rows:
+        - k: open
+          cells:
+          - 31 Oct
+          - Opening balance
+          - ''
+          - 2,150.00
+          tone: dim
+        - k: l0
+          cells:
+          - 01 Nov
+          - Salary
+          - +4,000.00
+          - 6,150.00
+          tone: dim
+        - k: l1
+          cells:
+          - 01 Nov
+          - Rent
+          - −1,200.00
+          - 4,950.00
+          tone: dim
+        - k: l2
+          cells:
+          - 02 Nov
+          - To savings
+          - −400.00
+          - 4,550.00
+          tone: dim
+        - k: l3
+          cells:
+          - 05 Nov
+          - MoMo to Mum
+          - −300.00
+          - 4,250.00
+          tone: dim
+        - k: l4
+          cells:
+          - 05 Nov
+          - Transfer fee
+          - −1.50
+          - 4,248.50
+          tone: dim
+        - k: l5
+          cells:
+          - 09 Nov
+          - Supermarket
+          - −326.40
+          - 3,922.10
+          tone: dim
+        - k: l6
+          cells:
+          - 12 Nov
+          - ATM cash
+          - −500.00
+          - 3,422.10
+          tone: dim
+        - k: l7
+          cells:
+          - 12 Nov
+          - ATM fee
+          - −5.00
+          - 3,417.10
+          tone: dim
+        - k: l8
+          cells:
+          - 15 Nov
+          - ONLINE SVC 7731
+          - −89.99
+          - 3,327.11
+          tone: bad
+  - title: Act on it
+    text: She reports it to her bank at once, which can block her card and dispute the payment. If it is refunded, the balance goes back to 3,327.11 + 89.99 = 3,417.10.
+    vars:
+      closing balance: 3,327.11
+      if refunded: 3,417.10
+    parts:
+    - kind: tables
+      id: t
+      slots: 10
+      tables:
+      - id: s
+        title: Ama's current account, November (GH₵)
+        columns:
+        - date
+        - description
+        - in / out
+        - balance
+        rows:
+        - k: open
+          cells:
+          - 31 Oct
+          - Opening balance
+          - ''
+          - 2,150.00
+          tone: dim
+        - k: l0
+          cells:
+          - 01 Nov
+          - Salary
+          - +4,000.00
+          - 6,150.00
+          tone: dim
+        - k: l1
+          cells:
+          - 01 Nov
+          - Rent
+          - −1,200.00
+          - 4,950.00
+          tone: dim
+        - k: l2
+          cells:
+          - 02 Nov
+          - To savings
+          - −400.00
+          - 4,550.00
+          tone: dim
+        - k: l3
+          cells:
+          - 05 Nov
+          - MoMo to Mum
+          - −300.00
+          - 4,250.00
+          tone: dim
+        - k: l4
+          cells:
+          - 05 Nov
+          - Transfer fee
+          - −1.50
+          - 4,248.50
+          tone: dim
+        - k: l5
+          cells:
+          - 09 Nov
+          - Supermarket
+          - −326.40
+          - 3,922.10
+          tone: dim
+        - k: l6
+          cells:
+          - 12 Nov
+          - ATM cash
+          - −500.00
+          - 3,422.10
+          tone: dim
+        - k: l7
+          cells:
+          - 12 Nov
+          - ATM fee
+          - −5.00
+          - 3,417.10
+          tone: dim
+        - k: l8
+          cells:
+          - 15 Nov
+          - ONLINE SVC 7731
+          - −89.99
+          - 3,327.11
+          tone: bad
+    - kind: note
+      id: n
+      text: 'Reported the same day: card blocked, payment disputed'
+      tone: found

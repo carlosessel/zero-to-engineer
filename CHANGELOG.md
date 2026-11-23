@@ -4,6 +4,14 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-23: Zero to Money and Investing, part 2
+
+Added
+- Part 2 of Zero to Money and Investing, "Your money day to day": income and payslips (income tax in bands, marginal and effective rates, converting pay, irregular income), budgeting (tracking, needs and wants, sinking funds, 50/30/20, zero-based and envelope budgets, budget against actual), saving and emergency funds (goals, standing orders, building a fund in stages, safety, liquidity and return, savings groups and susu), and banks, mobile money and payments (accounts, payment methods, statements, fees, remittances, deposit protection, account safety).
+- A walkthrough in each: income filling Ghana's 2026 tax bands, a budget's envelopes through one month, an emergency fund built, used and rebuilt, and a bank statement read line by line.
+- Country notes for Ghana and the UK, checked against official sources on 23 November 2026: GRA's monthly PAYE bands from 1 September 2026, SSNIT contribution rates, UK income tax and National Insurance for 2026 to 2027, ISAs, and deposit protection (GDPC limits now and from 1 January 2027; FSCS £120,000).
+- 50 glossary terms. "Return" and "Variance" now have separate definitions for finance and for the courses that already used them.
+
 ### 2026-11-23: Zero to Money and Investing, part 1
 
 Added

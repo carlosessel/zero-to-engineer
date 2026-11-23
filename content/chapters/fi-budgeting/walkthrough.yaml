@@ -1,0 +1,399 @@
+- id: fi-budgeting-month
+  title: A budget through one month
+  hint: Watch Ama's five envelopes empty week by week, an overrun get covered from another envelope, and what is left go to savings.
+  steps:
+  - title: Pay day
+    text: Rent, bills, phone, the loan, family support and GH₵ 400 of savings go out first. GH₵ 1,420 is left, split into five envelopes for the variable spending.
+    vars:
+      paid on pay day: 2,580 (savings 400 first)
+      in envelopes: 1,420
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: e
+        title: Ama's envelopes (GH₵)
+        columns:
+        - category
+        - budget
+        - spent
+        - left
+        rows:
+        - k: Food
+          cells:
+          - Food
+          - '700'
+          - '0'
+          - '700'
+          tone: active
+        - k: Transport
+          cells:
+          - Transport
+          - '380'
+          - '0'
+          - '380'
+          tone: active
+        - k: Eating out
+          cells:
+          - Eating out
+          - '150'
+          - '0'
+          - '150'
+          tone: active
+        - k: Entertainment
+          cells:
+          - Entertainment
+          - '100'
+          - '0'
+          - '100'
+          tone: active
+        - k: Clothes
+          cells:
+          - Clothes
+          - '90'
+          - '0'
+          - '90'
+          tone: active
+        - k: tot
+          cells:
+          - Total
+          - 1,420
+          - '0'
+          - 1,420
+  - title: Week 1
+    text: Groceries cost 230 and a week of transport 95. Both envelopes still have money in them.
+    vars:
+      spent this week: '325'
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: e
+        title: Ama's envelopes (GH₵)
+        columns:
+        - category
+        - budget
+        - spent
+        - left
+        rows:
+        - k: Food
+          cells:
+          - Food
+          - '700'
+          - '230'
+          - '470'
+          tone: active
+        - k: Transport
+          cells:
+          - Transport
+          - '380'
+          - '95'
+          - '285'
+          tone: active
+        - k: Eating out
+          cells:
+          - Eating out
+          - '150'
+          - '0'
+          - '150'
+        - k: Entertainment
+          cells:
+          - Entertainment
+          - '100'
+          - '0'
+          - '100'
+        - k: Clothes
+          cells:
+          - Clothes
+          - '90'
+          - '0'
+          - '90'
+        - k: tot
+          cells:
+          - Total
+          - 1,420
+          - '325'
+          - 1,095
+  - title: Week 2
+    text: More groceries (210), transport (95) and a meal out with colleagues (120). Eating out has only 30 left.
+    vars:
+      spent this week: '425'
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: e
+        title: Ama's envelopes (GH₵)
+        columns:
+        - category
+        - budget
+        - spent
+        - left
+        rows:
+        - k: Food
+          cells:
+          - Food
+          - '700'
+          - '440'
+          - '260'
+          tone: active
+        - k: Transport
+          cells:
+          - Transport
+          - '380'
+          - '190'
+          - '190'
+          tone: active
+        - k: Eating out
+          cells:
+          - Eating out
+          - '150'
+          - '120'
+          - '30'
+          tone: compare
+        - k: Entertainment
+          cells:
+          - Entertainment
+          - '100'
+          - '0'
+          - '100'
+        - k: Clothes
+          cells:
+          - Clothes
+          - '90'
+          - '0'
+          - '90'
+        - k: tot
+          cells:
+          - Total
+          - 1,420
+          - '750'
+          - '670'
+  - title: 'Week 3: an overrun'
+    text: A friend's birthday dinner costs 90, but only 30 was left. The eating-out envelope is 60 short.
+    vars:
+      spent this week: '90'
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: e
+        title: Ama's envelopes (GH₵)
+        columns:
+        - category
+        - budget
+        - spent
+        - left
+        rows:
+        - k: Food
+          cells:
+          - Food
+          - '700'
+          - '440'
+          - '260'
+        - k: Transport
+          cells:
+          - Transport
+          - '380'
+          - '190'
+          - '190'
+        - k: Eating out
+          cells:
+          - Eating out
+          - '150'
+          - '210'
+          - '-60'
+          tone: bad
+        - k: Entertainment
+          cells:
+          - Entertainment
+          - '100'
+          - '0'
+          - '100'
+        - k: Clothes
+          cells:
+          - Clothes
+          - '90'
+          - '0'
+          - '90'
+        - k: tot
+          cells:
+          - Total
+          - 1,420
+          - '840'
+          - '580'
+  - title: Move money, don't borrow
+    text: She moves 60 from clothes to eating out. Eating out's budget becomes 210 and clothes 30. The total is still 1,420, so nothing is borrowed from next month.
+    vars:
+      moved: 60 from clothes to eating out
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: e
+        title: Ama's envelopes (GH₵)
+        columns:
+        - category
+        - budget
+        - spent
+        - left
+        rows:
+        - k: Food
+          cells:
+          - Food
+          - '700'
+          - '440'
+          - '260'
+        - k: Transport
+          cells:
+          - Transport
+          - '380'
+          - '190'
+          - '190'
+        - k: Eating out
+          cells:
+          - Eating out
+          - '210'
+          - '210'
+          - '0'
+          tone: done
+        - k: Entertainment
+          cells:
+          - Entertainment
+          - '100'
+          - '0'
+          - '100'
+        - k: Clothes
+          cells:
+          - Clothes
+          - '30'
+          - '0'
+          - '30'
+          tone: compare
+        - k: tot
+          cells:
+          - Total
+          - 1,420
+          - '840'
+          - '580'
+  - title: Week 4
+    text: Groceries 240, transport 95 and a film with friends, 70. Every envelope ends the month with something left, or exactly zero.
+    vars:
+      spent this week: '405'
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: e
+        title: Ama's envelopes (GH₵)
+        columns:
+        - category
+        - budget
+        - spent
+        - left
+        rows:
+        - k: Food
+          cells:
+          - Food
+          - '700'
+          - '680'
+          - '20'
+          tone: active
+        - k: Transport
+          cells:
+          - Transport
+          - '380'
+          - '285'
+          - '95'
+          tone: active
+        - k: Eating out
+          cells:
+          - Eating out
+          - '210'
+          - '210'
+          - '0'
+        - k: Entertainment
+          cells:
+          - Entertainment
+          - '100'
+          - '70'
+          - '30'
+          tone: active
+        - k: Clothes
+          cells:
+          - Clothes
+          - '30'
+          - '0'
+          - '30'
+        - k: tot
+          cells:
+          - Total
+          - 1,420
+          - 1,245
+          - '175'
+  - title: Month end
+    text: GH₵ 175 is left across the envelopes. It goes to savings, so she saved 400 + 175 = 575 this month. Eating out overran, so next month's plan may give it more, taken from another want.
+    vars:
+      left over: 175 → savings
+      saved this month: '575'
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: e
+        title: Ama's envelopes (GH₵)
+        columns:
+        - category
+        - budget
+        - spent
+        - left
+        rows:
+        - k: Food
+          cells:
+          - Food
+          - '700'
+          - '680'
+          - '20'
+          tone: found
+        - k: Transport
+          cells:
+          - Transport
+          - '380'
+          - '285'
+          - '95'
+          tone: found
+        - k: Eating out
+          cells:
+          - Eating out
+          - '210'
+          - '210'
+          - '0'
+          tone: compare
+        - k: Entertainment
+          cells:
+          - Entertainment
+          - '100'
+          - '70'
+          - '30'
+          tone: found
+        - k: Clothes
+          cells:
+          - Clothes
+          - '30'
+          - '0'
+          - '30'
+          tone: found
+        - k: tot
+          cells:
+          - Total
+          - 1,420
+          - 1,245
+          - '175'
+          tone: found
