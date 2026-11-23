@@ -4,6 +4,15 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-23: A new look: the transit map
+
+Changed
+- The site's look is built on one idea: every course is a line on a transit map, and every line leaves the same station, Zero. The home page opens with that map, drawn at build time from the course files. Each course is a coloured line, each part is a stop, and a stop is drawn as an interchange when it shares chapters with another course. Stops fill in as you finish parts. Pointing at a line picks it out, pointing at a stop names that part, and clicking a line opens its course. The map draws itself once per visit (not with reduced motion) and is hidden on phones, where each course in the list shows its own small line instead.
+- A course page is that course's line running down the page, with a station for every chapter and "Also in…" on chapters shared with other courses. The chapter sidebar uses the same line, with the current chapter ringed.
+- New colours: cool paper or graphite backgrounds, ink text, one blue for actions, and a colour for each course, with separate light and dark values. Body text contrast is at least 6:1, and every course colour is at least 3:1 against the background in both themes.
+- Removed the gradient washes, floating orbs, gradient-highlighted headline words, lifting cards with identical shadows, and all-caps labels. Points, streaks, trophies and celebrations are unchanged, restyled to match.
+- Followed Anthropic's frontend-design skill (claude-plugins-official): ground the design in the subject, write a token plan, check it against generic defaults, spend boldness in one place.
+
 ### 2026-11-23: A walkthrough in every chapter
 
 Added

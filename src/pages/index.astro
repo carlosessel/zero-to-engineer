@@ -4,60 +4,100 @@ import SiteNav from '../components/SiteNav.astro';
 import { getCourses, href } from '../lib/load';
 const courses = await getCourses();
 
-// A simple picture for each course, drawn in white on its coloured band.
-const ICONS: Record<string, string> = {
-  ai: '<circle cx="50" cy="50" r="10"/><circle cx="20" cy="25" r="7"/><circle cx="80" cy="25" r="7"/><circle cx="20" cy="75" r="7"/><circle cx="80" cy="75" r="7"/><path d="M26 29 42 44M74 29 58 44M26 71 42 56M74 71 58 56" stroke-width="5"/>',
-  se: '<path d="M36 22 14 50l22 28M64 22l22 28-22 28M56 16 44 84" stroke-width="8" fill="none"/>',
-  web: '<rect x="10" y="18" width="80" height="64" rx="10" fill="none" stroke-width="7"/><path d="M10 36h80" stroke-width="7"/><circle cx="22" cy="27" r="3.5"/><circle cx="32" cy="27" r="3.5"/><path d="M30 52l10 8-10 8M50 68h18" stroke-width="6" fill="none"/>',
-};
-ICONS.mastery = '<path d="M8 86 38 34l14 22 10-14 30 44z" fill="none" stroke-width="7"/><path d="M38 34V12l18 7-18 7" stroke-width="5"/>';
-ICONS.claude = '<path d="M16 20h68a8 8 0 0 1 8 8v36a8 8 0 0 1-8 8H44L26 86V72H16a8 8 0 0 1-8-8V28a8 8 0 0 1 8-8z" fill="none" stroke-width="7"/><path d="M28 40l10 8-10 8M48 56h20" stroke-width="6" fill="none"/>';
-ICONS.backend = '<rect x="14" y="14" width="72" height="22" rx="6" fill="none" stroke-width="7"/><rect x="14" y="44" width="72" height="22" rx="6" fill="none" stroke-width="7"/><circle cx="28" cy="25" r="4"/><circle cx="28" cy="55" r="4"/><path d="M50 66v14M30 86h40" stroke-width="7"/>';
-const FALLBACK = '<path d="M50 10l10 30h32L66 58l10 32-26-19-26 19 10-32L8 40h32z"/>';
-const icon = (id: string) =>
-  `<svg viewBox="0 0 100 100" aria-hidden="true" fill="#fff" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" opacity=".9">${ICONS[id] ?? FALLBACK}</svg>`;
+// The transit map. Each course is a line leaving the Zero station; its stops
+// are the course's parts. A stop is drawn as an interchange when one of its
+// chapters is also in another course. Everything comes from the course files.
+const W = 1160, ROW = 60, TOP = 34, ZX = 46;
+const n = courses.length;
+const cy = TOP + ((n - 1) * ROW) / 2;
+const XS = 320, XE = W - 300;
+const inOthers = (courseId: string, chapterId: string) => courses.some((c) => c.id !== courseId && c.chapters.some((ch) => ch.id === chapterId));
+const routes = courses.map((c, i) => {
+  const y = TOP + i * ROW;
+  const by = cy + (i - (n - 1) / 2) * 8;           // lines leave Zero side by side
+  const x1 = 120;
+  const dx = Math.abs(y - by);                     // 45 degree bend to their own row
+  const d = `M${ZX + 20} ${by} H${x1} L${x1 + dx} ${y} H${XE}`;
+  const len = Math.round(x1 - (ZX + 20) + dx * Math.SQRT2 + (XE - x1 - dx));
+  const k = c.parts.length;
+  const stops = c.parts.map((p, j) => ({
+    x: k === 1 ? XE : XS + ((XE - XS) * j) / (k - 1),
+    name: p.name,
+    chapters: p.chapters.map((ch) => ch.id).join(' '),
+    count: p.chapters.length,
+    swap: p.chapters.some((ch) => inOthers(c.id, ch.id)),
+  }));
+  return { c, i, y, d, len, stops };
+});
+const H = TOP + (n - 1) * ROW + 34;
 ---
 <Base title="Zero to Engineer" description={`Free courses that start from nothing: ${courses.map((c) => c.title).join(', ')}.`}>
   <header class="sitehead"><SiteNav /></header>
   <main id="main" class="home" tabindex="-1">
     <section class="hero">
-      <div class="orbs" aria-hidden="true"><i></i><i></i><i></i></div>
-      <h1>Learn to build. <span class="grad-text">From zero.</span></h1>
-      <p class="lead">Free courses that assume you know nothing to begin with. Read, run real code in your browser, tick off exercises, and watch your level, streak and trophies grow.</p>
+      <h1>Every course starts at Zero.</h1>
+      <p class="lead">Free courses for people who have never written code. Pick a line, ride it one station at a time, and run real code in your browser on the way.</p>
       <div class="hero-cta">
-        <a class="btn glow big" href={href(`/${courses[0].id}/`)} data-continue>Start learning</a>
-        <a class="btn ghost big" href={href('/achievements/')}>Your trophies</a>
+        <a class="btn big" href={href(`/${courses[0].id}/`)} data-continue>Start learning</a>
+        <a class="btn ghost big" href="#courses">See all {courses.length} courses</a>
       </div>
     </section>
 
+    <figure class="map" id="map" aria-hidden="true">
+      <svg viewBox={`0 -6 ${W} ${H}`} role="presentation">
+        {routes.map((r) => (
+          <g class="route" data-line={r.c.id} data-href={href(`/${r.c.id}/`)} style={`--i:${r.i};--len:${r.len}`}>
+            <path class="track" d={r.d} />
+            {r.stops.map((s, j) => (
+              <circle class:list={['stop', { swap: s.swap }]} cx={s.x} cy={r.y} r={s.swap ? 9 : 7} style={`--j:${j}`}
+                data-part-chapters={s.chapters} data-tip={`${s.name}`} data-sub={`${s.count} ${s.count === 1 ? 'chapter' : 'chapters'}${s.swap ? ', some shared with other courses' : ''}`} />
+            ))}
+            <text class="terminus" x={XE + 22} y={r.y + 1}>{r.c.title}</text>
+            <text class="count" x={XE + 22} y={r.y + 18}>{r.c.chapters.length} chapters</text>
+          </g>
+        ))}
+        <g class="zero"><circle cx={ZX} cy={cy} r="20" /><text x={ZX - 22} y={cy + 46}>Zero</text></g>
+      </svg>
+      <script is:inline>
+        try { if (!sessionStorage.getItem('zte-map-drawn')) { document.getElementById('map').classList.add('draw'); sessionStorage.setItem('zte-map-drawn', '1'); } } catch (e) {}
+      </script>
+      <div class="map-tip" hidden></div>
+    </figure>
+    <p class="map-key" aria-hidden="true"><span><i></i>A part of a course</span><span><i class="swap"></i>Shares chapters with another course</span><span><i class="done"></i>Finished</span></p>
+
+    <h2 id="courses">Choose your line</h2>
+    <ul class="lines">
+      {routes.map((r) => (
+        <li data-line={r.c.id}>
+          <a class="lineitem" href={href(`/${r.c.id}/`)}>
+            <h3>{r.c.title}<span>{r.c.chapters.length} chapters in {r.c.parts.length} parts</span></h3>
+            <p>{r.c.description}</p>
+            <span class="go">Open course</span>
+            <span class="minimap" aria-hidden="true">
+              {r.stops.map((s, j) => (<>{j > 0 && <i />}<b data-part-chapters={s.chapters} title={s.name} /></>))}
+            </span>
+          </a>
+          <div class="meter" data-meter={r.c.chapters.map((x) => x.id).join(' ')} hidden><div class="bar"><i></i></div><span></span></div>
+        </li>
+      ))}
+    </ul>
+
+    <h2>Your progress</h2>
     <section class="player" aria-label="Your progress">
-      <div class="ring" data-g="levelring" style="--size:96px">
+      <div class="ring" data-g="levelring" style="--size:76px">
         <div><small>Level</small><b data-g="level">1</b></div>
       </div>
       <div class="who">
         <b data-g="title">Newcomer</b>
-        <span><span data-g="points">0</span> points · <span data-g="tonext">100</span> to the next level</span>
+        <span><span data-g="points">0</span> points, <span data-g="tonext">100</span> to the next level</span>
         <div class="xpbar" role="presentation"><i data-g="bar"></i></div>
       </div>
       <div class="stats">
         <div class="stat"><b><span aria-hidden="true">🔥</span> <span data-g="streak">0</span></b><span>day streak</span></div>
-        <div class="ring goal" data-g="goalring" style="--size:76px"><div><b data-g="today" style="font-size:20px">0</b><small>of <span data-g="goal">60</span></small></div></div>
+        <div class="ring goal" data-g="goalring" style="--size:64px"><div><b data-g="today" style="font-size:18px">0</b><small>of <span data-g="goal">60</span></small></div></div>
         <div class="stat"><b data-g="badges">0 / 16</b><span>trophies</span></div>
       </div>
     </section>
-
-    <h2 id="courses">Pick a course</h2>
-    <div class="cards">
-      {courses.map((c, i) => (
-        <section class="card" data-tone={String((i % 5) + 1)}>
-          <div class="band" set:html={icon(c.id)}></div>
-          <h2><a href={href(`/${c.id}/`)}>{c.title}</a></h2>
-          <p>{c.description}</p>
-          <div class="meta"><span class="pill">{c.chapters.length} chapters</span><span class="pill">{c.parts.length} parts</span></div>
-          <div class="meter" data-meter={c.chapters.map((x) => x.id).join(' ')}><div class="bar"><i></i></div><span></span></div>
-        </section>
-      ))}
-    </div>
 
     <h2>Tools that make it stick</h2>
     <div class="tools">
@@ -72,4 +112,8 @@ const icon = (id: string) =>
       <p><strong>Built in the open, and not finished.</strong> Every chapter shows its own status. The code examples are run under automatic tests, but no subject expert has reviewed the chapters yet. Your progress stays in this browser: nothing is sent anywhere.</p>
     </div>
   </main>
+  <script>
+    import { initMap } from '../scripts/map';
+    initMap();
+  </script>
 </Base>

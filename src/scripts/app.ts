@@ -13,6 +13,13 @@ function paint() {
     const tick = $('.tick', link);
     if (tick) tick.hidden = !done;
   }
+  // Stops on the map and on a course's line: filled when every chapter in
+  // that part is done, half filled once one is.
+  for (const stop of $$('[data-part-chapters]')) {
+    const { done, total } = P.countDone(state.progress, stop.dataset.partChapters!.split(' '));
+    stop.classList.toggle('done', done === total);
+    stop.classList.toggle('started', done > 0 && done < total);
+  }
   for (const meter of $$('[data-meter]')) {
     const { done, total } = P.countDone(state.progress, meter.dataset.meter!.split(' '));
     const bar = $('.bar i', meter);

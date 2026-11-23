@@ -7,12 +7,12 @@ interface Props { course: Course; current?: string; title: string; description?:
 const { course, current, title, description } = Astro.props;
 ---
 <Base title={title} description={description}>
-  <div class="topbar">
+  <div class="topbar" data-line={course.id}>
     <a class="home" href={href('/')}><b>{course.title}</b></a>
     <PlayerChips />
     <button class="btn ghost" id="menuBtn" aria-expanded="false" aria-controls="side">Chapters</button>
   </div>
-  <div class="shell">
+  <div class="shell" data-line={course.id}>
     <aside class="side" id="side">
       <p class="brand"><a href={href(`/${course.id}/`)}>{course.title}</a><small>{course.tagline}</small></p>
       <PlayerChips />

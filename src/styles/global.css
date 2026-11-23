@@ -1,38 +1,41 @@
 /* Ported from the prototype pages (legacy/), then extended. */
 :root{
-  --bg:#F7F5FF; --surface:#FFFFFF; --sunk:#EEEAFB; --ink:#1A1530; --muted:#585372;
-  --line:#E0D9F4; --accent:#5536E8; --accent-ink:#FFFFFF; --gold:#8F5A00; --gold-bg:#FFF2D6;
-  --good:#0E7A54; --good-bg:#DCF5EA; --bad:#B4213F; --bad-bg:#FCE4EA; --code-bg:#15112A; --code-ink:#E6E1FF;
-  --pink:#E5336B; --amber:#F59E0B; --teal:#0E9F94; --violet:#7C4DFF;
-  --grad:linear-gradient(120deg,#5B3DF5 0%,#B23CF0 40%,#F0457A 72%,#FF9F1C 100%);
-  --grad-soft:linear-gradient(120deg,rgba(91,61,245,.14),rgba(240,69,122,.12) 60%,rgba(255,159,28,.14));
-  --shadow:0 1px 2px rgba(26,21,48,.06),0 8px 24px -8px rgba(60,40,140,.18);
-  --shadow-lg:0 2px 6px rgba(26,21,48,.08),0 24px 48px -16px rgba(60,40,140,.30);
-  --radius:16px;
+  --bg:#F4F5F7; --surface:#FFFFFF; --sunk:#EBEDF1; --ink:#161A22; --muted:#555D6C;
+  --line:#D9DCE2; --accent:#1F4FD8; --accent-ink:#FFFFFF; --gold:#8A5A00; --gold-bg:#FFF3D1;
+  --good:#0B7A4B; --good-bg:#DDF3E8; --bad:#C0262D; --bad-bg:#FDE6E6; --code-bg:#161A22; --code-ink:#E8EAF0;
+  --pink:#C2255C; --amber:#E67700; --teal:#0C8599; --violet:#1F4FD8;
+  --grad:var(--accent); --grad-soft:transparent;
+  --shadow:none; --shadow-lg:0 2px 4px rgba(22,26,34,.08),0 18px 40px -18px rgba(22,26,34,.35);
+  --l-ai:#D9480F; --l-se:#1971C2; --l-web:#2B8A3E; --l-mastery:#6741D9; --l-claude:#C2255C; --l-backend:#C92A2A; --l-databases:#0C8599;
+  --radius:12px;
   box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
     color-scheme:dark;
-    --bg:#0D0A18; --surface:#161229; --sunk:#201A3A; --ink:#EFEBFF; --muted:#ABA4CB;
-    --line:#2E2651; --accent:#A796FF; --accent-ink:#110D22; --gold:#FFC857; --gold-bg:#33260A;
-    --good:#4FE0A5; --good-bg:#0F3326; --bad:#FF7C96; --bad-bg:#3D1422; --code-bg:#090713; --code-ink:#E6E1FF;
-    --pink:#FF6B9A; --amber:#FFB547; --teal:#3DDCCB; --violet:#B39DFF;
-    --grad-soft:linear-gradient(120deg,rgba(124,93,255,.22),rgba(240,69,122,.16) 60%,rgba(255,159,28,.16));
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -8px rgba(0,0,0,.6);
-    --shadow-lg:0 2px 6px rgba(0,0,0,.4),0 24px 48px -16px rgba(0,0,0,.7);
+    --bg:#14171C; --surface:#1C2027; --sunk:#252A33; --ink:#ECEEF2; --muted:#A3AAB8;
+    --line:#323844; --accent:#8FA8FF; --accent-ink:#0E1320; --gold:#F2C14E; --gold-bg:#3A2E10;
+    --good:#5BD69A; --good-bg:#123326; --bad:#FF8A8F; --bad-bg:#3B1719; --code-bg:#0F1216; --code-ink:#E8EAF0;
+    --pink:#F06595; --amber:#FFA94D; --teal:#3BC9DB; --violet:#8FA8FF;
+    --grad:var(--accent); --grad-soft:transparent;
+    --shadow:none; --shadow-lg:0 2px 6px rgba(0,0,0,.4),0 24px 48px -16px rgba(0,0,0,.7);
+    --l-ai:#FF8A4C; --l-se:#4DABF7; --l-web:#51CF66; --l-mastery:#9775FA; --l-claude:#F06595; --l-backend:#FF6B6B; --l-databases:#3BC9DB;
   }
 }
 :root[data-theme="dark"]{
   color-scheme:dark;
-  --bg:#0D0A18; --surface:#161229; --sunk:#201A3A; --ink:#EFEBFF; --muted:#ABA4CB;
-  --line:#2E2651; --accent:#A796FF; --accent-ink:#110D22; --gold:#FFC857; --gold-bg:#33260A;
-  --good:#4FE0A5; --good-bg:#0F3326; --bad:#FF7C96; --bad-bg:#3D1422; --code-bg:#090713; --code-ink:#E6E1FF;
-  --pink:#FF6B9A; --amber:#FFB547; --teal:#3DDCCB; --violet:#B39DFF;
-  --grad-soft:linear-gradient(120deg,rgba(124,93,255,.22),rgba(240,69,122,.16) 60%,rgba(255,159,28,.16));
-  --shadow:0 1px 2px rgba(0,0,0,.4),0 8px 24px -8px rgba(0,0,0,.6);
-  --shadow-lg:0 2px 6px rgba(0,0,0,.4),0 24px 48px -16px rgba(0,0,0,.7);
+  --bg:#14171C; --surface:#1C2027; --sunk:#252A33; --ink:#ECEEF2; --muted:#A3AAB8;
+  --line:#323844; --accent:#8FA8FF; --accent-ink:#0E1320; --gold:#F2C14E; --gold-bg:#3A2E10;
+  --good:#5BD69A; --good-bg:#123326; --bad:#FF8A8F; --bad-bg:#3B1719; --code-bg:#0F1216; --code-ink:#E8EAF0;
+  --pink:#F06595; --amber:#FFA94D; --teal:#3BC9DB; --violet:#8FA8FF;
+  --grad:var(--accent); --grad-soft:transparent;
+  --shadow:none; --shadow-lg:0 2px 6px rgba(0,0,0,.4),0 24px 48px -16px rgba(0,0,0,.7);
+  --l-ai:#FF8A4C; --l-se:#4DABF7; --l-web:#51CF66; --l-mastery:#9775FA; --l-claude:#F06595; --l-backend:#FF6B6B; --l-databases:#3BC9DB;
 }
+/* Each course is a line on the map, with its own colour. */
+[data-line="ai"]{--line-c:var(--l-ai)} [data-line="se"]{--line-c:var(--l-se)} [data-line="web"]{--line-c:var(--l-web)}
+[data-line="mastery"]{--line-c:var(--l-mastery)} [data-line="claude"]{--line-c:var(--l-claude)} [data-line="backend"]{--line-c:var(--l-backend)}
+[data-line="databases"]{--line-c:var(--l-databases)}
 *,*::before,*::after{box-sizing:inherit}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
 html,body{height:100%}

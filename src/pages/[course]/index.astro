@@ -1,11 +1,15 @@
 ---
 import Course from '../../layouts/Course.astro';
 import { getCourses, chapterHref } from '../../lib/load';
+import { coursesContaining } from '../../lib/model';
 
 export async function getStaticPaths() {
   return (await getCourses()).map((course) => ({ params: { course: course.id }, props: { courseId: course.id } }));
 }
-const course = (await getCourses()).find((c) => c.id === Astro.props.courseId)!;
+const courses = await getCourses();
+const course = courses.find((c) => c.id === Astro.props.courseId)!;
+// A chapter that is also in another course is an interchange on this line.
+const alsoIn = (id: string) => coursesContaining(courses, id).filter((c) => c.id !== course.id).map((c) => c.title.replace(/^Zero to /, ''));
 ---
 <Course course={course} title={course.title} description={course.tagline}>
   <article>
@@ -18,10 +22,18 @@ const course = (await getCourses()).find((c) => c.id === Astro.props.courseId)!;
     </header>
     {course.parts.map((p, i) => (
       <section class="partcard">
-        <h2><span class="num" aria-hidden="true">{i + 1}</span><span class="tick">Part {i + 1}: </span>{p.name}</h2>
+        <h2><span class="num">Part {i + 1}<span class="tick">:</span></span> {p.name}</h2>
         <p class="hint">{p.blurb}</p>
         <ol class="toc" start={p.chapters[0].number}>
-          {p.chapters.map((c) => <li><a href={chapterHref(course, c.slug)} data-nav-chapter={c.id}>{c.title}<span class="tick" hidden> (done)</span></a></li>)}
+          {p.chapters.map((c) => {
+            const others = alsoIn(c.id);
+            return (
+              <li class:list={{ swap: others.length > 0 }}>
+                <a href={chapterHref(course, c.slug)} data-nav-chapter={c.id}><span class="no">{c.number}</span><span>{c.title}<span class="tick" hidden> (done)</span></span></a>
+                {others.length > 0 && <span class="also"> Also in {others.join(', ')}</span>}
+              </li>
+            );
+          })}
         </ol>
       </section>
     ))}
