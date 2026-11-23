@@ -4,6 +4,11 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-23: Every course is now "Zero to …"
+
+Changed
+- Software Engineering Mastery is now **Zero to Senior Engineer**, and Mastering Claude and Claude Code is now **Zero to Claude Expert**, so every course is named for where it takes you, from zero. Their project chapters are now "The senior engineer projects" and "The Claude expert projects". Addresses (/mastery/, /claude/) and saved progress are unchanged. Older entries below keep the names used at the time.
+
 ### 2026-11-23: A new look: the transit map
 
 Changed
