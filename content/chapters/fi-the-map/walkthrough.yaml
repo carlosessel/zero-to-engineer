@@ -1,0 +1,112 @@
+- id: fi-the-map-money-flow
+  title: Every cedi gets a job
+  hint: Watch Ama's GH₵ 4,000 of net pay split four ways, then see what twelve months of the same split builds.
+  steps:
+    - title: Pay arrives
+      text: Ama's net pay, the money that actually reaches her account, is GH₵ 4,000. Before she spends anything, she decides where each part will go.
+      vars: { "not yet given a job": "GH₵ 4,000" }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: pay, label: "Net pay 4,000", x: 0.05, y: 0.5, tone: active }
+            - { k: spend, label: "Spending", x: 0.8, y: 0.0, tone: dim }
+            - { k: loan, label: "Loan", x: 0.8, y: 0.33, tone: dim }
+            - { k: save, label: "Savings", x: 0.8, y: 0.67, tone: dim }
+            - { k: inv, label: "Investing", x: 0.8, y: 1.0, tone: dim }
+          edges: []
+    - title: Spending first
+      text: Rent, food, transport, phone and family take GH₵ 2,800. This is most of her pay, as it is for most households.
+      vars: { "not yet given a job": "GH₵ 1,200" }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: pay, label: "Net pay 4,000", x: 0.05, y: 0.5, tone: base }
+            - { k: spend, label: "Spending 2,800", x: 0.8, y: 0.0, tone: active }
+            - { k: loan, label: "Loan", x: 0.8, y: 0.33, tone: dim }
+            - { k: save, label: "Savings", x: 0.8, y: 0.67, tone: dim }
+            - { k: inv, label: "Investing", x: 0.8, y: 1.0, tone: dim }
+          edges:
+            - { a: pay, b: spend, directed: true, tone: active }
+    - title: Paying back the loan
+      text: GH₵ 400 goes to her loan. Each repayment shrinks a liability, money she owes.
+      vars: { "not yet given a job": "GH₵ 800" }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: pay, label: "Net pay 4,000", x: 0.05, y: 0.5, tone: base }
+            - { k: spend, label: "Spending 2,800", x: 0.8, y: 0.0, tone: done }
+            - { k: loan, label: "Loan 400", x: 0.8, y: 0.33, tone: active }
+            - { k: save, label: "Savings", x: 0.8, y: 0.67, tone: dim }
+            - { k: inv, label: "Investing", x: 0.8, y: 1.0, tone: dim }
+          edges:
+            - { a: pay, b: spend, directed: true, tone: dim }
+            - { a: pay, b: loan, directed: true, tone: active }
+    - title: Emergency savings
+      text: GH₵ 500 goes into savings, kept safe and easy to reach for emergencies and plans in the next few years.
+      vars: { "not yet given a job": "GH₵ 300" }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: pay, label: "Net pay 4,000", x: 0.05, y: 0.5, tone: base }
+            - { k: spend, label: "Spending 2,800", x: 0.8, y: 0.0, tone: done }
+            - { k: loan, label: "Loan 400", x: 0.8, y: 0.33, tone: done }
+            - { k: save, label: "Savings 500", x: 0.8, y: 0.67, tone: active }
+            - { k: inv, label: "Investing", x: 0.8, y: 1.0, tone: dim }
+          edges:
+            - { a: pay, b: spend, directed: true, tone: dim }
+            - { a: pay, b: loan, directed: true, tone: dim }
+            - { a: pay, b: save, directed: true, tone: active }
+    - title: Investing for the long term
+      text: The last GH₵ 300 is invested for many years ahead. Its value can go down as well as up, which is why it is money she will not need soon.
+      vars: { "not yet given a job": "GH₵ 0" }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: pay, label: "Net pay 4,000", x: 0.05, y: 0.5, tone: base }
+            - { k: spend, label: "Spending 2,800", x: 0.8, y: 0.0, tone: done }
+            - { k: loan, label: "Loan 400", x: 0.8, y: 0.33, tone: done }
+            - { k: save, label: "Savings 500", x: 0.8, y: 0.67, tone: done }
+            - { k: inv, label: "Investing 300", x: 0.8, y: 1.0, tone: active }
+          edges:
+            - { a: pay, b: spend, directed: true, tone: dim }
+            - { a: pay, b: loan, directed: true, tone: dim }
+            - { a: pay, b: save, directed: true, tone: dim }
+            - { a: pay, b: inv, directed: true, tone: active }
+    - title: Every cedi has a job
+      text: 2,800 + 400 + 500 + 300 = 4,000. Nothing is left unplanned. That is what a budget is.
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: pay, label: "Net pay 4,000", x: 0.05, y: 0.5, tone: found }
+            - { k: spend, label: "Spending 2,800", x: 0.8, y: 0.0, tone: found }
+            - { k: loan, label: "Loan 400", x: 0.8, y: 0.33, tone: found }
+            - { k: save, label: "Savings 500", x: 0.8, y: 0.67, tone: found }
+            - { k: inv, label: "Investing 300", x: 0.8, y: 1.0, tone: found }
+          edges:
+            - { a: pay, b: spend, directed: true, tone: done }
+            - { a: pay, b: loan, directed: true, tone: done }
+            - { a: pay, b: save, directed: true, tone: done }
+            - { a: pay, b: inv, directed: true, tone: done }
+    - title: Twelve months later
+      text: Repeating the same month twelve times pays off GH₵ 4,800 of loan, saves GH₵ 6,000 and invests GH₵ 3,600 before any growth. Small amounts, repeated, become large ones.
+      parts:
+        - kind: kv
+          id: year
+          label: "After 12 months"
+          slots: 3
+          rows:
+            - { name: loan paid off, value: "12 × 400 = GH₵ 4,800", tone: found }
+            - { name: saved, value: "12 × 500 = GH₵ 6,000", tone: found }
+            - { name: invested, value: "12 × 300 = GH₵ 3,600", tone: found }

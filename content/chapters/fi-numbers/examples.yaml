@@ -1,0 +1,21 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    1 1,100.00
+    2 1,210.00
+    3 1,331.00
+  verify: |
+    assert round(ns["amount"], 2) == 1331.00
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the Python block above, which that block's check compares exactly.
+  verify: |
+    a = 1000
+    lines = []
+    for y in range(1, 4):
+        a *= 1.10
+        lines.append(f"{y} {a:,.2f}")
+    assert block.strip().splitlines() == lines

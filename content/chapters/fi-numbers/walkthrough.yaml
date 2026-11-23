@@ -1,0 +1,65 @@
+- id: fi-numbers-up-and-down
+  title: Up 50%, down 50%, and not back where you started
+  hint: Watch the bar shrink below its starting height, then see how big a rise it needs to recover.
+  steps:
+    - title: The start
+      text: A share price starts at GH₵ 100. We will apply two changes of the same size, one up and one down, using multipliers.
+      vars: { price: "100", "multipliers so far": "none" }
+      parts:
+        - kind: cells
+          id: c
+          label: "price after each change (GH₵)"
+          slots: 4
+          width: 90
+          bars: true
+          items: [{ k: s, v: 100, tone: active }]
+    - title: Up 50%
+      text: A 50% rise means multiplying by 1.5. 100 × 1.5 = 150.
+      vars: { price: "150", "multipliers so far": "1.5" }
+      parts:
+        - kind: cells
+          id: c
+          label: "price after each change (GH₵)"
+          slots: 4
+          width: 90
+          bars: true
+          items: [{ k: s, v: 100, tone: dim }, { k: u, v: 150, tone: active }]
+    - title: Down 50%
+      text: A 50% fall means multiplying by 0.5. But it is half of 150, a bigger number than the 100 the rise was taken from. 150 × 0.5 = 75.
+      vars: { price: "75", "multipliers so far": "1.5 × 0.5" }
+      parts:
+        - kind: cells
+          id: c
+          label: "price after each change (GH₵)"
+          slots: 4
+          width: 90
+          bars: true
+          items: [{ k: s, v: 100, tone: dim }, { k: u, v: 150, tone: dim }, { k: d, v: 75, tone: bad }]
+    - title: Multiply the multipliers
+      text: The two changes together are 1.5 × 0.5 = 0.75. The price is 75% of where it began, a 25% loss. Adding +50% and −50% to get 0% gives the wrong answer.
+      vars: { price: "75", "combined multiplier": "0.75" }
+      parts:
+        - { kind: note, id: n, text: "1.5 × 0.5 = 0.75, so 100 → 75: a 25% loss", tone: bad }
+    - title: What it takes to recover
+      text: To get from 75 back to 100, the rise needed is 25 ÷ 75 = 0.3333, or 33.33%. A 25% loss needs a 33.33% gain to undo it.
+      vars: { price: "100", "multiplier needed": "100 ÷ 75 = 1.3333" }
+      parts:
+        - kind: cells
+          id: c
+          label: "price after each change (GH₵)"
+          slots: 4
+          width: 90
+          bars: true
+          items: [{ k: s, v: 100, tone: dim }, { k: u, v: 150, tone: dim }, { k: d, v: 75, tone: dim }, { k: r, v: 100, tone: found }]
+        - { kind: note, id: n, text: "75 × 1.3333 = 100: a 33.33% rise just to get back", tone: found }
+    - title: The lesson
+      text: Percentage changes combine by multiplying, not adding, and losses need bigger gains to recover. Lose 20% and you need 25%; lose 50% and you need 100%.
+      parts:
+        - kind: kv
+          id: rec
+          label: "Loss → rise needed to recover"
+          slots: 3
+          rows:
+            - { name: "lose 20%", value: "need 25%  (1 ÷ 0.8 = 1.25)" }
+            - { name: "lose 25%", value: "need 33.33%  (1 ÷ 0.75 = 1.3333)", tone: active }
+            - { name: "lose 50%", value: "need 100%  (1 ÷ 0.5 = 2)" }

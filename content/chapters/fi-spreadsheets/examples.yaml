@@ -1,0 +1,39 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+# The blocks are spreadsheet formulas, not a programming language, so each check
+# recomputes the results in Python and compares them with what the block says the cell shows.
+- block: 1
+  lang: text
+  check: illustration
+  note: Spreadsheet arithmetic; each formula is evaluated in Python (with ^ as a power) and compared with the value the block says it gives.
+  verify: |
+    import re
+    for line in block.strip().splitlines():
+        m = re.match(r"=(\S+)\s+gives (\S+)", line)
+        assert m, line
+        got = eval(m.group(1).replace("^", "**"))
+        assert abs(got - float(m.group(2))) < 1e-9, (line, got)
+- block: 2
+  lang: text
+  check: illustration
+  note: SUM, AVERAGE, MAX and MIN of Esi's six months (the table above the block), recomputed in Python.
+  verify: |
+    s = [1850, 2100, 1975, 2320, 1790, 2065]
+    assert "shows 12100" in block and sum(s) == 12100
+    assert "shows 2016.666667" in block and f"{sum(s)/len(s):.6f}" == "2016.666667"
+    assert "shows 2320" in block and max(s) == 2320
+    assert "shows 1790" in block and min(s) == 1790
+- block: 3
+  lang: text
+  check: illustration
+  note: The growth table's formulas, followed row by row in Python with F1 = 10%; the chapter says column C shows 1100, 1210 and 1331, and the one-cell version 1331.
+  verify: |
+    F1 = 0.10
+    start = 1000
+    ends = []
+    for year in range(3):
+        end = start * (1 + F1)
+        ends.append(round(end, 2))
+        start = end
+    assert ends == [1100.0, 1210.0, 1331.0]
+    assert round(1000 * (1 + F1) ** 3, 2) == 1331.0
+    assert "=B3*(1+$F$1)" in block and "=C2" in block
