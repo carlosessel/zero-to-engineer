@@ -1,0 +1,141 @@
+- id: m-architecture-event-sourcing
+  title: Replaying events to get the state
+  hint: The event log is the truth. Watch the account's state being rebuilt one event at a time.
+  language: TypeScript
+  code: |
+    type AccountEvent = { type: "Opened" } | { type: "Deposited"; pence: number } | { type: "Withdrawn"; pence: number } | { type: "Frozen" };
+    type Account = { balancePence: number; frozen: boolean; version: number };
+
+    const apply = (state: Account, e: AccountEvent): Account => {
+      switch (e.type) {
+        case "Opened": return { balancePence: 0, frozen: false, version: state.version + 1 };
+        case "Deposited": return { ...state, balancePence: state.balancePence + e.pence, version: state.version + 1 };
+        case "Withdrawn": return { ...state, balancePence: state.balancePence - e.pence, version: state.version + 1 };
+        case "Frozen": return { ...state, frozen: true, version: state.version + 1 };
+      }
+    };
+
+    const eventLog: AccountEvent[] = [{ type: "Opened" }, { type: "Deposited", pence: 10_000 }, { type: "Withdrawn", pence: 2_500 }, { type: "Frozen" }];
+    const initial: Account = { balancePence: 0, frozen: false, version: 0 };
+
+    console.log(eventLog.reduce(apply, initial));
+    console.log(eventLog.slice(0, 2).reduce(apply, initial));
+  steps:
+    - title: The log and a blank start
+      text: The system stores only what happened, in order. No balance is saved anywhere; there is just a starting state with version 0.
+      lines: [13, 14]
+      parts:
+        - kind: cells
+          id: log
+          label: "Event log (the system of record)"
+          width: 130
+          slots: 4
+          indices: true
+          items: [Opened, "Deposited 10000", "Withdrawn 2500", Frozen]
+        - kind: kv
+          id: st
+          label: "Account state, worked out"
+          slots: 3
+          rows:
+            - { name: balancePence, value: "0" }
+            - { name: frozen, value: "false" }
+            - { name: version, value: "0" }
+    - title: Opened
+      text: reduce hands the first event to apply. Opened gives a zero balance, not frozen, and the version goes up by one.
+      lines: [16, 6]
+      parts:
+        - kind: cells
+          id: log
+          label: "Event log (the system of record)"
+          width: 130
+          slots: 4
+          indices: true
+          pointers: [{ name: e, at: 0 }]
+          items: [{ v: Opened, tone: active }, "Deposited 10000", "Withdrawn 2500", Frozen]
+        - kind: kv
+          id: st
+          label: "Account state, worked out"
+          slots: 3
+          rows:
+            - { name: balancePence, value: "0" }
+            - { name: frozen, value: "false" }
+            - { name: version, value: "1", tone: active }
+    - title: Deposited 10000
+      text: apply takes the state so far and the next event, and returns a new state with 10000 added to the balance.
+      lines: [7]
+      parts:
+        - kind: cells
+          id: log
+          label: "Event log (the system of record)"
+          width: 130
+          slots: 4
+          indices: true
+          pointers: [{ name: e, at: 1 }]
+          items: [{ v: Opened, tone: done }, { v: "Deposited 10000", tone: active }, "Withdrawn 2500", Frozen]
+        - kind: kv
+          id: st
+          label: "Account state, worked out"
+          slots: 3
+          rows:
+            - { name: balancePence, value: "10000", tone: active }
+            - { name: frozen, value: "false" }
+            - { name: version, value: "2", tone: active }
+    - title: Withdrawn 2500
+      text: The withdrawal takes 2500 off, leaving 7500. The balance is never edited in place; it is derived from the history.
+      lines: [8]
+      parts:
+        - kind: cells
+          id: log
+          label: "Event log (the system of record)"
+          width: 130
+          slots: 4
+          indices: true
+          pointers: [{ name: e, at: 2 }]
+          items: [{ v: Opened, tone: done }, { v: "Deposited 10000", tone: done }, { v: "Withdrawn 2500", tone: active }, Frozen]
+        - kind: kv
+          id: st
+          label: "Account state, worked out"
+          slots: 3
+          rows:
+            - { name: balancePence, value: "7500", tone: active }
+            - { name: frozen, value: "false" }
+            - { name: version, value: "3", tone: active }
+    - title: Frozen
+      text: "The last event freezes the account. After all four events the current state is a balance of 7500, frozen, version 4."
+      lines: [9]
+      parts:
+        - kind: cells
+          id: log
+          label: "Event log (the system of record)"
+          width: 130
+          slots: 4
+          indices: true
+          pointers: [{ name: e, at: 3 }]
+          items: [{ v: Opened, tone: done }, { v: "Deposited 10000", tone: done }, { v: "Withdrawn 2500", tone: done }, { v: Frozen, tone: active }]
+        - kind: kv
+          id: st
+          label: "Account state, worked out"
+          slots: 3
+          rows:
+            - { name: balancePence, value: "7500", tone: found }
+            - { name: frozen, value: "true", tone: found }
+            - { name: version, value: "4", tone: found }
+    - title: Time travel
+      text: Replaying only the first two events gives the state at that moment, a balance of 10000, not frozen, version 2. Any past state can be rebuilt this way.
+      lines: [17]
+      parts:
+        - kind: cells
+          id: log
+          label: "Event log (the system of record)"
+          width: 130
+          slots: 4
+          indices: true
+          items: [{ v: Opened, tone: active }, { v: "Deposited 10000", tone: active }, { v: "Withdrawn 2500", tone: dim }, { v: Frozen, tone: dim }]
+        - kind: kv
+          id: st
+          label: "Account state, worked out"
+          slots: 3
+          rows:
+            - { name: balancePence, value: "10000", tone: found }
+            - { name: frozen, value: "false", tone: found }
+            - { name: version, value: "2", tone: found }

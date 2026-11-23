@@ -1,0 +1,301 @@
+- id: react-data-routing-race
+  title: Two replies, one page
+  hint: Pick 2, then quickly 3, and watch the ignore flag throw away the late reply.
+  language: JSX
+  code: |-
+    useEffect(() => {
+      let ignore = false;
+      setPerson(null);
+      setError(false);
+      fetch(`https://jsonplaceholder.typicode.com/users/${id}`)
+        .then((response) => {
+          if (!response.ok) throw new Error(`The server replied ${response.status}`);
+          return response.json();
+        })
+        .then((data) => {
+          if (!ignore) setPerson(data);
+        })
+        .catch(() => {
+          if (!ignore) setError(true);
+        });
+      return () => {
+        ignore = true;
+      };
+    }, [id]);
+  steps:
+    - title: Number 2 is chosen
+      text: id is 2, so the effect runs. It makes its own ignore flag, set to false, clears the old person so the page shows Loading…, and starts fetching person 2.
+      lines:
+        - 2
+        - 3
+        - 5
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - React
+            - Effect 2
+            - Effect 3
+            - Server
+          slots: 8
+          messages:
+            - from: React
+              to: Effect 2
+              label: run with id 2
+              tone: active
+            - from: Effect 2
+              to: Server
+              label: fetch /users/2
+              tone: active
+        - kind: kv
+          id: k
+          label: Right now
+          slots: 4
+          rows:
+            - name: menu says
+              value: "2"
+              tone: base
+            - name: ignore (effect 2)
+              value: "false"
+              tone: active
+            - name: page shows
+              value: Loading…
+              tone: compare
+    - title: The reply for 2 is slow
+      text: Before person 2 arrives, someone picks 3. id has changed, so React must run the effect again. First it runs the cleanup of the effect that fetched 2.
+      lines:
+        - 16
+        - 17
+        - 18
+        - 19
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - React
+            - Effect 2
+            - Effect 3
+            - Server
+          slots: 8
+          messages:
+            - from: React
+              to: Effect 2
+              label: run with id 2
+              tone: dim
+            - from: Effect 2
+              to: Server
+              label: fetch /users/2
+              tone: dim
+            - from: React
+              to: Effect 2
+              label: clean up
+              tone: active
+        - kind: kv
+          id: k
+          label: Right now
+          slots: 4
+          rows:
+            - name: menu says
+              value: "3"
+              tone: active
+            - name: ignore (effect 2)
+              value: "true"
+              tone: bad
+            - name: page shows
+              value: Loading…
+              tone: compare
+    - title: The effect runs for 3
+      text: The new effect has its own ignore flag, false, and starts fetching person 3. Effect 2 is still waiting for its reply, but its flag is now true.
+      lines:
+        - 2
+        - 5
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - React
+            - Effect 2
+            - Effect 3
+            - Server
+          slots: 8
+          messages:
+            - from: React
+              to: Effect 2
+              label: run with id 2
+              tone: dim
+            - from: Effect 2
+              to: Server
+              label: fetch /users/2
+              tone: dim
+            - from: React
+              to: Effect 2
+              label: clean up
+              tone: dim
+            - from: React
+              to: Effect 3
+              label: run with id 3
+              tone: active
+            - from: Effect 3
+              to: Server
+              label: fetch /users/3
+              tone: active
+        - kind: kv
+          id: k
+          label: Right now
+          slots: 4
+          rows:
+            - name: menu says
+              value: "3"
+              tone: base
+            - name: ignore (effect 2)
+              value: "true"
+              tone: bad
+            - name: ignore (effect 3)
+              value: "false"
+              tone: active
+            - name: page shows
+              value: Loading…
+              tone: compare
+    - title: Person 3 arrives first
+      text: The reply for 3 comes back. Effect 3's ignore is false, so it calls setPerson, and the page shows person 3.
+      lines:
+        - 10
+        - 11
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - React
+            - Effect 2
+            - Effect 3
+            - Server
+          slots: 8
+          messages:
+            - from: React
+              to: Effect 2
+              label: run with id 2
+              tone: dim
+            - from: Effect 2
+              to: Server
+              label: fetch /users/2
+              tone: dim
+            - from: React
+              to: Effect 2
+              label: clean up
+              tone: dim
+            - from: React
+              to: Effect 3
+              label: run with id 3
+              tone: dim
+            - from: Effect 3
+              to: Server
+              label: fetch /users/3
+              tone: dim
+            - from: Server
+              to: Effect 3
+              label: person 3
+              tone: found
+            - from: Effect 3
+              to: React
+              label: setPerson(person 3)
+              tone: found
+        - kind: kv
+          id: k
+          label: Right now
+          slots: 4
+          rows:
+            - name: menu says
+              value: "3"
+              tone: base
+            - name: ignore (effect 2)
+              value: "true"
+              tone: bad
+            - name: ignore (effect 3)
+              value: "false"
+              tone: active
+            - name: page shows
+              value: person 3
+              tone: found
+    - title: The late reply for 2
+      text: Now person 2 finally arrives. Effect 2's ignore is true, so if (!ignore) is false and the reply is thrown away. The page still matches the menu.
+      lines:
+        - 11
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - React
+            - Effect 2
+            - Effect 3
+            - Server
+          slots: 8
+          messages:
+            - from: React
+              to: Effect 2
+              label: run with id 2
+              tone: dim
+            - from: Effect 2
+              to: Server
+              label: fetch /users/2
+              tone: dim
+            - from: React
+              to: Effect 2
+              label: clean up
+              tone: dim
+            - from: React
+              to: Effect 3
+              label: run with id 3
+              tone: dim
+            - from: Effect 3
+              to: Server
+              label: fetch /users/3
+              tone: dim
+            - from: Server
+              to: Effect 3
+              label: person 3
+              tone: dim
+            - from: Effect 3
+              to: React
+              label: setPerson(person 3)
+              tone: dim
+            - from: Server
+              to: Effect 2
+              label: "person 2 (late): ignored"
+              tone: bad
+        - kind: kv
+          id: k
+          label: Right now
+          slots: 4
+          rows:
+            - name: menu says
+              value: "3"
+              tone: base
+            - name: ignore (effect 2)
+              value: "true"
+              tone: compare
+            - name: ignore (effect 3)
+              value: "false"
+              tone: base
+            - name: page shows
+              value: person 3
+              tone: found
+    - title: Without the flag
+      text: "Without ignore, the late reply would call setPerson too, and the page would show person 2 while the menu says 3. That is a race condition: the result depends on which reply finishes first."
+      parts:
+        - kind: kv
+          id: k
+          label: Right now
+          slots: 4
+          rows:
+            - name: menu says
+              value: "3"
+              tone: base
+            - name: ignore (effect 2)
+              value: (no flag)
+              tone: dim
+            - name: ignore (effect 3)
+              value: (no flag)
+              tone: dim
+            - name: page shows
+              value: "person 2: wrong"
+              tone: bad

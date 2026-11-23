@@ -165,6 +165,8 @@ console.log(describe({ status: "failed", error: "timeout" }));
 
 It prints `Loading…`, `2 products` and `Could not load: timeout`. Inside each `case`, TypeScript **narrows** the type, so `state.data` exists only where it is loaded. The `default` branch assigns to `never`, a type with no values: if someone later adds a `{ status: "cancelled" }` state and forgets to handle it, that line becomes a compile error. This is an **exhaustiveness check**.
 
+<Walkthrough name="m-types-narrowing" />
+
 Java (21 and later; sealed types arrived in 17) does the same with **sealed interfaces**, **records** and pattern-matching `switch`, which must cover every permitted case:
 
 ```java

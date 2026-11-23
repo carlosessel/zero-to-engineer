@@ -540,6 +540,8 @@ sign in kofi@example.com: 200
   GET /reports/sales -> 401
 ```
 
+<Walkthrough name="be-auth-stacks-middleware-checks" />
+
 - **`hashPassword`** stores the algorithm, salt and hash together, so the format can change later; **`verifyPassword`** compares with `timingSafeEqual`.
 - **`authenticate`** verifies the signature, issuer, audience, expiry and the allowed algorithm (never accept whatever algorithm the token claims, especially `none`). With a provider, use `createRemoteJWKSet(new URL(".../.well-known/jwks.json"))` instead of the shared key.
 - **`requireRole`** is a middleware factory; routes list exactly what they need: `authenticate, requireRole("staff")`.

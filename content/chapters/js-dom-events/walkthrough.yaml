@@ -1,0 +1,169 @@
+- id: js-dom-events-delegation
+  title: One listener for the whole list
+  hint: Follow a click on a Done button as it bubbles up the tree to the single listener on the list.
+  language: JavaScript
+  code: |
+    item.append(text, doneButton, deleteButton);
+    list.append(item);
+
+    list.addEventListener("click", (event) => {
+      const item = event.target.closest("li");
+      if (event.target.classList.contains("toggle")) {
+        item.classList.toggle("done");
+      } else if (event.target.classList.contains("delete")) {
+        item.remove();
+      }
+      updateSummary();
+    });
+  steps:
+    - title: Two tasks on the page
+      text: Each submit built an li holding a span of text and two buttons, then appended it to the list. Here, two tasks have been added. Only the first is drawn in full.
+      lines: [1, 2]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: ul, label: "ul#todo-list", x: 0.5, y: 0 }
+            - { k: li1, label: "li", x: 0.3, y: 0.45 }
+            - { k: li2, label: "li: Call Kofi", x: 0.85, y: 0.45 }
+            - { k: span, label: "span: Buy flour", x: 0.05, y: 1 }
+            - { k: done, label: "button.toggle", x: 0.4, y: 1 }
+            - { k: del, label: "button.delete", x: 0.75, y: 1 }
+          edges:
+            - { a: ul, b: li1 }
+            - { a: ul, b: li2 }
+            - { a: li1, b: span }
+            - { a: li1, b: done }
+            - { a: li1, b: del }
+        - { kind: note, id: n, text: "summary: 0 of 2 done." }
+    - title: One listener, on the list
+      text: There is no listener on any button. There is one, on the ul, which existed before any task was added.
+      lines: [4]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: ul, label: "ul#todo-list", x: 0.5, y: 0, tone: compare, note: "listens for click" }
+            - { k: li1, label: "li", x: 0.3, y: 0.45 }
+            - { k: li2, label: "li: Call Kofi", x: 0.85, y: 0.45 }
+            - { k: span, label: "span: Buy flour", x: 0.05, y: 1 }
+            - { k: done, label: "button.toggle", x: 0.4, y: 1 }
+            - { k: del, label: "button.delete", x: 0.75, y: 1 }
+          edges:
+            - { a: ul, b: li1 }
+            - { a: ul, b: li2 }
+            - { a: li1, b: span }
+            - { a: li1, b: done }
+            - { a: li1, b: del }
+    - title: A click on Done
+      text: The click happens on the Done button of "Buy flour". That button is the event's target.
+      vars: { event.target: button.toggle }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: ul, label: "ul#todo-list", x: 0.5, y: 0, tone: compare, note: "listens for click" }
+            - { k: li1, label: "li", x: 0.3, y: 0.45 }
+            - { k: li2, label: "li: Call Kofi", x: 0.85, y: 0.45 }
+            - { k: span, label: "span: Buy flour", x: 0.05, y: 1 }
+            - { k: done, label: "button.toggle", x: 0.4, y: 1, tone: active, note: target }
+            - { k: del, label: "button.delete", x: 0.75, y: 1 }
+          edges:
+            - { a: ul, b: li1 }
+            - { a: ul, b: li2 }
+            - { a: li1, b: span }
+            - { a: li1, b: done }
+            - { a: li1, b: del }
+    - title: The click bubbles up
+      text: An event on an element also happens on each of its ancestors. The click rises to the li, then to the ul, where the listener runs.
+      lines: [4]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: ul, label: "ul#todo-list", x: 0.5, y: 0, tone: active, note: "handler runs" }
+            - { k: li1, label: "li", x: 0.3, y: 0.45, tone: compare }
+            - { k: li2, label: "li: Call Kofi", x: 0.85, y: 0.45 }
+            - { k: span, label: "span: Buy flour", x: 0.05, y: 1 }
+            - { k: done, label: "button.toggle", x: 0.4, y: 1, tone: compare, note: target }
+            - { k: del, label: "button.delete", x: 0.75, y: 1 }
+          edges:
+            - { a: ul, b: li1 }
+            - { a: ul, b: li2 }
+            - { a: li1, b: span }
+            - { a: done, b: li1, directed: true, label: bubbles, tone: active }
+            - { a: li1, b: ul, directed: true, label: bubbles, tone: active }
+            - { a: li1, b: del }
+    - title: Which task? closest("li")
+      text: closest searches upwards from the target for the nearest li. That is the task the button belongs to.
+      lines: [5]
+      vars: { event.target: button.toggle, item: "li (Buy flour)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: ul, label: "ul#todo-list", x: 0.5, y: 0, tone: active, note: "handler runs" }
+            - { k: li1, label: "li", x: 0.3, y: 0.45, tone: found, note: item }
+            - { k: li2, label: "li: Call Kofi", x: 0.85, y: 0.45 }
+            - { k: span, label: "span: Buy flour", x: 0.05, y: 1 }
+            - { k: done, label: "button.toggle", x: 0.4, y: 1, tone: compare, note: target }
+            - { k: del, label: "button.delete", x: 0.75, y: 1 }
+          edges:
+            - { a: ul, b: li1 }
+            - { a: ul, b: li2 }
+            - { a: li1, b: span }
+            - { a: done, b: li1, directed: true, label: closest, tone: found }
+            - { a: li1, b: del }
+    - title: Which button? Check the class
+      text: The target has the class toggle, so the li gets the class done switched on. The CSS for .done crosses the text out.
+      lines: [6, 7]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: ul, label: "ul#todo-list", x: 0.5, y: 0, tone: compare, note: "listens for click" }
+            - { k: li1, label: "li.done", x: 0.3, y: 0.45, tone: active }
+            - { k: li2, label: "li: Call Kofi", x: 0.85, y: 0.45 }
+            - { k: span, label: "span: Buy flour", x: 0.05, y: 1, tone: dim }
+            - { k: done, label: "button.toggle", x: 0.4, y: 1 }
+            - { k: del, label: "button.delete", x: 0.75, y: 1 }
+          edges:
+            - { a: ul, b: li1 }
+            - { a: ul, b: li2 }
+            - { a: li1, b: span }
+            - { a: li1, b: done }
+            - { a: li1, b: del }
+    - title: The summary is recounted
+      text: updateSummary counts the items and the .done items on the page, so the summary always matches what is shown.
+      lines: [11]
+      vars: {}
+      parts:
+        - { kind: note, id: n, text: "summary: 1 of 2 done.", tone: found }
+    - title: Later items work too
+      text: A click on the Delete button of "Call Kofi" bubbles to the same ul. The target has the class delete, so its li is removed. No new listener was ever needed.
+      lines: [8, 9, 11]
+      vars: { event.target: button.delete, item: "li (Call Kofi)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: ul, label: "ul#todo-list", x: 0.5, y: 0, tone: active, note: "handler runs" }
+            - { k: li1, label: "li.done", x: 0.3, y: 0.45 }
+            - { k: li2, label: "li: Call Kofi", x: 0.85, y: 0.45, tone: bad, note: removed }
+            - { k: span, label: "span: Buy flour", x: 0.05, y: 1, tone: dim }
+            - { k: done, label: "button.toggle", x: 0.4, y: 1 }
+            - { k: del, label: "button.delete", x: 0.75, y: 1 }
+          edges:
+            - { a: ul, b: li1 }
+            - { a: li2, b: ul, directed: true, label: bubbles, tone: active }
+            - { a: li1, b: span }
+            - { a: li1, b: done }
+            - { a: li1, b: del }
+        - { kind: note, id: n, text: "summary: 1 of 1 done.", tone: found }

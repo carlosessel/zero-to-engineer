@@ -157,6 +157,8 @@ console.log({ ordersPerDay, averagePerSecond: averagePerSecond.toFixed(2), peakP
 
 It prints `{ ordersPerDay: 100000, averagePerSecond: "1.16", peakPerSecond: "5.8", storageGb: "365" }`. Six orders a second at peak and a few hundred gigabytes over five years: one well-indexed PostgreSQL database handles that comfortably, and a design with sharding and a distributed log would be solving a problem this business does not have. Useful facts to keep in mind: a day has about 86,400 seconds (call it 100,000 for quick sums), the latency numbers from <Ref to="m-machine" />, and that a single modern server handles thousands of simple requests per second.
 
+<Walkthrough name="m-design-docs-envelope" />
+
 ## Estimating effort
 
 Estimating how long software will take is notoriously hard, mainly because of what nobody has thought of yet. Habits that help:

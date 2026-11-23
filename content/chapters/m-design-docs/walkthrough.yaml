@@ -1,0 +1,129 @@
+- id: m-design-docs-envelope
+  title: An estimate on the back of an envelope
+  hint: Watch five round guesses turn into requests per second and storage, then into a design decision.
+  language: TypeScript
+  code: |
+    const dailyActiveUsers = 200_000;
+    const ordersPerUserPerDay = 0.5;
+    const peakToAverage = 5;
+    const bytesPerOrder = 2_000;
+    const yearsKept = 5;
+
+    const ordersPerDay = dailyActiveUsers * ordersPerUserPerDay;
+    const averagePerSecond = ordersPerDay / 86_400;
+    const peakPerSecond = averagePerSecond * peakToAverage;
+    const storageGb = (ordersPerDay * 365 * yearsKept * bytesPerOrder) / 1e9;
+  steps:
+    - title: Start with round guesses
+      text: Before designing for scale, estimate how much scale there is. Five rough numbers about the business are enough to find the order of magnitude.
+      lines: [1, 2, 3, 4, 5]
+      parts:
+        - kind: kv
+          id: in
+          label: "Guesses"
+          slots: 5
+          rows:
+            - { name: dailyActiveUsers, value: "200,000", tone: active }
+            - { name: ordersPerUserPerDay, value: "0.5", tone: active }
+            - { name: peakToAverage, value: "5", tone: active }
+            - { name: bytesPerOrder, value: "2,000", tone: active }
+            - { name: yearsKept, value: "5", tone: active }
+        - { kind: kv, id: out, label: "Worked out", slots: 4, rows: [] }
+    - title: Orders per day
+      text: 200,000 users each placing half an order a day gives 100,000 orders a day.
+      lines: [7]
+      parts:
+        - kind: kv
+          id: in
+          label: "Guesses"
+          slots: 5
+          rows:
+            - { name: dailyActiveUsers, value: "200,000", tone: compare }
+            - { name: ordersPerUserPerDay, value: "0.5", tone: compare }
+            - { name: peakToAverage, value: "5" }
+            - { name: bytesPerOrder, value: "2,000" }
+            - { name: yearsKept, value: "5" }
+        - kind: kv
+          id: out
+          label: "Worked out"
+          slots: 4
+          rows: [{ name: ordersPerDay, value: "100,000", tone: active }]
+    - title: Spread over the day
+      text: A day has 86,400 seconds, so on average that is about 1.16 orders a second.
+      lines: [8]
+      parts:
+        - kind: kv
+          id: in
+          label: "Guesses"
+          slots: 5
+          rows:
+            - { name: dailyActiveUsers, value: "200,000" }
+            - { name: ordersPerUserPerDay, value: "0.5" }
+            - { name: peakToAverage, value: "5" }
+            - { name: bytesPerOrder, value: "2,000" }
+            - { name: yearsKept, value: "5" }
+        - kind: kv
+          id: out
+          label: "Worked out"
+          slots: 4
+          rows:
+            - { name: ordersPerDay, value: "100,000", tone: compare }
+            - { name: averagePerSecond, value: "1.16", tone: active }
+    - title: Allow for the busy hour
+      text: Traffic is not even; the guess is that the peak is five times the average. That gives about 5.8 orders a second at the busiest moment.
+      lines: [9]
+      parts:
+        - kind: kv
+          id: in
+          label: "Guesses"
+          slots: 5
+          rows:
+            - { name: dailyActiveUsers, value: "200,000" }
+            - { name: ordersPerUserPerDay, value: "0.5" }
+            - { name: peakToAverage, value: "5", tone: compare }
+            - { name: bytesPerOrder, value: "2,000" }
+            - { name: yearsKept, value: "5" }
+        - kind: kv
+          id: out
+          label: "Worked out"
+          slots: 4
+          rows:
+            - { name: ordersPerDay, value: "100,000" }
+            - { name: averagePerSecond, value: "1.16", tone: compare }
+            - { name: peakPerSecond, value: "5.8", tone: active }
+    - title: Storage over five years
+      text: 100,000 orders a day, for 365 days, for 5 years, at 2,000 bytes each, is 365 billion bytes, or 365 GB.
+      lines: [10]
+      parts:
+        - kind: kv
+          id: in
+          label: "Guesses"
+          slots: 5
+          rows:
+            - { name: dailyActiveUsers, value: "200,000" }
+            - { name: ordersPerUserPerDay, value: "0.5" }
+            - { name: peakToAverage, value: "5" }
+            - { name: bytesPerOrder, value: "2,000", tone: compare }
+            - { name: yearsKept, value: "5", tone: compare }
+        - kind: kv
+          id: out
+          label: "Worked out"
+          slots: 4
+          rows:
+            - { name: ordersPerDay, value: "100,000", tone: compare }
+            - { name: averagePerSecond, value: "1.16" }
+            - { name: peakPerSecond, value: "5.8" }
+            - { name: storageGb, value: "365", tone: active }
+    - title: What it rules out
+      text: Six orders a second and a few hundred gigabytes fit one well-indexed PostgreSQL database. Sharding and a distributed log would solve a problem this business does not have.
+      parts:
+        - kind: kv
+          id: out
+          label: "Worked out"
+          slots: 4
+          rows:
+            - { name: ordersPerDay, value: "100,000" }
+            - { name: averagePerSecond, value: "1.16" }
+            - { name: peakPerSecond, value: "5.8", tone: found }
+            - { name: storageGb, value: "365", tone: found }
+        - { kind: note, id: n, text: "Decision: one PostgreSQL database is plenty", tone: found }

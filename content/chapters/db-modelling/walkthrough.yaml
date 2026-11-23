@@ -1,0 +1,272 @@
+- id: db-modelling-link-table
+  title: A link table joins both ways
+  hint: Each row of product_tags is one line between a tag and a product. Watch a query follow those lines from the breakfast tag to its products.
+  language: SQL
+  code: |
+    CREATE TABLE tags (
+      id   integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      name text NOT NULL UNIQUE
+    );
+
+    CREATE TABLE product_tags (
+      product_id integer NOT NULL REFERENCES products (id) ON DELETE CASCADE,
+      tag_id     integer NOT NULL REFERENCES tags (id) ON DELETE CASCADE,
+      PRIMARY KEY (product_id, tag_id)
+    );
+    CREATE INDEX product_tags_tag_id_idx ON product_tags (tag_id);
+
+    INSERT INTO tags (name) VALUES ('breakfast'), ('gift'), ('bestseller');
+    INSERT INTO product_tags
+    SELECT p.id, t.id FROM products AS p, tags AS t
+    WHERE (p.sku, t.name) IN (('CRO-090', 'breakfast'), ('CRO-090', 'bestseller'), ('BAG-250', 'breakfast'),
+                              ('CAKE-CHOC', 'gift'), ('GIFT-BOX', 'gift'), ('TEA-250', 'breakfast'));
+
+    SELECT t.name AS tag, string_agg(p.name, ', ' ORDER BY p.name) AS products
+    FROM tags AS t
+    JOIN product_tags AS pt ON pt.tag_id = t.id
+    JOIN products AS p ON p.id = pt.product_id
+    GROUP BY t.name
+    ORDER BY t.name;
+  steps:
+    - title: Tags and products, not yet linked
+      text: A product can have many tags and a tag many products. Neither table can hold the other's id in one column, so the pairs need a table of their own.
+      lines: [ 1, 2, 3, 4, 13 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - { id: pt, title: product_tags, columns: [ product_id, tag_id ], rows: [] }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: t1, label: breakfast, x: 0.08, y: 0.15, note: tag 1 }
+            - { k: t2, label: gift, x: 0.08, y: 0.5, note: tag 2 }
+            - { k: t3, label: bestseller, x: 0.08, y: 0.85, note: tag 3 }
+            - { k: p4, label: Croissant, x: 0.85, y: 0, note: product 4 }
+            - { k: p3, label: Bagel, x: 0.85, y: 0.25, note: product 3 }
+            - { k: p10, label: Breakfast tea, x: 0.85, y: 0.5, note: product 10 }
+            - { k: p7, label: Chocolate cake, x: 0.85, y: 0.75, note: product 7 }
+            - { k: p12, label: Gift box, x: 0.85, y: 1, note: product 12 }
+          edges: []
+    - title: One row per pair
+      text: product_tags holds a foreign key to each side. Each row says "this product has this tag", and draws one line in the picture.
+      lines: [ 6, 7, 8, 14, 15, 16, 17 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: pt
+              title: product_tags
+              columns: [ product_id, tag_id ]
+              rows:
+                - { k: 3-1, cells: [ 3, 1 ], tone: active }
+                - { k: 4-1, cells: [ 4, 1 ], tone: active }
+                - { k: 4-3, cells: [ 4, 3 ], tone: active }
+                - { k: 7-2, cells: [ 7, 2 ], tone: active }
+                - { k: 10-1, cells: [ 10, 1 ], tone: active }
+                - { k: 12-2, cells: [ 12, 2 ], tone: active }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: t1, label: breakfast, x: 0.08, y: 0.15, note: tag 1 }
+            - { k: t2, label: gift, x: 0.08, y: 0.5, note: tag 2 }
+            - { k: t3, label: bestseller, x: 0.08, y: 0.85, note: tag 3 }
+            - { k: p4, label: Croissant, x: 0.85, y: 0, note: product 4 }
+            - { k: p3, label: Bagel, x: 0.85, y: 0.25, note: product 3 }
+            - { k: p10, label: Breakfast tea, x: 0.85, y: 0.5, note: product 10 }
+            - { k: p7, label: Chocolate cake, x: 0.85, y: 0.75, note: product 7 }
+            - { k: p12, label: Gift box, x: 0.85, y: 1, note: product 12 }
+          edges:
+            - { a: t1, b: p3, tone: active }
+            - { a: t1, b: p4, tone: active }
+            - { a: t3, b: p4, tone: active }
+            - { a: t2, b: p7, tone: active }
+            - { a: t1, b: p10, tone: active }
+            - { a: t2, b: p12, tone: active }
+    - title: Many on both sides
+      text: Croissant (product 4) has two rows, so two tags. The breakfast tag (tag 1) has three rows, so three products. That is many-to-many.
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: pt
+              title: product_tags
+              columns: [ product_id, tag_id ]
+              rows:
+                - { k: 3-1, cells: [ 3, 1 ], tone: compare }
+                - { k: 4-1, cells: [ 4, 1 ], tone: compare }
+                - { k: 4-3, cells: [ 4, 3 ], tone: compare }
+                - { k: 7-2, cells: [ 7, 2 ] }
+                - { k: 10-1, cells: [ 10, 1 ], tone: compare }
+                - { k: 12-2, cells: [ 12, 2 ] }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: t1, label: breakfast, x: 0.08, y: 0.15, tone: compare, note: tag 1 }
+            - { k: t2, label: gift, x: 0.08, y: 0.5, note: tag 2 }
+            - { k: t3, label: bestseller, x: 0.08, y: 0.85, note: tag 3 }
+            - { k: p4, label: Croissant, x: 0.85, y: 0, tone: compare, note: product 4 }
+            - { k: p3, label: Bagel, x: 0.85, y: 0.25, note: product 3 }
+            - { k: p10, label: Breakfast tea, x: 0.85, y: 0.5, note: product 10 }
+            - { k: p7, label: Chocolate cake, x: 0.85, y: 0.75, note: product 7 }
+            - { k: p12, label: Gift box, x: 0.85, y: 1, note: product 12 }
+          edges:
+            - { a: t1, b: p3, tone: compare }
+            - { a: t1, b: p4, tone: compare }
+            - { a: t3, b: p4, tone: compare }
+            - { a: t2, b: p7, tone: dim }
+            - { a: t1, b: p10, tone: compare }
+            - { a: t2, b: p12, tone: dim }
+    - title: The key stops duplicates
+      text: The primary key is the pair (product_id, tag_id), so the same product cannot get the same tag twice. The extra index on tag_id serves lookups that start from a tag.
+      lines: [ 9, 11 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: pt
+              title: product_tags
+              columns: [ product_id, tag_id ]
+              rows:
+                - { k: 3-1, cells: [ 3, 1 ] }
+                - { k: 4-1, cells: [ 4, 1 ] }
+                - { k: 4-3, cells: [ 4, 3 ] }
+                - { k: 7-2, cells: [ 7, 2 ] }
+                - { k: 10-1, cells: [ 10, 1 ] }
+                - { k: 12-2, cells: [ 12, 2 ] }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: t1, label: breakfast, x: 0.08, y: 0.15, note: tag 1 }
+            - { k: t2, label: gift, x: 0.08, y: 0.5, note: tag 2 }
+            - { k: t3, label: bestseller, x: 0.08, y: 0.85, note: tag 3 }
+            - { k: p4, label: Croissant, x: 0.85, y: 0, note: product 4 }
+            - { k: p3, label: Bagel, x: 0.85, y: 0.25, note: product 3 }
+            - { k: p10, label: Breakfast tea, x: 0.85, y: 0.5, note: product 10 }
+            - { k: p7, label: Chocolate cake, x: 0.85, y: 0.75, note: product 7 }
+            - { k: p12, label: Gift box, x: 0.85, y: 1, note: product 12 }
+          edges:
+            - { a: t1, b: p3 }
+            - { a: t1, b: p4 }
+            - { a: t3, b: p4 }
+            - { a: t2, b: p7 }
+            - { a: t1, b: p10 }
+            - { a: t2, b: p12 }
+    - title: Start from the tag
+      text: The query starts at tags and joins product_tags on pt.tag_id = t.id. For the breakfast tag, three link rows match.
+      lines: [ 19, 20, 21 ]
+      vars: { tag: breakfast }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: pt
+              title: product_tags
+              columns: [ product_id, tag_id ]
+              rows:
+                - { k: 3-1, cells: [ 3, 1 ], tone: active }
+                - { k: 4-1, cells: [ 4, 1 ], tone: active }
+                - { k: 4-3, cells: [ 4, 3 ], tone: dim }
+                - { k: 7-2, cells: [ 7, 2 ], tone: dim }
+                - { k: 10-1, cells: [ 10, 1 ], tone: active }
+                - { k: 12-2, cells: [ 12, 2 ], tone: dim }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: t1, label: breakfast, x: 0.08, y: 0.15, tone: active, note: tag 1 }
+            - { k: t2, label: gift, x: 0.08, y: 0.5, note: tag 2 }
+            - { k: t3, label: bestseller, x: 0.08, y: 0.85, note: tag 3 }
+            - { k: p4, label: Croissant, x: 0.85, y: 0, note: product 4 }
+            - { k: p3, label: Bagel, x: 0.85, y: 0.25, note: product 3 }
+            - { k: p10, label: Breakfast tea, x: 0.85, y: 0.5, note: product 10 }
+            - { k: p7, label: Chocolate cake, x: 0.85, y: 0.75, note: product 7 }
+            - { k: p12, label: Gift box, x: 0.85, y: 1, note: product 12 }
+          edges:
+            - { a: t1, b: p3, tone: active }
+            - { a: t1, b: p4, tone: active }
+            - { a: t3, b: p4, tone: dim }
+            - { a: t2, b: p7, tone: dim }
+            - { a: t1, b: p10, tone: active }
+            - { a: t2, b: p12, tone: dim }
+    - title: Follow each row to its product
+      text: "Joining products on p.id = pt.product_id turns the three product ids into names: Bagel, Breakfast tea and Croissant."
+      lines: [ 22 ]
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: t1, label: breakfast, x: 0.08, y: 0.15, tone: active, note: tag 1 }
+            - { k: t2, label: gift, x: 0.08, y: 0.5, note: tag 2 }
+            - { k: t3, label: bestseller, x: 0.08, y: 0.85, note: tag 3 }
+            - { k: p4, label: Croissant, x: 0.85, y: 0, tone: found, note: product 4 }
+            - { k: p3, label: Bagel, x: 0.85, y: 0.25, tone: found, note: product 3 }
+            - { k: p10, label: Breakfast tea, x: 0.85, y: 0.5, tone: found, note: product 10 }
+            - { k: p7, label: Chocolate cake, x: 0.85, y: 0.75, note: product 7 }
+            - { k: p12, label: Gift box, x: 0.85, y: 1, note: product 12 }
+          edges:
+            - { a: t1, b: p3, tone: found }
+            - { a: t1, b: p4, tone: found }
+            - { a: t3, b: p4, tone: dim }
+            - { a: t2, b: p7, tone: dim }
+            - { a: t1, b: p10, tone: found }
+            - { a: t2, b: p12, tone: dim }
+    - title: Group the names per tag
+      text: GROUP BY t.name makes one row per tag, and string_agg joins its product names in alphabetical order. Every tag gets the same treatment.
+      lines: [ 19, 23, 24 ]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: pt
+              title: product_tags
+              columns: [ product_id, tag_id ]
+              rows:
+                - { k: 3-1, cells: [ 3, 1 ] }
+                - { k: 4-1, cells: [ 4, 1 ] }
+                - { k: 4-3, cells: [ 4, 3 ] }
+                - { k: 7-2, cells: [ 7, 2 ] }
+                - { k: 10-1, cells: [ 10, 1 ] }
+                - { k: 12-2, cells: [ 12, 2 ] }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: t1, label: breakfast, x: 0.08, y: 0.15, note: tag 1 }
+            - { k: t2, label: gift, x: 0.08, y: 0.5, note: tag 2 }
+            - { k: t3, label: bestseller, x: 0.08, y: 0.85, note: tag 3 }
+            - { k: p4, label: Croissant, x: 0.85, y: 0, note: product 4 }
+            - { k: p3, label: Bagel, x: 0.85, y: 0.25, note: product 3 }
+            - { k: p10, label: Breakfast tea, x: 0.85, y: 0.5, note: product 10 }
+            - { k: p7, label: Chocolate cake, x: 0.85, y: 0.75, note: product 7 }
+            - { k: p12, label: Gift box, x: 0.85, y: 1, note: product 12 }
+          edges:
+            - { a: t1, b: p3, tone: done }
+            - { a: t1, b: p4, tone: done }
+            - { a: t3, b: p4, tone: done }
+            - { a: t2, b: p7, tone: done }
+            - { a: t1, b: p10, tone: done }
+            - { a: t2, b: p12, tone: done }
+        - kind: tables
+          id: r
+          slots: 3
+          tables:
+            - id: res
+              title: result
+              columns: [ tag, products ]
+              rows:
+                - { cells: [ bestseller, Croissant ] }
+                - { cells: [ breakfast, "Bagel, Breakfast tea, Croissant" ], tone: found }
+                - { cells: [ gift, "Chocolate cake, Gift box" ] }

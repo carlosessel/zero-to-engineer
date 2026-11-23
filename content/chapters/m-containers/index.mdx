@@ -60,6 +60,8 @@ console.log(rebuilt(ordered, codeChange));
 
 It prints the naive Dockerfile rebuilding `COPY . .`, `RUN npm ci` and the build after a one-line code change, while the ordered one shows `cached` for the dependency steps and rebuilds only from `COPY . .` onwards. Installing dependencies can take minutes; copying the dependency files first means it happens only when they change. The same applies to Maven (`COPY pom.xml` then `mvn dependency:go-offline`) and .NET (`COPY *.csproj` then `dotnet restore`).
 
+<Walkthrough name="m-containers-layer-cache" />
+
 ## A good Dockerfile
 
 A production Dockerfile for a Node.js service, using a **multi-stage build**:

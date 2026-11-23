@@ -117,6 +117,8 @@ main()
 
 It prints Ama's row for the normal input, then **every customer** for the attack (the input closed the quoted string and added `OR '1'='1'`, which is always true), then `[]` for the parameterised version, which treats the whole input as one value to compare. The rule is absolute: **never build queries by concatenating input**. Use parameters (`?`, `$1`, `@email`), or an ORM or query builder that does so. The same applies to shell commands (pass argument arrays, never a string through a shell) and to every other interpreter.
 
+<Walkthrough name="m-appsec-sql-injection" />
+
 **Cross-site scripting** (XSS) is injection into HTML: if a page includes user input without escaping it, an attacker's `<script>` runs in other users' browsers, stealing sessions or acting as them.
 
 ```python

@@ -1,0 +1,85 @@
+- id: math-probability-base-rates
+  title: Why a positive test is often a false alarm
+  hint: Follow 100,000 people through a 99% accurate test for a condition 1 in 1,000 people have.
+  steps:
+    - title: Start with a crowd
+      text: "Counting people is easier than juggling percentages. Picture 100,000 people taking the test."
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: all, label: "100,000 people", x: 0.45, y: 0, tone: active }
+          edges: []
+    - title: Split by the base rate
+      text: "1 in 1,000 people have the condition, so 100 of them have it and 99,900 do not. This split is the base rate."
+      vars: { "have it": 100, "do not": "99,900" }
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: all, label: "100,000 people", x: 0.45, y: 0 }
+            - { k: sick, label: "100 have it", x: 0.13, y: 0.5, tone: active }
+            - { k: well, label: "99,900 healthy", x: 0.78, y: 0.5, tone: active }
+          edges:
+            - { a: all, b: sick, directed: true, label: "1 in 1,000" }
+            - { a: all, b: well, directed: true }
+    - title: Test the 100 who have it
+      text: "Taking 99% accurate to mean the test catches 99% of true cases: 99 test positive and 1 is missed."
+      vars: { "have it": 100, "do not": "99,900", "true positives": 99 }
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: all, label: "100,000 people", x: 0.45, y: 0, tone: dim }
+            - { k: sick, label: "100 have it", x: 0.13, y: 0.5 }
+            - { k: well, label: "99,900 healthy", x: 0.78, y: 0.5 }
+            - { k: tp, label: "99 positive", x: 0, y: 1, tone: found }
+            - { k: fn, label: "1 negative", x: 0.26, y: 1, tone: dim }
+          edges:
+            - { a: all, b: sick, directed: true, tone: dim }
+            - { a: all, b: well, directed: true, tone: dim }
+            - { a: sick, b: tp, directed: true, label: "99%" }
+            - { a: sick, b: fn, directed: true }
+    - title: Test the 99,900 who do not
+      text: "It also wrongly flags 1% of healthy people. 1% of 99,900 is 999 false alarms, far more people than have the condition at all."
+      vars: { "have it": 100, "do not": "99,900", "true positives": 99, "false alarms": 999 }
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: all, label: "100,000 people", x: 0.45, y: 0, tone: dim }
+            - { k: sick, label: "100 have it", x: 0.13, y: 0.5 }
+            - { k: well, label: "99,900 healthy", x: 0.78, y: 0.5 }
+            - { k: tp, label: "99 positive", x: 0, y: 1, tone: found }
+            - { k: fn, label: "1 negative", x: 0.26, y: 1, tone: dim }
+            - { k: fp, label: "999 positive", x: 0.62, y: 1, tone: bad }
+            - { k: tn, label: "98,901 negative", x: 0.95, y: 1, tone: dim }
+          edges:
+            - { a: all, b: sick, directed: true, tone: dim }
+            - { a: all, b: well, directed: true, tone: dim }
+            - { a: sick, b: tp, directed: true, tone: dim }
+            - { a: sick, b: fn, directed: true, tone: dim }
+            - { a: well, b: fp, directed: true, label: "1%" }
+            - { a: well, b: tn, directed: true }
+    - title: Gather everyone who tested positive
+      text: "You tested positive, so you are one of these 99 + 999 = 1,098 people. The rest of the crowd no longer matters."
+      vars: { "all positives": "1,098" }
+      parts:
+        - kind: cells
+          id: pos
+          label: "people who tested positive"
+          bars: true
+          width: 90
+          items: [{ k: tp, v: 99, tone: found }, { k: fp, v: 999, tone: bad }]
+          slots: 2
+    - title: Your real chance
+      text: "Only 99 of those 1,098 have the condition: 99 / 1,098 ≈ 0.09, about 9%. The few true cases are swamped by false alarms from the many healthy people."
+      vars: { "P(have it | positive)": "99 / 1,098 ≈ 9%" }
+      parts:
+        - { kind: note, id: n, text: "P(have it | positive) = 99 / 1,098 ≈ 9%", tone: found }
+    - title: Base rates matter
+      text: "When the thing you look for is rare, even a good test or classifier raises mostly false alarms. Always ask how common the thing is before trusting a positive."

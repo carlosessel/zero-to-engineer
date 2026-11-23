@@ -1,0 +1,151 @@
+- id: be-interviews-sliding-window
+  title: Flagging customers with a sliding window
+  hint: Watch end step forward one order at a time, and start catch up whenever the window grows to ten minutes or more.
+  language: TypeScript
+  code: |
+    for (const [customer, group] of byCustomer) {
+      const times = group.map((o) => o.at.getTime()).sort((a, b) => a - b);
+      let start = 0;
+      for (let end = 0; end < times.length; end++) {
+        while (times[end] - times[start] >= windowMs) start++;
+        if (end - start + 1 >= limit) {
+          flagged.push(customer);
+          break;
+        }
+      }
+    }
+    return flagged.sort();
+  steps:
+    - title: Orders grouped by customer
+      text: The orders have been grouped with a map, one list per customer. Times here are minutes after 09:00. The rule is 3 orders within 10 minutes, with the window exclusive.
+      vars: { limit: 3, window: "10 minutes" }
+      parts:
+        - kind: kv
+          id: groups
+          label: "byCustomer"
+          slots: 3
+          rows:
+            - { name: ama, value: "0, 4, 9" }
+            - { name: kofi, value: "0, 6, 12" }
+            - { name: esi, value: "1" }
+        - { kind: cells, id: w, label: "sorted times", items: [], slots: 3, width: 80, empty: "no customer yet" }
+        - { kind: cells, id: flagged, label: "flagged", items: [], slots: 2, width: 80, empty: "none yet" }
+    - title: "ama: the window opens"
+      text: ama's times are sorted. end starts at the first order and start points at it too, so the window holds 1 order.
+      lines: [1, 2, 3, 4]
+      vars: { customer: ama, start: 0, end: 0, "orders in window": 1 }
+      parts:
+        - kind: kv
+          id: groups
+          label: "byCustomer"
+          slots: 3
+          rows:
+            - { name: ama, value: "0, 4, 9", tone: active }
+            - { name: kofi, value: "0, 6, 12" }
+            - { name: esi, value: "1" }
+        - kind: cells
+          id: w
+          label: "ama's times (minutes)"
+          slots: 3
+          width: 80
+          indices: true
+          pointers: [{ name: "start, end", at: 0 }]
+          items: [{ k: t0, v: 0, tone: active }, { k: t1, v: 4 }, { k: t2, v: 9 }]
+    - title: "ama: a second order"
+      text: end moves to 4 minutes. 4 − 0 is under 10, so start stays put and the window holds 2 orders.
+      lines: [4, 5, 6]
+      vars: { customer: ama, start: 0, end: 1, "times[end] − times[start]": "4 − 0 = 4", "orders in window": 2 }
+      parts:
+        - kind: cells
+          id: w
+          label: "ama's times (minutes)"
+          slots: 3
+          width: 80
+          indices: true
+          pointers: [{ name: start, at: 0 }, { name: end, at: 1 }]
+          items: [{ k: t0, v: 0, tone: active }, { k: t1, v: 4, tone: active }, { k: t2, v: 9 }]
+    - title: "ama: three in the window"
+      text: end moves to 9 minutes. 9 − 0 is still under 10, so all 3 orders are inside one window. That reaches the limit, so ama is flagged and the loop stops early.
+      lines: [5, 6, 7, 8]
+      vars: { customer: ama, start: 0, end: 2, "times[end] − times[start]": "9 − 0 = 9", "orders in window": 3 }
+      parts:
+        - kind: cells
+          id: w
+          label: "ama's times (minutes)"
+          slots: 3
+          width: 80
+          indices: true
+          pointers: [{ name: start, at: 0 }, { name: end, at: 2 }]
+          items: [{ k: t0, v: 0, tone: found }, { k: t1, v: 4, tone: found }, { k: t2, v: 9, tone: found }]
+        - { kind: cells, id: flagged, label: "flagged", slots: 2, width: 80, items: [{ v: ama, tone: found }] }
+    - title: "kofi: two orders so far"
+      text: A new customer starts a fresh window. kofi's second order is at 6 minutes, 6 − 0 is under 10, so the window holds 2.
+      lines: [1, 2, 3, 4, 5, 6]
+      vars: { customer: kofi, start: 0, end: 1, "times[end] − times[start]": "6 − 0 = 6", "orders in window": 2 }
+      parts:
+        - kind: kv
+          id: groups
+          label: "byCustomer"
+          slots: 3
+          rows:
+            - { name: ama, value: "0, 4, 9", tone: done }
+            - { name: kofi, value: "0, 6, 12", tone: active }
+            - { name: esi, value: "1" }
+        - kind: cells
+          id: w
+          label: "kofi's times (minutes)"
+          slots: 3
+          width: 80
+          indices: true
+          pointers: [{ name: start, at: 0 }, { name: end, at: 1 }]
+          items: [{ k: t0, v: 0, tone: active }, { k: t1, v: 6, tone: active }, { k: t2, v: 12 }]
+        - { kind: cells, id: flagged, label: "flagged", slots: 2, width: 80, items: [{ v: ama }] }
+    - title: "kofi: the window is too long"
+      text: end moves to 12 minutes. 12 − 0 is 10 or more, so start moves forward past the 0-minute order. Now 12 − 6 is 6, and the window holds only 2 orders.
+      lines: [4, 5, 6]
+      vars: { customer: kofi, start: 1, end: 2, "times[end] − times[start]": "12 − 6 = 6", "orders in window": 2 }
+      parts:
+        - kind: cells
+          id: w
+          label: "kofi's times (minutes)"
+          slots: 3
+          width: 80
+          indices: true
+          pointers: [{ name: start, at: 1 }, { name: end, at: 2 }]
+          items: [{ k: t0, v: 0, tone: dim }, { k: t1, v: 6, tone: active }, { k: t2, v: 12, tone: active }]
+    - title: "kofi is not flagged"
+      text: end has reached the last order and no window ever held 3. kofi's orders were spread over 12 minutes, so no ten-minute window holds all three.
+      lines: [4]
+      vars: { customer: kofi, "orders in window": 2 }
+      parts:
+        - kind: cells
+          id: w
+          label: "kofi's times (minutes)"
+          slots: 3
+          width: 80
+          indices: true
+          items: [{ k: t0, v: 0, tone: dim }, { k: t1, v: 6, tone: dim }, { k: t2, v: 12, tone: dim }]
+    - title: "esi, then the answer"
+      text: esi has a single order, so can never reach 3. The flagged list is sorted and returned, and the program prints ama.
+      lines: [1, 12]
+      vars: { customer: esi, "orders in window": 1 }
+      parts:
+        - kind: kv
+          id: groups
+          label: "byCustomer"
+          slots: 3
+          rows:
+            - { name: ama, value: "0, 4, 9", tone: found }
+            - { name: kofi, value: "0, 6, 12", tone: done }
+            - { name: esi, value: "1", tone: done }
+        - kind: cells
+          id: w
+          label: "esi's times (minutes)"
+          slots: 3
+          width: 80
+          indices: true
+          items: [{ k: t0, v: 1, tone: dim }]
+        - { kind: cells, id: flagged, label: "flagged", slots: 2, width: 80, items: [{ v: ama, tone: found }] }
+    - title: Why it is fast
+      text: "start and end only ever move forward, so each order is passed at most twice. After sorting, the scan is O(n); the brute force of counting forward from every order was O(n²)."
+      vars: {}

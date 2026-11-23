@@ -1,0 +1,171 @@
+- id: m-ddd-order-aggregate
+  title: An aggregate guards its rules and records events
+  hint: Every change goes through the Order root. Watch which changes it accepts, which it refuses, and the events it collects.
+  language: TypeScript
+  code: |
+    class Order {
+      private lines: Line[] = [];
+      private placed = false;
+      private events: DomainEvent[] = [];
+
+      constructor(readonly id: string, readonly customerId: string, private creditLimitPence: number) {}
+
+      addLine(sku: string, qty: number, unitPence: number) {
+        if (this.placed) throw new Error("A placed order cannot be changed");
+        if (qty < 1) throw new Error("Quantity must be at least 1");
+        if (this.total() + qty * unitPence > this.creditLimitPence) throw new Error("Over the customer's credit limit");
+        const existing = this.lines.find((l) => l.sku === sku);
+        if (existing) existing.qty += qty;
+        else this.lines.push({ sku, qty, unitPence });
+        this.events.push({ type: "LineAdded", orderId: this.id, sku, qty });
+      }
+
+      place() {
+        if (this.lines.length === 0) throw new Error("Cannot place an empty order");
+        this.placed = true;
+        this.events.push({ type: "OrderPlaced", orderId: this.id, customerId: this.customerId, totalPence: this.total() });
+      }
+    }
+
+    const order = new Order("o-7", "c-17", 3000);
+    order.addLine("RYE-400", 2, 450);
+    order.addLine("RYE-400", 1, 450);
+    for (const attempt of [() => order.addLine("HAMPER", 1, 2500), () => order.place(), () => order.addLine("JAM-STR", 1, 380)]) {
+      try {
+        attempt();
+      } catch (e) {
+        console.log((e as Error).message);
+      }
+    }
+    console.log(order.total(), order.pullEvents().map((e) => e.type));
+  steps:
+    - title: An empty order
+      text: Order o-7 belongs to customer c-17, held by id only, with a credit limit of 3000p. It starts with no lines, not placed, and no events.
+      lines: [6, 25]
+      parts:
+        - kind: kv
+          id: o
+          label: "Order o-7 (the aggregate root)"
+          slots: 4
+          rows:
+            - { name: customerId, value: c-17 }
+            - { name: lines, value: "(none)" }
+            - { name: total, value: "0p of 3000p limit" }
+            - { name: placed, value: "false" }
+        - { kind: cells, id: ev, label: "Recorded events", items: [], slots: 4, width: 110, empty: "none yet" }
+    - title: Two rye loaves
+      text: Not placed, quantity at least 1, and 0 + 900 is within the limit, so all three checks pass. A new line is added and a LineAdded event is recorded.
+      lines: [26, 9, 10, 11, 14, 15]
+      vars: { "this.total() + qty * unitPence": "0 + 2 × 450 = 900" }
+      parts:
+        - kind: kv
+          id: o
+          label: "Order o-7 (the aggregate root)"
+          slots: 4
+          rows:
+            - { name: customerId, value: c-17 }
+            - { name: lines, value: "RYE-400 × 2", tone: active }
+            - { name: total, value: "900p of 3000p limit", tone: active }
+            - { name: placed, value: "false" }
+        - kind: cells
+          id: ev
+          label: "Recorded events"
+          slots: 4
+          width: 110
+          items: [{ k: e1, v: LineAdded, tone: active }]
+    - title: One more of the same
+      text: RYE-400 is already on the order, so the existing line's quantity grows to 3 instead of adding a second line. Another LineAdded event is recorded.
+      lines: [27, 12, 13, 15]
+      vars: { "this.total() + qty * unitPence": "900 + 450 = 1350" }
+      parts:
+        - kind: kv
+          id: o
+          label: "Order o-7 (the aggregate root)"
+          slots: 4
+          rows:
+            - { name: customerId, value: c-17 }
+            - { name: lines, value: "RYE-400 × 3", tone: active }
+            - { name: total, value: "1350p of 3000p limit", tone: active }
+            - { name: placed, value: "false" }
+        - kind: cells
+          id: ev
+          label: "Recorded events"
+          slots: 4
+          width: 110
+          items: [{ k: e1, v: LineAdded }, { k: e2, v: LineAdded, tone: active }]
+    - title: A hamper is refused
+      text: "1350 + 2500 would be 3850, over the 3000p limit. The root throws, so nothing changes: no line, no event. The rule cannot be broken from outside."
+      lines: [28, 11, 32]
+      vars: { "this.total() + qty * unitPence": "1350 + 2500 = 3850" }
+      parts:
+        - kind: kv
+          id: o
+          label: "Order o-7 (the aggregate root)"
+          slots: 4
+          rows:
+            - { name: customerId, value: c-17 }
+            - { name: lines, value: "RYE-400 × 3" }
+            - { name: total, value: "1350p of 3000p limit", tone: bad }
+            - { name: placed, value: "false" }
+        - { kind: note, id: n, text: "Over the customer's credit limit", tone: bad }
+        - kind: cells
+          id: ev
+          label: "Recorded events"
+          slots: 4
+          width: 110
+          items: [{ k: e1, v: LineAdded }, { k: e2, v: LineAdded }]
+    - title: The order is placed
+      text: The order has lines, so place() marks it placed and records OrderPlaced with the total of 1350p.
+      lines: [28, 19, 20, 21]
+      vars: {}
+      parts:
+        - { id: n, remove: true }
+        - kind: kv
+          id: o
+          label: "Order o-7 (the aggregate root)"
+          slots: 4
+          rows:
+            - { name: customerId, value: c-17 }
+            - { name: lines, value: "RYE-400 × 3" }
+            - { name: total, value: "1350p of 3000p limit" }
+            - { name: placed, value: "true", tone: found }
+        - kind: cells
+          id: ev
+          label: "Recorded events"
+          slots: 4
+          width: 110
+          items: [{ k: e1, v: LineAdded }, { k: e2, v: LineAdded }, { k: e3, v: OrderPlaced, tone: found }]
+    - title: Jam is too late
+      text: The first check in addLine now fails, because a placed order cannot gain lines. Again nothing changes.
+      lines: [28, 9, 32]
+      parts:
+        - kind: kv
+          id: o
+          label: "Order o-7 (the aggregate root)"
+          slots: 4
+          rows:
+            - { name: customerId, value: c-17 }
+            - { name: lines, value: "RYE-400 × 3" }
+            - { name: total, value: "1350p of 3000p limit" }
+            - { name: placed, value: "true", tone: bad }
+        - { kind: note, id: n, text: "A placed order cannot be changed", tone: bad }
+    - title: The events go out
+      lines: [35]
+      text: "The final total is 1350, and the order hands over three events: LineAdded, LineAdded, OrderPlaced. After the transaction commits, the rest of the system reacts to them, for example by reserving stock."
+      parts:
+        - { id: n, remove: true }
+        - kind: kv
+          id: o
+          label: "Order o-7 (the aggregate root)"
+          slots: 4
+          rows:
+            - { name: customerId, value: c-17 }
+            - { name: lines, value: "RYE-400 × 3" }
+            - { name: total, value: "1350p of 3000p limit", tone: found }
+            - { name: placed, value: "true" }
+        - kind: cells
+          id: ev
+          label: "Recorded events"
+          slots: 4
+          width: 110
+          items: [{ k: e1, v: LineAdded, tone: done }, { k: e2, v: LineAdded, tone: done }, { k: e3, v: OrderPlaced, tone: done }]

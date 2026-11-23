@@ -1,0 +1,127 @@
+- id: be-api-aspnet-middleware
+  title: A request passing through middleware
+  hint: Follow two requests through the timing middleware, the key check and the endpoint, and see where each one stops.
+  language: C#
+  code: |
+    app.Use(async (context, next) =>
+    {
+        var clock = Stopwatch.StartNew();
+        Console.WriteLine($"-> {context.Request.Method} {context.Request.Path}");
+        await next(context);
+        Console.WriteLine($"<- {context.Response.StatusCode} in under a second: {clock.ElapsedMilliseconds < 1000}");
+    });
+
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Headers["X-Api-Key"] != "demo-key")
+        {
+            context.Response.StatusCode = 401;
+            return;
+        }
+        await next(context);
+    });
+
+    app.MapGet("/menu", () => "rye, bagel");
+  steps:
+    - title: A pipeline of three stages
+      text: "Every request goes through the middleware in the order they were added: timing first, then the key check, then the endpoint."
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Timing, "Key check", "/menu"]
+          slots: 6
+          messages: []
+        - { kind: terminal, id: out, slots: 4, lines: [] }
+    - title: The first request enters timing
+      text: The client calls GET /menu with no key. The timing middleware starts a stopwatch and prints the request line.
+      lines: [3, 4]
+      vars: { "X-Api-Key": "(none)" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Timing, "Key check", "/menu"]
+          slots: 6
+          messages:
+            - { from: Client, to: Timing, label: "GET /menu", tone: active }
+        - { kind: terminal, id: out, slots: 4, lines: ["-> GET /menu"] }
+    - title: next passes it on
+      text: "await next(context) hands the request to the next middleware and waits until everything after it has finished."
+      lines: [5]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Timing, "Key check", "/menu"]
+          slots: 6
+          messages:
+            - { from: Client, to: Timing, label: "GET /menu", tone: dim }
+            - { from: Timing, to: "Key check", label: "next(context)", tone: active }
+    - title: The key check stops it
+      text: There is no X-Api-Key header, so this middleware sets 401 and returns without calling next. The endpoint never runs.
+      lines: [11, 12, 13, 14]
+      vars: { "X-Api-Key": "(none)", status: 401 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Timing, "Key check", "/menu"]
+          slots: 6
+          messages:
+            - { from: Client, to: Timing, label: "GET /menu", tone: dim }
+            - { from: Timing, to: "Key check", label: "next(context)", tone: dim }
+            - { from: "Key check", to: Timing, label: "401, stop here", tone: bad }
+    - title: Back out through timing
+      text: Control returns to the line after await next. Timing sees the response on its way out and prints the status, so it logs requests that were refused too.
+      lines: [6]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Timing, "Key check", "/menu"]
+          slots: 6
+          messages:
+            - { from: Client, to: Timing, label: "GET /menu", tone: dim }
+            - { from: Timing, to: "Key check", label: "next(context)", tone: dim }
+            - { from: "Key check", to: Timing, label: "401, stop here", tone: dim }
+            - { from: Timing, to: Client, label: "401", tone: bad }
+        - { kind: terminal, id: out, slots: 4, lines: ["-> GET /menu", "<- 401 in under a second: True"] }
+    - title: A second request, with the key
+      text: This time the client sends X-Api-Key demo-key. Timing prints the request and calls next, as before.
+      lines: [4, 5]
+      vars: { "X-Api-Key": demo-key }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Timing, "Key check", "/menu"]
+          slots: 6
+          messages:
+            - { from: Client, to: Timing, label: "GET /menu + key", tone: active }
+            - { from: Timing, to: "Key check", label: "next(context)", tone: active }
+        - { kind: terminal, id: out, slots: 4, lines: ["-> GET /menu", "<- 401 in under a second: True", "-> GET /menu"] }
+    - title: The key passes, the endpoint runs
+      text: The key matches, so the check calls next and the request reaches the /menu endpoint, which returns "rye, bagel".
+      lines: [16, 19]
+      vars: { "X-Api-Key": demo-key, status: 200 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Timing, "Key check", "/menu"]
+          slots: 6
+          messages:
+            - { from: Client, to: Timing, label: "GET /menu + key", tone: dim }
+            - { from: Timing, to: "Key check", label: "next(context)", tone: dim }
+            - { from: "Key check", to: "/menu", label: "next(context)", tone: active }
+            - { from: "/menu", to: "Key check", label: "200 rye, bagel", tone: found }
+    - title: The response unwinds
+      text: The response travels back through each middleware in reverse order. Because timing runs first, it wraps everything and sees both requests.
+      lines: [6]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Timing, "Key check", "/menu"]
+          slots: 6
+          messages:
+            - { from: Client, to: Timing, label: "GET /menu + key", tone: dim }
+            - { from: Timing, to: "Key check", label: "next(context)", tone: dim }
+            - { from: "Key check", to: "/menu", label: "next(context)", tone: dim }
+            - { from: "/menu", to: "Key check", label: "200 rye, bagel", tone: dim }
+            - { from: "Key check", to: Timing, label: "200", tone: found }
+            - { from: Timing, to: Client, label: "200 rye, bagel", tone: found }
+        - { kind: terminal, id: out, slots: 4, lines: ["-> GET /menu", "<- 401 in under a second: True", "-> GET /menu", "<- 200 in under a second: True"] }

@@ -1,0 +1,176 @@
+- id: m-schema-design-expand-contract
+  title: Renaming a column without downtime
+  hint: Watch customers.name become full_name in five small steps. At every step, the code that is running still works with the table.
+  language: Python
+  code: |
+    db.execute("CREATE TABLE customers (id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
+    for i in range(1, 8):
+        old_app_signs_up(f"Customer {i}")
+
+    db.execute("ALTER TABLE customers ADD COLUMN full_name TEXT")
+    print("1 expand:", columns())
+    old_app_signs_up("Ama Mensah")
+    print("  old code still works; rows missing full_name:", db.execute("SELECT COUNT(*) FROM customers WHERE full_name IS NULL").fetchone()[0])
+
+    bridging_app_signs_up("Kofi Boateng")
+    print("2 deploy code that writes both columns")
+
+    print("3 backfill in batches of 3:", backfill(3), "batches")
+
+    print("4 deploy code that reads full_name:", new_app_reads()[-2:])
+
+    db.execute("ALTER TABLE customers DROP COLUMN name")
+    print("5 contract:", columns())
+  steps:
+    - title: The starting table
+      text: Seven customers, each with a name column. The running application reads and writes name.
+      lines: [ 1, 2, 3 ]
+      vars: { running code uses: name }
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name ]
+              rows:
+                - { k: r1, cells: [ 1, Customer 1 ] }
+                - { k: r2, cells: [ 2, Customer 2 ] }
+                - { k: r3, cells: [ 3, Customer 3 ] }
+                - { k: r4, cells: [ 4, Customer 4 ] }
+                - { k: r5, cells: [ 5, Customer 5 ] }
+                - { k: r6, cells: [ 6, Customer 6 ] }
+                - { k: r7, cells: [ 7, Customer 7 ] }
+        - { kind: terminal, id: out, slots: 6, lines: [] }
+    - title: "1. Expand: add the new column"
+      text: full_name is added alongside name, empty (NULL) for now. Nothing has been removed, so the old code carries on as before.
+      lines: [ 5, 6 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name, full_name ]
+              rows:
+                - { k: r1, cells: [ 1, Customer 1, null ] }
+                - { k: r2, cells: [ 2, Customer 2, null ] }
+                - { k: r3, cells: [ 3, Customer 3, null ] }
+                - { k: r4, cells: [ 4, Customer 4, null ] }
+                - { k: r5, cells: [ 5, Customer 5, null ] }
+                - { k: r6, cells: [ 6, Customer 6, null ] }
+                - { k: r7, cells: [ 7, Customer 7, null ] }
+        - { kind: terminal, id: out, slots: 6, lines: [ "1 expand: ['id', 'name', 'full_name']" ] }
+    - title: Old code still works
+      text: "The old code signs up Ama, writing name only. Her full_name is NULL, like the other seven: 8 rows are missing it."
+      lines: [ 7, 8 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name, full_name ]
+              rows:
+                - { k: r1, cells: [ 1, Customer 1, null ] }
+                - { k: r2, cells: [ 2, Customer 2, null ] }
+                - { k: r3, cells: [ 3, Customer 3, null ] }
+                - { k: r4, cells: [ 4, Customer 4, null ] }
+                - { k: r5, cells: [ 5, Customer 5, null ] }
+                - { k: r6, cells: [ 6, Customer 6, null ] }
+                - { k: r7, cells: [ 7, Customer 7, null ] }
+                - { k: r8, cells: [ 8, Ama Mensah, null ], tone: active }
+        - { kind: terminal, id: out, slots: 6, lines: [ "1 expand: ['id', 'name', 'full_name']", "  old code still works; rows missing full_name: 8" ] }
+    - title: 2. Write both columns
+      text: The next deployment writes both name and full_name for new customers, so no new gaps appear. Kofi arrives with both filled in.
+      lines: [ 10, 11 ]
+      vars: { running code uses: name (writes both) }
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name, full_name ]
+              rows:
+                - { k: r1, cells: [ 1, Customer 1, null ] }
+                - { k: r2, cells: [ 2, Customer 2, null ] }
+                - { k: r3, cells: [ 3, Customer 3, null ] }
+                - { k: r4, cells: [ 4, Customer 4, null ] }
+                - { k: r5, cells: [ 5, Customer 5, null ] }
+                - { k: r6, cells: [ 6, Customer 6, null ] }
+                - { k: r7, cells: [ 7, Customer 7, null ] }
+                - { k: r8, cells: [ 8, Ama Mensah, null ] }
+                - { k: r9, cells: [ 9, Kofi Boateng, Kofi Boateng ], tone: active }
+        - { kind: terminal, id: out, slots: 6, lines: [ "1 expand: ['id', 'name', 'full_name']", "  old code still works; rows missing full_name: 8", 2 deploy code that writes both columns ] }
+    - title: 3. Backfill, a batch at a time
+      text: A loop copies name into full_name for at most three rows per UPDATE, so no single statement locks the table for long. Three batches fill the 8 empty rows.
+      lines: [ 13 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name, full_name ]
+              rows:
+                - { k: r1, cells: [ 1, Customer 1, Customer 1 ], tone: found }
+                - { k: r2, cells: [ 2, Customer 2, Customer 2 ], tone: found }
+                - { k: r3, cells: [ 3, Customer 3, Customer 3 ], tone: found }
+                - { k: r4, cells: [ 4, Customer 4, Customer 4 ], tone: found }
+                - { k: r5, cells: [ 5, Customer 5, Customer 5 ], tone: found }
+                - { k: r6, cells: [ 6, Customer 6, Customer 6 ], tone: found }
+                - { k: r7, cells: [ 7, Customer 7, Customer 7 ], tone: found }
+                - { k: r8, cells: [ 8, Ama Mensah, Ama Mensah ], tone: found }
+                - { k: r9, cells: [ 9, Kofi Boateng, Kofi Boateng ] }
+        - { kind: terminal, id: out, slots: 6, lines: [ "1 expand: ['id', 'name', 'full_name']", "  old code still works; rows missing full_name: 8", 2 deploy code that writes both columns, "3 backfill in batches of 3: 3 batches" ] }
+    - title: 4. Read the new column
+      text: Every row now has full_name, so the next deployment reads it instead of name. The old column is still there, so rolling back stays safe.
+      lines: [ 15 ]
+      vars: { running code uses: full_name }
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name, full_name ]
+              rows:
+                - { k: r1, cells: [ 1, Customer 1, Customer 1 ] }
+                - { k: r2, cells: [ 2, Customer 2, Customer 2 ] }
+                - { k: r3, cells: [ 3, Customer 3, Customer 3 ] }
+                - { k: r4, cells: [ 4, Customer 4, Customer 4 ] }
+                - { k: r5, cells: [ 5, Customer 5, Customer 5 ] }
+                - { k: r6, cells: [ 6, Customer 6, Customer 6 ] }
+                - { k: r7, cells: [ 7, Customer 7, Customer 7 ] }
+                - { k: r8, cells: [ 8, Ama Mensah, Ama Mensah ], tone: compare }
+                - { k: r9, cells: [ 9, Kofi Boateng, Kofi Boateng ], tone: compare }
+        - { kind: terminal, id: out, slots: 6, lines: [ "1 expand: ['id', 'name', 'full_name']", "  old code still works; rows missing full_name: 8", 2 deploy code that writes both columns, "3 backfill in batches of 3: 3 batches", "4 deploy code that reads full_name: ['Ama Mensah', 'Kofi Boateng']" ] }
+    - title: "5. Contract: drop the old column"
+      text: No running code uses name any more, so it can finally be dropped. Each step was its own deployment, and at every moment the code and the schema agreed.
+      lines: [ 17, 18 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, full_name ]
+              rows:
+                - { k: r1, cells: [ 1, Customer 1 ], tone: done }
+                - { k: r2, cells: [ 2, Customer 2 ], tone: done }
+                - { k: r3, cells: [ 3, Customer 3 ], tone: done }
+                - { k: r4, cells: [ 4, Customer 4 ], tone: done }
+                - { k: r5, cells: [ 5, Customer 5 ], tone: done }
+                - { k: r6, cells: [ 6, Customer 6 ], tone: done }
+                - { k: r7, cells: [ 7, Customer 7 ], tone: done }
+                - { k: r8, cells: [ 8, Ama Mensah ], tone: done }
+                - { k: r9, cells: [ 9, Kofi Boateng ], tone: done }
+        - { kind: terminal, id: out, slots: 6, lines: [ "1 expand: ['id', 'name', 'full_name']", "  old code still works; rows missing full_name: 8", 2 deploy code that writes both columns, "3 backfill in batches of 3: 3 batches", "4 deploy code that reads full_name: ['Ama Mensah', 'Kofi Boateng']", "5 contract: ['id', 'full_name']" ] }

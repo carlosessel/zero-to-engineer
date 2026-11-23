@@ -1,0 +1,104 @@
+- id: terminal-files-moving-around
+  title: Moving around with the terminal
+  hint: Each command either tells you where you are or moves you. Watch the highlighted folder, the current directory, follow along.
+  steps:
+    - title: The prompt is waiting
+      text: The terminal opens in your home folder. The $ is the prompt, waiting for a command. The terminal is always in one folder, the current directory.
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { label: /home/ama, x: 0.1, y: 0.5, tone: active, note: "you are here" }
+            - { label: Documents, x: 0.5, y: 0.15 }
+            - { label: Downloads, x: 0.5, y: 0.85 }
+          edges:
+            - { a: /home/ama, b: Documents }
+            - { a: /home/ama, b: Downloads }
+        - { kind: terminal, id: t, lines: ["$ "], slots: 10 }
+    - title: pwd, where am I?
+      text: pwd prints the folder you are in now, as a full path.
+      parts:
+        - { kind: terminal, id: t, lines: ["$ pwd", "/home/ama"], slots: 10 }
+    - title: ls, what is here?
+      text: ls lists what is inside the current folder. Here there are two folders.
+      parts:
+        - { kind: terminal, id: t, lines: ["$ pwd", "/home/ama", "$ ls", "Documents  Downloads"], slots: 10 }
+    - title: cd Documents
+      text: cd moves you into a folder. Nothing is printed; the prompt simply comes back, and you are now one level down.
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { label: /home/ama, x: 0.1, y: 0.5 }
+            - { label: Documents, x: 0.5, y: 0.15, tone: active, note: "you are here" }
+            - { label: Downloads, x: 0.5, y: 0.85 }
+          edges:
+            - { a: /home/ama, b: Documents, tone: active, directed: true }
+            - { a: /home/ama, b: Downloads }
+        - { kind: terminal, id: t, lines: ["$ pwd", "/home/ama", "$ ls", "Documents  Downloads", "$ cd Documents"], slots: 10 }
+    - title: mkdir ai-course
+      text: mkdir makes a new folder inside the current one. You are still in Documents; making a folder does not move you into it.
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { label: /home/ama, x: 0.1, y: 0.5 }
+            - { label: Documents, x: 0.5, y: 0.15, tone: active, note: "you are here" }
+            - { label: Downloads, x: 0.5, y: 0.85 }
+            - { label: ai-course, x: 0.9, y: 0.15, tone: found, note: "new" }
+          edges:
+            - { a: /home/ama, b: Documents }
+            - { a: /home/ama, b: Downloads }
+            - { a: Documents, b: ai-course }
+        - { kind: terminal, id: t, lines: ["$ pwd", "/home/ama", "$ ls", "Documents  Downloads", "$ cd Documents", "$ mkdir ai-course"], slots: 10 }
+    - title: cd ai-course, then pwd
+      text: Now you move in. pwd shows the whole path, every folder from the top down to where you are.
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { label: /home/ama, x: 0.1, y: 0.5 }
+            - { label: Documents, x: 0.5, y: 0.15 }
+            - { label: Downloads, x: 0.5, y: 0.85 }
+            - { label: ai-course, x: 0.9, y: 0.15, tone: active, note: "you are here" }
+          edges:
+            - { a: /home/ama, b: Documents }
+            - { a: /home/ama, b: Downloads }
+            - { a: Documents, b: ai-course, tone: active, directed: true }
+        - { kind: terminal, id: t, lines: ["$ pwd", "/home/ama", "$ ls", "Documents  Downloads", "$ cd Documents", "$ mkdir ai-course", "$ cd ai-course", "$ pwd", "/home/ama/Documents/ai-course"], slots: 10 }
+    - title: cd .. goes up one level
+      text: Two dots mean the folder that contains this one. You are back in Documents.
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { label: /home/ama, x: 0.1, y: 0.5 }
+            - { label: Documents, x: 0.5, y: 0.15, tone: active, note: "you are here" }
+            - { label: Downloads, x: 0.5, y: 0.85 }
+            - { label: ai-course, x: 0.9, y: 0.15 }
+          edges:
+            - { a: /home/ama, b: Documents }
+            - { a: /home/ama, b: Downloads }
+            - { a: ai-course, b: Documents, tone: active, directed: true }
+        - { kind: terminal, id: t, lines: ["$ cd Documents", "$ mkdir ai-course", "$ cd ai-course", "$ pwd", "/home/ama/Documents/ai-course", "$ cd .."], slots: 10 }
+    - title: A misspelt path
+      text: A typo in the name gives "No such file or directory", and you stay where you were. Run ls to see the real names, or press Tab to auto-complete them.
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { label: /home/ama, x: 0.1, y: 0.5 }
+            - { label: Documents, x: 0.5, y: 0.15, tone: active, note: "you are here" }
+            - { label: Downloads, x: 0.5, y: 0.85 }
+            - { label: ai-course, x: 0.9, y: 0.15 }
+          edges:
+            - { a: /home/ama, b: Documents }
+            - { a: /home/ama, b: Downloads }
+            - { a: Documents, b: ai-course }
+        - { kind: terminal, id: t, lines: ["$ cd ai-course", "$ pwd", "/home/ama/Documents/ai-course", "$ cd ..", "$ cd ai-cuorse", "cd: ai-cuorse: No such file or directory", "$ ls", "ai-course"], slots: 10 }

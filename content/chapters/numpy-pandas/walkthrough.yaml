@@ -1,0 +1,112 @@
+- id: numpy-pandas-broadcasting
+  title: Broadcasting, one step at a time
+  hint: Watch a row of 3 column means stretch to fit a table of shape (2, 3), so one line normalises every number with no loop.
+  language: Python
+  code: |
+    x = np.array([[1., 2., 3.],
+                  [4., 5., 6.]])
+    x.shape            # (2, 3): 2 rows, 3 columns
+    x.mean(axis=0)     # mean down each column -> shape (3,)
+    normalised = (x - x.mean(axis=0)) / x.std(axis=0)
+  steps:
+    - title: The array
+      text: "x has 2 rows and 3 columns, so its shape is (2, 3). Printing .shape is the habit that catches most bugs."
+      lines: [1, 2, 3]
+      vars: { "x.shape": "(2, 3)" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: x
+              title: "x  (2, 3)"
+              columns: [c0, c1, c2]
+              rows: [{ k: r0, cells: ["1", "2", "3"] }, { k: r1, cells: ["4", "5", "6"] }]
+    - title: Mean down each column
+      text: "axis=0 means work down the rows, one answer per column: (1 + 4) / 2 = 2.5, then 3.5, then 4.5. The result has shape (3,), a single row of 3."
+      lines: [4]
+      vars: { "x.shape": "(2, 3)", "mean shape": "(3,)" }
+      parts:
+        - kind: cells
+          id: m
+          label: "x.mean(axis=0)  shape (3,)"
+          width: 70
+          items: [{ k: m0, v: 2.5, tone: found }, { k: m1, v: 3.5, tone: found }, { k: m2, v: 4.5, tone: found }]
+          slots: 3
+    - title: The shapes differ
+      text: "x - mean asks NumPy to subtract a shape (3,) row from a shape (2, 3) table. The last sizes match (3 and 3), so NumPy can stretch the row."
+      lines: [5]
+      parts:
+        - kind: cells
+          id: m
+          label: "x.mean(axis=0)  shape (3,)"
+          width: 70
+          items: [{ k: m0, v: 2.5, tone: compare }, { k: m1, v: 3.5, tone: compare }, { k: m2, v: 4.5, tone: compare }]
+          slots: 3
+    - title: Stretch the row
+      text: "NumPy uses the same row of means for every row of x, as if it had been copied. No copy is really made, which keeps it fast."
+      lines: [5]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: x
+              title: "x  (2, 3)"
+              columns: [c0, c1, c2]
+              rows: [{ k: r0, cells: ["1", "2", "3"] }, { k: r1, cells: ["4", "5", "6"] }]
+            - id: mb
+              title: "mean, stretched"
+              columns: [c0, c1, c2]
+              rows: [{ k: r0, cells: ["2.5", "3.5", "4.5"], tone: active }, { k: r1, cells: ["2.5", "3.5", "4.5"], tone: active }]
+    - title: Subtract, element by element
+      text: "Now the shapes match, so each number has its column mean taken away: 1 - 2.5 = -1.5, 4 - 2.5 = 1.5, and so on."
+      lines: [5]
+      vars: { "x - mean": "shape (2, 3)" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: x
+              title: "x  (2, 3)"
+              columns: [c0, c1, c2]
+              rows: [{ k: r0, cells: ["1", "2", "3"], tone: dim }, { k: r1, cells: ["4", "5", "6"], tone: dim }]
+            - id: mb
+              title: "mean, stretched"
+              columns: [c0, c1, c2]
+              rows: [{ k: r0, cells: ["2.5", "3.5", "4.5"], tone: dim }, { k: r1, cells: ["2.5", "3.5", "4.5"], tone: dim }]
+            - id: d
+              title: "x - mean"
+              columns: [c0, c1, c2]
+              rows: [{ k: r0, cells: ["-1.5", "-1.5", "-1.5"], tone: active }, { k: r1, cells: ["1.5", "1.5", "1.5"], tone: active }]
+        - { id: m, remove: true }
+    - title: Divide by the spread
+      text: "x.std(axis=0) measures how spread out each column is; here every column's is 1.5. It is shape (3,) too, so it stretches the same way."
+      lines: [5]
+      vars: { "x - mean": "shape (2, 3)", "x.std(axis=0)": "[1.5, 1.5, 1.5]" }
+      parts:
+        - kind: cells
+          id: s
+          label: "x.std(axis=0)  shape (3,)"
+          width: 70
+          items: [{ k: s0, v: 1.5, tone: compare }, { k: s1, v: 1.5, tone: compare }, { k: s2, v: 1.5, tone: compare }]
+          slots: 3
+    - title: The result
+      text: "-1.5 / 1.5 = -1 and 1.5 / 1.5 = 1. Every column now has mean 0 and standard deviation 1, done in one line with no loop."
+      lines: [5]
+      vars: { "normalised.shape": "(2, 3)" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: d
+              title: "x - mean"
+              columns: [c0, c1, c2]
+              rows: [{ k: r0, cells: ["-1.5", "-1.5", "-1.5"], tone: dim }, { k: r1, cells: ["1.5", "1.5", "1.5"], tone: dim }]
+            - id: nm
+              title: "normalised  (2, 3)"
+              columns: [c0, c1, c2]
+              rows: [{ k: r0, cells: ["-1", "-1", "-1"], tone: found }, { k: r1, cells: ["1", "1", "1"], tone: found }]
+        - { id: s, remove: true }

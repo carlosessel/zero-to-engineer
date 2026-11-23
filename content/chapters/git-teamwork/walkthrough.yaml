@@ -1,0 +1,137 @@
+- id: git-teamwork-pull-request
+  title: A branch, a pull request, a merge
+  hint: Watch the change live on its own branch until it has been reviewed and tested, while main keeps working.
+  language: Shell
+  code: |
+    git switch -c add-login          # create a branch and move to it
+    # ... edit, then ...
+    git add .
+    git commit -m "Add login form"
+    git push -u origin add-login     # upload the branch to GitHub
+    git switch main
+    git pull                         # get everyone else's merged work
+    git switch -c next-feature
+  steps:
+    - title: main holds the working product
+      text: Two commits so far, and main points at the newest. Everyone on the team starts their work from here.
+      vars: { "you are on": main }
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { k: c1, label: "c1", x: 0.05, y: 0.1 }
+            - { k: c2, label: "c2", x: 0.3, y: 0.1, tone: active, note: "main" }
+          edges:
+            - { a: c1, b: c2, directed: true }
+        - { kind: kv, id: pr, label: "Pull request on GitHub", rows: [], slots: 3 }
+    - title: A branch for the change
+      text: git switch -c makes a new branch at the same commit and moves you onto it. Nothing is copied; it is a new name for a separate line of work.
+      lines: [1]
+      vars: { "you are on": add-login }
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { k: c1, label: "c1", x: 0.05, y: 0.1 }
+            - { k: c2, label: "c2", x: 0.3, y: 0.1, tone: active, note: "main, add-login" }
+          edges:
+            - { a: c1, b: c2, directed: true }
+    - title: Commit on the branch
+      text: The new commit belongs to add-login only. main has not moved, so unfinished work cannot break it.
+      lines: [2, 3, 4]
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { k: c1, label: "c1", x: 0.05, y: 0.1 }
+            - { k: c2, label: "c2", x: 0.3, y: 0.1, note: "main" }
+            - { k: login, label: "Add login form", x: 0.55, y: 0.9, tone: active, note: "add-login" }
+          edges:
+            - { a: c1, b: c2, directed: true }
+            - { a: c2, b: login, directed: true, tone: active }
+    - title: Upload the branch
+      text: git push sends the branch to GitHub, so teammates can see it. It is still separate from main.
+      lines: [5]
+      parts:
+        - kind: kv
+          id: pr
+          label: "Pull request on GitHub"
+          slots: 3
+          rows: [{ name: branch, value: "add-login (uploaded)", tone: active }]
+    - title: Open a pull request
+      text: A pull request proposes merging add-login into main. Teammates read the changes and comment, and the automated tests run.
+      parts:
+        - kind: kv
+          id: pr
+          label: "Pull request on GitHub"
+          slots: 3
+          rows:
+            - { name: branch, value: "add-login → main" }
+            - { name: review, value: "waiting for teammates", tone: compare }
+            - { name: tests, value: "running", tone: compare }
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { k: c1, label: "c1", x: 0.05, y: 0.1 }
+            - { k: c2, label: "c2", x: 0.3, y: 0.1, note: "main" }
+            - { k: login, label: "Add login form", x: 0.55, y: 0.9, tone: compare, note: "add-login" }
+          edges:
+            - { a: c1, b: c2, directed: true }
+            - { a: c2, b: login, directed: true }
+    - title: Approved, tests passed
+      text: The review step catches bugs and spreads knowledge of the code. Only now is the change ready for main.
+      parts:
+        - kind: kv
+          id: pr
+          label: "Pull request on GitHub"
+          slots: 3
+          rows:
+            - { name: branch, value: "add-login → main" }
+            - { name: review, value: "approved", tone: found }
+            - { name: tests, value: "passed", tone: found }
+    - title: Merged into main
+      text: The branch's work joins main, and main moves forward. The product now includes the login form.
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { k: c1, label: "c1", x: 0.05, y: 0.1 }
+            - { k: c2, label: "c2", x: 0.3, y: 0.1 }
+            - { k: login, label: "Add login form", x: 0.55, y: 0.9, tone: done }
+            - { k: merge, label: "merge", x: 0.8, y: 0.1, tone: found, note: "main" }
+          edges:
+            - { a: c1, b: c2, directed: true }
+            - { a: c2, b: login, directed: true }
+            - { a: c2, b: merge, directed: true }
+            - { a: login, b: merge, directed: true, tone: found }
+        - kind: kv
+          id: pr
+          label: "Pull request on GitHub"
+          slots: 3
+          rows:
+            - { name: branch, value: "add-login → main" }
+            - { name: status, value: "merged", tone: done }
+    - title: Start the next change from the latest main
+      text: git pull brings your copy of main up to date with everyone's merged work. The next branch starts from there, and the cycle repeats.
+      lines: [6, 7, 8]
+      vars: { "you are on": next-feature }
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { k: c1, label: "c1", x: 0.05, y: 0.1 }
+            - { k: c2, label: "c2", x: 0.3, y: 0.1 }
+            - { k: login, label: "Add login form", x: 0.55, y: 0.9, tone: dim }
+            - { k: merge, label: "merge", x: 0.8, y: 0.1, tone: active, note: "main, next-feature" }
+          edges:
+            - { a: c1, b: c2, directed: true }
+            - { a: c2, b: login, directed: true }
+            - { a: c2, b: merge, directed: true }
+            - { a: login, b: merge, directed: true }
+        - { kind: kv, id: pr, label: "Pull request on GitHub", rows: [], slots: 3 }

@@ -1,0 +1,129 @@
+- id: cl-prompting-documents-first
+  title: Building a prompt with the documents first
+  hint: Watch the list of parts grow. Each document gets its own tags and source, and the question goes on last.
+  language: Python
+  code: |
+    documents = {
+        "q3-report.pdf": "Revenue rose 8%. Costs rose 12%, mostly flour and energy...",
+        "q3-survey.csv": "satisfaction,comment\n4,Great bread\n2,Queue too long\n...",
+    }
+
+    parts = ["<documents>"]
+    for index, (source, text) in enumerate(documents.items(), start=1):
+        parts.append(f'<document index="{index}">')
+        parts.append(f"<source>{source}</source>")
+        parts.append(f"<document_content>\n{text}\n</document_content>")
+        parts.append("</document>")
+    parts.append("</documents>")
+    parts.append(
+        "Using only the documents above, list the three biggest problems for the "
+        "business. After each one, quote the sentence or row it comes from. "
+        "If the documents do not support a point, leave it out."
+    )
+
+    prompt = "\n".join(parts)
+    print(prompt)
+  steps:
+    - title: Two documents
+      text: The material is two documents, a report and a survey, each named by its source. They are long, so they will go at the top of the prompt.
+      lines: [1, 2, 3, 4]
+      parts:
+        - kind: kv
+          id: parts
+          label: "parts"
+          slots: 11
+          rows: []
+    - title: Open the documents tag
+      text: The list starts with an opening XML tag. Tags mark where the material starts and ends, so Claude does not mistake it for instructions.
+      lines: [6]
+      parts:
+        - kind: kv
+          id: parts
+          label: "parts"
+          slots: 11
+          rows:
+            - { name: "parts[0]", value: "<documents>", tone: active }
+    - title: The first document
+      text: The loop takes the first document. It gets its own tag with an index, its source, and its content between tags.
+      lines: [7, 8, 9, 10, 11]
+      vars: { index: 1, source: q3-report.pdf }
+      parts:
+        - kind: kv
+          id: parts
+          label: "parts"
+          slots: 11
+          rows:
+            - { name: "parts[0]", value: "<documents>" }
+            - { name: "parts[1]", value: '<document index="1">', tone: active }
+            - { name: "parts[2]", value: "<source>q3-report.pdf</source>", tone: active }
+            - { name: "parts[3]", value: "<document_content> Revenue rose 8%...", tone: active }
+            - { name: "parts[4]", value: "</document>", tone: active }
+    - title: The second document
+      text: The same four parts for the survey, with index 2. Wrapping each document separately, with its source, keeps them apart.
+      lines: [7, 8, 9, 10, 11]
+      vars: { index: 2, source: q3-survey.csv }
+      parts:
+        - kind: kv
+          id: parts
+          label: "parts"
+          slots: 11
+          rows:
+            - { name: "parts[0]", value: "<documents>" }
+            - { name: "parts[1]", value: '<document index="1">' }
+            - { name: "parts[2]", value: "<source>q3-report.pdf</source>" }
+            - { name: "parts[3]", value: "<document_content> Revenue rose 8%..." }
+            - { name: "parts[4]", value: "</document>" }
+            - { name: "parts[5]", value: '<document index="2">', tone: active }
+            - { name: "parts[6]", value: "<source>q3-survey.csv</source>", tone: active }
+            - { name: "parts[7]", value: "<document_content> satisfaction,comm...", tone: active }
+            - { name: "parts[8]", value: "</document>", tone: active }
+    - title: Close the documents tag
+      text: After the loop, the closing tag marks the end of the material.
+      lines: [12]
+      vars: {}
+      parts:
+        - kind: kv
+          id: parts
+          label: "parts"
+          slots: 11
+          rows:
+            - { name: "parts[0]", value: "<documents>" }
+            - { name: "parts[1]", value: '<document index="1">', tone: dim }
+            - { name: "parts[2]", value: "<source>q3-report.pdf</source>", tone: dim }
+            - { name: "parts[3]", value: "<document_content> Revenue rose 8%...", tone: dim }
+            - { name: "parts[4]", value: "</document>", tone: dim }
+            - { name: "parts[5]", value: '<document index="2">', tone: dim }
+            - { name: "parts[6]", value: "<source>q3-survey.csv</source>", tone: dim }
+            - { name: "parts[7]", value: "<document_content> satisfaction,comm...", tone: dim }
+            - { name: "parts[8]", value: "</document>", tone: dim }
+            - { name: "parts[9]", value: "</documents>", tone: active }
+    - title: The question goes last
+      text: Only now is the question added, at the very end. In Anthropic's tests, putting the question after long material improved answers by up to 30%.
+      lines: [13, 14, 15, 16, 17]
+      parts:
+        - kind: kv
+          id: parts
+          label: "parts"
+          slots: 11
+          rows:
+            - { name: "parts[0]", value: "<documents>", tone: dim }
+            - { name: "parts[1]", value: '<document index="1">', tone: dim }
+            - { name: "parts[2]", value: "<source>q3-report.pdf</source>", tone: dim }
+            - { name: "parts[3]", value: "<document_content> Revenue rose 8%...", tone: dim }
+            - { name: "parts[4]", value: "</document>", tone: dim }
+            - { name: "parts[5]", value: '<document index="2">', tone: dim }
+            - { name: "parts[6]", value: "<source>q3-survey.csv</source>", tone: dim }
+            - { name: "parts[7]", value: "<document_content> satisfaction,comm...", tone: dim }
+            - { name: "parts[8]", value: "</document>", tone: dim }
+            - { name: "parts[9]", value: "</documents>", tone: dim }
+            - { name: "parts[10]", value: "Using only the documents above, ...", tone: active }
+    - title: A question you can check
+      text: "The question limits Claude to the material, asks for quotations you can check, and allows leaving a point out rather than inventing one."
+      lines: [14, 15, 16]
+      parts:
+        - { kind: note, id: n, text: "only the documents · quote the source · leave out what is unsupported", tone: found }
+    - title: One prompt
+      text: Joining the parts with new lines gives one prompt, material first and question last, ready to send.
+      lines: [19, 20]
+      parts:
+        - { kind: note, id: n, text: "prompt = 11 parts joined: 2 tagged documents, then the question", tone: found }

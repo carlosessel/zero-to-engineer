@@ -1,0 +1,206 @@
+- id: sql-run-the-script
+  title: The script, statement by statement
+  hint: Run the chapter's SQL from the top and watch the two tables fill, change, and get combined into answers.
+  language: SQL
+  code: |
+    CREATE TABLE customers (
+      id    INTEGER PRIMARY KEY,
+      name  TEXT NOT NULL,
+      city  TEXT
+    );
+
+    CREATE TABLE orders (
+      id          INTEGER PRIMARY KEY,
+      customer_id INTEGER NOT NULL REFERENCES customers(id),
+      amount      REAL NOT NULL,
+      created     TEXT NOT NULL
+    );
+
+    INSERT INTO customers (name, city) VALUES ('Ama', 'Accra'), ('Kofi', 'Kumasi');
+    INSERT INTO orders (customer_id, amount, created) VALUES (1, 120.0, '2026-01-05');
+
+    SELECT name, city FROM customers WHERE city = 'Accra' ORDER BY name;
+
+    UPDATE customers SET city = 'Tema' WHERE id = 1;
+    DELETE FROM orders WHERE id = 9;
+
+    -- Combine tables
+    SELECT c.name, o.amount
+    FROM orders o
+    JOIN customers c ON c.id = o.customer_id;
+
+    -- Summarise
+    SELECT c.city, COUNT(*) AS orders, SUM(o.amount) AS revenue
+    FROM orders o
+    JOIN customers c ON c.id = o.customer_id
+    GROUP BY c.city
+    HAVING SUM(o.amount) > 100;
+  steps:
+    - title: Two empty tables
+      text: CREATE TABLE sets out the columns and their rules. id is the primary key, and customer_id is a foreign key pointing at a customer. (The created column is left out of the picture to save room.)
+      lines: [1, 2, 3, 4, 5, 7, 8, 9, 10, 11, 12]
+      parts:
+        - kind: tables
+          id: db
+          slots: 2
+          tables:
+            - id: c
+              title: customers
+              columns: [id, name, city]
+              rows: []
+            - id: o
+              title: orders
+              columns: [id, customer_id, amount]
+              rows: []
+        - kind: tables
+          id: res
+          slots: 1
+          tables:
+            - id: r
+              title: "result"
+              columns: ["(no query yet)"]
+              rows: []
+    - title: Add two customers
+      text: INSERT adds rows. No id was given, so the database fills in the primary key itself, 1 and 2.
+      lines: [14]
+      parts:
+        - kind: tables
+          id: db
+          slots: 2
+          tables:
+            - id: c
+              title: customers
+              columns: [id, name, city]
+              rows: [{ cells: ["1", "Ama", "Accra"], tone: active }, { cells: ["2", "Kofi", "Kumasi"], tone: active }]
+            - id: o
+              title: orders
+              columns: [id, customer_id, amount]
+              rows: []
+    - title: Add an order
+      text: customer_id 1 points at Ama's row. That link between tables is the "relation" in relational database.
+      lines: [15]
+      parts:
+        - kind: tables
+          id: db
+          slots: 2
+          tables:
+            - id: c
+              title: customers
+              columns: [id, name, city]
+              rows: [{ cells: ["1", "Ama", "Accra"], tone: compare }, ["2", "Kofi", "Kumasi"]]
+            - id: o
+              title: orders
+              columns: [id, customer_id, amount]
+              rows: [{ cells: ["1", "1", "120.0"], tone: active }]
+    - title: Ask a question
+      text: WHERE keeps only the rows whose city is Accra, and the result has just the columns asked for. A SELECT changes nothing.
+      lines: [17]
+      parts:
+        - kind: tables
+          id: db
+          slots: 2
+          tables:
+            - id: c
+              title: customers
+              columns: [id, name, city]
+              rows: [{ cells: ["1", "Ama", "Accra"], tone: found }, { cells: ["2", "Kofi", "Kumasi"], tone: dim }]
+            - id: o
+              title: orders
+              columns: [id, customer_id, amount]
+              rows: [["1", "1", "120.0"]]
+        - kind: tables
+          id: res
+          slots: 1
+          tables:
+            - id: r
+              title: "result"
+              columns: ["name", "city"]
+              rows: [{ cells: ["Ama", "Accra"], tone: found }]
+    - title: Change a row
+      text: UPDATE with WHERE id = 1 changes exactly one row. Without the WHERE it would change every customer.
+      lines: [19]
+      parts:
+        - kind: tables
+          id: db
+          slots: 2
+          tables:
+            - id: c
+              title: customers
+              columns: [id, name, city]
+              rows: [{ cells: ["1", "Ama", "Tema"], tone: active }, ["2", "Kofi", "Kumasi"]]
+            - id: o
+              title: orders
+              columns: [id, customer_id, amount]
+              rows: [["1", "1", "120.0"]]
+        - kind: tables
+          id: res
+          slots: 1
+          tables:
+            - id: r
+              title: "result"
+              columns: ["(no rows returned)"]
+              rows: []
+    - title: Delete nothing
+      text: There is no order with id 9, so DELETE matches no rows and nothing happens. It is not an error.
+      lines: [20]
+      parts:
+        - kind: tables
+          id: db
+          slots: 2
+          tables:
+            - id: c
+              title: customers
+              columns: [id, name, city]
+              rows: [["1", "Ama", "Tema"], ["2", "Kofi", "Kumasi"]]
+            - id: o
+              title: orders
+              columns: [id, customer_id, amount]
+              rows: [{ cells: ["1", "1", "120.0"], tone: compare }]
+    - title: Join the tables
+      text: JOIN pairs each order with the customer whose id equals its customer_id. Order 1 meets Ama, so the result has her name and the amount.
+      lines: [22, 23, 24, 25]
+      parts:
+        - kind: tables
+          id: db
+          slots: 2
+          tables:
+            - id: c
+              title: customers
+              columns: [id, name, city]
+              rows: [{ cells: ["1", "Ama", "Tema"], tone: compare }, ["2", "Kofi", "Kumasi"]]
+            - id: o
+              title: orders
+              columns: [id, customer_id, amount]
+              rows: [{ cells: ["1", "1", "120.0"], tone: compare }]
+        - kind: tables
+          id: res
+          slots: 1
+          tables:
+            - id: r
+              title: "result"
+              columns: ["name", "amount"]
+              rows: [{ cells: ["Ama", "120.0"], tone: found }]
+    - title: Group and filter groups
+      text: GROUP BY makes one row per city, counting orders and adding amounts. Ama now lives in Tema, so her order counts for Tema. HAVING keeps groups over 100, and 120.0 is.
+      lines: [27, 28, 29, 30, 31, 32]
+      parts:
+        - kind: tables
+          id: db
+          slots: 2
+          tables:
+            - id: c
+              title: customers
+              columns: [id, name, city]
+              rows: [{ cells: ["1", "Ama", "Tema"], tone: compare }, ["2", "Kofi", "Kumasi"]]
+            - id: o
+              title: orders
+              columns: [id, customer_id, amount]
+              rows: [{ cells: ["1", "1", "120.0"], tone: compare }]
+        - kind: tables
+          id: res
+          slots: 1
+          tables:
+            - id: r
+              title: "result"
+              columns: ["city", "orders", "revenue"]
+              rows: [{ cells: ["Tema", "1", "120.0"], tone: found }]

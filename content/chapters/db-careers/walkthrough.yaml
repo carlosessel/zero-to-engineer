@@ -1,0 +1,213 @@
+- id: db-careers-roles
+  title: Which chapters each role leans on
+  hint: Pick out one role at a time and see the parts of the course that matter most for it.
+  steps:
+    - title: Five roles, one course
+      text: Database skills are central to five common jobs. Each leans hardest on a different part of the course.
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: r1, label: Back-end, x: 0.1, y: 0 }
+            - { k: r2, label: DBA, x: 0.1, y: 0.25 }
+            - { k: r3, label: Data engineer, x: 0.1, y: 0.5 }
+            - { k: r4, label: Analytics eng, x: 0.1, y: 0.75 }
+            - { k: r5, label: Data analyst, x: 0.1, y: 1 }
+            - { label: modelling, x: 0.52, y: 0 }
+            - { label: indexes, x: 0.52, y: 0.16666666666666666 }
+            - { label: query plans, x: 0.52, y: 0.3333333333333333 }
+            - { label: transactions, x: 0.52, y: 0.5 }
+            - { label: migrations, x: 0.52, y: 0.6666666666666666 }
+            - { label: ORM code, x: 0.52, y: 0.8333333333333334 }
+            - { label: operations, x: 0.52, y: 1 }
+            - { label: security, x: 0.9, y: 0 }
+            - { label: performance, x: 0.9, y: 0.2 }
+            - { label: analytics, x: 0.9, y: 0.4 }
+            - { label: window funcs, x: 0.9, y: 0.6 }
+            - { label: advanced SQL, x: 0.9, y: 0.8 }
+            - { label: SQL from zero, x: 0.9, y: 1 }
+          edges: []
+    - title: Back-end engineer
+      text: Designs tables and migrations, writes queries and ORM code, and makes services fast and correct.
+      vars: { day to day: "tables, queries, ORM code" }
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: r1, label: Back-end, x: 0.1, y: 0, tone: active }
+            - { k: r2, label: DBA, x: 0.1, y: 0.25, tone: dim }
+            - { k: r3, label: Data engineer, x: 0.1, y: 0.5, tone: dim }
+            - { k: r4, label: Analytics eng, x: 0.1, y: 0.75, tone: dim }
+            - { k: r5, label: Data analyst, x: 0.1, y: 1, tone: dim }
+            - { label: modelling, x: 0.52, y: 0, tone: found }
+            - { label: indexes, x: 0.52, y: 0.16666666666666666, tone: found }
+            - { label: query plans, x: 0.52, y: 0.3333333333333333, tone: found }
+            - { label: transactions, x: 0.52, y: 0.5, tone: found }
+            - { label: migrations, x: 0.52, y: 0.6666666666666666, tone: found }
+            - { label: ORM code, x: 0.52, y: 0.8333333333333334, tone: found }
+            - { label: operations, x: 0.52, y: 1, tone: dim }
+            - { label: security, x: 0.9, y: 0, tone: dim }
+            - { label: performance, x: 0.9, y: 0.2, tone: dim }
+            - { label: analytics, x: 0.9, y: 0.4, tone: dim }
+            - { label: window funcs, x: 0.9, y: 0.6, tone: dim }
+            - { label: advanced SQL, x: 0.9, y: 0.8, tone: dim }
+            - { label: SQL from zero, x: 0.9, y: 1, tone: dim }
+          edges:
+            - { a: r1, b: modelling, tone: found }
+            - { a: r1, b: indexes, tone: found }
+            - { a: r1, b: query plans, tone: found }
+            - { a: r1, b: transactions, tone: found }
+            - { a: r1, b: migrations, tone: found }
+            - { a: r1, b: ORM code, tone: found }
+    - title: Database administrator
+      text: "Runs databases: backups, replication, upgrades, tuning, security and incident response. Also called a database reliability engineer."
+      vars: { day to day: "backups, tuning, incidents" }
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: r1, label: Back-end, x: 0.1, y: 0, tone: dim }
+            - { k: r2, label: DBA, x: 0.1, y: 0.25, tone: active }
+            - { k: r3, label: Data engineer, x: 0.1, y: 0.5, tone: dim }
+            - { k: r4, label: Analytics eng, x: 0.1, y: 0.75, tone: dim }
+            - { k: r5, label: Data analyst, x: 0.1, y: 1, tone: dim }
+            - { label: modelling, x: 0.52, y: 0, tone: dim }
+            - { label: indexes, x: 0.52, y: 0.16666666666666666, tone: dim }
+            - { label: query plans, x: 0.52, y: 0.3333333333333333, tone: dim }
+            - { label: transactions, x: 0.52, y: 0.5, tone: found }
+            - { label: migrations, x: 0.52, y: 0.6666666666666666, tone: found }
+            - { label: ORM code, x: 0.52, y: 0.8333333333333334, tone: dim }
+            - { label: operations, x: 0.52, y: 1, tone: found }
+            - { label: security, x: 0.9, y: 0, tone: found }
+            - { label: performance, x: 0.9, y: 0.2, tone: found }
+            - { label: analytics, x: 0.9, y: 0.4, tone: dim }
+            - { label: window funcs, x: 0.9, y: 0.6, tone: dim }
+            - { label: advanced SQL, x: 0.9, y: 0.8, tone: dim }
+            - { label: SQL from zero, x: 0.9, y: 1, tone: dim }
+          edges:
+            - { a: r2, b: operations, tone: found }
+            - { a: r2, b: security, tone: found }
+            - { a: r2, b: performance, tone: found }
+            - { a: r2, b: migrations, tone: found }
+            - { a: r2, b: transactions, tone: found }
+    - title: Data engineer
+      text: Builds pipelines that move and transform data into warehouses. Adds a programming language and orchestration to the database chapters.
+      vars: { day to day: pipelines into warehouses }
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: r1, label: Back-end, x: 0.1, y: 0, tone: dim }
+            - { k: r2, label: DBA, x: 0.1, y: 0.25, tone: dim }
+            - { k: r3, label: Data engineer, x: 0.1, y: 0.5, tone: active }
+            - { k: r4, label: Analytics eng, x: 0.1, y: 0.75, tone: dim }
+            - { k: r5, label: Data analyst, x: 0.1, y: 1, tone: dim }
+            - { label: modelling, x: 0.52, y: 0, tone: found }
+            - { label: indexes, x: 0.52, y: 0.16666666666666666, tone: dim }
+            - { label: query plans, x: 0.52, y: 0.3333333333333333, tone: dim }
+            - { label: transactions, x: 0.52, y: 0.5, tone: dim }
+            - { label: migrations, x: 0.52, y: 0.6666666666666666, tone: dim }
+            - { label: ORM code, x: 0.52, y: 0.8333333333333334, tone: dim }
+            - { label: operations, x: 0.52, y: 1, tone: dim }
+            - { label: security, x: 0.9, y: 0, tone: dim }
+            - { label: performance, x: 0.9, y: 0.2, tone: found }
+            - { label: analytics, x: 0.9, y: 0.4, tone: found }
+            - { label: window funcs, x: 0.9, y: 0.6, tone: dim }
+            - { label: advanced SQL, x: 0.9, y: 0.8, tone: dim }
+            - { label: SQL from zero, x: 0.9, y: 1, tone: dim }
+          edges:
+            - { a: r3, b: analytics, tone: found }
+            - { a: r3, b: performance, tone: found }
+            - { a: r3, b: modelling, tone: found }
+    - title: Analytics engineer
+      text: Models data in the warehouse for reporting, with tested, version-controlled SQL, often dbt.
+      vars: { day to day: "warehouse models, dbt" }
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: r1, label: Back-end, x: 0.1, y: 0, tone: dim }
+            - { k: r2, label: DBA, x: 0.1, y: 0.25, tone: dim }
+            - { k: r3, label: Data engineer, x: 0.1, y: 0.5, tone: dim }
+            - { k: r4, label: Analytics eng, x: 0.1, y: 0.75, tone: active }
+            - { k: r5, label: Data analyst, x: 0.1, y: 1, tone: dim }
+            - { label: modelling, x: 0.52, y: 0, tone: found }
+            - { label: indexes, x: 0.52, y: 0.16666666666666666, tone: dim }
+            - { label: query plans, x: 0.52, y: 0.3333333333333333, tone: dim }
+            - { label: transactions, x: 0.52, y: 0.5, tone: dim }
+            - { label: migrations, x: 0.52, y: 0.6666666666666666, tone: dim }
+            - { label: ORM code, x: 0.52, y: 0.8333333333333334, tone: dim }
+            - { label: operations, x: 0.52, y: 1, tone: dim }
+            - { label: security, x: 0.9, y: 0, tone: dim }
+            - { label: performance, x: 0.9, y: 0.2, tone: dim }
+            - { label: analytics, x: 0.9, y: 0.4, tone: found }
+            - { label: window funcs, x: 0.9, y: 0.6, tone: found }
+            - { label: advanced SQL, x: 0.9, y: 0.8, tone: found }
+            - { label: SQL from zero, x: 0.9, y: 1, tone: dim }
+          edges:
+            - { a: r4, b: analytics, tone: found }
+            - { a: r4, b: window funcs, tone: found }
+            - { a: r4, b: advanced SQL, tone: found }
+            - { a: r4, b: modelling, tone: found }
+    - title: Data analyst
+      text: Answers business questions with SQL and dashboards, and explains the findings to people who do not read SQL.
+      vars: { day to day: "questions, dashboards" }
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: r1, label: Back-end, x: 0.1, y: 0, tone: dim }
+            - { k: r2, label: DBA, x: 0.1, y: 0.25, tone: dim }
+            - { k: r3, label: Data engineer, x: 0.1, y: 0.5, tone: dim }
+            - { k: r4, label: Analytics eng, x: 0.1, y: 0.75, tone: dim }
+            - { k: r5, label: Data analyst, x: 0.1, y: 1, tone: active }
+            - { label: modelling, x: 0.52, y: 0, tone: dim }
+            - { label: indexes, x: 0.52, y: 0.16666666666666666, tone: dim }
+            - { label: query plans, x: 0.52, y: 0.3333333333333333, tone: dim }
+            - { label: transactions, x: 0.52, y: 0.5, tone: dim }
+            - { label: migrations, x: 0.52, y: 0.6666666666666666, tone: dim }
+            - { label: ORM code, x: 0.52, y: 0.8333333333333334, tone: dim }
+            - { label: operations, x: 0.52, y: 1, tone: dim }
+            - { label: security, x: 0.9, y: 0, tone: dim }
+            - { label: performance, x: 0.9, y: 0.2, tone: dim }
+            - { label: analytics, x: 0.9, y: 0.4, tone: found }
+            - { label: window funcs, x: 0.9, y: 0.6, tone: dim }
+            - { label: advanced SQL, x: 0.9, y: 0.8, tone: found }
+            - { label: SQL from zero, x: 0.9, y: 1, tone: found }
+          edges:
+            - { a: r5, b: SQL from zero, tone: found }
+            - { a: r5, b: advanced SQL, tone: found }
+            - { a: r5, b: analytics, tone: found }
+    - title: Strong SQL for all of them
+      text: Every role is tested on SQL in interviews. Choose the role you want, finish the matching projects, and learn the tools its adverts name.
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: r1, label: Back-end, x: 0.1, y: 0 }
+            - { k: r2, label: DBA, x: 0.1, y: 0.25 }
+            - { k: r3, label: Data engineer, x: 0.1, y: 0.5 }
+            - { k: r4, label: Analytics eng, x: 0.1, y: 0.75 }
+            - { k: r5, label: Data analyst, x: 0.1, y: 1 }
+            - { label: modelling, x: 0.52, y: 0 }
+            - { label: indexes, x: 0.52, y: 0.16666666666666666 }
+            - { label: query plans, x: 0.52, y: 0.3333333333333333 }
+            - { label: transactions, x: 0.52, y: 0.5 }
+            - { label: migrations, x: 0.52, y: 0.6666666666666666 }
+            - { label: ORM code, x: 0.52, y: 0.8333333333333334 }
+            - { label: operations, x: 0.52, y: 1 }
+            - { label: security, x: 0.9, y: 0 }
+            - { label: performance, x: 0.9, y: 0.2 }
+            - { label: analytics, x: 0.9, y: 0.4 }
+            - { label: window funcs, x: 0.9, y: 0.6 }
+            - { label: advanced SQL, x: 0.9, y: 0.8 }
+            - { label: SQL from zero, x: 0.9, y: 1 }
+          edges: []

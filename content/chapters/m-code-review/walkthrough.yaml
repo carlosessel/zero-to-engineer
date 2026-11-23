@@ -1,0 +1,99 @@
+- id: m-code-review-coupon
+  title: Reviewing a coupon change
+  hint: Run the change in your head case by case, the way a careful reviewer does, and watch the comments pile up.
+  language: TypeScript
+  code: |
+    type Coupon = { code: string; pence: number; expires: string };
+
+    const coupons: Coupon[] = [{ code: "BREAD10", pence: 1000, expires: "2026-12-31" }];
+
+    function applyCoupon(code: string, basketPence: number, today: string): number {
+      const coupon = coupons.find((c) => c.code == code)!;
+      if (coupon.expires < today) return basketPence;
+      return basketPence - coupon.pence;
+    }
+
+    console.log(applyCoupon("BREAD10", 4500, "2026-11-13"));
+    console.log(applyCoupon("BREAD10", 700, "2026-11-13"));
+    try {
+      console.log(applyCoupon("bread10", 4500, "2026-11-13"));
+    } catch (e) {
+      console.log((e as Error).name);
+    }
+  steps:
+    - title: Description, then tests, then code
+      text: A reviewer reads the description first, then the tests, which show what the change is meant to do, and only then the code. Correctness comes first.
+      parts:
+        - { kind: terminal, id: out, slots: 3, lines: [] }
+        - { kind: kv, id: c, label: "Review comments", slots: 4, rows: [] }
+    - title: The usual case works
+      text: BREAD10 on a basket of 4500 pence takes 1000 off, giving 3500. If you only try this case, the change looks finished.
+      lines: [6, 7, 8, 11]
+      vars: { code: BREAD10, basketPence: 4500 }
+      parts:
+        - { kind: terminal, id: out, slots: 3, lines: ["3500"] }
+    - title: A coupon bigger than the basket
+      text: "With a 700 pence basket, 700 - 1000 is -300: a negative total. Nothing stops the discount going below zero."
+      lines: [8, 12]
+      vars: { code: BREAD10, basketPence: 700 }
+      parts:
+        - { kind: terminal, id: out, slots: 3, lines: ["3500", "-300"] }
+        - kind: kv
+          id: c
+          label: "Review comments"
+          slots: 4
+          rows:
+            - { name: "line 8", value: "issue: total can go below zero", tone: bad }
+    - title: A lowercase code finds nothing
+      text: "\"bread10\" does not match \"BREAD10\", so find returns nothing. The ! after it, a non-null assertion, tells the compiler to trust that a coupon was found."
+      lines: [6, 14]
+      vars: { code: bread10, basketPence: 4500, coupon: "(none found)" }
+    - title: The ! becomes a crash
+      text: Reading coupon.expires on nothing throws a TypeError. The customer gets a crash instead of a clear "invalid code" result.
+      lines: [7, 16]
+      parts:
+        - { kind: terminal, id: out, slots: 3, lines: ["3500", "-300", "TypeError"] }
+        - kind: kv
+          id: c
+          label: "Review comments"
+          slots: 4
+          rows:
+            - { name: "line 8", value: "issue: total can go below zero" }
+            - { name: "line 6", value: "issue: unknown code crashes (the !)", tone: bad }
+    - title: A smaller point
+      text: The comparison uses == where TypeScript code should use ===. Labelling it shows the author it matters less than the two issues.
+      lines: [6]
+      vars: {}
+      parts:
+        - kind: kv
+          id: c
+          label: "Review comments"
+          slots: 4
+          rows:
+            - { name: "line 8", value: "issue: total can go below zero" }
+            - { name: "line 6", value: "issue: unknown code crashes (the !)" }
+            - { name: "line 6", k: eq, value: "suggestion: use === instead of ==", tone: compare }
+    - title: Check the tests too
+      text: The tests evidently only tried a valid uppercase code on a large basket, so they could not catch either issue. A question asks for the missing cases.
+      parts:
+        - kind: kv
+          id: c
+          label: "Review comments"
+          slots: 4
+          rows:
+            - { name: "line 8", value: "issue: total can go below zero" }
+            - { name: "line 6", value: "issue: unknown code crashes (the !)" }
+            - { name: "line 6", k: eq, value: "suggestion: use === instead of ==" }
+            - { name: tests, value: "question: lowercase code, small basket?", tone: compare }
+    - title: Found before any customer did
+      text: Each comment is about the code, says why, and is labelled so the author knows what blocks approval. The reviewer requests changes; the bugs never reach production.
+      parts:
+        - kind: kv
+          id: c
+          label: "Review comments"
+          slots: 4
+          rows:
+            - { name: "line 8", value: "issue: total can go below zero", tone: done }
+            - { name: "line 6", value: "issue: unknown code crashes (the !)", tone: done }
+            - { name: "line 6", k: eq, value: "suggestion: use === instead of ==", tone: done }
+            - { name: tests, value: "question: lowercase code, small basket?", tone: done }

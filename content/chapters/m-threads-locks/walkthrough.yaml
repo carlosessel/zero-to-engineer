@@ -1,0 +1,217 @@
+- id: m-threads-locks-lost-update
+  title: Two threads, one counter
+  hint: Switch between the two versions. Watch what each thread reads and writes, and whether an increment is lost.
+  language: Java
+  examples:
+    - label: count++ with no lock
+      code: |
+        static long unsafeCount = 0;
+
+        Runnable work = () -> {
+            for (int i = 0; i < 1_000_000; i++) {
+                unsafeCount++;
+            }
+        };
+      steps:
+        - title: One shared field
+          text: Threads a and b both run work, and both see the same field unsafeCount, because threads share their process's memory. Suppose it holds 41 right now.
+          lines: [1]
+          vars: {}
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread a, unsafeCount, Thread b]
+              slots: 4
+              messages: []
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: unsafeCount, value: "41" }
+                - { name: "a's copy", value: "-" }
+                - { name: "b's copy", value: "-" }
+        - title: count++ is three steps
+          text: unsafeCount++ looks like one step, but it is three. Read the value, add one, write it back. Thread a does the first step and reads 41.
+          lines: [5]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread a, unsafeCount, Thread b]
+              slots: 4
+              messages:
+                - { from: unsafeCount, to: Thread a, label: "read 41", tone: active }
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: unsafeCount, value: "41" }
+                - { name: "a's copy", value: "41", tone: active }
+                - { name: "b's copy", value: "-" }
+        - title: Thread b reads too
+          text: Before a writes anything back, b runs the same line and also reads 41. Nothing stops it, because nothing guards the field.
+          lines: [5]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread a, unsafeCount, Thread b]
+              slots: 4
+              messages:
+                - { from: unsafeCount, to: Thread a, label: "read 41", tone: dim }
+                - { from: unsafeCount, to: Thread b, label: "read 41", tone: active }
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: unsafeCount, value: "41" }
+                - { name: "a's copy", value: "41" }
+                - { name: "b's copy", value: "41", tone: active }
+        - title: Both add one
+          text: Each thread adds one to its own copy. Both now hold 42.
+          lines: [5]
+          parts:
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: unsafeCount, value: "41" }
+                - { name: "a's copy", value: "42", tone: compare }
+                - { name: "b's copy", value: "42", tone: compare }
+        - title: Both write 42
+          text: Thread a writes 42, then b writes 42 over it. Two increments ran, but the counter went up by only one.
+          lines: [5]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread a, unsafeCount, Thread b]
+              slots: 4
+              messages:
+                - { from: unsafeCount, to: Thread a, label: "read 41", tone: dim }
+                - { from: unsafeCount, to: Thread b, label: "read 41", tone: dim }
+                - { from: Thread a, to: unsafeCount, label: "write 42", tone: active }
+                - { from: Thread b, to: unsafeCount, label: "write 42", tone: bad }
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: unsafeCount, value: "42 (should be 43)", tone: bad }
+                - { name: "a's copy", value: "42", tone: dim }
+                - { name: "b's copy", value: "42", tone: dim }
+        - title: A lost update
+          text: Over two million increments this happened often enough to print 1977694 instead of 2000000, and a different number on every run. Sometimes none are lost, which is why tests pass.
+          vars: { expected: 2000000, "printed once": 1977694 }
+    - label: With synchronized (lock)
+      code: |
+        static long lockedCount = 0;
+        static final Object lock = new Object();
+
+        Runnable work = () -> {
+            for (int i = 0; i < 1_000_000; i++) {
+                synchronized (lock) { lockedCount++; }
+            }
+        };
+      steps:
+        - title: The same race, guarded
+          text: This time the increment sits inside synchronized (lock), a critical section. A thread must hold the lock to enter it. lockedCount holds 41.
+          lines: [2, 6]
+          vars: {}
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread a, lockedCount, Thread b]
+              slots: 5
+              messages: []
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: lockedCount, value: "41" }
+                - { name: lock held by, value: nobody }
+                - { name: waiting, value: nobody }
+        - title: Thread a takes the lock
+          text: Thread a acquires the lock and reads 41.
+          lines: [6]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread a, lockedCount, Thread b]
+              slots: 5
+              messages:
+                - { from: lockedCount, to: Thread a, label: "read 41", tone: active }
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: lockedCount, value: "41" }
+                - { name: lock held by, value: Thread a, tone: active }
+                - { name: waiting, value: nobody }
+        - title: Thread b has to wait
+          text: Thread b reaches the same line, but the lock is taken, so it waits. It cannot read the half-finished value.
+          lines: [6]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread a, lockedCount, Thread b]
+              slots: 5
+              messages:
+                - { from: lockedCount, to: Thread a, label: "read 41", tone: dim }
+                - { from: Thread b, to: Thread b, label: "waits", tone: compare }
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: lockedCount, value: "41" }
+                - { name: lock held by, value: Thread a }
+                - { name: waiting, value: Thread b, tone: compare }
+        - title: a writes, then releases
+          text: Thread a writes 42 and leaves the block, which releases the lock. Everything a did before releasing is visible to the next thread that takes it.
+          lines: [6]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread a, lockedCount, Thread b]
+              slots: 5
+              messages:
+                - { from: lockedCount, to: Thread a, label: "read 41", tone: dim }
+                - { from: Thread b, to: Thread b, label: "waits", tone: dim }
+                - { from: Thread a, to: lockedCount, label: "write 42", tone: found }
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: lockedCount, value: "42", tone: found }
+                - { name: lock held by, value: nobody }
+                - { name: waiting, value: Thread b, tone: compare }
+        - title: Now b takes its turn
+          text: Thread b acquires the lock, reads 42 and writes 43. Both increments count.
+          lines: [6]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread a, lockedCount, Thread b]
+              slots: 5
+              messages:
+                - { from: lockedCount, to: Thread a, label: "read 41", tone: dim }
+                - { from: Thread b, to: Thread b, label: "waits", tone: dim }
+                - { from: Thread a, to: lockedCount, label: "write 42", tone: dim }
+                - { from: lockedCount, to: Thread b, label: "read 42", tone: active }
+                - { from: Thread b, to: lockedCount, label: "write 43", tone: found }
+            - kind: kv
+              id: mem
+              label: "Values right now"
+              slots: 3
+              rows:
+                - { name: lockedCount, value: "43", tone: found }
+                - { name: lock held by, value: Thread b, tone: active }
+                - { name: waiting, value: nobody }
+        - title: Always exactly right
+          text: The locked counter always prints exactly 2000000. The cost is that threads take turns at this line; an AtomicLong gives the same result for one variable without a lock.
+          vars: { expected: 2000000, printed: 2000000 }

@@ -1,0 +1,88 @@
+- id: java-objects-account
+  title: An object guards its own balance
+  hint: Watch the Account object's fields change only through its methods, and a withdrawal that breaks the rule being refused.
+  language: Java
+  code: |
+    var account = new Account("Ama");
+    account.deposit(5000);
+    account.withdraw(1250);
+    System.out.println(account.owner() + " has " + account.balancePence() + "p");
+
+    try {
+        account.withdraw(10_000);
+    } catch (IllegalStateException e) {
+        System.out.println("Refused: " + e.getMessage());
+    }
+    System.out.println("Still " + account.balancePence() + "p");
+
+    void withdraw(long pence) {
+        if (pence > balancePence) throw new IllegalStateException("Insufficient funds");
+        balancePence -= pence;
+    }
+  steps:
+    - title: new makes an object
+      text: new Account("Ama") runs the constructor, which stores "Ama" in the owner field. balancePence is a long that nobody set, so it starts at 0.
+      lines: [1]
+      parts:
+        - kind: kv
+          id: obj
+          label: "Inside the Account object (private)"
+          slots: 2
+          rows: [{ name: owner, value: '"Ama"', tone: active }, { name: balancePence, value: "0", tone: active }]
+        - { kind: terminal, id: out, lines: [], slots: 3 }
+    - title: deposit(5000)
+      text: Code outside the class cannot touch the private fields. It has to call a method, and deposit adds 5000 to the balance.
+      lines: [2]
+      parts:
+        - kind: kv
+          id: obj
+          label: "Inside the Account object (private)"
+          slots: 2
+          rows: [{ name: owner, value: '"Ama"' }, { name: balancePence, value: "5000", tone: active }]
+    - title: withdraw(1250) is allowed
+      text: withdraw first checks the rule. 1250 is not more than 5000, so no exception is thrown and the balance drops to 3750.
+      lines: [3, 14, 15]
+      vars: { "pence > balancePence": "1250 > 5000 is false" }
+      parts:
+        - kind: kv
+          id: obj
+          label: "Inside the Account object (private)"
+          slots: 2
+          rows: [{ name: owner, value: '"Ama"' }, { name: balancePence, value: "3750", tone: active }]
+    - title: Reading through methods
+      text: owner() and balancePence() hand back the values without letting the caller change them.
+      lines: [4]
+      vars: {}
+      parts:
+        - kind: kv
+          id: obj
+          label: "Inside the Account object (private)"
+          slots: 2
+          rows: [{ name: owner, value: '"Ama"', tone: compare }, { name: balancePence, value: "3750", tone: compare }]
+        - { kind: terminal, id: out, lines: ["Ama has 3750p"], slots: 3 }
+    - title: withdraw(10_000) breaks the rule
+      text: 10000 is more than 3750, so withdraw throws an IllegalStateException. The line that would subtract never runs.
+      lines: [7, 14]
+      vars: { "pence > balancePence": "10000 > 3750 is true" }
+      parts:
+        - kind: kv
+          id: obj
+          label: "Inside the Account object (private)"
+          slots: 2
+          rows: [{ name: owner, value: '"Ama"' }, { name: balancePence, value: "3750", tone: bad }]
+    - title: The caller catches it
+      text: The exception travels back to main, where the catch block handles it and prints the message.
+      lines: [8, 9]
+      vars: {}
+      parts:
+        - { kind: terminal, id: out, lines: ["Ama has 3750p", "Refused: Insufficient funds"], slots: 3 }
+    - title: The rule held
+      text: The balance is still 3750. Because the only way to change it is through withdraw, the rule "never go below zero" is enforced in one place. This is encapsulation.
+      lines: [11]
+      parts:
+        - kind: kv
+          id: obj
+          label: "Inside the Account object (private)"
+          slots: 2
+          rows: [{ name: owner, value: '"Ama"' }, { name: balancePence, value: "3750", tone: found }]
+        - { kind: terminal, id: out, lines: ["Ama has 3750p", "Refused: Insufficient funds", "Still 3750p"], slots: 3 }

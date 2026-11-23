@@ -1,0 +1,107 @@
+- id: css-from-zero-cascade
+  title: Which rule wins?
+  hint: Watch the browser collect every rule that matches each paragraph, then pick a winner by specificity, then by order.
+  language: CSS
+  code: |
+    #first {
+      color: green;
+    }
+
+    .note {
+      color: blue;
+    }
+
+    p {
+      color: red;
+    }
+
+    .note {
+      color: purple;
+    }
+  steps:
+    - title: Two paragraphs, four rules
+      text: Both paragraphs have class="note"; only the first also has id="first". Every rule sets color, so the browser must choose one value for each paragraph.
+      parts:
+        - { kind: note, id: html, text: '<p class="note" id="first">   and   <p class="note">' }
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - { id: a, title: "first paragraph", columns: [rule, colour], rows: [] }
+            - { id: b, title: "second paragraph", columns: [rule, colour], rows: [] }
+    - title: "#first matches one"
+      text: An id selector chooses the one element with that id. Only the first paragraph matches, so it collects green.
+      lines: [1, 2, 3]
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - { id: a, title: "first paragraph", columns: [rule, colour], rows: [{ cells: ["#first (id)", green], tone: active }] }
+            - { id: b, title: "second paragraph", columns: [rule, colour], rows: [] }
+    - title: .note matches both
+      text: A class selector chooses every element with that class, so both paragraphs collect blue.
+      lines: [5, 6, 7]
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - { id: a, title: "first paragraph", columns: [rule, colour], rows: [["#first (id)", green], { cells: [".note (class)", blue], tone: active }] }
+            - { id: b, title: "second paragraph", columns: [rule, colour], rows: [{ cells: [".note (class)", blue], tone: active }] }
+    - title: p matches both
+      text: A type selector chooses every element of that type. Both are paragraphs, so both collect red as well.
+      lines: [9, 10, 11]
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - { id: a, title: "first paragraph", columns: [rule, colour], rows: [["#first (id)", green], [".note (class)", blue], { cells: ["p (type)", red], tone: active }] }
+            - { id: b, title: "second paragraph", columns: [rule, colour], rows: [[".note (class)", blue], { cells: ["p (type)", red], tone: active }] }
+    - title: .note again
+      text: The last rule is another .note, so both paragraphs collect purple. Each now has several candidates for one property.
+      lines: [13, 14, 15]
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - { id: a, title: "first paragraph", columns: [rule, colour], rows: [["#first (id)", green], [".note (class)", blue], ["p (type)", red], { cells: [".note (class)", purple], tone: active }] }
+            - { id: b, title: "second paragraph", columns: [rule, colour], rows: [[".note (class)", blue], ["p (type)", red], { cells: [".note (class)", purple], tone: active }] }
+    - title: "First paragraph: the id wins"
+      text: Specificity comes first. An id beats a class, and a class beats a type, so #first wins even though it comes first in the file. The paragraph is green.
+      lines: [1, 2, 3]
+      vars: { "first paragraph": green }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - { id: a, title: "first paragraph", columns: [rule, colour], rows: [{ cells: ["#first (id)", green], tone: found }, { cells: [".note (class)", blue], tone: dim }, { cells: ["p (type)", red], tone: dim }, { cells: [".note (class)", purple], tone: dim }] }
+            - { id: b, title: "second paragraph", columns: [rule, colour], rows: [[".note (class)", blue], ["p (type)", red], [".note (class)", purple]] }
+    - title: "Second paragraph: classes beat the type"
+      text: The second paragraph has no id. Both .note rules are more specific than p, so red is out.
+      lines: [9, 10, 11]
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - { id: a, title: "first paragraph", columns: [rule, colour], rows: [{ cells: ["#first (id)", green], tone: found }, { cells: [".note (class)", blue], tone: dim }, { cells: ["p (type)", red], tone: dim }, { cells: [".note (class)", purple], tone: dim }] }
+            - { id: b, title: "second paragraph", columns: [rule, colour], rows: [{ cells: [".note (class)", blue], tone: compare }, { cells: ["p (type)", red], tone: bad }, { cells: [".note (class)", purple], tone: compare }] }
+    - title: "A tie: the later rule wins"
+      text: The two .note rules are equally specific, so order decides, and the later one wins. The second paragraph is purple.
+      lines: [13, 14, 15]
+      vars: { "first paragraph": green, "second paragraph": purple }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - { id: a, title: "first paragraph", columns: [rule, colour], rows: [{ cells: ["#first (id)", green], tone: found }, { cells: [".note (class)", blue], tone: dim }, { cells: ["p (type)", red], tone: dim }, { cells: [".note (class)", purple], tone: dim }] }
+            - { id: b, title: "second paragraph", columns: [rule, colour], rows: [{ cells: [".note (class)", blue], tone: dim }, { cells: ["p (type)", red], tone: dim }, { cells: [".note (class)", purple], tone: found }] }
+    - title: Why to style with classes
+      text: The id rule won regardless of order, so changing that paragraph later would need another id or !important. With classes, a later rule can always override.
+      parts:
+        - { kind: note, id: html, text: "More specific wins; if equal, later wins.", tone: found }

@@ -1,0 +1,222 @@
+- id: web-performance-caching
+  title: Cached for a year, yet never stale
+  hint: Follow three visits and watch which files are checked, reused or downloaded.
+  language: HTTP
+  code: |-
+    # The fingerprinted files: dist/assets/index-Cd3Kp2fJ.js and the like
+    Cache-Control: max-age=31536000, immutable
+
+    # The HTML pages: dist/index.html
+    Cache-Control: no-cache
+  steps:
+    - title: "First visit: the HTML"
+      text: "The browser asks for the page. index.html comes back with no-cache: keep it, but check with the server before each use."
+      lines:
+        - 4
+        - 5
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - Browser
+            - Server
+          slots: 4
+          messages:
+            - from: Browser
+              to: Server
+              label: GET index.html
+              tone: active
+            - from: Server
+              to: Browser
+              label: index.html, no-cache
+              tone: found
+        - kind: kv
+          id: c
+          label: Browser cache
+          slots: 3
+          rows:
+            - name: index.html
+              value: kept; check before use
+              tone: active
+    - title: "First visit: the script"
+      text: "The HTML points at index-Cd3Kp2fJ.js. It comes back with max-age=31536000, one year, and immutable: it will never change, so do not even ask."
+      lines:
+        - 1
+        - 2
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - Browser
+            - Server
+          slots: 4
+          messages:
+            - from: Browser
+              to: Server
+              label: GET index.html
+              tone: dim
+            - from: Server
+              to: Browser
+              label: index.html, no-cache
+              tone: dim
+            - from: Browser
+              to: Server
+              label: GET index-Cd3Kp2fJ.js
+              tone: active
+            - from: Server
+              to: Browser
+              label: file, keep 1 year, immutable
+              tone: found
+        - kind: kv
+          id: c
+          label: Browser cache
+          slots: 3
+          rows:
+            - name: index.html
+              value: kept; check before use
+              tone: base
+            - name: index-Cd3Kp2fJ.js
+              value: kept 1 year; never ask
+              tone: active
+    - title: "Next visit: check the HTML"
+      text: The browser has index.html but must check it. Nothing has changed, so the server answers "not modified" in a tiny reply.
+      lines:
+        - 5
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - Browser
+            - Server
+          slots: 4
+          messages:
+            - from: Browser
+              to: Server
+              label: has index.html changed?
+              tone: active
+            - from: Server
+              to: Browser
+              label: not modified
+              tone: found
+        - kind: kv
+          id: c
+          label: Browser cache
+          slots: 3
+          rows:
+            - name: index.html
+              value: "kept; checked: same"
+              tone: found
+            - name: index-Cd3Kp2fJ.js
+              value: kept 1 year; never ask
+              tone: base
+    - title: "Next visit: the script"
+      text: The HTML still points at index-Cd3Kp2fJ.js, which is in the cache and immutable. The browser uses its copy without asking. Almost nothing was downloaded.
+      lines:
+        - 2
+      parts:
+        - kind: kv
+          id: c
+          label: Browser cache
+          slots: 3
+          rows:
+            - name: index.html
+              value: "kept; checked: same"
+              tone: done
+            - name: index-Cd3Kp2fJ.js
+              value: used from the cache
+              tone: found
+    - title: You change the code
+      text: You build again. Fingerprinting gives the changed script a new name made from its contents, say index-B7q2LmXe.js, and index.html now points at it.
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - Browser
+            - Server
+          slots: 4
+          messages: []
+        - kind: kv
+          id: c
+          label: Browser cache
+          slots: 3
+          rows:
+            - name: index.html
+              value: kept; check before use
+              tone: base
+            - name: index-Cd3Kp2fJ.js
+              value: kept 1 year; never ask
+              tone: base
+    - title: The check finds a change
+      text: On the next visit, the check on index.html finds it has changed, so the server sends the new one.
+      lines:
+        - 5
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - Browser
+            - Server
+          slots: 4
+          messages:
+            - from: Browser
+              to: Server
+              label: has index.html changed?
+              tone: active
+            - from: Server
+              to: Browser
+              label: "yes: new index.html"
+              tone: found
+        - kind: kv
+          id: c
+          label: Browser cache
+          slots: 3
+          rows:
+            - name: index.html
+              value: new; points at new name
+              tone: active
+            - name: index-Cd3Kp2fJ.js
+              value: no longer used
+              tone: dim
+    - title: A new name, a new download
+      text: index-B7q2LmXe.js is a different file as far as the browser is concerned, so it downloads it once and keeps it for a year. That is why immutable is safe.
+      lines:
+        - 1
+        - 2
+      parts:
+        - kind: seq
+          id: s
+          actors:
+            - Browser
+            - Server
+          slots: 4
+          messages:
+            - from: Browser
+              to: Server
+              label: has index.html changed?
+              tone: dim
+            - from: Server
+              to: Browser
+              label: "yes: new index.html"
+              tone: dim
+            - from: Browser
+              to: Server
+              label: GET index-B7q2LmXe.js
+              tone: active
+            - from: Server
+              to: Browser
+              label: file, keep 1 year, immutable
+              tone: found
+        - kind: kv
+          id: c
+          label: Browser cache
+          slots: 3
+          rows:
+            - name: index.html
+              value: new; points at new name
+              tone: base
+            - name: index-Cd3Kp2fJ.js
+              value: no longer used
+              tone: dim
+            - name: index-B7q2LmXe.js
+              value: kept 1 year; never ask
+              tone: found

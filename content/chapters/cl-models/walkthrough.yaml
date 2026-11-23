@@ -1,0 +1,125 @@
+- id: cl-models-cost
+  title: What one document costs on each model
+  hint: Follow the cost program as it prices a 6,000-token document with a 500-token summary on each model.
+  language: Python
+  code: |
+    PRICES = {  # dollars per million tokens (input, output), checked November 2026
+        "claude-fable-5-2": (8.00, 40.00),
+        "claude-opus-5-5": (4.00, 20.00),
+        "claude-sonnet-5-5": (2.00, 10.00),
+        "claude-haiku-5-5": (0.10, 0.50),  # Haiku's starting price
+    }
+
+    def cost(model, input_tokens, output_tokens):
+        price_in, price_out = PRICES[model]
+        return input_tokens * price_in / 1_000_000 + output_tokens * price_out / 1_000_000
+
+    for model in PRICES:
+        one = cost(model, 6_000, 500)
+        print(f"{model}: ${one:.5f} each, ${one * 1_000_000:,.0f} for a million")
+  steps:
+    - title: The price list
+      text: Each model has two prices per million tokens, one for input (what you send) and one for output (what it writes). Output costs five times as much as input on every model here.
+      lines: [1, 2, 3, 4, 5, 6]
+      parts:
+        - kind: kv
+          id: prices
+          label: "PRICES (dollars per million tokens)"
+          slots: 4
+          rows:
+            - { name: claude-fable-5-2, value: "$8 in, $40 out" }
+            - { name: claude-opus-5-5, value: "$4 in, $20 out" }
+            - { name: claude-sonnet-5-5, value: "$2 in, $10 out" }
+            - { name: claude-haiku-5-5, value: "$0.10 in, $0.50 out" }
+        - { kind: terminal, id: out, lines: [], slots: 4 }
+    - title: Look up the prices
+      text: To price one request, cost looks up the model's two prices. Take Opus 5.5 first, the suggested default.
+      lines: [8, 9]
+      vars: { model: claude-opus-5-5, price_in: 4.0, price_out: 20.0 }
+      parts:
+        - kind: kv
+          id: prices
+          label: "PRICES (dollars per million tokens)"
+          slots: 4
+          rows:
+            - { name: claude-fable-5-2, value: "$8 in, $40 out" }
+            - { name: claude-opus-5-5, value: "$4 in, $20 out", tone: active }
+            - { name: claude-sonnet-5-5, value: "$2 in, $10 out" }
+            - { name: claude-haiku-5-5, value: "$0.10 in, $0.50 out" }
+    - title: The input part
+      text: The 6,000-token document is input. 6,000 × $4 ÷ 1,000,000 is $0.024.
+      lines: [10]
+      vars: { model: claude-opus-5-5, input: "6,000 × 4 ÷ 1,000,000 = 0.024" }
+    - title: The output part
+      text: The 500-token summary is output, at the higher price. 500 × $20 ÷ 1,000,000 is $0.010.
+      lines: [10]
+      vars: { model: claude-opus-5-5, input: "0.024", output: "500 × 20 ÷ 1,000,000 = 0.010" }
+    - title: About 3.4 cents
+      text: Added together, one document costs $0.034 on Opus 5.5. The program also multiplies by a million to show the cost at volume. (Fable, first in the list, was printed before it.)
+      lines: [13, 14]
+      vars: { model: claude-opus-5-5, one: "0.034" }
+      parts:
+        - kind: terminal
+          id: out
+          slots: 4
+          lines:
+            - "claude-fable-5-2: $0.06800 each, $68,000 for a million"
+            - "claude-opus-5-5: $0.03400 each, $34,000 for a million"
+    - title: Every model in turn
+      text: The loop does the same for each model in PRICES. Fable comes first in the list and costs twice as much as Opus; Sonnet costs half as much.
+      lines: [12, 13, 14]
+      vars: { model: claude-sonnet-5-5, one: "0.017" }
+      parts:
+        - kind: kv
+          id: prices
+          label: "PRICES (dollars per million tokens)"
+          slots: 4
+          rows:
+            - { name: claude-fable-5-2, value: "$8 in, $40 out", tone: done }
+            - { name: claude-opus-5-5, value: "$4 in, $20 out", tone: done }
+            - { name: claude-sonnet-5-5, value: "$2 in, $10 out", tone: active }
+            - { name: claude-haiku-5-5, value: "$0.10 in, $0.50 out" }
+        - kind: terminal
+          id: out
+          slots: 4
+          lines:
+            - "claude-fable-5-2: $0.06800 each, $68,000 for a million"
+            - "claude-opus-5-5: $0.03400 each, $34,000 for a million"
+            - "claude-sonnet-5-5: $0.01700 each, $17,000 for a million"
+    - title: Haiku, under a tenth of a cent
+      text: At its starting price Haiku 5.5 costs $0.00085 for the same document. For one document the difference does not matter.
+      lines: [12, 13, 14]
+      vars: { model: claude-haiku-5-5, one: "0.00085" }
+      parts:
+        - kind: kv
+          id: prices
+          label: "PRICES (dollars per million tokens)"
+          slots: 4
+          rows:
+            - { name: claude-fable-5-2, value: "$8 in, $40 out", tone: done }
+            - { name: claude-opus-5-5, value: "$4 in, $20 out", tone: done }
+            - { name: claude-sonnet-5-5, value: "$2 in, $10 out", tone: done }
+            - { name: claude-haiku-5-5, value: "$0.10 in, $0.50 out", tone: active }
+        - kind: terminal
+          id: out
+          slots: 4
+          lines:
+            - "claude-fable-5-2: $0.06800 each, $68,000 for a million"
+            - "claude-opus-5-5: $0.03400 each, $34,000 for a million"
+            - "claude-sonnet-5-5: $0.01700 each, $17,000 for a million"
+            - "claude-haiku-5-5: $0.00085 each, $850 for a million"
+    - title: At a million documents, it matters
+      text: For a million documents it is $34,000 on Opus against $850 on Haiku. Cheaper is only better if quality holds, so measure on real examples before choosing.
+      vars: {}
+      parts:
+        - kind: cells
+          id: bars
+          label: "dollars for a million documents"
+          bars: true
+          width: 90
+          slots: 4
+          items:
+            - { k: fable, v: 68000 }
+            - { k: opus, v: 34000, tone: compare }
+            - { k: sonnet, v: 17000 }
+            - { k: haiku, v: 850, tone: found }

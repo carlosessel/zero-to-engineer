@@ -1,0 +1,87 @@
+- id: java-errors-concurrency-lost-update
+  title: How two threads lose an update
+  hint: count++ looks like one step but is three. Watch two threads interleave them and one increase disappear.
+  language: Java
+  code: |
+    executor.submit(() -> {
+        unsafeCount++;
+        safeCount.incrementAndGet();
+        synchronized (lock) {
+            lockedCount++;
+        }
+    });
+  steps:
+    - title: Two tasks, one counter
+      text: The pool runs tasks on several threads at once. Say unsafeCount is 7 and two threads, A and B, are about to run unsafeCount++.
+      lines: [1, 2]
+      vars: { unsafeCount: 7 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Thread A, unsafeCount, Thread B]
+          slots: 6
+          messages: []
+    - title: A reads 7
+      text: "unsafeCount++ is really three steps: read, add one, write. Thread A reads the current value, 7."
+      lines: [2]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Thread A, unsafeCount, Thread B]
+          slots: 6
+          messages:
+            - { from: unsafeCount, to: Thread A, label: "read: 7", tone: active }
+    - title: B reads 7 too
+      text: Before A writes anything back, Thread B also reads. It sees 7 as well, because A has not finished.
+      lines: [2]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Thread A, unsafeCount, Thread B]
+          slots: 6
+          messages:
+            - { from: unsafeCount, to: Thread A, label: "read: 7", tone: dim }
+            - { from: unsafeCount, to: Thread B, label: "read: 7", tone: active }
+    - title: Both add one
+      text: Each thread works out 7 + 1 = 8 on its own copy of the value.
+      lines: [2]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Thread A, unsafeCount, Thread B]
+          slots: 6
+          messages:
+            - { from: unsafeCount, to: Thread A, label: "read: 7", tone: dim }
+            - { from: unsafeCount, to: Thread B, label: "read: 7", tone: dim }
+            - { from: Thread A, to: Thread A, label: "7 + 1 = 8", tone: active }
+            - { from: Thread B, to: Thread B, label: "7 + 1 = 8", tone: active }
+    - title: Both write 8
+      text: A writes 8, then B writes 8 over it. Two increments ran, but the counter only went up by one. This is a race condition.
+      lines: [2]
+      vars: { unsafeCount: "8 (should be 9)" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Thread A, unsafeCount, Thread B]
+          slots: 6
+          messages:
+            - { from: unsafeCount, to: Thread A, label: "read: 7", tone: dim }
+            - { from: unsafeCount, to: Thread B, label: "read: 7", tone: dim }
+            - { from: Thread A, to: Thread A, label: "7 + 1 = 8", tone: dim }
+            - { from: Thread B, to: Thread B, label: "7 + 1 = 8", tone: dim }
+            - { from: Thread A, to: unsafeCount, label: "write 8", tone: active }
+            - { from: Thread B, to: unsafeCount, label: "write 8", tone: bad }
+    - title: It depends on timing
+      text: If A had finished before B read, the result would be 9. Races depend on timing, so after 100,000 tasks the unsafe counter usually ends below 100,000, but not always.
+      vars: {}
+    - title: The safe versions
+      text: incrementAndGet on an AtomicInteger does the read, add and write as one step. A synchronized block lets only one thread in at a time. Both end at exactly 100,000.
+      lines: [3, 4, 5, 6]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Thread A, safeCount, Thread B]
+          slots: 6
+          messages:
+            - { from: Thread A, to: safeCount, label: "incrementAndGet: 8", tone: found }
+            - { from: Thread B, to: safeCount, label: "incrementAndGet: 9", tone: found }

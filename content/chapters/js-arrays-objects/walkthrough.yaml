@@ -1,0 +1,198 @@
+- id: js-arrays-objects-references
+  title: Two names, one array
+  hint: Watch which array each name points at, and which array changes on each push.
+  language: JavaScript
+  code: |
+    const a = [1, 2, 3];
+    const b = a;
+    b.push(4);
+    console.log(a);
+
+    const c = [...a];
+    c.push(5);
+    console.log(a, c);
+  steps:
+    - title: One name, one array
+      text: The array [1, 2, 3] is made, and the name a points at it.
+      lines: [1]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: a, x: 0.05, y: 0.15, tone: active }
+            - { k: arr1, label: "[1, 2, 3]", x: 0.7, y: 0.15, tone: active }
+          edges:
+            - { a: a, b: arr1, directed: true, tone: active }
+        - { kind: terminal, id: out, lines: [], slots: 2 }
+    - title: b = a does not copy
+      text: Assigning an array gives a second name for the same array. No new array is made; b and a now point at one array.
+      lines: [2]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: a, x: 0.05, y: 0.15 }
+            - { label: b, x: 0.05, y: 0.5, tone: active }
+            - { k: arr1, label: "[1, 2, 3]", x: 0.7, y: 0.15, tone: compare }
+          edges:
+            - { a: a, b: arr1, directed: true }
+            - { a: b, b: arr1, directed: true, tone: active }
+    - title: Pushing through b
+      text: b.push(4) changes the one array that both names point at.
+      lines: [3]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: a, x: 0.05, y: 0.15 }
+            - { label: b, x: 0.05, y: 0.5, tone: active }
+            - { k: arr1, label: "[1, 2, 3, 4]", x: 0.7, y: 0.15, tone: active }
+          edges:
+            - { a: a, b: arr1, directed: true }
+            - { a: b, b: arr1, directed: true, tone: active }
+    - title: a has changed too
+      text: Printing a shows the 4. Nobody touched a directly, but it is the same array as b.
+      lines: [4]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: a, x: 0.05, y: 0.15, tone: bad }
+            - { label: b, x: 0.05, y: 0.5 }
+            - { k: arr1, label: "[1, 2, 3, 4]", x: 0.7, y: 0.15, tone: bad }
+          edges:
+            - { a: a, b: arr1, directed: true, tone: bad }
+            - { a: b, b: arr1, directed: true }
+        - { kind: terminal, id: out, lines: ["[1, 2, 3, 4]"], slots: 2 }
+    - title: Spread makes a real copy
+      text: "[...a] means all the elements of a, in a new array. c points at that new array, separate from the first."
+      lines: [6]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: a, x: 0.05, y: 0.15 }
+            - { label: b, x: 0.05, y: 0.5 }
+            - { label: c, x: 0.05, y: 0.85, tone: active }
+            - { k: arr1, label: "[1, 2, 3, 4]", x: 0.7, y: 0.15 }
+            - { k: arr2, label: "[1, 2, 3, 4]", x: 0.7, y: 0.85, tone: active }
+          edges:
+            - { a: a, b: arr1, directed: true }
+            - { a: b, b: arr1, directed: true }
+            - { a: c, b: arr2, directed: true, tone: active }
+    - title: Pushing to the copy
+      text: c.push(5) changes only the copy. a and b still point at the first array, which stays as it was.
+      lines: [7, 8]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: a, x: 0.05, y: 0.15 }
+            - { label: b, x: 0.05, y: 0.5 }
+            - { label: c, x: 0.05, y: 0.85, tone: active }
+            - { k: arr1, label: "[1, 2, 3, 4]", x: 0.7, y: 0.15, tone: found }
+            - { k: arr2, label: "[1, 2, 3, 4, 5]", x: 0.7, y: 0.85, tone: active }
+          edges:
+            - { a: a, b: arr1, directed: true }
+            - { a: b, b: arr1, directed: true }
+            - { a: c, b: arr2, directed: true, tone: active }
+        - { kind: terminal, id: out, lines: ["[1, 2, 3, 4]", "[1, 2, 3, 4] [1, 2, 3, 4, 5]"], slots: 2 }
+    - title: Names point; spread copies
+      text: Arrays and objects are not copied when assigned. Use [...array] or { ...object } when you need a separate copy, especially before passing one into a function that changes it.
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: a, x: 0.05, y: 0.15, tone: done }
+            - { label: b, x: 0.05, y: 0.5, tone: done }
+            - { label: c, x: 0.05, y: 0.85, tone: done }
+            - { k: arr1, label: "[1, 2, 3, 4]", x: 0.7, y: 0.15, tone: found }
+            - { k: arr2, label: "[1, 2, 3, 4, 5]", x: 0.7, y: 0.85, tone: found }
+          edges:
+            - { a: a, b: arr1, directed: true, label: same array }
+            - { a: b, b: arr1, directed: true, label: same array }
+            - { a: c, b: arr2, directed: true, label: a copy }
+
+- id: js-arrays-objects-map-filter-reduce
+  title: map, filter and reduce
+  hint: Watch each method call your function once per element and build a new result, leaving prices untouched.
+  language: JavaScript
+  code: |
+    const prices = [15, 12, 20];
+
+    const doubled = prices.map((price) => price * 2);
+    const cheap = prices.filter((price) => price < 16);
+    const total = prices.reduce((sum, price) => sum + price, 0);
+  steps:
+    - title: The starting array
+      text: prices holds three numbers. Each method below takes a function, called a callback, and calls it for each element in turn.
+      lines: [1]
+      parts:
+        - { kind: cells, id: p, label: "prices", items: [15, 12, 20], indices: true, slots: 3 }
+        - { kind: cells, id: r, label: "result", items: [], slots: 3, empty: "nothing yet" }
+    - title: map, first element
+      text: map calls the callback with 15. It returns 30, which goes into a new array in the same position.
+      lines: [3]
+      vars: { price: 15 }
+      parts:
+        - { kind: cells, id: p, label: "prices", items: [15, 12, 20], indices: true, slots: 3, pointers: [{ name: price, at: 0 }] }
+        - { kind: cells, id: r, label: "doubled", items: [{ k: d0, v: 30, tone: active }], slots: 3 }
+    - title: map, every element
+      text: "The same for 12 and 20. map always gives a new array the same length: [30, 24, 40]."
+      lines: [3]
+      vars: { price: 20 }
+      parts:
+        - { kind: cells, id: p, label: "prices", items: [15, 12, 20], indices: true, slots: 3, pointers: [{ name: price, at: 2 }] }
+        - { kind: cells, id: r, label: "doubled", items: [{ k: d0, v: 30, tone: found }, { k: d1, v: 24, tone: found }, { k: d2, v: 40, tone: found }], slots: 3 }
+    - title: filter keeps or drops
+      text: filter asks price < 16 for each element. 15 and 12 give true and are kept; 20 gives false and is left out.
+      lines: [4]
+      vars: {}
+      parts:
+        - kind: cells
+          id: p
+          label: "prices"
+          indices: true
+          slots: 3
+          items: [{ k: p0, v: 15, tone: found }, { k: p1, v: 12, tone: found }, { k: p2, v: 20, tone: bad }]
+        - { kind: cells, id: r, label: "cheap", items: [{ k: c0, v: 15, tone: found }, { k: c1, v: 12, tone: found }], slots: 3 }
+    - title: reduce starts at 0
+      text: reduce combines everything into one value. Its callback gets the running result, sum, and the next element. The 0 at the end is where sum starts.
+      lines: [5]
+      vars: { sum: 0 }
+      parts:
+        - { kind: cells, id: p, label: "prices", items: [15, 12, 20], indices: true, slots: 3 }
+        - { kind: cells, id: r, label: "sum", items: [{ k: s, v: 0, tone: compare }], slots: 3 }
+    - title: Add 15
+      text: "First call: sum is 0 and price is 15. The callback returns 15, which becomes the new sum."
+      lines: [5]
+      vars: { sum: 0, price: 15, returns: 15 }
+      parts:
+        - { kind: cells, id: p, label: "prices", items: [15, 12, 20], indices: true, slots: 3, pointers: [{ name: price, at: 0 }] }
+        - { kind: cells, id: r, label: "sum", items: [{ k: s, v: 15, tone: active }], slots: 3 }
+    - title: Add 12
+      text: "Second call: sum is 15 and price is 12, so the new sum is 27."
+      lines: [5]
+      vars: { sum: 15, price: 12, returns: 27 }
+      parts:
+        - { kind: cells, id: p, label: "prices", items: [15, 12, 20], indices: true, slots: 3, pointers: [{ name: price, at: 1 }] }
+        - { kind: cells, id: r, label: "sum", items: [{ k: s, v: 27, tone: active }], slots: 3 }
+    - title: Add 20
+      text: "Last call: 27 + 20 is 47. With no elements left, reduce gives back the final sum, 47, and total stores it."
+      lines: [5]
+      vars: { sum: 27, price: 20, returns: 47 }
+      parts:
+        - { kind: cells, id: p, label: "prices", items: [15, 12, 20], indices: true, slots: 3, pointers: [{ name: price, at: 2 }] }
+        - { kind: cells, id: r, label: "total", items: [{ k: s, v: 47, tone: found }], slots: 3 }
+    - title: prices is unchanged
+      text: map, filter and reduce each return a new value and never change prices. Store what they return, or it is lost.
+      vars: {}
+      parts:
+        - { kind: cells, id: p, label: "prices", items: [{ k: p0, v: 15, tone: done }, { k: p1, v: 12, tone: done }, { k: p2, v: 20, tone: done }], indices: true, slots: 3 }

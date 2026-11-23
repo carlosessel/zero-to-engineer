@@ -1,0 +1,163 @@
+- id: db-advanced-queries-gaps-islands
+  title: Finding runs of days
+  hint: Watch the day minus its row number stay the same through a run of consecutive days, and change at every gap.
+  language: SQL
+  code: |
+    WITH days AS (
+      SELECT DISTINCT placed_at::date AS day
+      FROM orders
+    ),
+    grouped AS (
+      SELECT day, day - (row_number() OVER (ORDER BY day))::integer AS island
+      FROM days
+    )
+    SELECT min(day) AS run_start, max(day) AS run_end, count(*) AS days
+    FROM grouped
+    GROUP BY island
+    HAVING count(*) > 1
+    ORDER BY run_start;
+  steps:
+    - title: Every day with an order
+      text: The first CTE keeps one row per day on which any order was placed. There are 18 such days in October and November 2026; the first eight are shown.
+      lines: [ 1, 2, 3, 4 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: g
+              title: grouped
+              columns: [ day, row_number, island ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, "", "" ] }
+                - { k: 2026-10-03, cells: [ 2026-10-03, "", "" ] }
+                - { k: 2026-10-04, cells: [ 2026-10-04, "", "" ] }
+                - { k: 2026-10-06, cells: [ 2026-10-06, "", "" ] }
+                - { k: 2026-10-08, cells: [ 2026-10-08, "", "" ] }
+                - { k: 2026-10-11, cells: [ 2026-10-11, "", "" ] }
+                - { k: 2026-10-12, cells: [ 2026-10-12, "", "" ] }
+                - { k: 2026-10-15, cells: [ 2026-10-15, "", "" ] }
+                - { k: more, cells: [ … 10 more days, "", "" ] }
+    - title: Number the days in order
+      text: row_number() OVER (ORDER BY day) numbers the days 1, 2, 3 and so on, from the earliest.
+      lines: [ 6 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: g
+              title: grouped
+              columns: [ day, row_number, island ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, "1", "" ] }
+                - { k: 2026-10-03, cells: [ 2026-10-03, "2", "" ] }
+                - { k: 2026-10-04, cells: [ 2026-10-04, "3", "" ] }
+                - { k: 2026-10-06, cells: [ 2026-10-06, "4", "" ] }
+                - { k: 2026-10-08, cells: [ 2026-10-08, "5", "" ] }
+                - { k: 2026-10-11, cells: [ 2026-10-11, "6", "" ] }
+                - { k: 2026-10-12, cells: [ 2026-10-12, "7", "" ] }
+                - { k: 2026-10-15, cells: [ 2026-10-15, "8", "" ] }
+                - { k: more, cells: [ … 10 more days, 9 to 18, "" ] }
+    - title: Subtract the number from the day
+      text: Each day minus its row number gives a date, called island here. 1 October minus 1 day is 30 September; 3 October minus 2 days is 1 October.
+      lines: [ 6 ]
+      vars: { 2026-10-03 - 2: 2026-10-01 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: g
+              title: grouped
+              columns: [ day, row_number, island ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, "1", 2026-09-30 ] }
+                - { k: 2026-10-03, cells: [ 2026-10-03, "2", 2026-10-01 ] }
+                - { k: 2026-10-04, cells: [ 2026-10-04, "3", 2026-10-01 ] }
+                - { k: 2026-10-06, cells: [ 2026-10-06, "4", 2026-10-02 ] }
+                - { k: 2026-10-08, cells: [ 2026-10-08, "5", 2026-10-03 ] }
+                - { k: 2026-10-11, cells: [ 2026-10-11, "6", 2026-10-05 ] }
+                - { k: 2026-10-12, cells: [ 2026-10-12, "7", 2026-10-05 ] }
+                - { k: 2026-10-15, cells: [ 2026-10-15, "8", 2026-10-07 ] }
+                - { k: more, cells: [ … 10 more days, 9 to 18, all different ] }
+    - title: A run keeps the same value
+      text: On 4 October the day goes up by one and so does the row number, so the difference stays at 1 October. Consecutive days always share an island value.
+      lines: [ 6 ]
+      vars: { 2026-10-04 - 3: 2026-10-01 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: g
+              title: grouped
+              columns: [ day, row_number, island ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, "1", 2026-09-30 ] }
+                - { k: 2026-10-03, cells: [ 2026-10-03, "2", 2026-10-01 ] }
+                - { k: 2026-10-04, cells: [ 2026-10-04, "3", 2026-10-01 ] }
+                - { k: 2026-10-06, cells: [ 2026-10-06, "4", 2026-10-02 ] }
+                - { k: 2026-10-08, cells: [ 2026-10-08, "5", 2026-10-03 ] }
+                - { k: 2026-10-11, cells: [ 2026-10-11, "6", 2026-10-05 ] }
+                - { k: 2026-10-12, cells: [ 2026-10-12, "7", 2026-10-05 ] }
+                - { k: 2026-10-15, cells: [ 2026-10-15, "8", 2026-10-07 ] }
+                - { k: more, cells: [ … 10 more days, 9 to 18, all different ] }
+    - title: A gap changes the value
+      text: There were no orders on 5 October. The day jumps by two but the row number by one, so 6 October gets a new island value.
+      lines: [ 6 ]
+      vars: { 2026-10-06 - 4: 2026-10-02 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: g
+              title: grouped
+              columns: [ day, row_number, island ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, "1", 2026-09-30 ] }
+                - { k: 2026-10-03, cells: [ 2026-10-03, "2", 2026-10-01 ] }
+                - { k: 2026-10-04, cells: [ 2026-10-04, "3", 2026-10-01 ] }
+                - { k: 2026-10-06, cells: [ 2026-10-06, "4", 2026-10-02 ] }
+                - { k: 2026-10-08, cells: [ 2026-10-08, "5", 2026-10-03 ] }
+                - { k: 2026-10-11, cells: [ 2026-10-11, "6", 2026-10-05 ] }
+                - { k: 2026-10-12, cells: [ 2026-10-12, "7", 2026-10-05 ] }
+                - { k: 2026-10-15, cells: [ 2026-10-15, "8", 2026-10-07 ] }
+                - { k: more, cells: [ … 10 more days, 9 to 18, all different ] }
+    - title: Find every shared value
+      text: 11 and 12 October share the value 5 October. Every other day, including the ten not shown, has a value of its own.
+      lines: [ 6 ]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: g
+              title: grouped
+              columns: [ day, row_number, island ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, "1", 2026-09-30 ] }
+                - { k: 2026-10-03, cells: [ 2026-10-03, "2", 2026-10-01 ] }
+                - { k: 2026-10-04, cells: [ 2026-10-04, "3", 2026-10-01 ] }
+                - { k: 2026-10-06, cells: [ 2026-10-06, "4", 2026-10-02 ] }
+                - { k: 2026-10-08, cells: [ 2026-10-08, "5", 2026-10-03 ] }
+                - { k: 2026-10-11, cells: [ 2026-10-11, "6", 2026-10-05 ] }
+                - { k: 2026-10-12, cells: [ 2026-10-12, "7", 2026-10-05 ] }
+                - { k: 2026-10-15, cells: [ 2026-10-15, "8", 2026-10-07 ] }
+                - { k: more, cells: [ … 10 more days, 9 to 18, all different ] }
+    - title: Group by island
+      text: Grouping by island turns each run into one row with its first day, last day and length. HAVING count(*) > 1 keeps only runs longer than a day.
+      lines: [ 9, 10, 11, 12, 13 ]
+      parts:
+        - kind: tables
+          id: r
+          slots: 2
+          tables:
+            - id: res
+              title: result
+              columns: [ run_start, run_end, days ]
+              rows:
+                - { cells: [ 2026-10-03, 2026-10-04, "2" ], tone: found }
+                - { cells: [ 2026-10-11, 2026-10-12, "2" ], tone: found }

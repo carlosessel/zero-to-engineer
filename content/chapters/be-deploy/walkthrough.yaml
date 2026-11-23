@@ -1,0 +1,129 @@
+- id: be-deploy-rolling
+  title: A rolling deployment without dropped requests
+  hint: Watch how readiness decides when the load balancer sends traffic to each instance, and when it stops.
+  language: TypeScript
+  code: |
+    let shuttingDown = false;
+
+    if (req.url === "/health/ready") {
+      const ready = !shuttingDown && (await checkDatabase());
+      res.writeHead(ready ? 200 : 503, { "content-type": "text/plain" }).end(ready ? "ready" : "not ready");
+      return;
+    }
+
+    async function shutdown(): Promise<void> {
+      shuttingDown = true; // readiness fails, so the load balancer stops sending new requests
+      await new Promise((resolve) => setTimeout(resolve, 100)); // in production: a few seconds
+      server.close(() => console.log("closed after finishing in-flight requests"));
+    }
+    process.once("SIGTERM", shutdown);
+  steps:
+    - title: Two old instances serving
+      text: The load balancer sends requests to two instances of the old version. Both answer their readiness check with 200.
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: load balancer, x: 0.12, y: 0.5 }
+            - { k: a, label: v1 instance A, x: 0.75, y: 0, note: "ready 200" }
+            - { k: b, label: v1 instance B, x: 0.75, y: 0.33, note: "ready 200" }
+          edges:
+            - { a: load balancer, b: a, directed: true }
+            - { a: load balancer, b: b, directed: true }
+    - title: A new instance starts
+      text: The platform starts one instance of the new version. Until it is truly ready, its readiness check fails, so it gets no traffic yet.
+      lines: [3, 4, 5]
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: load balancer, x: 0.12, y: 0.5 }
+            - { k: a, label: v1 instance A, x: 0.75, y: 0, note: "ready 200" }
+            - { k: b, label: v1 instance B, x: 0.75, y: 0.33, note: "ready 200" }
+            - { k: c, label: v2 instance C, x: 0.75, y: 0.66, tone: compare, note: "ready 503" }
+          edges:
+            - { a: load balancer, b: a, directed: true }
+            - { a: load balancer, b: b, directed: true }
+    - title: Ready, so traffic arrives
+      text: Once its readiness check passes, the load balancer starts sending it requests. Old and new versions now run side by side, so they must be compatible.
+      lines: [4, 5]
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: load balancer, x: 0.12, y: 0.5 }
+            - { k: a, label: v1 instance A, x: 0.75, y: 0, note: "ready 200" }
+            - { k: b, label: v1 instance B, x: 0.75, y: 0.33, note: "ready 200" }
+            - { k: c, label: v2 instance C, x: 0.75, y: 0.66, tone: found, note: "ready 200" }
+          edges:
+            - { a: load balancer, b: a, directed: true }
+            - { a: load balancer, b: b, directed: true }
+            - { a: load balancer, b: c, directed: true, tone: found }
+    - title: SIGTERM to an old instance
+      text: The platform sends SIGTERM to instance A. The first thing shutdown does is set shuttingDown, so its readiness check now fails and the load balancer stops sending it new requests.
+      lines: [10, 14]
+      vars: { "A: shuttingDown": "true" }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: load balancer, x: 0.12, y: 0.5 }
+            - { k: a, label: v1 instance A, x: 0.75, y: 0, tone: compare, note: "ready 503" }
+            - { k: b, label: v1 instance B, x: 0.75, y: 0.33, note: "ready 200" }
+            - { k: c, label: v2 instance C, x: 0.75, y: 0.66, note: "ready 200" }
+          edges:
+            - { a: load balancer, b: a, directed: true, tone: dim }
+            - { a: load balancer, b: b, directed: true }
+            - { a: load balancer, b: c, directed: true }
+    - title: Finish, then exit
+      text: After a pause (a few seconds in production, longer than the check interval), server.close stops accepting connections and waits for in-flight requests to finish. Then instance A exits.
+      lines: [11, 12]
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: load balancer, x: 0.12, y: 0.5 }
+            - { k: a, label: v1 instance A, x: 0.75, y: 0, tone: dim, note: "stopped" }
+            - { k: b, label: v1 instance B, x: 0.75, y: 0.33, note: "ready 200" }
+            - { k: c, label: v2 instance C, x: 0.75, y: 0.66, note: "ready 200" }
+          edges:
+            - { a: load balancer, b: b, directed: true }
+            - { a: load balancer, b: c, directed: true }
+    - title: Repeat for the next one
+      text: A second new instance starts, passes readiness and receives traffic. Then instance B gets SIGTERM and drains the same way.
+      vars: { "B: shuttingDown": "true" }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: load balancer, x: 0.12, y: 0.5 }
+            - { k: a, label: v1 instance A, x: 0.75, y: 0, tone: dim, note: "stopped" }
+            - { k: b, label: v1 instance B, x: 0.75, y: 0.33, tone: compare, note: "ready 503" }
+            - { k: c, label: v2 instance C, x: 0.75, y: 0.66, note: "ready 200" }
+            - { k: d, label: v2 instance D, x: 0.75, y: 1, tone: found, note: "ready 200" }
+          edges:
+            - { a: load balancer, b: b, directed: true, tone: dim }
+            - { a: load balancer, b: c, directed: true }
+            - { a: load balancer, b: d, directed: true, tone: found }
+    - title: Only the new version is left
+      text: "Every request was answered: traffic only reached instances that were ready, and old ones finished their work before exiting."
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: load balancer, x: 0.12, y: 0.5 }
+            - { k: a, label: v1 instance A, x: 0.75, y: 0, tone: dim, note: "stopped" }
+            - { k: b, label: v1 instance B, x: 0.75, y: 0.33, tone: dim, note: "stopped" }
+            - { k: c, label: v2 instance C, x: 0.75, y: 0.66, tone: done, note: "ready 200" }
+            - { k: d, label: v2 instance D, x: 0.75, y: 1, tone: done, note: "ready 200" }
+          edges:
+            - { a: load balancer, b: c, directed: true }
+            - { a: load balancer, b: d, directed: true }

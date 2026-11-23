@@ -1,0 +1,128 @@
+- id: css-box-model-width
+  title: How wide is this box?
+  hint: Add up the layers from left to right, then switch to border-box and see the content shrink instead.
+  language: CSS
+  examples:
+    - label: content-box (the default)
+      code: |
+        .card {
+          width: 300px;
+          padding: 20px;
+          border: 5px solid #7a3e00;
+          margin: 10px;
+        }
+      steps:
+        - title: You ask for 300 pixels
+          text: By default, width sets the width of the content only, the text inside. So the content is 300 pixels.
+          lines: [2]
+          vars: { visible width: 300px }
+          parts:
+            - kind: cells
+              id: c
+              label: "across the card, in pixels"
+              bars: true
+              slots: 5
+              width: 70
+              items: [{ k: content, v: 300, tone: active }]
+        - title: Padding goes round the content
+          text: padding is space inside the box, between the content and the border. 20 pixels is added on each side.
+          lines: [3]
+          vars: { visible width: "20 + 300 + 20 = 340px" }
+          parts:
+            - kind: cells
+              id: c
+              label: "across the card, in pixels"
+              bars: true
+              slots: 5
+              width: 70
+              items: [{ k: pl, v: 20, tone: active }, { k: content, v: 300 }, { k: pr, v: 20, tone: active }]
+        - title: The border goes round the padding
+          text: A 5-pixel border is drawn on each side, outside the padding. It adds to the width too.
+          lines: [4]
+          vars: { visible width: "5 + 20 + 300 + 20 + 5 = 350px" }
+          parts:
+            - kind: cells
+              id: c
+              label: "across the card, in pixels"
+              bars: true
+              slots: 5
+              width: 70
+              items: [{ k: bl, v: 5, tone: active }, { k: pl, v: 20 }, { k: content, v: 300 }, { k: pr, v: 20 }, { k: br, v: 5, tone: active }]
+        - title: Margin sits outside
+          text: The margin is transparent space outside the border, pushing other boxes 10 pixels away. It is not part of the visible box.
+          lines: [5]
+          vars: { visible width: 350px, "margin each side": 10px }
+          parts:
+            - kind: cells
+              id: c
+              label: "across the card, in pixels"
+              bars: true
+              slots: 5
+              width: 70
+              items: [{ k: bl, v: 5 }, { k: pl, v: 20 }, { k: content, v: 300 }, { k: pr, v: 20 }, { k: br, v: 5 }]
+            - { kind: note, id: n, text: "Plus 10 pixels of margin on each side, outside the border.", tone: compare }
+        - title: 350, not 300
+          text: You asked for 300 pixels and got a 350-pixel card. This is content-box sizing, and it trips up almost everyone.
+          vars: { visible width: 350px }
+          parts:
+            - { kind: note, id: n, text: "5 + 20 + 300 + 20 + 5 = 350 pixels on screen", tone: bad }
+    - label: border-box
+      code: |
+        .card {
+          box-sizing: border-box;
+          width: 300px;
+          padding: 20px;
+          border: 5px solid #7a3e00;
+        }
+      steps:
+        - title: One line changes the rule
+          text: With box-sizing set to border-box, width means the whole visible box, border included.
+          lines: [2]
+          parts:
+            - kind: cells
+              id: c
+              label: "across the card, in pixels"
+              bars: true
+              slots: 5
+              width: 70
+              items: []
+              empty: "nothing measured yet"
+        - title: The box is 300 pixels
+          text: Now 300 pixels is the outside edge of the border. The card is exactly as wide as you asked.
+          lines: [3]
+          vars: { visible width: 300px }
+          parts:
+            - kind: cells
+              id: c
+              label: "across the card, in pixels"
+              bars: true
+              slots: 5
+              width: 70
+              items: [{ k: all, v: 300, tone: active }]
+        - title: Border and padding fit inside
+          text: The 5-pixel borders and 20-pixel padding are taken out of the 300, not added to it.
+          lines: [4, 5]
+          vars: { visible width: 300px, content: "300 − 2 × 5 − 2 × 20" }
+          parts:
+            - kind: cells
+              id: c
+              label: "across the card, in pixels"
+              bars: true
+              slots: 5
+              width: 70
+              items: [{ k: bl, v: 5, tone: compare }, { k: pl, v: 20, tone: compare }, { k: all, v: 300 }, { k: pr, v: 20, tone: compare }, { k: br, v: 5, tone: compare }]
+        - title: The content shrinks to fit
+          text: What is left for the content is 250 pixels. The total is still 300, which is far easier to plan with.
+          vars: { visible width: 300px, content: 250px }
+          parts:
+            - kind: cells
+              id: c
+              label: "across the card, in pixels"
+              bars: true
+              slots: 5
+              width: 70
+              items: [{ k: bl, v: 5 }, { k: pl, v: 20 }, { k: all, v: 250, tone: found }, { k: pr, v: 20 }, { k: br, v: 5 }]
+        - title: Use it everywhere
+          text: That is why almost every modern stylesheet starts by setting box-sizing to border-box on every element.
+          parts:
+            - { kind: note, id: n, text: "5 + 20 + 250 + 20 + 5 = 300 pixels on screen", tone: found }

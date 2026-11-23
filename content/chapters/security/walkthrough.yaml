@@ -1,0 +1,99 @@
+- id: security-sql-injection
+  title: SQL injection, and the defence
+  hint: The same hostile text goes into two versions of a lookup. Watch where the text ends up, and how many rows come back.
+  language: Python
+  examples:
+    - label: "Text glued into the query"
+      code: |
+        name = input("Name: ")
+        query = "SELECT * FROM users WHERE name = '" + name + "'"
+        rows = db.execute(query).fetchall()
+      steps:
+        - title: A normal name
+          text: The program looks a user up by name. Typing ama builds a query that finds Ama's row, as intended.
+          lines: [1, 2, 3]
+          vars: { name: "ama" }
+          parts:
+            - { kind: note, id: q, text: "SELECT * FROM users WHERE name = 'ama'" }
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: u
+                  title: users
+                  columns: [id, name]
+                  rows: [{ cells: ["1", ama], tone: found }, ["2", kofi], ["3", esi]]
+        - title: Hostile input
+          text: Never trust input. Someone types a quote mark followed by SQL of their own.
+          lines: [1]
+          vars: { name: "' OR '1'='1" }
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: u
+                  title: users
+                  columns: [id, name]
+                  rows: [["1", ama], ["2", kofi], ["3", esi]]
+        - title: The text becomes code
+          text: Gluing it into the string closes the quote early. What the user typed is now part of the query itself.
+          lines: [2]
+          parts:
+            - { kind: note, id: q, text: "SELECT * FROM users WHERE name = '' OR '1'='1'", tone: bad }
+        - title: Every row comes back
+          text: "'1'='1' is true for every row, so the database returns all the users. The attacker sees everyone."
+          lines: [3]
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: u
+                  title: users
+                  columns: [id, name]
+                  rows: [{ cells: ["1", ama], tone: bad }, { cells: ["2", kofi], tone: bad }, { cells: ["3", esi], tone: bad }]
+    - label: "Parameterised query"
+      code: |
+        name = input("Name: ")
+        rows = db.execute("SELECT * FROM users WHERE name = ?", (name,)).fetchall()
+      steps:
+        - title: The query never changes
+          text: The query has a ? placeholder, and the value is passed separately. The database receives the SQL and the value as two different things.
+          lines: [2]
+          vars: { name: "' OR '1'='1" }
+          parts:
+            - { kind: note, id: q, text: "SELECT * FROM users WHERE name = ?", tone: found }
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: u
+                  title: users
+                  columns: [id, name]
+                  rows: [["1", ama], ["2", kofi], ["3", esi]]
+        - title: The input is only a value
+          text: The hostile text is compared with each name, as text. Nobody is called that, so no rows come back.
+          lines: [2]
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: u
+                  title: users
+                  columns: [id, name]
+                  rows: [{ cells: ["1", ama], tone: dim }, { cells: ["2", kofi], tone: dim }, { cells: ["3", esi], tone: dim }]
+        - title: Normal input still works
+          text: Typing ama finds Ama's row exactly as before. Parameterised queries, always.
+          lines: [1, 2]
+          vars: { name: "ama" }
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: u
+                  title: users
+                  columns: [id, name]
+                  rows: [{ cells: ["1", ama], tone: found }, ["2", kofi], ["3", esi]]

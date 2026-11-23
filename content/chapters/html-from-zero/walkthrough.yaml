@@ -1,0 +1,152 @@
+- id: html-from-zero-skeleton
+  title: Boxes inside boxes
+  hint: Watch the browser read the page skeleton line by line and place each element inside its parent.
+  language: HTML
+  code: |
+    <!DOCTYPE html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+        <title>Ama's Bakery</title>
+      </head>
+      <body>
+        <h1>Ama's Bakery</h1>
+        <p>Fresh bread every morning.</p>
+      </body>
+    </html>
+  steps:
+    - title: "\"This is a modern HTML page\""
+      text: The first line is not an element. It tells the browser to use modern rules, not its old, quirky way of drawing pages.
+      lines: [1]
+      parts:
+        - { kind: note, id: n, text: "Modern HTML page: yes", tone: active }
+    - title: The html element holds everything
+      text: The html element is the outer box; every other element goes inside it. lang="en" says the page is in English.
+      lines: [2]
+      parts:
+        - { kind: note, id: n, text: "Open boxes: html", tone: base }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: html, x: 0.5, y: 0, tone: active, note: 'lang="en"' }
+          edges: []
+    - title: head opens inside html
+      text: The head holds information about the page, which is not shown in it. It opens inside html, so it is a box inside that box.
+      lines: [3]
+      parts:
+        - { kind: note, id: n, text: "Open boxes: html > head", tone: base }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: html, x: 0.5, y: 0, note: 'lang="en"' }
+            - { label: head, x: 0.2, y: 0.5, tone: active }
+          edges:
+            - { a: html, b: head }
+    - title: Two meta elements
+      text: The meta lines say the text is UTF-8 and the page should fit the phone's width. They are void elements, with no content and no closing tag.
+      lines: [4, 5]
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: html, x: 0.5, y: 0, note: 'lang="en"' }
+            - { label: head, x: 0.2, y: 0.5 }
+            - { k: m1, label: meta, x: 0, y: 1, tone: active, note: charset }
+            - { k: m2, label: meta, x: 0.17, y: 1, tone: active, note: viewport }
+          edges:
+            - { a: html, b: head }
+            - { a: head, b: m1 }
+            - { a: head, b: m2 }
+    - title: The title, then head closes
+      text: The title is the name on the browser tab. Then </head> closes the head box, so the next element goes back inside html.
+      lines: [6, 7]
+      parts:
+        - { kind: note, id: n, text: "Open boxes: html", tone: base }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: html, x: 0.5, y: 0, note: 'lang="en"' }
+            - { label: head, x: 0.2, y: 0.5, tone: done }
+            - { k: m1, label: meta, x: 0, y: 1, note: charset }
+            - { k: m2, label: meta, x: 0.17, y: 1, note: viewport }
+            - { label: title, x: 0.35, y: 1, tone: active, note: "Ama's Bakery" }
+          edges:
+            - { a: html, b: head }
+            - { a: head, b: m1 }
+            - { a: head, b: m2 }
+            - { a: head, b: title }
+    - title: body opens
+      text: The body holds everything that appears on the page. It sits beside head, both inside html.
+      lines: [8]
+      parts:
+        - { kind: note, id: n, text: "Open boxes: html > body", tone: base }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: html, x: 0.5, y: 0, note: 'lang="en"' }
+            - { label: head, x: 0.2, y: 0.5, tone: done }
+            - { k: m1, label: meta, x: 0, y: 1, note: charset }
+            - { k: m2, label: meta, x: 0.17, y: 1, note: viewport }
+            - { label: title, x: 0.35, y: 1, note: "Ama's Bakery" }
+            - { label: body, x: 0.8, y: 0.5, tone: active }
+          edges:
+            - { a: html, b: head }
+            - { a: head, b: m1 }
+            - { a: head, b: m2 }
+            - { a: head, b: title }
+            - { a: html, b: body }
+    - title: A heading and a paragraph
+      text: The h1 and p go inside body. Each opens, holds its text and closes before the next begins. These are what the reader sees.
+      lines: [9, 10]
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: html, x: 0.5, y: 0, note: 'lang="en"' }
+            - { label: head, x: 0.2, y: 0.5, tone: done }
+            - { k: m1, label: meta, x: 0, y: 1, note: charset }
+            - { k: m2, label: meta, x: 0.17, y: 1, note: viewport }
+            - { label: title, x: 0.35, y: 1, note: "Ama's Bakery" }
+            - { label: body, x: 0.8, y: 0.5 }
+            - { label: h1, x: 0.68, y: 1, tone: active, note: "Ama's Bakery" }
+            - { label: p, x: 0.95, y: 1, tone: active, note: "Fresh bread…" }
+          edges:
+            - { a: html, b: head }
+            - { a: head, b: m1 }
+            - { a: head, b: m2 }
+            - { a: head, b: title }
+            - { a: html, b: body }
+            - { a: body, b: h1 }
+            - { a: body, b: p }
+    - title: Close in reverse order
+      text: "</body> closes before </html>, the reverse of the order they opened. Boxes never overlap: each one sits wholly inside its parent."
+      lines: [11, 12]
+      parts:
+        - { kind: note, id: n, text: "Open boxes: none. The page is complete.", tone: found }
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: html, x: 0.5, y: 0, tone: found, note: 'lang="en"' }
+            - { label: head, x: 0.2, y: 0.5, tone: done }
+            - { k: m1, label: meta, x: 0, y: 1, tone: done, note: charset }
+            - { k: m2, label: meta, x: 0.17, y: 1, tone: done, note: viewport }
+            - { label: title, x: 0.35, y: 1, tone: done, note: "Ama's Bakery" }
+            - { label: body, x: 0.8, y: 0.5, tone: done }
+            - { label: h1, x: 0.68, y: 1, tone: done, note: "Ama's Bakery" }
+            - { label: p, x: 0.95, y: 1, tone: done, note: "Fresh bread…" }
+          edges:
+            - { a: html, b: head }
+            - { a: head, b: m1 }
+            - { a: head, b: m2 }
+            - { a: head, b: title }
+            - { a: html, b: body }
+            - { a: body, b: h1 }
+            - { a: body, b: p }

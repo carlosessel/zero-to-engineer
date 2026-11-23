@@ -1,0 +1,134 @@
+- id: db-indexes-multi-column
+  title: Reading a multi-column index
+  hint: The index is sorted by shop, then status, then time. Watch how a query that names the leading columns lands on one small block.
+  language: SQL
+  code: |
+    CREATE INDEX big_orders_shop_status_placed_idx ON big_orders (shop_id, status, placed_at);
+
+    SELECT id, placed_at FROM big_orders
+    WHERE shop_id = 2 AND status = 'placed' AND placed_at >= '2025-06-01'
+    ORDER BY placed_at;
+
+    SELECT id FROM big_orders WHERE status = 'placed';
+  steps:
+    - title: One sorted list of entries
+      text: The index holds one entry for each of the 25,000 orders, sorted by shop_id first, then status within each shop, then placed_at within each status. Like a phone book sorted by surname, then first name.
+      lines: [1]
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: idx
+              title: big_orders_shop_status_placed_idx (in order)
+              columns: [shop_id, status, placed_at, entries]
+              rows:
+                - [1, cancelled, "…", "333"]
+                - [1, delivered, "…", "7,917"]
+                - [1, placed, "…", "83"]
+                - [2, cancelled, "…", "333"]
+                - [2, delivered, "…", "7,917"]
+                - [2, placed, "before 2025-06-01", "29"]
+                - [2, placed, "from 2025-06-01", "55"]
+                - [3, cancelled, "…", "334"]
+                - [3, delivered, "…", "7,916"]
+                - [3, placed, "…", "83"]
+    - title: "First column: shop_id = 2"
+      text: The query fixes the first column, so the tree can go straight to where shop 2 begins. Shops 1 and 3 are never read.
+      lines: [3, 4]
+      vars: { shop_id: "2" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: idx
+              title: big_orders_shop_status_placed_idx (in order)
+              columns: [shop_id, status, placed_at, entries]
+              rows:
+                - { cells: [1, cancelled, "…", "333"], tone: dim }
+                - { cells: [1, delivered, "…", "7,917"], tone: dim }
+                - { cells: [1, placed, "…", "83"], tone: dim }
+                - { cells: [2, cancelled, "…", "333"], tone: compare }
+                - { cells: [2, delivered, "…", "7,917"], tone: compare }
+                - { cells: [2, placed, "before 2025-06-01", "29"], tone: compare }
+                - { cells: [2, placed, "from 2025-06-01", "55"], tone: compare }
+                - { cells: [3, cancelled, "…", "334"], tone: dim }
+                - { cells: [3, delivered, "…", "7,916"], tone: dim }
+                - { cells: [3, placed, "…", "83"], tone: dim }
+    - title: "Second column: status = 'placed'"
+      text: Inside shop 2 the entries are sorted by status, so the placed ones sit together. The search narrows again without looking at the thousands of delivered orders.
+      lines: [4]
+      vars: { shop_id: "2", status: placed }
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: idx
+              title: big_orders_shop_status_placed_idx (in order)
+              columns: [shop_id, status, placed_at, entries]
+              rows:
+                - { cells: [1, cancelled, "…", "333"], tone: dim }
+                - { cells: [1, delivered, "…", "7,917"], tone: dim }
+                - { cells: [1, placed, "…", "83"], tone: dim }
+                - { cells: [2, cancelled, "…", "333"], tone: dim }
+                - { cells: [2, delivered, "…", "7,917"], tone: dim }
+                - { cells: [2, placed, "before 2025-06-01", "29"], tone: compare }
+                - { cells: [2, placed, "from 2025-06-01", "55"], tone: compare }
+                - { cells: [3, cancelled, "…", "334"], tone: dim }
+                - { cells: [3, delivered, "…", "7,916"], tone: dim }
+                - { cells: [3, placed, "…", "83"], tone: dim }
+    - title: "Third column: the range on placed_at"
+      text: Within shop 2's placed orders the entries are in time order, so everything from 1 June 2025 onwards is one unbroken run. The index finds the start and reads to the end of the block.
+      lines: [4]
+      vars: { shop_id: "2", status: placed, placed_at: ">= 2025-06-01" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: idx
+              title: big_orders_shop_status_placed_idx (in order)
+              columns: [shop_id, status, placed_at, entries]
+              rows:
+                - { cells: [1, cancelled, "…", "333"], tone: dim }
+                - { cells: [1, delivered, "…", "7,917"], tone: dim }
+                - { cells: [1, placed, "…", "83"], tone: dim }
+                - { cells: [2, cancelled, "…", "333"], tone: dim }
+                - { cells: [2, delivered, "…", "7,917"], tone: dim }
+                - { cells: [2, placed, "before 2025-06-01", "29"], tone: dim }
+                - { cells: [2, placed, "from 2025-06-01", "55"], tone: found }
+                - { cells: [3, cancelled, "…", "334"], tone: dim }
+                - { cells: [3, delivered, "…", "7,916"], tone: dim }
+                - { cells: [3, placed, "…", "83"], tone: dim }
+    - title: "A query on status alone"
+      text: The second query gives no shop_id. Its placed orders sit in three separate places, one inside each shop, so the tree cannot jump to a single block.
+      lines: [7]
+      vars: { status: placed }
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: idx
+              title: big_orders_shop_status_placed_idx (in order)
+              columns: [shop_id, status, placed_at, entries]
+              rows:
+                - { cells: [1, cancelled, "…", "333"], tone: compare }
+                - { cells: [1, delivered, "…", "7,917"], tone: compare }
+                - { cells: [1, placed, "…", "83"], tone: found }
+                - { cells: [2, cancelled, "…", "333"], tone: compare }
+                - { cells: [2, delivered, "…", "7,917"], tone: compare }
+                - { cells: [2, placed, "before 2025-06-01", "29"], tone: found }
+                - { cells: [2, placed, "from 2025-06-01", "55"], tone: found }
+                - { cells: [3, cancelled, "…", "334"], tone: compare }
+                - { cells: [3, delivered, "…", "7,916"], tone: compare }
+                - { cells: [3, placed, "…", "83"], tone: found }
+    - title: Scanning the whole index
+      text: PostgreSQL still used the index here, by reading all of it, which is cheap on a small table. On a large one, an index whose first column is status would be far faster.
+      lines: [7]
+    - title: The rule for column order
+      text: An index serves conditions on a leading prefix of its columns. Put the equality columns first, then the range or sort column.
+      lines: [1]
+      vars: {}

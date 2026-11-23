@@ -1,0 +1,139 @@
+- id: m-concurrency-patterns-bounded-queue
+  title: The till, the kitchen and a bounded queue
+  hint: Watch the queue fill, the till wait when it is full, and the poison pill stop the kitchen.
+  language: Java
+  code: |
+    BlockingQueue<Order> queue = new ArrayBlockingQueue<>(2);
+
+    Thread kitchen = Thread.ofPlatform().start(() -> {
+        long total = 0;
+        while (true) {
+            Order order = queue.take();
+            if (order == DONE) break;
+            Thread.sleep(20);
+            total += order.pence();
+            System.out.println("baked order " + order.id());
+        }
+        System.out.println("kitchen total: " + total);
+    });
+
+    for (int id = 1; id <= 5; id++) {
+        long start = System.nanoTime();
+        queue.put(new Order(id, 450L * id));
+        long waitedMs = (System.nanoTime() - start) / 1_000_000;
+        if (waitedMs >= 10) System.out.println("till waited for space before order " + id);
+    }
+    queue.put(DONE);
+    kitchen.join();
+  steps:
+    - title: "A queue that holds two"
+      text: "The till produces orders and the kitchen consumes them, through a queue with room for only two. The kitchen is waiting in take() for its first order."
+      lines: [1, 6]
+      parts:
+        - { kind: cells, id: q, label: "queue (holds 2)", slots: 2, width: 90, empty: "empty", items: [] }
+        - kind: kv
+          id: who
+          label: "Threads"
+          slots: 3
+          rows:
+            - { name: till, value: "starting", tone: base }
+            - { name: kitchen, value: "waiting in take()", tone: compare }
+            - { name: kitchen total, value: "0" }
+        - { kind: terminal, id: out, slots: 8, lines: [] }
+    - title: "Order 1 goes straight through"
+      text: "The till puts order 1. The waiting kitchen takes it at once and starts baking, which takes 20 ms."
+      lines: [6, 8, 17]
+      parts:
+        - { kind: cells, id: q, label: "queue (holds 2)", slots: 2, width: 90, empty: "empty", items: [] }
+        - kind: kv
+          id: who
+          label: "Threads"
+          slots: 3
+          rows:
+            - { name: till, value: "put order 1", tone: active }
+            - { name: kitchen, value: "baking order 1", tone: active }
+            - { name: kitchen total, value: "0" }
+    - title: "Orders 2 and 3 fill the queue"
+      text: "The till is much faster than the kitchen. Orders 2 and 3 go into the queue, which is now full."
+      lines: [17]
+      parts:
+        - { kind: cells, id: q, label: "queue (holds 2)", slots: 2, width: 90, empty: "empty", items: [{ k: "qorder 2", v: "order 2" }, { k: "qorder 3", v: "order 3" }] }
+        - kind: kv
+          id: who
+          label: "Threads"
+          slots: 3
+          rows:
+            - { name: till, value: "put orders 2, 3", tone: active }
+            - { name: kitchen, value: "baking order 1", tone: active }
+            - { name: kitchen total, value: "0" }
+    - title: "Back-pressure: the till waits"
+      text: "put(order 4) finds no space, so it blocks. The slow kitchen pushes back on the fast till instead of the queue growing without limit."
+      lines: [17]
+      parts:
+        - { kind: cells, id: q, label: "queue (holds 2)", slots: 2, width: 90, empty: "empty", items: [{ k: "qorder 2", v: "order 2", tone: compare }, { k: "qorder 3", v: "order 3", tone: compare }] }
+        - kind: kv
+          id: who
+          label: "Threads"
+          slots: 3
+          rows:
+            - { name: till, value: "blocked in put(order 4)", tone: bad }
+            - { name: kitchen, value: "baking order 1", tone: active }
+            - { name: kitchen total, value: "0" }
+    - title: "Space appears, order 4 goes in"
+      text: "The kitchen finishes order 1 and takes order 2, freeing a slot. The till's put completes, and it notices it waited."
+      lines: [9, 10, 6, 17, 19]
+      parts:
+        - { kind: cells, id: q, label: "queue (holds 2)", slots: 2, width: 90, empty: "empty", items: [{ k: "qorder 3", v: "order 3" }, { k: "qorder 4", v: "order 4" }] }
+        - kind: kv
+          id: who
+          label: "Threads"
+          slots: 3
+          rows:
+            - { name: till, value: "put order 4", tone: active }
+            - { name: kitchen, value: "baking order 2", tone: active }
+            - { name: kitchen total, value: "450" }
+        - { kind: terminal, id: out, slots: 8, lines: ["baked order 1", "till waited for space before order 4"] }
+    - title: "The same again for order 5"
+      text: "Order 5 also has to wait for the kitchen to finish order 2 and take order 3."
+      lines: [10, 6, 17, 19]
+      parts:
+        - { kind: cells, id: q, label: "queue (holds 2)", slots: 2, width: 90, empty: "empty", items: [{ k: "qorder 4", v: "order 4" }, { k: "qorder 5", v: "order 5" }] }
+        - kind: kv
+          id: who
+          label: "Threads"
+          slots: 3
+          rows:
+            - { name: till, value: "put order 5", tone: active }
+            - { name: kitchen, value: "baking order 3", tone: active }
+            - { name: kitchen total, value: "1350" }
+        - { kind: terminal, id: out, slots: 8, lines: ["baked order 1", "till waited for space before order 4", "baked order 2", "till waited for space before order 5"] }
+    - title: "The poison pill"
+      text: "After order 5 the till puts the special DONE order. It joins the end of the queue, so everything before it is still processed."
+      lines: [21]
+      parts:
+        - { kind: cells, id: q, label: "queue (holds 2)", slots: 2, width: 90, empty: "empty", items: [{ k: "qorder 5", v: "order 5" }, { k: "qDONE", v: "DONE" }] }
+        - kind: kv
+          id: who
+          label: "Threads"
+          slots: 3
+          rows:
+            - { name: till, value: "put DONE, then join()", tone: done }
+            - { name: kitchen, value: "baking order 4", tone: active }
+            - { name: kitchen total, value: "2700" }
+        - { kind: terminal, id: out, slots: 8, lines: ["baked order 1", "till waited for space before order 4", "baked order 2", "till waited for space before order 5", "baked order 3"] }
+    - title: "DONE stops the kitchen"
+      text: "The kitchen bakes orders 4 and 5, then takes DONE and leaves its loop. The total is 450 × (1 + 2 + 3 + 4 + 5) = 6,750."
+      lines: [10, 7, 12]
+      parts:
+        - { kind: cells, id: q, label: "queue (holds 2)", slots: 2, width: 90, empty: "empty", items: [] }
+        - kind: kv
+          id: who
+          label: "Threads"
+          slots: 3
+          rows:
+            - { name: till, value: "finished", tone: done }
+            - { name: kitchen, value: "stopped", tone: found }
+            - { name: kitchen total, value: "6750" }
+        - { kind: terminal, id: out, slots: 8, lines: ["baked order 1", "till waited for space before order 4", "baked order 2", "till waited for space before order 5", "baked order 3", "baked order 4", "baked order 5", "kitchen total: 6750"] }
+    - title: "What can vary"
+      text: "On another run, the lines may interleave differently. The orders are always baked in order, and the total is always 6,750."

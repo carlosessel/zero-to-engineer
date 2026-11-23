@@ -104,6 +104,8 @@ console.log("after resetting to the beginning:", poll(5).processed.length, "reco
 
 It prints `{ processed: ["0:placed o-7", "1:paid o-7"], committed: 2 }`, then the next two records processed with the crash leaving `committed: 2`, then the **same** two records again with `committed: 4`: at-least-once redelivery. Finally, resetting the offset replays all 5 records.
 
+<Walkthrough name="m-kafka-offsets-replay" />
+
 **Consumer lag** (the latest offset minus the committed offset) is the key health metric for a consumer group: lag that keeps growing means consumers cannot keep up.
 
 ## Replication and durability

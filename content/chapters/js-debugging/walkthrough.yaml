@@ -1,0 +1,78 @@
+- id: js-debugging-average
+  title: Printing values to find a bug
+  hint: Watch total and its type after each pass of the loop. The printed values show what rereading the code hides.
+  language: JavaScript
+  code: |
+    const typed = ["60", "70", "80"];
+
+    let total = 0;
+    for (const score of typed) {
+      total += score;
+      console.log("total is", total, typeof total);
+    }
+  steps:
+    - title: The symptom
+      text: Three scores should average 70, but the program printed average 202360. The guess is that something is wrong with total, so print it inside the loop.
+      lines: [1]
+      parts:
+        - { kind: cells, id: a, label: "typed", items: ['"60"', '"70"', '"80"'], indices: true, slots: 3 }
+        - { kind: kv, id: mem, label: "Values right now", slots: 2, rows: [] }
+        - { kind: terminal, id: out, slots: 3, lines: [] }
+    - title: total starts at 0
+      text: total begins as the number 0. So far, nothing looks wrong.
+      lines: [3]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Values right now"
+          slots: 2
+          rows: [{ name: total, value: "0 (number)", tone: active }]
+    - title: The first score
+      text: score is "60", in quotes because it is text. Adding text to a number joins them, so total becomes "060".
+      lines: [4, 5]
+      parts:
+        - { kind: cells, id: a, label: "typed", items: [{ k: a, v: '"60"', tone: active }, { k: b, v: '"70"' }, { k: c, v: '"80"' }], indices: true, slots: 3, pointers: [{ name: score, at: 0 }] }
+        - kind: kv
+          id: mem
+          label: "Values right now"
+          slots: 2
+          rows: [{ name: total, value: '"060" (string)', tone: bad }, { name: score, value: '"60" (string)' }]
+    - title: The print shows it
+      text: The labelled print says total is now a string. That one line is the clue.
+      lines: [6]
+      parts:
+        - { kind: terminal, id: out, slots: 3, lines: ["total is 060 string"] }
+    - title: The second score
+      text: "\"70\" is joined on the end: \"06070\". Still a string."
+      lines: [5, 6]
+      parts:
+        - { kind: cells, id: a, label: "typed", items: [{ k: a, v: '"60"', tone: done }, { k: b, v: '"70"', tone: active }, { k: c, v: '"80"' }], indices: true, slots: 3, pointers: [{ name: score, at: 1 }] }
+        - kind: kv
+          id: mem
+          label: "Values right now"
+          slots: 2
+          rows: [{ name: total, value: '"06070" (string)', tone: bad }, { name: score, value: '"70" (string)' }]
+        - { kind: terminal, id: out, slots: 3, lines: ["total is 060 string", "total is 06070 string"] }
+    - title: The third score
+      text: "\"80\" is joined on too, giving \"0607080\". Dividing later turns this text into 607080, and 607080 ÷ 3 is 202360."
+      lines: [5, 6]
+      vars: { "total / typed.length": "607080 / 3 = 202360" }
+      parts:
+        - { kind: cells, id: a, label: "typed", items: [{ k: a, v: '"60"', tone: done }, { k: b, v: '"70"', tone: done }, { k: c, v: '"80"', tone: active }], indices: true, slots: 3, pointers: [{ name: score, at: 2 }] }
+        - kind: kv
+          id: mem
+          label: "Values right now"
+          slots: 2
+          rows: [{ name: total, value: '"0607080" (string)', tone: bad }, { name: score, value: '"80" (string)' }]
+        - { kind: terminal, id: out, slots: 3, lines: ["total is 060 string", "total is 06070 string", "total is 0607080 string"] }
+    - title: Fix the cause
+      text: The cause is that the scores are strings. Writing total += Number(score) adds 60, 70 and 80 as numbers, and the program prints average 70.
+      vars: { "total / typed.length": "210 / 3 = 70" }
+      parts:
+        - { kind: cells, id: a, label: "typed", items: [{ k: a, v: '"60"', tone: done }, { k: b, v: '"70"', tone: done }, { k: c, v: '"80"', tone: done }], indices: true, slots: 3 }
+        - kind: kv
+          id: mem
+          label: "Values right now"
+          slots: 2
+          rows: [{ name: total, value: "210 (number)", tone: found }]
+        - { kind: terminal, id: out, slots: 3, lines: ["average 70"] }

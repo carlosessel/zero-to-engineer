@@ -1,9 +1,10 @@
 ---
 // A step-by-step visual walkthrough: a picture that changes each step, a
 // sentence explaining it, the line of code being run and its variables.
-// Lessons live in src/walk/lessons/ and are listed in src/walk/index.ts.
+// Coded lessons live in src/walk/lessons/ (listed in src/walk/index.ts);
+// data lessons in content/chapters/<id>/walkthrough.yaml (see src/walk/data.ts).
 // The first step is drawn here, so it shows even without JavaScript.
-import { LESSONS } from '../walk/index';
+import { ALL_LESSONS as LESSONS, isData } from '../walk/all';
 import { renderCode, renderSvg, stageHeight } from '../walk/render';
 
 interface Props { name: string }
@@ -14,8 +15,11 @@ const frames = lesson.frames(0);
 const first = frames[0];
 const svg = renderSvg(first, stageHeight(frames));
 const uid = `wk-${name}`;
+const code = lesson.code(0);
+// Data lessons carry their steps in the page; coded ones rebuild them in the browser.
+const embedded = isData(lesson) ? JSON.stringify(lesson.data).replace(/</g, '\\u003c') : undefined;
 ---
-<section class="walk widget" data-walk={name} aria-labelledby={`${uid}-h`}>
+<section class="walk widget" data-walk={name} data-generated aria-labelledby={`${uid}-h`}>
   <div class="wk-head">
     <h2 id={`${uid}-h`}>{lesson.title}</h2>
     <p class="hint">{lesson.hint}</p>
@@ -44,10 +48,10 @@ const uid = `wk-${name}`;
       <p class="wk-keys">Tip: once a button here has focus, the ← and → keys step too.</p>
     </div>
   </div>
-  <div class="wk-detail">
-    <figure class="wk-codebox">
+  <div class:list={['wk-detail', { 'wk-nocode': !code }]}>
+    <figure class="wk-codebox" hidden={!code}>
       <figcaption>{lesson.language}</figcaption>
-      <pre class="wk-code"><code set:html={renderCode(lesson.code(0))} /></pre>
+      <pre class="wk-code"><code set:html={renderCode(code)} /></pre>
     </figure>
     <div class="wk-varsbox">
       <p class="wk-varshead">Values right now</p>
@@ -56,6 +60,7 @@ const uid = `wk-${name}`;
       </dl>
     </div>
   </div>
+  {embedded && <script is:inline type="application/json" class="wk-data" set:html={embedded} />}
   <noscript><p class="note">Stepping through needs JavaScript switched on. The first step is shown above.</p></noscript>
 </section>
 <script>

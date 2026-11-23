@@ -1,0 +1,70 @@
+- id: http-request-response
+  title: One request, one response
+  hint: Follow a request from the app to the server and back, and see which part of the message each step reads.
+  language: HTTP
+  code: |
+    POST /orders?source=app HTTP/1.1
+    Host: api.bakery.example
+    Content-Type: application/json
+    Authorization: Bearer eyJhbGciOi...
+
+    {"items":[{"sku":"RYE-400","quantity":2}]}
+
+    HTTP/1.1 201 Created
+    Content-Type: application/json
+    Location: /orders/o-1042
+
+    {"id":"o-1042","status":"placed"}
+  steps:
+    - title: The request line
+      text: "Every request starts with a method (POST: create something), a path (/orders), an optional query string (?source=app) and the protocol version."
+      lines: [1]
+      vars: { method: POST, path: /orders }
+      parts:
+        - kind: seq
+          id: s
+          actors: [App, "API server", Database]
+          slots: 5
+          messages:
+            - { from: App, to: "API server", label: "POST /orders", tone: active }
+    - title: Headers describe the message
+      text: "Headers are Name: value lines. Host says which site, Content-Type says the body is JSON, Authorization says who is calling."
+      lines: [2, 3, 4]
+      vars: { method: POST, path: /orders, "Content-Type": application/json }
+    - title: A blank line, then the body
+      text: The blank line ends the headers. What follows is the body, the data being sent; here, two rye loaves.
+      lines: [5, 6]
+    - title: The server checks, then stores
+      text: The server reads the token to find out who is calling, checks the body is valid, then saves the order. The app sees none of this; it is still waiting.
+      parts:
+        - kind: seq
+          id: s
+          actors: [App, "API server", Database]
+          slots: 5
+          messages:
+            - { from: App, to: "API server", label: "POST /orders", tone: dim }
+            - { from: "API server", to: "API server", label: "check token and body", tone: active }
+            - { from: "API server", to: Database, label: "INSERT order", tone: active }
+            - { from: Database, to: "API server", label: "saved: o-1042", tone: found }
+    - title: "The status line: 201 Created"
+      text: "The response starts with a status code. 2xx means success; 201 means something new was created. 4xx would mean the request was wrong, 5xx that the server failed."
+      lines: [8]
+      vars: { status: "201 Created" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [App, "API server", Database]
+          slots: 5
+          messages:
+            - { from: App, to: "API server", label: "POST /orders", tone: dim }
+            - { from: "API server", to: "API server", label: "check token and body", tone: dim }
+            - { from: "API server", to: Database, label: "INSERT order", tone: dim }
+            - { from: Database, to: "API server", label: "saved: o-1042", tone: dim }
+            - { from: "API server", to: App, label: "201 Created", tone: found }
+    - title: Where to find it
+      text: The Location header gives the address of the new order, so the app can fetch it later with GET /orders/o-1042.
+      lines: [9, 10]
+      vars: { status: "201 Created", Location: /orders/o-1042 }
+    - title: The body
+      text: After another blank line comes the response body, the new order as JSON. One request, one response, and the exchange is over; HTTP keeps no memory of it.
+      lines: [11, 12]

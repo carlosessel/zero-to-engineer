@@ -1,0 +1,115 @@
+- id: db-the-map-first-query
+  title: Reading a query clause by clause
+  hint: Watch the customers table pass through FROM, WHERE, SELECT and ORDER BY to become the three-row result.
+  language: SQL
+  code: |
+    SELECT name, city
+    FROM customers
+    WHERE city = 'Leeds'
+    ORDER BY name;
+  steps:
+    - title: FROM customers
+      text: "The query starts from the customers table: nine rows, one per customer. (Only three of its columns are shown here.)"
+      lines: [ 2 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name, city ]
+              rows:
+                - { k: "1", cells: [ 1, Ama, Leeds ], tone: active }
+                - { k: "2", cells: [ 2, Kofi, York ], tone: active }
+                - { k: "3", cells: [ 3, Esi, Leeds ], tone: active }
+                - { k: "4", cells: [ 4, Yaa, null ], tone: active }
+                - { k: "5", cells: [ 5, Kwame, Hull ], tone: active }
+                - { k: "6", cells: [ 6, Akosua, York ], tone: active }
+                - { k: "7", cells: [ 7, Kobina, Leeds ], tone: active }
+                - { k: "8", cells: [ 8, Afua, Hull ], tone: active }
+                - { k: "9", cells: [ 9, Kweku, York ], tone: active }
+            - { id: r, title: result, columns: [ name, city ], rows: [] }
+    - title: WHERE city = 'Leeds'
+      text: The database checks each row against the condition. Three rows have Leeds as their city. Yaa's city is unknown (NULL), so her row does not match either.
+      lines: [ 3 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name, city ]
+              rows:
+                - { k: "1", cells: [ 1, Ama, Leeds ], tone: found }
+                - { k: "2", cells: [ 2, Kofi, York ], tone: dim }
+                - { k: "3", cells: [ 3, Esi, Leeds ], tone: found }
+                - { k: "4", cells: [ 4, Yaa, null ], tone: dim }
+                - { k: "5", cells: [ 5, Kwame, Hull ], tone: dim }
+                - { k: "6", cells: [ 6, Akosua, York ], tone: dim }
+                - { k: "7", cells: [ 7, Kobina, Leeds ], tone: found }
+                - { k: "8", cells: [ 8, Afua, Hull ], tone: dim }
+                - { k: "9", cells: [ 9, Kweku, York ], tone: dim }
+            - { id: r, title: result, columns: [ name, city ], rows: [] }
+    - title: SELECT name, city
+      text: From the rows that passed, only the two columns asked for are kept.
+      lines: [ 1 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name, city ]
+              rows:
+                - { k: "1", cells: [ 1, Ama, Leeds ], tone: compare }
+                - { k: "2", cells: [ 2, Kofi, York ], tone: dim }
+                - { k: "3", cells: [ 3, Esi, Leeds ], tone: compare }
+                - { k: "4", cells: [ 4, Yaa, null ], tone: dim }
+                - { k: "5", cells: [ 5, Kwame, Hull ], tone: dim }
+                - { k: "6", cells: [ 6, Akosua, York ], tone: dim }
+                - { k: "7", cells: [ 7, Kobina, Leeds ], tone: compare }
+                - { k: "8", cells: [ 8, Afua, Hull ], tone: dim }
+                - { k: "9", cells: [ 9, Kweku, York ], tone: dim }
+            - id: r
+              title: result
+              columns: [ name, city ]
+              rows:
+                - { k: Ama, cells: [ Ama, Leeds ], tone: active }
+                - { k: Esi, cells: [ Esi, Leeds ], tone: active }
+                - { k: Kobina, cells: [ Kobina, Leeds ], tone: active }
+    - title: ORDER BY name
+      text: The result is sorted by name. These three happen to be in order already; without ORDER BY, SQL promises no order at all.
+      lines: [ 4 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ id, name, city ]
+              rows:
+                - { k: "1", cells: [ 1, Ama, Leeds ], tone: compare }
+                - { k: "2", cells: [ 2, Kofi, York ], tone: dim }
+                - { k: "3", cells: [ 3, Esi, Leeds ], tone: compare }
+                - { k: "4", cells: [ 4, Yaa, null ], tone: dim }
+                - { k: "5", cells: [ 5, Kwame, Hull ], tone: dim }
+                - { k: "6", cells: [ 6, Akosua, York ], tone: dim }
+                - { k: "7", cells: [ 7, Kobina, Leeds ], tone: compare }
+                - { k: "8", cells: [ 8, Afua, Hull ], tone: dim }
+                - { k: "9", cells: [ 9, Kweku, York ], tone: dim }
+            - id: r
+              title: result
+              columns: [ name, city ]
+              rows:
+                - { k: Ama, cells: [ Ama, Leeds ], tone: found }
+                - { k: Esi, cells: [ Esi, Leeds ], tone: found }
+                - { k: Kobina, cells: [ Kobina, Leeds ], tone: found }
+    - title: What, not how
+      text: You described the result you wanted; the database decided how to find it, whether by reading every row or using an index. That is what declarative means.
+      lines: [ 1, 2, 3, 4 ]
+      parts:
+        - { kind: note, id: n, text: "(3 rows): the same query keeps working as the table grows", tone: found }

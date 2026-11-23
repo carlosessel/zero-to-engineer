@@ -1,0 +1,303 @@
+- id: html-css-tree-and-rules
+  title: HTML becomes a tree, CSS picks from it
+  hint: First watch the page's elements nest into a tree. Then switch to CSS and watch each selector choose elements from that tree.
+  examples:
+    - label: "HTML: the tree"
+      code: |
+        <body>
+          <header><h1>Ama's Bakery</h1></header>
+          <main>
+            <p class="intro">Fresh bread every <strong>morning</strong>.</p>
+            <ul>
+              <li>Sugar bread</li>
+              <li>Tea bread</li>
+            </ul>
+            <a href="menu.html">See the menu</a>
+            <img src="bread.jpg" alt="A loaf of sugar bread">
+          </main>
+        </body>
+      steps:
+        - title: The body holds the visible page
+          text: An element runs from its opening tag to its closing tag. Everything you see on the page goes inside body.
+          lines: [1, 12]
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0, tone: active }
+              edges: []
+        - title: Elements inside elements
+          text: header sits inside body, and h1 sits inside header. An element inside another is its child, so the page becomes a tree.
+          lines: [2]
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0 }
+                - { label: header, x: 0.15, y: 0.33, tone: active }
+                - { label: h1, x: 0.15, y: 0.66, tone: active, note: "Ama's Bakery" }
+              edges:
+                - { a: body, b: header }
+                - { a: header, b: h1 }
+        - title: main and a paragraph
+          text: main holds the page's main content. The paragraph carries an attribute, class="intro", and has a strong element inside it.
+          lines: [3, 4]
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0 }
+                - { label: header, x: 0.15, y: 0.33 }
+                - { label: h1, x: 0.15, y: 0.66, note: "Ama's Bakery" }
+                - { label: main, x: 0.65, y: 0.33, tone: active }
+                - { label: p, x: 0.36, y: 0.66, tone: active, note: 'class="intro"' }
+                - { label: strong, x: 0.36, y: 1, tone: active }
+              edges:
+                - { a: body, b: header }
+                - { a: header, b: h1 }
+                - { a: body, b: main }
+                - { a: main, b: p }
+                - { a: p, b: strong }
+        - title: A list with two items
+          text: ul is a list, and each li is one item in it.
+          lines: [5, 6, 7, 8]
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0 }
+                - { label: header, x: 0.15, y: 0.33 }
+                - { label: h1, x: 0.15, y: 0.66, note: "Ama's Bakery" }
+                - { label: main, x: 0.65, y: 0.33 }
+                - { label: p, x: 0.36, y: 0.66, note: 'class="intro"' }
+                - { label: strong, x: 0.36, y: 1 }
+                - { label: ul, x: 0.6, y: 0.66, tone: active }
+                - { k: li1, label: li, x: 0.53, y: 1, tone: active, note: "Sugar bread" }
+                - { k: li2, label: li, x: 0.72, y: 1, tone: active, note: "Tea bread" }
+              edges:
+                - { a: body, b: header }
+                - { a: header, b: h1 }
+                - { a: body, b: main }
+                - { a: main, b: p }
+                - { a: p, b: strong }
+                - { a: main, b: ul }
+                - { a: ul, b: li1 }
+                - { a: ul, b: li2 }
+        - title: A link and an image
+          text: Attributes add detail. href says where the link goes; alt describes the image for people who cannot see it.
+          lines: [9, 10]
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0 }
+                - { label: header, x: 0.15, y: 0.33 }
+                - { label: h1, x: 0.15, y: 0.66, note: "Ama's Bakery" }
+                - { label: main, x: 0.65, y: 0.33 }
+                - { label: p, x: 0.36, y: 0.66, note: 'class="intro"' }
+                - { label: strong, x: 0.36, y: 1 }
+                - { label: ul, x: 0.6, y: 0.66 }
+                - { k: li1, label: li, x: 0.53, y: 1, note: "Sugar bread" }
+                - { k: li2, label: li, x: 0.72, y: 1, note: "Tea bread" }
+                - { label: a, x: 0.8, y: 0.66, tone: active, note: 'href="menu.html"' }
+                - { label: img, x: 0.97, y: 0.66, tone: active, note: "alt text" }
+              edges:
+                - { a: body, b: header }
+                - { a: header, b: h1 }
+                - { a: body, b: main }
+                - { a: main, b: p }
+                - { a: p, b: strong }
+                - { a: main, b: ul }
+                - { a: ul, b: li1 }
+                - { a: ul, b: li2 }
+                - { a: main, b: a }
+                - { a: main, b: img }
+        - title: The whole tree
+          text: Tags chosen for their meaning, such as header and main, tell screen readers and search engines what each part of the page is. CSS will choose from this tree.
+          lines: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12]
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0, tone: done }
+                - { label: header, x: 0.15, y: 0.33, tone: found }
+                - { label: h1, x: 0.15, y: 0.66, tone: done, note: "Ama's Bakery" }
+                - { label: main, x: 0.65, y: 0.33, tone: found }
+                - { label: p, x: 0.36, y: 0.66, tone: done, note: 'class="intro"' }
+                - { label: strong, x: 0.36, y: 1, tone: done }
+                - { label: ul, x: 0.6, y: 0.66, tone: done }
+                - { k: li1, label: li, x: 0.53, y: 1, tone: done, note: "Sugar bread" }
+                - { k: li2, label: li, x: 0.72, y: 1, tone: done, note: "Tea bread" }
+                - { label: a, x: 0.8, y: 0.66, tone: done, note: 'href="menu.html"' }
+                - { label: img, x: 0.97, y: 0.66, tone: done, note: "alt text" }
+              edges:
+                - { a: body, b: header }
+                - { a: header, b: h1 }
+                - { a: body, b: main }
+                - { a: main, b: p }
+                - { a: p, b: strong }
+                - { a: main, b: ul }
+                - { a: ul, b: li1 }
+                - { a: ul, b: li2 }
+                - { a: main, b: a }
+                - { a: main, b: img }
+    - label: "CSS: choosing elements"
+      code: |
+        h1 { color: #7a3e00; }
+        .intro { font-size: 1.2rem; }          /* a dot selects by class */
+
+        ul { display: flex; gap: 12px; list-style: none; padding: 0; }
+        li { background: #fff3d1; padding: 8px 12px; border-radius: 8px; }
+
+        @media (max-width: 500px) {            /* rules for small screens */
+          ul { flex-direction: column; }
+        }
+      steps:
+        - title: Select by tag
+          text: A rule is a selector and some properties in braces. The selector h1 chooses every h1 element; here there is one, and it turns brown.
+          lines: [1]
+          vars: { selector: h1, matches: "1 element" }
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0 }
+                - { label: header, x: 0.15, y: 0.33 }
+                - { label: h1, x: 0.15, y: 0.66, tone: active, note: "color: #7a3e00" }
+                - { label: main, x: 0.65, y: 0.33 }
+                - { label: p, x: 0.36, y: 0.66, note: 'class="intro"' }
+                - { label: strong, x: 0.36, y: 1 }
+                - { label: ul, x: 0.6, y: 0.66 }
+                - { k: li1, label: li, x: 0.53, y: 1 }
+                - { k: li2, label: li, x: 0.72, y: 1 }
+                - { label: a, x: 0.8, y: 0.66 }
+                - { label: img, x: 0.97, y: 0.66 }
+              edges:
+                - { a: body, b: header }
+                - { a: header, b: h1 }
+                - { a: body, b: main }
+                - { a: main, b: p }
+                - { a: p, b: strong }
+                - { a: main, b: ul }
+                - { a: ul, b: li1 }
+                - { a: ul, b: li2 }
+                - { a: main, b: a }
+                - { a: main, b: img }
+        - title: Select by class
+          text: A dot means "elements with this class". Only the paragraph has class="intro", so only its text grows.
+          lines: [2]
+          vars: { selector: .intro, matches: "1 element" }
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0 }
+                - { label: header, x: 0.15, y: 0.33 }
+                - { label: h1, x: 0.15, y: 0.66, tone: done }
+                - { label: main, x: 0.65, y: 0.33 }
+                - { label: p, x: 0.36, y: 0.66, tone: active, note: "font-size: 1.2rem" }
+                - { label: strong, x: 0.36, y: 1 }
+                - { label: ul, x: 0.6, y: 0.66 }
+                - { k: li1, label: li, x: 0.53, y: 1 }
+                - { k: li2, label: li, x: 0.72, y: 1 }
+                - { label: a, x: 0.8, y: 0.66 }
+                - { label: img, x: 0.97, y: 0.66 }
+              edges:
+                - { a: body, b: header }
+                - { a: header, b: h1 }
+                - { a: body, b: main }
+                - { a: main, b: p }
+                - { a: p, b: strong }
+                - { a: main, b: ul }
+                - { a: ul, b: li1 }
+                - { a: ul, b: li2 }
+                - { a: main, b: a }
+                - { a: main, b: img }
+        - title: Flexbox lays out the list
+          text: display flex on the ul lays its children out in a row, with a 12px gap between them.
+          lines: [4]
+          vars: { selector: ul, matches: "1 element" }
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0 }
+                - { label: header, x: 0.15, y: 0.33 }
+                - { label: h1, x: 0.15, y: 0.66, tone: done }
+                - { label: main, x: 0.65, y: 0.33 }
+                - { label: p, x: 0.36, y: 0.66, tone: done }
+                - { label: strong, x: 0.36, y: 1 }
+                - { label: ul, x: 0.6, y: 0.66, tone: active, note: "display: flex" }
+                - { k: li1, label: li, x: 0.53, y: 1 }
+                - { k: li2, label: li, x: 0.72, y: 1 }
+                - { label: a, x: 0.8, y: 0.66 }
+                - { label: img, x: 0.97, y: 0.66 }
+              edges:
+                - { a: body, b: header }
+                - { a: header, b: h1 }
+                - { a: body, b: main }
+                - { a: main, b: p }
+                - { a: p, b: strong }
+                - { a: main, b: ul }
+                - { a: ul, b: li1 }
+                - { a: ul, b: li2 }
+                - { a: main, b: a }
+                - { a: main, b: img }
+            - { kind: cells, id: list, label: "The list on screen", items: [Sugar bread, Tea bread], width: 110, slots: 2 }
+        - title: One rule, many elements
+          text: The selector li matches both list items, so both get the same background and rounded corners.
+          lines: [5]
+          vars: { selector: li, matches: "2 elements" }
+          parts:
+            - kind: graph
+              id: g
+              height: 300
+              nodes:
+                - { label: body, x: 0.5, y: 0 }
+                - { label: header, x: 0.15, y: 0.33 }
+                - { label: h1, x: 0.15, y: 0.66, tone: done }
+                - { label: main, x: 0.65, y: 0.33 }
+                - { label: p, x: 0.36, y: 0.66, tone: done }
+                - { label: strong, x: 0.36, y: 1 }
+                - { label: ul, x: 0.6, y: 0.66, tone: done }
+                - { k: li1, label: li, x: 0.53, y: 1, tone: active }
+                - { k: li2, label: li, x: 0.72, y: 1, tone: active }
+                - { label: a, x: 0.8, y: 0.66 }
+                - { label: img, x: 0.97, y: 0.66 }
+              edges:
+                - { a: body, b: header }
+                - { a: header, b: h1 }
+                - { a: body, b: main }
+                - { a: main, b: p }
+                - { a: p, b: strong }
+                - { a: main, b: ul }
+                - { a: ul, b: li1 }
+                - { a: ul, b: li2 }
+                - { a: main, b: a }
+                - { a: main, b: img }
+            - kind: cells
+              id: list
+              label: "The list on screen"
+              width: 110
+              slots: 2
+              items: [{ v: Sugar bread, tone: compare }, { v: Tea bread, tone: compare }]
+        - title: A small screen
+          text: The media query's rules apply only when the screen is 500px wide or less. On a phone the list turns into a column; this is responsive design.
+          lines: [7, 8, 9]
+          vars: { "screen width": "500px or less", selector: ul }
+          parts:
+            - kind: cells
+              id: list
+              label: "The list on a phone"
+              orient: column
+              slots: 2
+              items: [{ v: Sugar bread, tone: found }, { v: Tea bread, tone: found }]

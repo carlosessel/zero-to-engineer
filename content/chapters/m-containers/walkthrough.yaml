@@ -1,0 +1,136 @@
+- id: m-containers-layer-cache
+  title: Which layers rebuild after a code change
+  hint: Change one line in src/server.ts and watch where the cache breaks in each Dockerfile.
+  language: Dockerfile
+  examples:
+    - label: Code copied first
+      code: |
+        FROM node:24-slim
+        COPY . .
+        RUN npm ci
+        RUN npm run build
+      steps:
+        - title: One line of code changes
+          text: You edit src/server.ts and build again. Docker checks each instruction in order, reusing a cached layer when the instruction and its inputs have not changed.
+          parts:
+            - { kind: note, id: n, text: "changed since the last build: src/server.ts", tone: active }
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: d
+                  title: build
+                  columns: [instruction, layer]
+                  rows: [["FROM node:24-slim", ""], ["COPY . .", ""], ["RUN npm ci", ""], ["RUN npm run build", ""]]
+        - title: The base image is cached
+          text: FROM has no inputs from your project, so its layer is reused as it is.
+          lines: [1]
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: d
+                  title: build
+                  columns: [instruction, layer]
+                  rows: [{ cells: ["FROM node:24-slim", cached], tone: found }, ["COPY . .", ""], ["RUN npm ci", ""], ["RUN npm run build", ""]]
+        - title: COPY . . sees the change
+          text: COPY . . copies every file, including src/server.ts, which has changed. The cache breaks here.
+          lines: [2]
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: d
+                  title: build
+                  columns: [instruction, layer]
+                  rows: [{ cells: ["FROM node:24-slim", cached], tone: dim }, { cells: ["COPY . .", REBUILD], tone: bad }, ["RUN npm ci", ""], ["RUN npm run build", ""]]
+        - title: Everything after it rebuilds too
+          text: Once the cache is broken, every later layer is rebuilt, even npm ci, whose dependency files did not change. Installing dependencies can take minutes.
+          lines: [3, 4]
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: d
+                  title: build
+                  columns: [instruction, layer]
+                  rows: [{ cells: ["FROM node:24-slim", cached], tone: dim }, { cells: ["COPY . .", REBUILD], tone: bad }, { cells: ["RUN npm ci", REBUILD], tone: bad }, { cells: ["RUN npm run build", REBUILD], tone: bad }]
+        - title: Three of four steps rebuilt
+          text: A one-line code change paid for a full dependency install. Switch to the other example to see the fix.
+          parts:
+            - { kind: note, id: n, text: "1 layer cached, 3 rebuilt, including npm ci", tone: bad }
+    - label: Dependencies first
+      code: |
+        FROM node:24-slim
+        COPY package.json package-lock.json ./
+        RUN npm ci
+        COPY . .
+        RUN npm run build
+      steps:
+        - title: The same code change
+          text: Again only src/server.ts has changed. This Dockerfile copies the dependency files on their own before copying the rest of the code.
+          parts:
+            - { kind: note, id: n, text: "changed since the last build: src/server.ts", tone: active }
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: d
+                  title: build
+                  columns: [instruction, layer]
+                  rows: [["FROM node:24-slim", ""], ["COPY package.json package-lock.json ./", ""], ["RUN npm ci", ""], ["COPY . .", ""], ["RUN npm run build", ""]]
+        - title: Base image cached
+          text: FROM has not changed, so its layer is reused.
+          lines: [1]
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: d
+                  title: build
+                  columns: [instruction, layer]
+                  rows: [{ cells: ["FROM node:24-slim", cached], tone: found }, ["COPY package.json package-lock.json ./", ""], ["RUN npm ci", ""], ["COPY . .", ""], ["RUN npm run build", ""]]
+        - title: Dependency files unchanged
+          text: This COPY only reads package.json and package-lock.json. Neither changed, so the layer is reused.
+          lines: [2]
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: d
+                  title: build
+                  columns: [instruction, layer]
+                  rows: [{ cells: ["FROM node:24-slim", cached], tone: dim }, { cells: ["COPY package.json package-lock.json ./", cached], tone: found }, ["RUN npm ci", ""], ["COPY . .", ""], ["RUN npm run build", ""]]
+        - title: npm ci is cached
+          text: The cache is still unbroken, so the installed dependencies are reused. The slow step is skipped.
+          lines: [3]
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: d
+                  title: build
+                  columns: [instruction, layer]
+                  rows: [{ cells: ["FROM node:24-slim", cached], tone: dim }, { cells: ["COPY package.json package-lock.json ./", cached], tone: dim }, { cells: ["RUN npm ci", cached], tone: found }, ["COPY . .", ""], ["RUN npm run build", ""]]
+        - title: The code copy sees the change
+          text: COPY . . brings in src/server.ts, which changed, so the cache breaks here and the build step after it runs again.
+          lines: [4, 5]
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: d
+                  title: build
+                  columns: [instruction, layer]
+                  rows: [{ cells: ["FROM node:24-slim", cached], tone: dim }, { cells: ["COPY package.json package-lock.json ./", cached], tone: dim }, { cells: ["RUN npm ci", cached], tone: dim }, { cells: ["COPY . .", REBUILD], tone: bad }, { cells: ["RUN npm run build", REBUILD], tone: bad }]
+        - title: Order is what made it fast
+          text: Only the steps from COPY . . onwards rebuilt. Dependencies are now reinstalled only when the dependency files change.
+          parts:
+            - { kind: note, id: n, text: "3 layers cached, including npm ci; 2 rebuilt", tone: found }

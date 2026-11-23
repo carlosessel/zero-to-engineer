@@ -1,0 +1,160 @@
+- id: js-values-variables-shopping-total
+  title: Variables built from variables
+  hint: Watch each line store a value under a name, and later lines use the values stored above them.
+  language: JavaScript
+  code: |
+    const breadPrice = 15;
+    const loaves = 3;
+    const deliveryFee = 10;
+
+    const subtotal = breadPrice * loaves;
+    const total = subtotal + deliveryFee;
+
+    console.log("Subtotal:", subtotal);
+    console.log("Total:", total);
+  steps:
+    - title: Nothing stored yet
+      text: A program runs one statement at a time, top to bottom. Before the first line runs, no variables exist.
+      parts:
+        - { kind: kv, id: mem, label: "Variables", rows: [], slots: 5 }
+        - { kind: terminal, id: out, lines: [], slots: 2 }
+    - title: Three starting values
+      text: "Each line makes a variable and stores a number in it. The = sign means store, not equals. They are const because they never change."
+      lines: [1, 2, 3]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 5
+          rows:
+            - { name: breadPrice, value: "15", tone: active }
+            - { name: loaves, value: "3", tone: active }
+            - { name: deliveryFee, value: "10", tone: active }
+    - title: The right-hand side first
+      text: "To make subtotal, JavaScript first looks up breadPrice and loaves and works out 15 * 3."
+      lines: [5]
+      vars: { "breadPrice * loaves": "15 * 3 = 45" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 5
+          rows:
+            - { name: breadPrice, value: "15", tone: compare }
+            - { name: loaves, value: "3", tone: compare }
+            - { name: deliveryFee, value: "10" }
+    - title: subtotal is 45
+      text: Only then is the result stored. subtotal holds the number 45, worked out from the values above it.
+      lines: [5]
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 5
+          rows:
+            - { name: breadPrice, value: "15" }
+            - { name: loaves, value: "3" }
+            - { name: deliveryFee, value: "10" }
+            - { name: subtotal, value: "45", tone: active }
+    - title: total is 55
+      text: "The next line uses subtotal, made one line earlier: 45 + 10 is 55. Each line can use any value computed above it."
+      lines: [6]
+      vars: { "subtotal + deliveryFee": "45 + 10 = 55" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 5
+          rows:
+            - { name: breadPrice, value: "15" }
+            - { name: loaves, value: "3" }
+            - { name: deliveryFee, value: "10", tone: compare }
+            - { name: subtotal, value: "45", tone: compare }
+            - { name: total, value: "55", tone: active }
+    - title: Printing the results
+      text: console.log prints several values separated by commas, with a space between them. The text in quotes is printed as it is; the names are replaced by their values.
+      lines: [8, 9]
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 5
+          rows:
+            - { name: breadPrice, value: "15" }
+            - { name: loaves, value: "3" }
+            - { name: deliveryFee, value: "10" }
+            - { name: subtotal, value: "45", tone: found }
+            - { name: total, value: "55", tone: found }
+        - { kind: terminal, id: out, lines: ["Subtotal: 45", "Total: 55"], slots: 2 }
+    - title: Change one, the rest follow
+      text: "If loaves were 5 and you ran it again, subtotal would be 75 and total 85. Values that depend on loaves change with it; that is the point of variables."
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables (loaves = 5)"
+          slots: 5
+          rows:
+            - { name: breadPrice, value: "15" }
+            - { name: loaves, value: "5", tone: active }
+            - { name: deliveryFee, value: "10" }
+            - { name: subtotal, value: "75", tone: found }
+            - { name: total, value: "85", tone: found }
+        - { kind: terminal, id: out, lines: ["Subtotal: 75", "Total: 85"], slots: 2 }
+
+- id: js-values-variables-string-or-number
+  title: "\"25\" is not 25"
+  hint: Watch what + does when one side is text, and how Number() changes the answer.
+  language: JavaScript
+  code: |
+    const typed = "25";
+    console.log(typed + 5);
+    console.log(Number(typed) + 5);
+    console.log(String(42) + "!");
+    console.log(Number("hello"));
+  steps:
+    - title: A string that looks like a number
+      text: What people type always arrives as a string. typed holds the text "25", two digit characters, not the number 25.
+      lines: [1]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 1
+          rows: [{ name: typed, value: "\"25\" (a string)", tone: active }]
+        - { kind: note, id: n, text: "typeof typed is \"string\"", tone: compare }
+        - { kind: terminal, id: out, lines: [], slots: 4 }
+    - title: + joins when a string is involved
+      text: When either side of + is a string, + joins rather than adds. So "25" + 5 gives the text "255". This is the commonest JavaScript bug.
+      lines: [2]
+      parts:
+        - { kind: note, id: n, text: "\"25\" + 5  →  \"255\"  (joined, not added)", tone: bad }
+        - { kind: terminal, id: out, lines: ["255"], slots: 4 }
+    - title: Convert first, then add
+      text: Number(typed) turns the text "25" into the number 25. Now both sides of + are numbers, so it adds and gives 30.
+      lines: [3]
+      parts:
+        - { kind: note, id: n, text: "Number(\"25\") + 5  →  25 + 5  →  30", tone: found }
+        - { kind: terminal, id: out, lines: ["255", "30"], slots: 4 }
+    - title: The other way round
+      text: String(42) turns a number into text. Joining it with "!" gives the text 42!.
+      lines: [4]
+      parts:
+        - { kind: note, id: n, text: "String(42) + \"!\"  →  \"42\" + \"!\"  →  \"42!\"", tone: found }
+        - { kind: terminal, id: out, lines: ["255", "30", "42!"], slots: 4 }
+    - title: Text that is not a number
+      text: "\"hello\" cannot become a number, so Number gives NaN, short for Not a Number, and that is what is printed. Check for it with Number.isNaN(value)."
+      lines: [5]
+      parts:
+        - { kind: note, id: n, text: "Number(\"hello\")  →  NaN", tone: bad }
+        - { kind: terminal, id: out, lines: ["255", "30", "42!", "NaN"], slots: 4 }
+    - title: Say what you mean
+      text: "The fix is always the same: convert input with Number() before calculating, so + adds instead of joining."
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 1
+          rows: [{ name: typed, value: "\"25\" (a string)", tone: dim }]
+        - { kind: note, id: n, text: "Number(typed) + 5 is 30; typed + 5 is \"255\"", tone: found }

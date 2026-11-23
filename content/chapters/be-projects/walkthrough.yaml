@@ -1,0 +1,83 @@
+- id: be-projects-outbox-flow
+  title: "Project 4: one order, one baking ticket"
+  hint: Follow an order from the database through the outbox and Kafka to the kitchen, including a duplicate and a bad message.
+  steps:
+    - title: Order and event together
+      text: When an order is placed, the API writes the order and an OrderPlaced row in an outbox table in one transaction. Either both are saved or neither is.
+      vars: { tickets: 0 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [API, Database, Relay, Kitchen, Kafka]
+          slots: 8
+          messages:
+            - { from: API, to: Database, label: "order + outbox row", tone: active }
+    - title: The relay picks it up
+      text: A separate relay reads new rows from the outbox. The API's request is already finished; publishing happens afterwards.
+      parts:
+        - kind: seq
+          id: s
+          actors: [API, Database, Relay, Kitchen, Kafka]
+          slots: 8
+          messages:
+            - { from: API, to: Database, label: "order + outbox row", tone: dim }
+            - { from: Relay, to: Database, label: "read outbox rows", tone: active }
+    - title: Published to Kafka
+      text: The relay publishes OrderPlaced to a Kafka topic. The orders service does not need to know who listens.
+      parts:
+        - kind: seq
+          id: s
+          actors: [API, Database, Relay, Kitchen, Kafka]
+          slots: 8
+          messages:
+            - { from: API, to: Database, label: "order + outbox row", tone: dim }
+            - { from: Relay, to: Database, label: "read outbox rows", tone: dim }
+            - { from: Relay, to: Kafka, label: "publish OrderPlaced", tone: active }
+    - title: The kitchen makes a ticket
+      text: The separate kitchen service consumes the event and creates a baking ticket.
+      vars: { tickets: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [API, Database, Relay, Kitchen, Kafka]
+          slots: 8
+          messages:
+            - { from: API, to: Database, label: "order + outbox row", tone: dim }
+            - { from: Relay, to: Database, label: "read outbox rows", tone: dim }
+            - { from: Relay, to: Kafka, label: "publish OrderPlaced", tone: dim }
+            - { from: Kafka, to: Kitchen, label: "OrderPlaced", tone: active }
+            - { from: Kitchen, to: Kitchen, label: "create ticket", tone: found }
+    - title: The same event again
+      text: The same event can be delivered twice. The consumer is idempotent, so it recognises the event and creates no second ticket. The checklist asks for a test proving this.
+      vars: { tickets: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [API, Database, Relay, Kitchen, Kafka]
+          slots: 8
+          messages:
+            - { from: API, to: Database, label: "order + outbox row", tone: dim }
+            - { from: Relay, to: Database, label: "read outbox rows", tone: dim }
+            - { from: Relay, to: Kafka, label: "publish OrderPlaced", tone: dim }
+            - { from: Kafka, to: Kitchen, label: "OrderPlaced", tone: dim }
+            - { from: Kitchen, to: Kitchen, label: "create ticket", tone: dim }
+            - { from: Kafka, to: Kitchen, label: "OrderPlaced (again)", tone: compare }
+            - { from: Kitchen, to: Kitchen, label: "seen it: no ticket", tone: found }
+    - title: A poison message
+      text: A message the kitchen cannot process goes to a dead-letter topic, instead of blocking every message behind it.
+      parts:
+        - kind: seq
+          id: s
+          actors: [API, Database, Relay, Kitchen, Kafka]
+          slots: 8
+          messages:
+            - { from: API, to: Database, label: "order + outbox row", tone: dim }
+            - { from: Relay, to: Database, label: "read outbox rows", tone: dim }
+            - { from: Relay, to: Kafka, label: "publish OrderPlaced", tone: dim }
+            - { from: Kafka, to: Kitchen, label: "OrderPlaced", tone: dim }
+            - { from: Kitchen, to: Kitchen, label: "create ticket", tone: dim }
+            - { from: Kafka, to: Kitchen, label: "OrderPlaced (again)", tone: dim }
+            - { from: Kitchen, to: Kitchen, label: "seen it: no ticket", tone: dim }
+            - { from: Kitchen, to: Kafka, label: "to dead-letter topic", tone: bad }
+    - title: What done means
+      text: "Each arrow matches a line of the checklist: one transaction with the outbox, an idempotent consumer, and a dead-letter topic. Retried emails and graceful shutdown complete it."

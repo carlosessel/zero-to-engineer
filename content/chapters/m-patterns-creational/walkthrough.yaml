@@ -1,0 +1,141 @@
+- id: m-patterns-creational-builder
+  title: Building a request step by step
+  hint: Watch the builder collect named settings, then check them all together in build().
+  language: Java
+  code: |
+    HttpRequest build() {
+        if (retries > 0 && method.equals("POST") && !headers.containsKey("Idempotency-Key")) {
+            throw new IllegalStateException("Retried POSTs need an Idempotency-Key header");
+        }
+        return new HttpRequest(url, method, Map.copyOf(headers), timeout, retries);
+    }
+
+    HttpRequest post = HttpRequest.to("https://api.example.com/orders")
+        .method("POST")
+        .header("Idempotency-Key", "order-7")
+        .timeout(Duration.ofSeconds(5))
+        .retries(3)
+        .build();
+    System.out.println(post.method() + " " + post.headers() + " " + post.timeout());
+
+    try {
+        HttpRequest.to("https://api.example.com/orders").method("POST").retries(3).build();
+    } catch (IllegalStateException e) {
+        System.out.println("Refused: " + e.getMessage());
+    }
+  steps:
+    - title: "A builder with defaults"
+      text: "HttpRequest.to(url) makes a Builder. Every setting starts at its default, written once in the Builder: GET, no headers, a 10-second timeout, no retries."
+      lines: [8]
+      parts:
+        - kind: kv
+          id: b
+          label: "Builder settings"
+          slots: 5
+          rows:
+            - { name: url, value: "https://api.example.com/orders", tone: active }
+            - { name: method, value: "GET" }
+            - { name: headers, value: "{}" }
+            - { name: timeout, value: "PT10S" }
+            - { name: retries, value: "0" }
+        - { kind: terminal, id: out, slots: 2, lines: [] }
+    - title: ".method(\"POST\")"
+      text: "Each method sets one named setting and returns the same builder, so the calls chain. Nothing is built yet."
+      lines: [9]
+      parts:
+        - kind: kv
+          id: b
+          label: "Builder settings"
+          slots: 5
+          rows:
+            - { name: url, value: "https://api.example.com/orders" }
+            - { name: method, value: "POST", tone: active }
+            - { name: headers, value: "{}" }
+            - { name: timeout, value: "PT10S" }
+            - { name: retries, value: "0" }
+    - title: ".header(...)"
+      text: "The Idempotency-Key header is added to the builder's map of headers."
+      lines: [10]
+      parts:
+        - kind: kv
+          id: b
+          label: "Builder settings"
+          slots: 5
+          rows:
+            - { name: url, value: "https://api.example.com/orders" }
+            - { name: method, value: "POST" }
+            - { name: headers, value: "{Idempotency-Key=order-7}", tone: active }
+            - { name: timeout, value: "PT10S" }
+            - { name: retries, value: "0" }
+    - title: ".timeout and .retries"
+      text: "The timeout becomes 5 seconds and retries becomes 3. Each setting is named at the call, unlike a long constructor of bare values."
+      lines: [11, 12]
+      parts:
+        - kind: kv
+          id: b
+          label: "Builder settings"
+          slots: 5
+          rows:
+            - { name: url, value: "https://api.example.com/orders" }
+            - { name: method, value: "POST" }
+            - { name: headers, value: "{Idempotency-Key=order-7}" }
+            - { name: timeout, value: "PT5S", tone: active }
+            - { name: retries, value: "3", tone: active }
+    - title: "build() checks the whole"
+      text: "build() checks a rule that involves several fields: a retried POST needs an Idempotency-Key. Retries 3, POST, and the key is present, so it passes."
+      lines: [1, 2, 13]
+      parts:
+        - kind: kv
+          id: b
+          label: "Builder settings"
+          slots: 5
+          rows:
+            - { name: url, value: "https://api.example.com/orders" }
+            - { name: method, value: "POST", tone: compare }
+            - { name: headers, value: "{Idempotency-Key=order-7}", tone: compare }
+            - { name: timeout, value: "PT5S" }
+            - { name: retries, value: "3", tone: compare }
+    - title: "An immutable record"
+      text: "build() returns an HttpRequest record, with a copy of the headers. The finished request cannot be changed."
+      lines: [5, 14]
+      parts:
+        - kind: kv
+          id: b
+          label: "HttpRequest post (immutable)"
+          slots: 5
+          rows:
+            - { name: url, value: "https://api.example.com/orders", tone: found }
+            - { name: method, value: "POST", tone: found }
+            - { name: headers, value: "{Idempotency-Key=order-7}", tone: found }
+            - { name: timeout, value: "PT5S", tone: found }
+            - { name: retries, value: "3", tone: found }
+        - { kind: terminal, id: out, slots: 2, lines: ["POST {Idempotency-Key=order-7} PT5S"] }
+    - title: "A POST with retries, no key"
+      text: "This time the builder gets POST and 3 retries but no Idempotency-Key header."
+      lines: [17]
+      parts:
+        - kind: kv
+          id: b
+          label: "Builder settings"
+          slots: 5
+          rows:
+            - { name: url, value: "https://api.example.com/orders" }
+            - { name: method, value: "POST", tone: compare }
+            - { name: headers, value: "{}", tone: compare }
+            - { name: timeout, value: "PT10S" }
+            - { name: retries, value: "3", tone: compare }
+    - title: "Refused before it exists"
+      text: "build() finds the broken rule and throws, so an unsafe request is never created. One check in one place protects every caller."
+      lines: [2, 3, 18, 19]
+      parts:
+        - kind: kv
+          id: b
+          label: "Builder settings"
+          slots: 5
+          rows:
+            - { name: url, value: "https://api.example.com/orders" }
+            - { name: method, value: "POST" }
+            - { name: headers, value: "{}", tone: bad }
+            - { name: timeout, value: "PT10S" }
+            - { name: retries, value: "3" }
+        - { kind: terminal, id: out, slots: 2, lines: ["POST {Idempotency-Key=order-7} PT5S", "Refused: Retried POSTs need an Idempotency-Key header"] }

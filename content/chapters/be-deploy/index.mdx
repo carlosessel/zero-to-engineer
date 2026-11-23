@@ -323,6 +323,8 @@ In a **rolling deployment**, the platform starts a new instance, waits until its
 - on `SIGTERM`, readiness fails first, then the service finishes in-flight requests and exits within the platform's grace period;
 - the old and new versions can run side by side (compatible APIs, messages and schema).
 
+<Walkthrough name="be-deploy-rolling" />
+
 **Blue-green** and **canary** deployments add the ability to switch back instantly or to try a release on a small share of traffic first (<Ref to="m-delivery" />). Whatever the platform (Kubernetes, Azure Container Apps, Google Cloud Run, AWS ECS, or a platform-as-a-service), the service's side of the contract is the same: configuration from the environment, health endpoints, graceful shutdown, logs to standard output.
 
 ## Common mistakes

@@ -232,6 +232,8 @@ console.log(update(7, "Ring twice", readByKofi));
 
 It prints `saved version 2` and then `conflict: order 7 was changed by someone else`. In SQL this is `UPDATE orders SET notes = ?, version = version + 1 WHERE id = ? AND version = ?`, followed by checking that one row was updated. JPA's `@Version` and EF Core's concurrency tokens do it automatically and raise an exception on conflict; the application then reloads and asks the user, or retries.
 
+<Walkthrough name="m-enterprise-patterns-optimistic-concurrency" />
+
 ## Common mistakes
 
 - **Business rules in services or controllers** while domain objects are bags of data (when the domain really has rules).

@@ -1,0 +1,127 @@
+- id: be-integration-tests-supertest-flow
+  title: One Supertest request through the real app
+  hint: Follow the first test's request through the real routing, JSON and validation, to the fake store and fake clock, and back to the assertions.
+  language: TypeScript
+  code: |
+    app.post("/orders", async (req: Request, res: Response) => {
+      const parsed = PlaceOrder.safeParse(req.body);
+      if (!parsed.success) {
+        res.status(400).type("application/problem+json").json({
+          title: "Invalid request",
+          status: 400,
+          errors: parsed.error.issues.map((i) => ({ field: i.path.join("."), message: i.message })),
+        });
+        return;
+      }
+      const order = await deps.store.add(parsed.data.customer, parsed.data.totalPence, deps.now());
+      res.status(201).location(`/orders/${order.id}`).json(order);
+    });
+
+    beforeEach(() => {
+      app = createApp({ store: new InMemoryOrderStore(), now: sevenThirty });
+    });
+
+    it("returns 201 with the order and its location", async () => {
+      const response = await request(app).post("/orders").send({ customer: "Ama", totalPence: 1250 });
+
+      expect(response.status).toBe(201);
+      expect(response.headers.location).toBe("/orders/o-1");
+      expect(response.body).toEqual({ id: "o-1", customer: "Ama", totalPence: 1250, placedAt: "2026-11-13T07:30:00.000Z" });
+    });
+  steps:
+    - title: A fresh app for each test
+      text: Before each test, beforeEach builds a new app with an empty in-memory store and a clock that always says 07:30. The test controls both, because createApp receives them as dependencies.
+      lines: [15, 16, 17]
+      vars: { store: "new InMemoryOrderStore()", now: "sevenThirty" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Test, "Express app", "Fake store"]
+          slots: 5
+          messages: []
+        - { kind: kv, id: db, label: "Orders in the fake store", rows: [], slots: 1 }
+    - title: A real HTTP request, in process
+      text: Supertest sends a real POST with a JSON body to the app in the same process, without the test opening a port.
+      lines: [20]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Test, "Express app", "Fake store"]
+          slots: 5
+          messages:
+            - { from: Test, to: "Express app", label: "POST /orders {Ama, 1250}", tone: active }
+    - title: Parsing and validation run for real
+      text: The app's real routing, JSON parsing and zod validation all run. The body is valid, so safeParse succeeds and the handler carries on.
+      lines: [2, 3]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Test, "Express app", "Fake store"]
+          slots: 5
+          messages:
+            - { from: Test, to: "Express app", label: "POST /orders {Ama, 1250}", tone: dim }
+            - { from: "Express app", to: "Express app", label: "parse JSON, validate", tone: found }
+    - title: The fakes answer
+      text: deps.now() asks the fake clock, which says 07:30 on 13 November 2026 every time. The fake store saves the order and gives it the id o-1.
+      lines: [11]
+      vars: { store: "new InMemoryOrderStore()", now: "2026-11-13T07:30:00Z" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Test, "Express app", "Fake store"]
+          slots: 5
+          messages:
+            - { from: Test, to: "Express app", label: "POST /orders {Ama, 1250}", tone: dim }
+            - { from: "Express app", to: "Express app", label: "parse JSON, validate", tone: dim }
+            - { from: "Express app", to: "Fake store", label: "add(Ama, 1250, 07:30)", tone: active }
+        - kind: kv
+          id: db
+          label: "Orders in the fake store"
+          slots: 1
+          rows: [{ name: o-1, value: "Ama, 1250, 2026-11-13T07:30", tone: active }]
+    - title: The response goes back
+      text: The handler answers 201 Created, with a Location header pointing at the new order and the order as JSON.
+      lines: [12]
+      vars: { status: "201", location: /orders/o-1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Test, "Express app", "Fake store"]
+          slots: 5
+          messages:
+            - { from: Test, to: "Express app", label: "POST /orders {Ama, 1250}", tone: dim }
+            - { from: "Express app", to: "Express app", label: "parse JSON, validate", tone: dim }
+            - { from: "Express app", to: "Fake store", label: "add(Ama, 1250, 07:30)", tone: dim }
+            - { from: "Express app", to: Test, label: "201, Location /orders/o-1", tone: found }
+        - kind: kv
+          id: db
+          label: "Orders in the fake store"
+          slots: 1
+          rows: [{ name: o-1, value: "Ama, 1250, 2026-11-13T07:30" }]
+    - title: Assert what a client would see
+      text: The test checks the status code, the header and the whole body, exactly as a client would read them. Because the clock is fixed, placedAt is the same on every run.
+      lines: [22, 23, 24]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Test, "Express app", "Fake store"]
+          slots: 5
+          messages:
+            - { from: Test, to: "Express app", label: "POST /orders {Ama, 1250}", tone: dim }
+            - { from: "Express app", to: "Express app", label: "parse JSON, validate", tone: dim }
+            - { from: "Express app", to: "Fake store", label: "add(Ama, 1250, 07:30)", tone: dim }
+            - { from: "Express app", to: Test, label: "201, Location /orders/o-1", tone: dim }
+            - { from: Test, to: Test, label: "status, location, body match", tone: found }
+    - title: Only the edges were replaced
+      text: Everything between the request and the store was the real code, so a misspelt route or a renamed JSON field would fail this test. Only the store and the clock were swapped for fakes.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Test, "Express app", "Fake store"]
+          slots: 5
+          messages:
+            - { from: Test, to: "Express app", label: "POST /orders {Ama, 1250}", tone: done }
+            - { from: "Express app", to: "Express app", label: "parse JSON, validate", tone: done }
+            - { from: "Express app", to: "Fake store", label: "add(Ama, 1250, 07:30)", tone: done }
+            - { from: "Express app", to: Test, label: "201, Location /orders/o-1", tone: done }
+            - { from: Test, to: Test, label: "status, location, body match", tone: done }

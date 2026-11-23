@@ -1,0 +1,130 @@
+- id: testing-pytest-run
+  title: What pytest does when you run it
+  hint: Each test calls cart_total with known input and checks the answer. Watch each one pass, until the run is green.
+  language: Python
+  code: |
+    # cart.py
+    def cart_total(prices, discount=0):
+        if not 0 <= discount <= 1:
+            raise ValueError("discount must be between 0 and 1")
+        return sum(prices) * (1 - discount)
+
+    # test_cart.py
+    import pytest
+    from cart import cart_total
+
+    def test_adds_prices():
+        assert cart_total([10, 20]) == 30
+
+    def test_empty_cart_is_zero():
+        assert cart_total([]) == 0
+
+    def test_applies_discount():
+        assert cart_total([100], discount=0.25) == 75
+
+    def test_rejects_bad_discount():
+        with pytest.raises(ValueError):
+            cart_total([100], discount=2)
+  steps:
+    - title: Run pytest
+      text: pytest finds the test functions in test_cart.py and runs them one by one. Each is a small program that checks the real code.
+      lines: [7, 8, 9]
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: r
+              title: test_cart.py
+              columns: [test, cart_total returned, result]
+              rows:
+                - [test_adds_prices, "", waiting]
+                - [test_empty_cart_is_zero, "", waiting]
+                - [test_applies_discount, "", waiting]
+                - [test_rejects_bad_discount, "", waiting]
+        - { kind: terminal, id: out, lines: ["$ pytest"], slots: 3 }
+    - title: The normal case
+      text: "The test calls cart_total([10, 20]). With no discount, 30 × (1 − 0) is 30, so assert 30 == 30 holds and the test passes."
+      lines: [11, 12, 5]
+      vars: { prices: "[10, 20]", discount: 0 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: r
+              title: test_cart.py
+              columns: [test, cart_total returned, result]
+              rows:
+                - { cells: [test_adds_prices, "30", passed], tone: found }
+                - [test_empty_cart_is_zero, "", waiting]
+                - [test_applies_discount, "", waiting]
+                - [test_rejects_bad_discount, "", waiting]
+    - title: An edge, the empty cart
+      text: Empty input is where code often breaks. sum([]) is 0, so the total is 0 and this test passes too.
+      lines: [14, 15, 5]
+      vars: { prices: "[]", discount: 0 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: r
+              title: test_cart.py
+              columns: [test, cart_total returned, result]
+              rows:
+                - [test_adds_prices, "30", passed]
+                - { cells: [test_empty_cart_is_zero, "0", passed], tone: found }
+                - [test_applies_discount, "", waiting]
+                - [test_rejects_bad_discount, "", waiting]
+    - title: The discount
+      text: "A quarter off 100: 100 × (1 − 0.25) is 75. The check on line 3 lets 0.25 through, because it is between 0 and 1."
+      lines: [17, 18, 3, 5]
+      vars: { prices: "[100]", discount: 0.25 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: r
+              title: test_cart.py
+              columns: [test, cart_total returned, result]
+              rows:
+                - [test_adds_prices, "30", passed]
+                - [test_empty_cart_is_zero, "0", passed]
+                - { cells: [test_applies_discount, "75.0", passed], tone: found }
+                - [test_rejects_bad_discount, "", waiting]
+    - title: The invalid input
+      text: A discount of 2 fails the check on line 3, so cart_total raises ValueError. That is exactly what pytest.raises expects, so this test passes.
+      lines: [20, 21, 22, 3, 4]
+      vars: { prices: "[100]", discount: 2 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: r
+              title: test_cart.py
+              columns: [test, cart_total returned, result]
+              rows:
+                - [test_adds_prices, "30", passed]
+                - [test_empty_cart_is_zero, "0", passed]
+                - [test_applies_discount, "75.0", passed]
+                - { cells: [test_rejects_bad_discount, "raised ValueError", passed], tone: found }
+    - title: Green
+      text: Every check passed. Next month, after any change, one command tells you whether these four behaviours still hold.
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: r
+              title: test_cart.py
+              columns: [test, cart_total returned, result]
+              rows:
+                - { cells: [test_adds_prices, "30", passed], tone: done }
+                - { cells: [test_empty_cart_is_zero, "0", passed], tone: done }
+                - { cells: [test_applies_discount, "75.0", passed], tone: done }
+                - { cells: [test_rejects_bad_discount, "raised ValueError", passed], tone: done }
+        - { kind: terminal, id: out, lines: ["$ pytest", "test_cart.py ....", "4 passed"], slots: 3 }

@@ -1,0 +1,106 @@
+- id: cs-errors-async-when-all
+  title: One after another, then together
+  hint: Watch the clock. Awaiting each call in turn adds their waits; starting both first lets the waits overlap.
+  language: C#
+  code: |
+    var clock = Stopwatch.StartNew();
+    var customer = await FetchAsync("customer", 300);
+    var orders = await FetchAsync("orders", 300);
+    Console.WriteLine($"one after another: {Round(clock)} ms");
+
+    clock.Restart();
+    var customerTask = FetchAsync("customer", 300);
+    var ordersTask = FetchAsync("orders", 300);
+    await Task.WhenAll(customerTask, ordersTask);
+    Console.WriteLine($"together: {Round(clock)} ms, got {customerTask.Result} and {ordersTask.Result}");
+
+    static async Task<string> FetchAsync(string what, int ms)
+    {
+        await Task.Delay(ms);
+        return what;
+    }
+  steps:
+    - title: Two calls that each wait 300 ms
+      text: FetchAsync stands in for a real database or HTTP call. Task.Delay makes it wait 300 ms, then it returns its name. The stopwatch starts at 0.
+      lines: [1, 12, 13, 14, 15, 16]
+      vars: { clock: "0 ms" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Program, "customer call", "orders call"]
+          slots: 5
+          messages: []
+        - { kind: terminal, id: out, slots: 2, lines: [] }
+    - title: await the first call
+      text: The first FetchAsync starts. await pauses the program here until its task completes, without blocking the thread.
+      lines: [2]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Program, "customer call", "orders call"]
+          slots: 5
+          messages:
+            - { from: Program, to: "customer call", label: "start, then await", tone: active }
+    - title: The first result arrives
+      text: After 300 ms the task completes and await hands back its result, "customer". Only now does the next line run.
+      lines: [2]
+      vars: { clock: "300 ms", customer: "\"customer\"" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Program, "customer call", "orders call"]
+          slots: 5
+          messages:
+            - { from: Program, to: "customer call", label: "start, then await", tone: dim }
+            - { from: "customer call", to: Program, label: "\"customer\" at 300 ms", tone: found }
+    - title: The second call waits its turn
+      text: The orders call could have started at the beginning, but it starts only now. Its 300 ms wait comes on top of the first one.
+      lines: [3]
+      vars: { clock: "600 ms", customer: "\"customer\"", orders: "\"orders\"" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Program, "customer call", "orders call"]
+          slots: 5
+          messages:
+            - { from: Program, to: "customer call", label: "start, then await", tone: dim }
+            - { from: "customer call", to: Program, label: "\"customer\" at 300 ms", tone: dim }
+            - { from: Program, to: "orders call", label: "start at 300 ms, then await", tone: active }
+            - { from: "orders call", to: Program, label: "\"orders\" at 600 ms", tone: found }
+    - title: "600 ms in total"
+      text: Awaiting one call after another runs them in sequence, so the waits add up.
+      lines: [4]
+      parts:
+        - { kind: terminal, id: out, slots: 2, lines: ["one after another: 600 ms"] }
+    - title: Start both, await neither yet
+      text: The clock restarts. This time each FetchAsync is called without await, so each gives back a running task straight away and both waits begin together.
+      lines: [6, 7, 8]
+      vars: { clock: "0 ms", customerTask: running, ordersTask: running }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Program, "customer call", "orders call"]
+          slots: 5
+          messages:
+            - { from: Program, to: "customer call", label: "start at 0 ms", tone: active }
+            - { from: Program, to: "orders call", label: "start at 0 ms", tone: active }
+    - title: Task.WhenAll waits for both
+      text: await Task.WhenAll pauses until every task it was given has completed. The two 300 ms waits overlap, so both are done at about 300 ms.
+      lines: [9]
+      vars: { clock: "300 ms", customerTask: "done: \"customer\"", ordersTask: "done: \"orders\"" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Program, "customer call", "orders call"]
+          slots: 5
+          messages:
+            - { from: Program, to: "customer call", label: "start at 0 ms", tone: dim }
+            - { from: Program, to: "orders call", label: "start at 0 ms", tone: dim }
+            - { from: Program, to: Program, label: "await Task.WhenAll", tone: compare }
+            - { from: "customer call", to: Program, label: "\"customer\" at 300 ms", tone: found }
+            - { from: "orders call", to: Program, label: "\"orders\" at 300 ms", tone: found }
+    - title: Half the time, same results
+      text: Reading .Result is safe here only because WhenAll has already finished both tasks. Independent calls run together take as long as the slowest one, not the sum.
+      lines: [10]
+      parts:
+        - { kind: terminal, id: out, slots: 2, lines: ["one after another: 600 ms", "together: 300 ms, got customer and orders"] }

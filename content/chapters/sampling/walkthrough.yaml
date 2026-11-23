@@ -1,0 +1,98 @@
+- id: sampling-temperature-top-p
+  title: Picking the next token
+  hint: Follow made-up scores for five candidate tokens through temperature, softmax and top_p to one random pick.
+  steps:
+    - title: Scores for the next token
+      text: 'After "The cat sat on the", suppose the model gives these scores to five candidate tokens. Real models score every token in the vocabulary; five keep it readable.'
+      vars: { temperature: 1, top_p: 0.9 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: s
+              title: "next-token candidates"
+              columns: [token, score, "probability", "running total"]
+              rows:
+                - { k: mat, cells: [" mat", "3.0", "", ""] }
+                - { k: floor, cells: [" floor", "2.0", "", ""] }
+                - { k: sofa, cells: [" sofa", "1.5", "", ""] }
+                - { k: bed, cells: [" bed", "1.0", "", ""] }
+                - { k: moon, cells: [" moon", "0.0", "", ""] }
+    - title: Divide by the temperature
+      text: "Temperature divides the scores before softmax. At temperature 1 nothing changes. At 0.5 the gaps would double, making the top token win even more often."
+      vars: { temperature: 1, top_p: 0.9, "scores / 1": "unchanged" }
+    - title: Softmax gives probabilities
+      text: "softmax turns the scores into probabilities that add up to 1. mat is most likely at 0.563, but the others still have a chance."
+      vars: { temperature: 1, top_p: 0.9 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: s
+              title: "next-token candidates"
+              columns: [token, score, "probability", "running total"]
+              rows:
+                - { k: mat, cells: [" mat", "3.0", "0.563", ""], tone: active }
+                - { k: floor, cells: [" floor", "2.0", "0.207", ""], tone: active }
+                - { k: sofa, cells: [" sofa", "1.5", "0.126", ""], tone: active }
+                - { k: bed, cells: [" bed", "1.0", "0.076", ""], tone: active }
+                - { k: moon, cells: [" moon", "0.0", "0.028", ""], tone: active }
+    - title: "top_p: add up from the top"
+      text: "With top_p = 0.9, keep the most likely tokens until their total reaches 0.9. After three tokens the total is 0.896, just short, so bed is needed too: 0.972."
+      vars: { temperature: 1, top_p: 0.9 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: s
+              title: "next-token candidates"
+              columns: [token, score, "probability", "running total"]
+              rows:
+                - { k: mat, cells: [" mat", "3.0", "0.563", "0.563"], tone: compare }
+                - { k: floor, cells: [" floor", "2.0", "0.207", "0.770"], tone: compare }
+                - { k: sofa, cells: [" sofa", "1.5", "0.126", "0.896"], tone: compare }
+                - { k: bed, cells: [" bed", "1.0", "0.076", "0.972"], tone: active }
+                - { k: moon, cells: [" moon", "0.0", "0.028", ""] }
+    - title: The tail is cut off
+      text: "moon is outside the smallest set that reaches 0.9, so it cannot be picked at all. This stops very unlikely tokens from slipping in."
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: s
+              title: "next-token candidates"
+              columns: [token, score, "probability", "running total"]
+              rows:
+                - { k: mat, cells: [" mat", "3.0", "0.563", "0.563"], tone: found }
+                - { k: floor, cells: [" floor", "2.0", "0.207", "0.770"], tone: found }
+                - { k: sofa, cells: [" sofa", "1.5", "0.126", "0.896"], tone: found }
+                - { k: bed, cells: [" bed", "1.0", "0.076", "0.972"], tone: found }
+                - { k: moon, cells: [" moon", "0.0", "0.028", "cut"], tone: bad }
+    - title: Share out the probability again
+      text: "The four survivors are divided by their total, 0.972, so they add up to 1 again: mat 0.579, floor 0.213, sofa 0.129, bed 0.078."
+      parts:
+        - kind: cells
+          id: p
+          label: "chances after top_p"
+          bars: true
+          width: 80
+          items: [{ k: mat, v: 0.579 }, { k: floor, v: 0.213 }, { k: sofa, v: 0.129 }, { k: bed, v: 0.078 }]
+          slots: 4
+    - title: Sample one
+      text: "Now one token is drawn at random according to those chances. Here the draw lands on floor, not the favourite. Run it again and you may get mat; that is where the variety comes from."
+      vars: { picked: " floor" }
+      parts:
+        - kind: cells
+          id: p
+          label: "chances after top_p"
+          bars: true
+          width: 80
+          items: [{ k: mat, v: 0.579, tone: dim }, { k: floor, v: 0.213, tone: found }, { k: sofa, v: 0.129, tone: dim }, { k: bed, v: 0.078, tone: dim }]
+          slots: 4
+        - { kind: note, id: n, text: "The cat sat on the floor", tone: found }
+    - title: Then the next token
+      text: "The chosen token is added to the text and the whole process repeats for the token after it, until a stop sequence or max_tokens ends it."

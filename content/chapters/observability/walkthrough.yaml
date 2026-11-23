@@ -1,0 +1,37 @@
+- id: observability-slowest-request
+  title: The average hides the slow request
+  hint: Compare what the average says with what the slowest request says, then follow the slow one through its logs.
+  steps:
+    - title: "Twenty requests"
+      text: "Twenty requests to GET /orders, as a metric records them. Nineteen take 0.2 seconds; one takes 8 seconds."
+      vars: {}
+      parts:
+        - { kind: cells, id: b, label: "Response times of 20 requests, in tenths of a second", bars: true, slots: 20, items: [{ k: "r1", v: 2 }, { k: "r2", v: 2 }, { k: "r3", v: 2 }, { k: "r4", v: 2 }, { k: "r5", v: 2 }, { k: "r6", v: 2 }, { k: "r7", v: 2 }, { k: "r8", v: 2 }, { k: "r9", v: 2 }, { k: "r10", v: 2 }, { k: "r11", v: 2 }, { k: "r12", v: 2 }, { k: "r13", v: 2 }, { k: "r14", v: 80 }, { k: "r15", v: 2 }, { k: "r16", v: 2 }, { k: "r17", v: 2 }, { k: "r18", v: 2 }, { k: "r19", v: 2 }, { k: "r20", v: 2 }] }
+    - title: "The average looks fine"
+      text: "The average is 0.59 seconds, which sounds healthy. The one slow request is diluted by the nineteen fast ones."
+      vars: {"average": "0.59 s"}
+      parts:
+        - { kind: cells, id: b, label: "Response times of 20 requests, in tenths of a second", bars: true, slots: 20, items: [{ k: "r1", v: 2, tone: "compare" }, { k: "r2", v: 2, tone: "compare" }, { k: "r3", v: 2, tone: "compare" }, { k: "r4", v: 2, tone: "compare" }, { k: "r5", v: 2, tone: "compare" }, { k: "r6", v: 2, tone: "compare" }, { k: "r7", v: 2, tone: "compare" }, { k: "r8", v: 2, tone: "compare" }, { k: "r9", v: 2, tone: "compare" }, { k: "r10", v: 2, tone: "compare" }, { k: "r11", v: 2, tone: "compare" }, { k: "r12", v: 2, tone: "compare" }, { k: "r13", v: 2, tone: "compare" }, { k: "r14", v: 80, tone: "compare" }, { k: "r15", v: 2, tone: "compare" }, { k: "r16", v: 2, tone: "compare" }, { k: "r17", v: 2, tone: "compare" }, { k: "r18", v: 2, tone: "compare" }, { k: "r19", v: 2, tone: "compare" }, { k: "r20", v: 2, tone: "compare" }] }
+        - { kind: note, id: n, text: "Average: 0.59 s. Looks fine.", tone: compare }
+    - title: "Look at the slowest"
+      text: "Sorted by time, the slowest stands out: 8 seconds. One user in twenty waits that long, and they notice even if the average does not."
+      vars: {"average": "0.59 s", "slowest": "8 s"}
+      parts:
+        - { kind: cells, id: b, label: "Response times of 20 requests, in tenths of a second", bars: true, slots: 20, items: [{ k: "r1", v: 2, tone: "dim" }, { k: "r2", v: 2, tone: "dim" }, { k: "r3", v: 2, tone: "dim" }, { k: "r4", v: 2, tone: "dim" }, { k: "r5", v: 2, tone: "dim" }, { k: "r6", v: 2, tone: "dim" }, { k: "r7", v: 2, tone: "dim" }, { k: "r8", v: 2, tone: "dim" }, { k: "r9", v: 2, tone: "dim" }, { k: "r10", v: 2, tone: "dim" }, { k: "r11", v: 2, tone: "dim" }, { k: "r12", v: 2, tone: "dim" }, { k: "r13", v: 2, tone: "dim" }, { k: "r14", v: 80, tone: "bad" }, { k: "r15", v: 2, tone: "dim" }, { k: "r16", v: 2, tone: "dim" }, { k: "r17", v: 2, tone: "dim" }, { k: "r18", v: 2, tone: "dim" }, { k: "r19", v: 2, tone: "dim" }, { k: "r20", v: 2, tone: "dim" }] }
+        - { kind: note, id: n, text: "Slowest: 8 s. One request in twenty.", tone: bad }
+    - title: "Follow it by request id"
+      text: "Every log line for this request carries the same request id, so one search finds its whole story."
+      vars: {"request id": "r-7f3a"}
+      parts:
+        - { kind: terminal, id: t, slots: 7, lines: ["$ grep req=r-7f3a app.log", "12:00:01.10 info  api req=r-7f3a GET /orders"] }
+    - title: "Where the time went"
+      text: "The logs show one query for the list, then one more query for every order. Too many database queries is the first of the usual culprits."
+      vars: {"request id": "r-7f3a"}
+      parts:
+        - { kind: terminal, id: t, slots: 7, lines: ["$ grep req=r-7f3a app.log", "12:00:01.10 info  api req=r-7f3a GET /orders", "12:00:01.12 info  db  req=r-7f3a query: list orders", "12:00:01.13 debug db  req=r-7f3a query: items for order 1", "12:00:01.19 debug db  req=r-7f3a query: items for order 2", "...", "12:00:09.06 info  api req=r-7f3a 200 in 7.96 s"] }
+    - title: "Fix it, then measure again"
+      text: "With the items fetched in one query, the slowest request takes 0.3 seconds. Measure before and after; the numbers, not a guess, say it worked."
+      vars: {"slowest": "0.3 s"}
+      parts:
+        - { kind: cells, id: b, label: "Response times of 20 requests, in tenths of a second", bars: true, slots: 20, items: [{ k: "r1", v: 2 }, { k: "r2", v: 2 }, { k: "r3", v: 2 }, { k: "r4", v: 2 }, { k: "r5", v: 2 }, { k: "r6", v: 2 }, { k: "r7", v: 2 }, { k: "r8", v: 2 }, { k: "r9", v: 2 }, { k: "r10", v: 2 }, { k: "r11", v: 2 }, { k: "r12", v: 2 }, { k: "r13", v: 2 }, { k: "r14", v: 3, tone: "found" }, { k: "r15", v: 2 }, { k: "r16", v: 2 }, { k: "r17", v: 2 }, { k: "r18", v: 2 }, { k: "r19", v: 2 }, { k: "r20", v: 2 }] }
+        - { kind: note, id: n, text: "Slowest: 0.3 s", tone: found }

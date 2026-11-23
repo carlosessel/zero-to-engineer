@@ -262,6 +262,8 @@ parameterised: 0 rows
 concatenated: 1 rows
 ```
 
+<Walkthrough name="be-data-node-sql-injection" />
+
 - **`db.transaction`** runs the callback in a transaction: if it throws, everything in it is rolled back. The first order was inserted, the second broke the check constraint, and neither was kept. Use the `tx` object inside the callback, not `db`, or the query runs outside the transaction.
 - **Optimistic concurrency**: the update only matches if the `version` is still the one the caller read, and increments it. The second cancel, still expecting version 0, matched no row, so it reports a conflict instead of silently overwriting; an API returns 409 Conflict (<Ref to="be-http" />).
 - **SQL injection**: the email value contains `' OR '1'='1`. Passed as a parameter (`$1`), it is just an odd email that matches nobody. Pasted into the SQL string, it changes the query to "or true" and returns every customer. **Never build SQL by concatenating or interpolating values**; with Drizzle's builder and its `sql` template, values are always parameters (<Ref to="m-appsec" />).

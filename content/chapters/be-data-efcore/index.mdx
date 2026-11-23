@@ -182,6 +182,8 @@ ORDER BY "o"."TotalPence" DESC
 kofi@example.com
 ```
 
+<Walkthrough name="be-data-efcore-linq-to-sql" />
+
 - `SaveChanges` inserted two customers and three orders (5 rows), filling in the foreign keys from the object graph.
 - The LINQ became one SQL query with a `JOIN`, because the projection used `o.Customer.Name`. Filtering, sorting, grouping and paging all run **in the database**; only the results come back.
 - **`Select`** to just the columns you need (a **projection**) is the most effective way to keep queries fast.

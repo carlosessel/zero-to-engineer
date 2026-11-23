@@ -1,0 +1,141 @@
+- id: be-data-jpa-n-plus-one
+  title: Where the N+1 queries come from
+  hint: Both versions add up the same orders. Count the queries as the code touches each customer's lazy orders list.
+  language: Java
+  examples:
+    - label: Lazy loop
+      code: |
+        tx.executeWithoutResult(s -> {
+            long sum = 0;
+            for (var c : customers.findAll()) sum += c.getOrders().stream().mapToInt(CustomerOrder::getTotalPence).sum();
+            System.out.println("lazy loop: " + stats.getPrepareStatementCount() + " queries, total " + sum);
+        });
+      steps:
+        - title: Load the customers
+          text: "findAll runs one query and returns Ama and Kofi. Their orders lists are lazy: Hibernate has not loaded them yet."
+          lines: [ 3 ]
+          vars: { queries: 1 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Java code, Hibernate, Database ]
+              slots: 6
+              messages:
+                - { from: Java code, to: Hibernate, label: customers.findAll(), tone: active }
+                - { from: Hibernate, to: Database, label: "query 1: select customers", tone: active }
+            - kind: kv
+              id: mem
+              label: Loaded in memory
+              slots: 2
+              rows:
+                - { name: Ama.orders, value: not loaded (lazy) }
+                - { name: Kofi.orders, value: not loaded (lazy) }
+            - { kind: terminal, id: out, slots: 1, lines: [] }
+        - title: Touch Ama's orders
+          text: "The loop reads Ama's orders. The list is empty in memory, so Hibernate quietly runs a second query to fill it: 1,250 and 3,100 pence."
+          lines: [ 3 ]
+          vars: { queries: 2, sum: 1250 + 3100 = 4350 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Java code, Hibernate, Database ]
+              slots: 6
+              messages:
+                - { from: Java code, to: Hibernate, label: customers.findAll(), tone: dim }
+                - { from: Hibernate, to: Database, label: "query 1: select customers", tone: dim }
+                - { from: Java code, to: Hibernate, label: Ama.getOrders(), tone: active }
+                - { from: Hibernate, to: Database, label: "query 2: select Ama's orders", tone: active }
+            - kind: kv
+              id: mem
+              label: Loaded in memory
+              slots: 2
+              rows:
+                - { name: Ama.orders, value: "1250, 3100", tone: active }
+                - { name: Kofi.orders, value: not loaded (lazy) }
+        - title: Touch Kofi's orders
+          text: Then Kofi's list, and a third query for his one order of 450 pence. Every customer in the loop costs one more query.
+          lines: [ 3 ]
+          vars: { queries: 3, sum: 4350 + 450 = 4800 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Java code, Hibernate, Database ]
+              slots: 6
+              messages:
+                - { from: Java code, to: Hibernate, label: customers.findAll(), tone: dim }
+                - { from: Hibernate, to: Database, label: "query 1: select customers", tone: dim }
+                - { from: Java code, to: Hibernate, label: Ama.getOrders(), tone: dim }
+                - { from: Hibernate, to: Database, label: "query 2: select Ama's orders", tone: dim }
+                - { from: Java code, to: Hibernate, label: Kofi.getOrders(), tone: active }
+                - { from: Hibernate, to: Database, label: "query 3: select Kofi's orders", tone: active }
+            - kind: kv
+              id: mem
+              label: Loaded in memory
+              slots: 2
+              rows:
+                - { name: Ama.orders, value: "1250, 3100" }
+                - { name: Kofi.orders, value: "450", tone: active }
+        - title: One plus N
+          text: One query for the list plus one per customer. With two customers that is 3; with 2,000 it would be 2,001.
+          lines: [ 4 ]
+          parts:
+            - { kind: terminal, id: out, slots: 1, lines: [ "lazy loop: 3 queries, total 4800" ] }
+    - label: Entity graph
+      code: |
+        @EntityGraph(attributePaths = "orders")
+        List<Customer> findAllByOrderByNameAsc();
+
+        long sum = customers.findAllByOrderByNameAsc().stream().flatMap(c -> c.getOrders().stream()).mapToInt(CustomerOrder::getTotalPence).sum();
+        System.out.println("entity graph: " + stats.getPrepareStatementCount() + " query, total " + sum);
+      steps:
+        - title: Ask for the orders up front
+          text: "The repository method carries @EntityGraph(attributePaths = \"orders\"): whoever calls it also wants each customer's orders."
+          lines: [ 1, 2 ]
+          vars: { queries: 0 }
+          parts:
+            - { kind: seq, id: s, actors: [ Java code, Hibernate, Database ], slots: 6, messages: [] }
+            - kind: kv
+              id: mem
+              label: Loaded in memory
+              slots: 2
+              rows:
+                - { name: Ama.orders, value: not loaded (lazy) }
+                - { name: Kofi.orders, value: not loaded (lazy) }
+            - { kind: terminal, id: out, slots: 1, lines: [] }
+        - title: One query loads both
+          text: Hibernate fetches the customers and their orders together in a single query, so both lists arrive filled in.
+          lines: [ 4 ]
+          vars: { queries: 1 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Java code, Hibernate, Database ]
+              slots: 6
+              messages:
+                - { from: Java code, to: Hibernate, label: findAllByOrderByNameAsc(), tone: active }
+                - { from: Hibernate, to: Database, label: "query 1: customers with orders", tone: active }
+            - kind: kv
+              id: mem
+              label: Loaded in memory
+              slots: 2
+              rows:
+                - { name: Ama.orders, value: "1250, 3100", tone: found }
+                - { name: Kofi.orders, value: "450", tone: found }
+        - title: Summing needs no more queries
+          text: Walking through the orders only reads lists already in memory. The database is not asked again.
+          lines: [ 4 ]
+          vars: { queries: 1, sum: 1250 + 3100 + 450 = 4800 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Java code, Hibernate, Database ]
+              slots: 6
+              messages:
+                - { from: Java code, to: Hibernate, label: findAllByOrderByNameAsc(), tone: dim }
+                - { from: Hibernate, to: Database, label: "query 1: customers with orders", tone: dim }
+                - { from: Java code, to: Java code, label: add up the loaded orders, tone: active }
+        - title: Same total, one query
+          text: The answer is the same 4,800 pence, from one query however many customers there are. A join fetch in JPQL, or a projection, does the same.
+          lines: [ 5 ]
+          parts:
+            - { kind: terminal, id: out, slots: 1, lines: [ "entity graph: 1 query, total 4800" ] }

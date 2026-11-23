@@ -48,6 +48,8 @@ console.log(query("CUSTOMER#c-17", "PROFILE")[0].data);
 
 It prints `["ORDER#2026-11-02#o-7", "ORDER#2026-11-12#o-9"]` and `{ name: "Ama", tier: "gold" }`. In a real DynamoDB table this is a single, fast request to one partition. The customer's profile and orders live together because the application always reads them together: you design the keys around the **queries you will run**, decided up front. A query you did not plan for (all orders over £50 across all customers) means a full scan or a new index.
 
+<Walkthrough name="m-nosql-partition-sort-key" />
+
 ## Document databases
 
 A **document database** stores **documents**, usually JSON-like objects, each with a key, and can query and index fields inside them. **MongoDB** is the best known; others are Couchbase, Firestore and Cosmos DB's document API.

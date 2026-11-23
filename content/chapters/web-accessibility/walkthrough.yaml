@@ -1,0 +1,110 @@
+- id: web-accessibility-tab-through
+  title: Tabbing through a sign-up form
+  hint: Put the mouse aside. Switch between the two versions and watch where focus goes and what a screen reader says.
+  language: HTML
+  examples:
+    - label: Wrong elements
+      code: |
+        <img src="logo.png">
+        <div>Email</div>
+        <input type="email" id="email" name="email">
+        <div class="button" onclick="signUp()">Sign up</div>
+      steps:
+        - title: Four things on the page
+          text: To a sighted mouse user, this looks like a normal sign-up form. A screen reader user and a keyboard user meet something else.
+          parts:
+            - kind: cells
+              id: c
+              label: "Elements in page order"
+              width: 130
+              items: [{ k: a, v: "img, no alt" }, { k: b, v: "div: Email" }, { k: c, v: "input" }, { k: d, v: "div: Sign up" }]
+            - { kind: kv, id: sr, label: "Screen reader says", slots: 1, rows: [] }
+        - title: The image has no alt
+          text: With no alt text, the screen reader falls back to the file name. That tells the listener nothing about what the image shows.
+          lines: [1]
+          parts:
+            - kind: cells
+              id: c
+              label: "Elements in page order"
+              width: 130
+              items: [{ k: a, v: "img, no alt", tone: bad }, { k: b, v: "div: Email" }, { k: c, v: "input" }, { k: d, v: "div: Sign up" }]
+            - { kind: kv, id: sr, label: "Screen reader says", slots: 1, rows: [{ name: image, value: "logo.png", tone: bad }] }
+        - title: Tab reaches the field, without a name
+          text: Pressing Tab moves focus to the input, the first thing that can take it. The div saying Email is not connected to it, so the field is announced only as "edit text".
+          lines: [2, 3]
+          parts:
+            - kind: cells
+              id: c
+              label: "Elements in page order"
+              width: 130
+              items: [{ k: a, v: "img, no alt", tone: dim }, { k: b, v: "div: Email", tone: dim }, { k: c, v: "input", tone: bad }, { k: d, v: "div: Sign up" }]
+              pointers: [{ name: focus, at: 2 }]
+            - { kind: kv, id: sr, label: "Screen reader says", slots: 1, rows: [{ name: field, value: '"edit text"', tone: bad }] }
+        - title: Tab skips the "button"
+          text: Pressing Tab again passes over Sign up, because a div cannot take focus. A keyboard user can never press it; a screen reader reads it as plain text.
+          lines: [4]
+          parts:
+            - kind: cells
+              id: c
+              label: "Elements in page order"
+              width: 130
+              items: [{ k: a, v: "img, no alt", tone: dim }, { k: b, v: "div: Email", tone: dim }, { k: c, v: "input", tone: dim }, { k: d, v: "div: Sign up", tone: bad }]
+            - { kind: kv, id: sr, label: "Screen reader says", slots: 1, rows: [{ name: "Sign up", value: "plain text, not a button", tone: bad }] }
+    - label: Right elements
+      code: |
+        <img src="logo.png" alt="Ama's Bakery">
+        <label for="email">Email</label>
+        <input type="email" id="email" name="email" autocomplete="email">
+        <button type="button">Sign up</button>
+      steps:
+        - title: The same form, the right elements
+          text: It looks the same. Nothing here is harder to write; each element simply says what it is.
+          parts:
+            - kind: cells
+              id: c
+              label: "Elements in page order"
+              width: 130
+              items: [{ k: a, v: "img with alt" }, { k: b, v: "label: Email" }, { k: c, v: "input" }, { k: d, v: "button" }]
+            - { kind: kv, id: sr, label: "Screen reader says", slots: 1, rows: [] }
+        - title: The image is described
+          text: The screen reader reads the alt text, so the listener hears the bakery's name rather than a file name.
+          lines: [1]
+          parts:
+            - kind: cells
+              id: c
+              label: "Elements in page order"
+              width: 130
+              items: [{ k: a, v: "img with alt", tone: found }, { k: b, v: "label: Email" }, { k: c, v: "input" }, { k: d, v: "button" }]
+            - { kind: kv, id: sr, label: "Screen reader says", slots: 1, rows: [{ name: image, value: "Ama's Bakery", tone: found }] }
+        - title: Tab reaches a named field
+          text: The label's for matches the input's id, so the field has a name. The screen reader announces "Email" with it, and the focus ring shows where you are.
+          lines: [2, 3]
+          parts:
+            - kind: cells
+              id: c
+              label: "Elements in page order"
+              width: 130
+              items: [{ k: a, v: "img with alt", tone: dim }, { k: b, v: "label: Email", tone: compare }, { k: c, v: "input", tone: active }, { k: d, v: "button" }]
+              pointers: [{ name: focus, at: 2 }]
+            - { kind: kv, id: sr, label: "Screen reader says", slots: 1, rows: [{ name: field, value: "Email", tone: found }] }
+        - title: Tab reaches the button
+          text: A real button can take focus, so Tab lands on it and the screen reader announces it as a button.
+          lines: [4]
+          parts:
+            - kind: cells
+              id: c
+              label: "Elements in page order"
+              width: 130
+              items: [{ k: a, v: "img with alt", tone: dim }, { k: b, v: "label: Email", tone: dim }, { k: c, v: "input", tone: dim }, { k: d, v: "button", tone: active }]
+              pointers: [{ name: focus, at: 3 }]
+            - { kind: kv, id: sr, label: "Screen reader says", slots: 1, rows: [{ name: button, value: "Sign up, button", tone: found }] }
+        - title: Enter or Space presses it
+          text: The keyboard user presses Enter or Space and the button works. Using the right element gave all of this for free.
+          lines: [4]
+          parts:
+            - kind: cells
+              id: c
+              label: "Elements in page order"
+              width: 130
+              items: [{ k: a, v: "img with alt", tone: done }, { k: b, v: "label: Email", tone: done }, { k: c, v: "input", tone: done }, { k: d, v: "button", tone: found }]
+              pointers: [{ name: focus, at: 3 }]

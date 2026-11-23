@@ -1,0 +1,144 @@
+- id: m-clean-code-process-order
+  title: A function that reads like a summary
+  hint: Follow order 7 through processOrder and see each named step do one job and hand its result on.
+  language: TypeScript
+  code: |
+    const BULK_DISCOUNT_THRESHOLD = 50;
+    const BULK_DISCOUNT_RATE = 0.1;
+
+    function subtotal(order: Order): number {
+      return order.items.reduce((sum, item) => sum + item.price * item.quantity, 0);
+    }
+
+    function applyBulkDiscount(amount: number): number {
+      return amount > BULK_DISCOUNT_THRESHOLD ? amount * (1 - BULK_DISCOUNT_RATE) : amount;
+    }
+
+    function roundToPence(amount: number): number {
+      return Math.round(amount * 100) / 100;
+    }
+
+    function sendConfirmation(order: Order, total: number): void {
+      sent.push(`To ${order.customerEmail}: your order ${order.id} comes to £${total.toFixed(2)}`);
+    }
+
+    function processOrder(order: Order): number {
+      const total = roundToPence(applyBulkDiscount(subtotal(order)));
+      sendConfirmation(order, total);
+      return total;
+    }
+  steps:
+    - title: Three lines you can read at a glance
+      text: processOrder no longer does the sums itself. It calls four small functions, and their names tell you the whole story before you read any detail.
+      lines: [20, 21, 22, 23, 24]
+      vars: { order: "id 7, price 30 × quantity 2" }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: processOrder, x: 0.08, y: 0.5, tone: active }
+            - { label: subtotal, x: 0.85, y: 0 }
+            - { label: applyBulkDiscount, x: 0.85, y: 0.33 }
+            - { label: roundToPence, x: 0.85, y: 0.67 }
+            - { label: sendConfirmation, x: 0.85, y: 1 }
+          edges:
+            - { a: processOrder, b: subtotal, directed: true }
+            - { a: processOrder, b: applyBulkDiscount, directed: true }
+            - { a: processOrder, b: roundToPence, directed: true }
+            - { a: processOrder, b: sendConfirmation, directed: true }
+    - title: subtotal adds up the items
+      text: The innermost call runs first. subtotal multiplies each item's price by its quantity and adds them up, so 30 × 2 gives 60.
+      lines: [4, 5, 6, 21]
+      vars: { order: "id 7, price 30 × quantity 2", subtotal: 60 }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: processOrder, x: 0.08, y: 0.5 }
+            - { label: subtotal, x: 0.85, y: 0, tone: active }
+            - { label: applyBulkDiscount, x: 0.85, y: 0.33 }
+            - { label: roundToPence, x: 0.85, y: 0.67 }
+            - { label: sendConfirmation, x: 0.85, y: 1 }
+          edges:
+            - { a: processOrder, b: subtotal, directed: true, label: "60", tone: active }
+            - { a: processOrder, b: applyBulkDiscount, directed: true }
+            - { a: processOrder, b: roundToPence, directed: true }
+            - { a: processOrder, b: sendConfirmation, directed: true }
+    - title: The discount rule has a name
+      text: "60 is more than BULK_DISCOUNT_THRESHOLD, so 10% comes off: 60 × 0.9 is 54. The old magic numbers 50 and 0.9 are now named constants that say what they mean."
+      lines: [1, 2, 8, 9, 10]
+      vars: { order: "id 7, price 30 × quantity 2", subtotal: 60, discounted: 54 }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: processOrder, x: 0.08, y: 0.5 }
+            - { label: subtotal, x: 0.85, y: 0, tone: done }
+            - { label: applyBulkDiscount, x: 0.85, y: 0.33, tone: active }
+            - { label: roundToPence, x: 0.85, y: 0.67 }
+            - { label: sendConfirmation, x: 0.85, y: 1 }
+          edges:
+            - { a: processOrder, b: subtotal, directed: true, label: "60", tone: dim }
+            - { a: processOrder, b: applyBulkDiscount, directed: true, label: "54", tone: active }
+            - { a: processOrder, b: roundToPence, directed: true }
+            - { a: processOrder, b: sendConfirmation, directed: true }
+    - title: Rounding to pence
+      text: roundToPence keeps two decimal places. 54 is already whole, so it stays 54, and that becomes total.
+      lines: [12, 13, 14, 21]
+      vars: { order: "id 7, price 30 × quantity 2", subtotal: 60, discounted: 54, total: 54 }
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: processOrder, x: 0.08, y: 0.5 }
+            - { label: subtotal, x: 0.85, y: 0, tone: done }
+            - { label: applyBulkDiscount, x: 0.85, y: 0.33, tone: done }
+            - { label: roundToPence, x: 0.85, y: 0.67, tone: active }
+            - { label: sendConfirmation, x: 0.85, y: 1 }
+          edges:
+            - { a: processOrder, b: subtotal, directed: true, label: "60", tone: dim }
+            - { a: processOrder, b: applyBulkDiscount, directed: true, label: "54", tone: dim }
+            - { a: processOrder, b: roundToPence, directed: true, label: "54", tone: active }
+            - { a: processOrder, b: sendConfirmation, directed: true }
+    - title: Sending is its own step
+      text: Sending the message is a separate job, so it gets its own function. The confirmation is added to sent with the total formatted as £54.00.
+      lines: [16, 17, 18, 22]
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: processOrder, x: 0.08, y: 0.5 }
+            - { label: subtotal, x: 0.85, y: 0, tone: done }
+            - { label: applyBulkDiscount, x: 0.85, y: 0.33, tone: done }
+            - { label: roundToPence, x: 0.85, y: 0.67, tone: done }
+            - { label: sendConfirmation, x: 0.85, y: 1, tone: active }
+          edges:
+            - { a: processOrder, b: subtotal, directed: true, label: "60", tone: dim }
+            - { a: processOrder, b: applyBulkDiscount, directed: true, label: "54", tone: dim }
+            - { a: processOrder, b: roundToPence, directed: true, label: "54", tone: dim }
+            - { a: processOrder, b: sendConfirmation, directed: true, label: "total 54", tone: active }
+        - { kind: note, id: sent, text: "sent: …your order 7 comes to £54.00", tone: active }
+    - title: Same result, easier to read
+      text: processOrder returns 54, exactly as the long version did. The behaviour is unchanged, but each detail now lives in a function whose name says what it is, and each can be tested on its own.
+      lines: [23]
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { label: processOrder, x: 0.08, y: 0.5, tone: found, note: "returns 54" }
+            - { label: subtotal, x: 0.85, y: 0, tone: done }
+            - { label: applyBulkDiscount, x: 0.85, y: 0.33, tone: done }
+            - { label: roundToPence, x: 0.85, y: 0.67, tone: done }
+            - { label: sendConfirmation, x: 0.85, y: 1, tone: done }
+          edges:
+            - { a: processOrder, b: subtotal, directed: true, label: "60", tone: dim }
+            - { a: processOrder, b: applyBulkDiscount, directed: true, label: "54", tone: dim }
+            - { a: processOrder, b: roundToPence, directed: true, label: "54", tone: dim }
+            - { a: processOrder, b: sendConfirmation, directed: true, label: "total 54", tone: dim }
+        - { kind: note, id: sent, text: "sent: …your order 7 comes to £54.00", tone: done }

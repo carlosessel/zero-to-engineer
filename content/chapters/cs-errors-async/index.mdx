@@ -177,6 +177,8 @@ static long Round(Stopwatch s) => (s.ElapsedMilliseconds + 50) / 100 * 100;
 
 It prints `one after another: 600 ms` and `together: 300 ms, got customer and orders`. Reading `.Result` is safe here only because `WhenAll` has already finished; elsewhere, always `await`.
 
+<Walkthrough name="cs-errors-async-when-all" />
+
 ### Exceptions in async code
 
 An exception inside an async method is stored in its task and thrown again where you `await` it, so ordinary `try` and `catch` work:

@@ -157,6 +157,8 @@ for question in ["What time do bakers start?", "How do I log a waste item?"]:
 
 The first request writes the handbook to the cache (`cache_creation_input_tokens`); the second, within five minutes, reads it back (`cache_read_input_tokens`) at a fraction of the price. The rule for where to put the marker, from the documentation: **on the last block whose beginning is identical across requests.** The prefix is matched in order (tools, then system, then messages), so put stable material first and anything that changes (the user's question, today's date) after the marker. A timestamp at the top of the system prompt would make every request different and nothing would ever be read from the cache.
 
+<Walkthrough name="cl-api-deep-prompt-caching" />
+
 A worked cost example on Opus 5.5 ($4 per million input tokens): a 20,000-token handbook sent with 1,000 questions in one busy hour. Without caching: 1,000 × 20,000 = 20 million tokens = **$80** for the handbook part. With a 1-hour cache: one write at 2 × $4 = $8 per million, so 20,000 × $8 ÷ 1,000,000 = $0.16, plus 999 reads at 0.05 × $4 = $0.20 per million, so 999 × 20,000 × $0.20 ÷ 1,000,000 ≈ $4.00. About **$4.16** instead of $80.
 
 ## Thinking and effort

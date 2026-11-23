@@ -1,0 +1,103 @@
+- id: cc-parallel-worktrees
+  title: Two tasks, two worktrees
+  hint: Watch two sessions get their own working copies, so parallel tasks cannot overwrite each other.
+  steps:
+    - title: Two sessions, one folder
+      text: Say you want a bug fix and a small feature done at the same time, in two sessions. If both work in the same folder, they will overwrite each other's files.
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: repo, label: repository, x: 0.5, y: 0.1, tone: base, note: shared history }
+            - { k: s1, label: session 1, x: 0.15, y: 0.9, tone: active }
+            - { k: s2, label: session 2, x: 0.85, y: 0.9, tone: active }
+            - { k: f, label: project folder, x: 0.5, y: 0.5, tone: bad, note: both edit here }
+          edges:
+            - { a: repo, b: f, directed: false }
+            - { a: s1, b: f, directed: true, tone: bad }
+            - { a: s2, b: f, directed: true, tone: bad }
+        - { kind: terminal, id: t, slots: 3, lines: [] }
+    - title: A worktree for the first task
+      text: claude --worktree fix-login makes a second working copy of the repository in its own folder, on a new branch called worktree-fix-login, and starts a session in it.
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: repo, label: repository, x: 0.5, y: 0.1, tone: base, note: shared history }
+            - { k: w1, label: fix-login, x: 0.15, y: 0.5, tone: active, note: worktree-fix-login }
+            - { k: s1, label: session 1, x: 0.15, y: 0.9, tone: active }
+          edges:
+            - { a: repo, b: w1, directed: false, tone: active }
+            - { a: s1, b: w1, directed: true, tone: active }
+        - { kind: terminal, id: t, slots: 3, lines: [ $ claude --worktree fix-login ] }
+    - title: A second worktree
+      text: In a second terminal, a different name gives a second worktree on its own branch. Both share the repository's history, but each has its own files.
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: repo, label: repository, x: 0.5, y: 0.1, tone: base, note: shared history }
+            - { k: w1, label: fix-login, x: 0.15, y: 0.5, tone: base, note: worktree-fix-login }
+            - { k: s1, label: session 1, x: 0.15, y: 0.9, tone: base }
+            - { k: w2, label: small-feature, x: 0.85, y: 0.5, tone: active, note: worktree-small-feature }
+            - { k: s2, label: session 2, x: 0.85, y: 0.9, tone: active }
+          edges:
+            - { a: repo, b: w1, directed: false }
+            - { a: s1, b: w1, directed: true }
+            - { a: repo, b: w2, directed: false, tone: active }
+            - { a: s2, b: w2, directed: true, tone: active }
+        - { kind: terminal, id: t, slots: 3, lines: [ $ claude --worktree fix-login, $ claude --worktree small-feature ] }
+    - title: A fresh checkout is missing things
+      text: "Each worktree is a fresh checkout: files Git ignores, such as .env, are not there, and dependencies are not installed. List small ignored files in .worktreeinclude and Claude Code copies them in."
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: repo, label: repository, x: 0.5, y: 0.1, tone: base, note: shared history }
+            - { k: w1, label: fix-login, x: 0.15, y: 0.5, tone: compare, note: + .env copied in }
+            - { k: s1, label: session 1, x: 0.15, y: 0.9, tone: base }
+            - { k: w2, label: small-feature, x: 0.85, y: 0.5, tone: compare, note: + .env copied in }
+            - { k: s2, label: session 2, x: 0.85, y: 0.9, tone: base }
+          edges:
+            - { a: repo, b: w1, directed: false }
+            - { a: s1, b: w1, directed: true }
+            - { a: repo, b: w2, directed: false }
+            - { a: s2, b: w2, directed: true }
+    - title: Working side by side
+      text: Now each session edits only its own folder, so the tasks cannot collide. This only works if the tasks are truly independent and do not change the same files.
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: repo, label: repository, x: 0.5, y: 0.1, tone: base, note: shared history }
+            - { k: w1, label: fix-login, x: 0.15, y: 0.5, tone: active, note: worktree-fix-login }
+            - { k: s1, label: session 1, x: 0.15, y: 0.9, tone: active, note: editing }
+            - { k: w2, label: small-feature, x: 0.85, y: 0.5, tone: active, note: worktree-small-feature }
+            - { k: s2, label: session 2, x: 0.85, y: 0.9, tone: active, note: editing }
+          edges:
+            - { a: repo, b: w1, directed: false }
+            - { a: s1, b: w1, directed: true, tone: active }
+            - { a: repo, b: w2, directed: false }
+            - { a: s2, b: w2, directed: true, tone: active }
+    - title: Merged like any branch
+      text: "When each task is done, its branch is merged like any other. Review each result as carefully as you would one: parallel work pays off only if you can review it all."
+      parts:
+        - kind: graph
+          id: g
+          height: 280
+          nodes:
+            - { k: repo, label: repository, x: 0.5, y: 0.1, tone: found, note: both merged }
+            - { k: w1, label: fix-login, x: 0.15, y: 0.5, tone: done, note: reviewed }
+            - { k: s1, label: session 1, x: 0.15, y: 0.9, tone: dim }
+            - { k: w2, label: small-feature, x: 0.85, y: 0.5, tone: done, note: reviewed }
+            - { k: s2, label: session 2, x: 0.85, y: 0.9, tone: dim }
+          edges:
+            - { a: w1, b: repo, directed: true, tone: found, label: merge }
+            - { a: s1, b: w1, directed: true, tone: dim }
+            - { a: w2, b: repo, directed: true, tone: found, label: merge }
+            - { a: s2, b: w2, directed: true, tone: dim }

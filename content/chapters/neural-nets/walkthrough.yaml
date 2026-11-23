@@ -1,0 +1,82 @@
+- id: neural-nets-forward-pass
+  title: One forward pass, number by number
+  hint: Follow 4 input numbers through a hidden layer of 8 neurons, a ReLU, and out as 3 class scores.
+  language: Python
+  code: |
+    import numpy as np
+
+    def relu(z): return np.maximum(0, z)
+
+    x  = np.random.randn(4)            # 4 input features
+    W1 = np.random.randn(8, 4); b1 = np.zeros(8)
+    W2 = np.random.randn(3, 8); b2 = np.zeros(3)
+
+    h      = relu(W1 @ x + b1)         # hidden layer: 8 numbers
+    scores = W2 @ h + b2               # output: 3 class scores
+  steps:
+    - title: Four input features
+      text: "x holds 4 random numbers standing in for real features. These come from one run, rounded to one decimal place; yours will differ, because they are random."
+      lines: [5]
+      vars: { "x.shape": "(4,)" }
+      parts:
+        - kind: cells
+          id: x
+          label: "x: 4 inputs"
+          items: [{ k: x0, v: 1.3 }, { k: x1, v: 1.4 }, { k: x2, v: 0.1 }, { k: x3, v: -0.8 }]
+          slots: 8
+    - title: Eight neurons, four weights each
+      text: "W1 has shape (8, 4): one row of 4 weights for each of the 8 hidden neurons. The biases b1 start at zero."
+      lines: [6]
+      vars: { "x.shape": "(4,)", "W1.shape": "(8, 4)", "W1 row 0": "[-1.1, 0.0, -1.0, -1.4]" }
+    - title: Neuron 0 does a dot product
+      text: "Multiply each input by its weight and add up: -1.1 × 1.3 + 0.0 × 1.4 + -1.0 × 0.1 + -1.4 × -0.8 = -1.43 + 0 - 0.1 + 1.12 = -0.41. Adding the bias 0 leaves -0.41."
+      lines: [9]
+      vars: { "W1 row 0": "[-1.1, 0.0, -1.0, -1.4]", "row 0 · x + b": -0.41 }
+      parts:
+        - kind: cells
+          id: x
+          label: "x: 4 inputs"
+          items: [{ k: x0, v: 1.3, tone: compare }, { k: x1, v: 1.4, tone: compare }, { k: x2, v: 0.1, tone: compare }, { k: x3, v: -0.8, tone: compare }]
+          slots: 8
+        - kind: cells
+          id: z
+          label: "W1 @ x + b1: 8 numbers"
+          indices: true
+          items: [{ k: z0, v: -0.41, tone: active }]
+          slots: 8
+    - title: All eight at once
+      text: "Each of the other rows does the same with its own weights. W1 @ x does all eight dot products in one matrix multiplication."
+      lines: [9]
+      vars: { "(W1 @ x + b1).shape": "(8,)" }
+      parts:
+        - kind: cells
+          id: z
+          label: "W1 @ x + b1: 8 numbers"
+          indices: true
+          items: [{ k: z0, v: -0.41 }, { k: z1, v: 1.17, tone: active }, { k: z2, v: -0.69, tone: active }, { k: z3, v: 3.85, tone: active }, { k: z4, v: 2.25, tone: active }, { k: z5, v: 1.65, tone: active }, { k: z6, v: -1.42, tone: active }, { k: z7, v: 1.63, tone: active }]
+          slots: 8
+    - title: ReLU bends the line
+      text: "relu turns every negative number into 0 and lets positives through. Three neurons go quiet. Without this bend, stacked layers would collapse into one straight-line function."
+      lines: [3, 9]
+      vars: { "h.shape": "(8,)" }
+      parts:
+        - kind: cells
+          id: z
+          label: "h = relu(...): 8 numbers"
+          indices: true
+          items: [{ k: z0, v: 0, tone: dim }, { k: z1, v: 1.17, tone: found }, { k: z2, v: 0, tone: dim }, { k: z3, v: 3.85, tone: found }, { k: z4, v: 2.25, tone: found }, { k: z5, v: 1.65, tone: found }, { k: z6, v: 0, tone: dim }, { k: z7, v: 1.63, tone: found }]
+          slots: 8
+    - title: The output layer
+      text: "W2 has shape (3, 8): three output neurons, each reading all 8 hidden numbers. The first does 0.7 × 0 - 1.1 × 1.17 - 0.4 × 0 - 0.5 × 3.85 + 2.0 × 2.25 - 0.1 × 1.65 + 0.7 × 0 + 0.6 × 1.63 ≈ 2.1."
+      lines: [7, 10]
+      vars: { "W2.shape": "(3, 8)", "scores.shape": "(3,)" }
+      parts:
+        - kind: cells
+          id: s
+          label: "scores: 3 class scores"
+          width: 70
+          items: [{ k: s0, v: 2.1, tone: found }, { k: s1, v: -1.86, tone: found }, { k: s2, v: -1.25, tone: found }]
+          slots: 3
+    - title: A complete forward pass
+      text: "4 numbers in, 3 scores out: two matrix multiplications and a ReLU. With random weights the scores mean nothing; training adjusts W1, b1, W2 and b2 until they do."
+      lines: [9, 10]

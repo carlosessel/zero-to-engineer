@@ -1,0 +1,107 @@
+- id: m-solid-square-rectangle
+  title: Why a Square is not a safe Rectangle
+  hint: Run stretch twice, once on a Rectangle and once on a Square, and watch the width and height after each call.
+  language: TypeScript
+  code: |
+    class Rectangle {
+      constructor(protected w: number, protected h: number) {}
+      setWidth(w: number) { this.w = w; }
+      setHeight(h: number) { this.h = h; }
+      area() { return this.w * this.h; }
+    }
+
+    class Square extends Rectangle {
+      constructor(side: number) { super(side, side); }
+      setWidth(w: number) { this.w = w; this.h = w; }
+      setHeight(h: number) { this.w = h; this.h = h; }
+    }
+
+    function stretch(r: Rectangle): number {
+      r.setWidth(5);
+      r.setHeight(4);
+      return r.area();
+    }
+
+    console.log(stretch(new Rectangle(1, 1)), stretch(new Square(1)));
+  steps:
+    - title: stretch expects a Rectangle
+      text: stretch was written for rectangles. It assumes that setting the height leaves the width alone, so it expects an area of 5 × 4 = 20.
+      lines: [14, 15, 16, 17, 18]
+      parts:
+        - kind: kv
+          id: rect
+          label: "new Rectangle(1, 1)"
+          slots: 2
+          rows: [{ name: w, value: "1" }, { name: h, value: "1" }]
+        - { kind: terminal, id: out, slots: 1, lines: [] }
+    - title: Rectangle, setWidth(5)
+      text: The Rectangle's setWidth changes only the width.
+      lines: [15, 3]
+      parts:
+        - kind: kv
+          id: rect
+          label: "new Rectangle(1, 1)"
+          slots: 2
+          rows: [{ name: w, value: "5", tone: active }, { name: h, value: "1" }]
+    - title: Rectangle, setHeight(4)
+      text: setHeight changes only the height. The width set a moment ago is untouched, just as stretch assumed.
+      lines: [16, 4]
+      parts:
+        - kind: kv
+          id: rect
+          label: "new Rectangle(1, 1)"
+          slots: 2
+          rows: [{ name: w, value: "5" }, { name: h, value: "4", tone: active }]
+    - title: Area 20, as promised
+      text: area() multiplies 5 by 4. For a real Rectangle, stretch gets exactly what it expected.
+      lines: [17, 5]
+      vars: { "stretch(Rectangle)": "5 × 4 = 20" }
+      parts:
+        - kind: kv
+          id: rect
+          label: "new Rectangle(1, 1)"
+          slots: 2
+          rows: [{ name: w, value: "5", tone: found }, { name: h, value: "4", tone: found }]
+    - title: Now pass a Square
+      text: Square extends Rectangle, so the compiler happily accepts it where a Rectangle is expected. It starts with both sides 1.
+      lines: [8, 9, 20]
+      parts:
+        - kind: kv
+          id: rect
+          label: "new Rectangle(1, 1)"
+          slots: 2
+          rows: [{ name: w, value: "5", tone: dim }, { name: h, value: "4", tone: dim }]
+        - kind: kv
+          id: sq
+          label: "new Square(1)"
+          slots: 2
+          rows: [{ name: w, value: "1" }, { name: h, value: "1" }]
+    - title: Square, setWidth(5)
+      text: Square overrides setWidth to keep its sides equal, so the height changes too. stretch did not ask for that.
+      lines: [15, 10]
+      parts:
+        - kind: kv
+          id: sq
+          label: "new Square(1)"
+          slots: 2
+          rows: [{ name: w, value: "5", tone: active }, { name: h, value: "5", tone: compare }]
+    - title: Square, setHeight(4)
+      text: setHeight sets both sides to 4. The width stretch set to 5 has quietly become 4, breaking the promise a Rectangle makes.
+      lines: [16, 11]
+      parts:
+        - kind: kv
+          id: sq
+          label: "new Square(1)"
+          slots: 2
+          rows: [{ name: w, value: "4", tone: bad }, { name: h, value: "4", tone: active }]
+    - title: Area 16, not 20
+      text: The program prints 20 16. Square is not substitutable for Rectangle, which is what the Liskov substitution principle forbids. Being "a kind of" something is not enough; a subtype must behave like it.
+      lines: [17, 20]
+      vars: { "stretch(Rectangle)": "5 × 4 = 20", "stretch(Square)": "4 × 4 = 16" }
+      parts:
+        - kind: kv
+          id: sq
+          label: "new Square(1)"
+          slots: 2
+          rows: [{ name: w, value: "4", tone: bad }, { name: h, value: "4", tone: bad }]
+        - { kind: terminal, id: out, slots: 1, lines: ["20 16"] }

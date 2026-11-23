@@ -1,0 +1,149 @@
+- id: m-identity-pkce-login
+  title: The authorisation code flow with PKCE
+  hint: Follow a login from the client to the authorisation server and back, and watch where the code verifier and the challenge travel.
+  language: Python
+  code: |
+    import base64
+    import hashlib
+    import secrets
+
+    verifier = base64.urlsafe_b64encode(secrets.token_bytes(32)).rstrip(b"=").decode()
+    challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()
+  steps:
+    - title: A secret only the client knows
+      text: Before anything is sent, the client makes a random code verifier and keeps it to itself. Then it hashes the verifier with SHA-256 to get the code challenge.
+      lines: [5, 6]
+      vars: { verifier: "random, kept by the client", challenge: "SHA-256 of the verifier" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Browser, "Auth server", API]
+          slots: 11
+          messages:
+            - { from: Client, to: Client, label: "make verifier, challenge", tone: active }
+    - title: Off to the authorisation server
+      text: "The client sends the user's browser to the authorisation server with the challenge, its client id, redirect URI, scopes and a random state value. Only the hash travels; the verifier stays behind."
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Browser, "Auth server", API]
+          slots: 11
+          messages:
+            - { from: Client, to: Client, label: "make verifier, challenge", tone: dim }
+            - { from: Client, to: Browser, label: "go to the auth server", tone: active }
+            - { from: Browser, to: "Auth server", label: "challenge, state, scopes", tone: active }
+    - title: The user logs in there
+      text: The user types their password (or uses a passkey) on the authorisation server's own page and consents. The client never sees the password.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Browser, "Auth server", API]
+          slots: 11
+          messages:
+            - { from: Client, to: Client, label: "make verifier, challenge", tone: dim }
+            - { from: Client, to: Browser, label: "go to the auth server", tone: dim }
+            - { from: Browser, to: "Auth server", label: "challenge, state, scopes", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "log in and consent", tone: active }
+    - title: A short-lived code comes back
+      text: The authorisation server redirects the browser back to the client with an authorisation code, which is short-lived and single-use, and the same state value.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Browser, "Auth server", API]
+          slots: 11
+          messages:
+            - { from: Client, to: Client, label: "make verifier, challenge", tone: dim }
+            - { from: Client, to: Browser, label: "go to the auth server", tone: dim }
+            - { from: Browser, to: "Auth server", label: "challenge, state, scopes", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "log in and consent", tone: dim }
+            - { from: "Auth server", to: Browser, label: "redirect: code + state", tone: active }
+            - { from: Browser, to: Client, label: "code + state", tone: active }
+    - title: Check the state
+      text: The client checks that the state matches the one it sent. A mismatch means the response was not started by this client, so it is refused; this blocks cross-site request forgery.
+      vars: { verifier: "random, kept by the client", challenge: "SHA-256 of the verifier", state: matches }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Browser, "Auth server", API]
+          slots: 11
+          messages:
+            - { from: Client, to: Client, label: "make verifier, challenge", tone: dim }
+            - { from: Client, to: Browser, label: "go to the auth server", tone: dim }
+            - { from: Browser, to: "Auth server", label: "challenge, state, scopes", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "log in and consent", tone: dim }
+            - { from: "Auth server", to: Browser, label: "redirect: code + state", tone: dim }
+            - { from: Browser, to: Client, label: "code + state", tone: dim }
+            - { from: Client, to: Client, label: "state matches?", tone: found }
+    - title: Exchange the code, with the verifier
+      text: The client sends the code together with the original code verifier, the secret it has kept since the first step.
+      lines: [5]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Browser, "Auth server", API]
+          slots: 11
+          messages:
+            - { from: Client, to: Client, label: "make verifier, challenge", tone: dim }
+            - { from: Client, to: Browser, label: "go to the auth server", tone: dim }
+            - { from: Browser, to: "Auth server", label: "challenge, state, scopes", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "log in and consent", tone: dim }
+            - { from: "Auth server", to: Browser, label: "redirect: code + state", tone: dim }
+            - { from: Browser, to: Client, label: "code + state", tone: dim }
+            - { from: Client, to: Client, label: "state matches?", tone: dim }
+            - { from: Client, to: "Auth server", label: "code + verifier", tone: active }
+    - title: The server hashes the verifier
+      text: The authorisation server hashes the verifier and checks it equals the challenge it saw earlier. An attacker who intercepted the code has no verifier, so the code is useless to them.
+      lines: [6]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Browser, "Auth server", API]
+          slots: 11
+          messages:
+            - { from: Client, to: Client, label: "make verifier, challenge", tone: dim }
+            - { from: Client, to: Browser, label: "go to the auth server", tone: dim }
+            - { from: Browser, to: "Auth server", label: "challenge, state, scopes", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "log in and consent", tone: dim }
+            - { from: "Auth server", to: Browser, label: "redirect: code + state", tone: dim }
+            - { from: Browser, to: Client, label: "code + state", tone: dim }
+            - { from: Client, to: Client, label: "state matches?", tone: dim }
+            - { from: Client, to: "Auth server", label: "code + verifier", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "hash = challenge?", tone: compare }
+    - title: Tokens for the client
+      text: The check passes, so the server returns an access token, limited by scopes and a lifetime. With the openid scope, OpenID Connect adds an ID token saying who logged in.
+      vars: { verifier: "random, kept by the client", challenge: "SHA-256 of the verifier", state: matches, "access token": issued }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Browser, "Auth server", API]
+          slots: 11
+          messages:
+            - { from: Client, to: Client, label: "make verifier, challenge", tone: dim }
+            - { from: Client, to: Browser, label: "go to the auth server", tone: dim }
+            - { from: Browser, to: "Auth server", label: "challenge, state, scopes", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "log in and consent", tone: dim }
+            - { from: "Auth server", to: Browser, label: "redirect: code + state", tone: dim }
+            - { from: Browser, to: Client, label: "code + state", tone: dim }
+            - { from: Client, to: Client, label: "state matches?", tone: dim }
+            - { from: Client, to: "Auth server", label: "code + verifier", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "hash = challenge?", tone: dim }
+            - { from: "Auth server", to: Client, label: "access token", tone: found }
+    - title: Calling the API
+      text: The client calls the API with the access token, never the ID token. The user's password went only to the authorisation server, and the client got access without ever seeing it.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Browser, "Auth server", API]
+          slots: 11
+          messages:
+            - { from: Client, to: Client, label: "make verifier, challenge", tone: dim }
+            - { from: Client, to: Browser, label: "go to the auth server", tone: dim }
+            - { from: Browser, to: "Auth server", label: "challenge, state, scopes", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "log in and consent", tone: dim }
+            - { from: "Auth server", to: Browser, label: "redirect: code + state", tone: dim }
+            - { from: Browser, to: Client, label: "code + state", tone: dim }
+            - { from: Client, to: Client, label: "state matches?", tone: dim }
+            - { from: Client, to: "Auth server", label: "code + verifier", tone: dim }
+            - { from: "Auth server", to: "Auth server", label: "hash = challenge?", tone: dim }
+            - { from: "Auth server", to: Client, label: "access token", tone: dim }
+            - { from: Client, to: API, label: "Bearer access token", tone: active }

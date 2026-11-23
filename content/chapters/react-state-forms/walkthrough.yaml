@@ -1,0 +1,307 @@
+- id: react-state-forms-snapshot
+  title: State is a snapshot
+  hint: Switch between the two versions and watch what each setScore asks React for during one click.
+  language: JSX
+  examples:
+    - label: setScore(score + 1)
+      code: |-
+        const [score, setScore] = useState(0);
+
+        function addThree() {
+          setScore(score + 1);
+          setScore(score + 1);
+          setScore(score + 1);
+        }
+      steps:
+        - title: The first render
+          text: "useState(0) starts score at 0. For the whole of this render, score is 0: a snapshot."
+          lines:
+            - 1
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "0"
+                  tone: active
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items: []
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 0"
+              tone: base
+        - title: "Click: the first setScore"
+          text: addThree runs. score is 0, so setScore(score + 1) asks React to make the state 1. The variable score does not change.
+          lines:
+            - 4
+          vars:
+            score + 1: 0 + 1 = 1
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "0"
+                  tone: compare
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items:
+                - k: r0
+                  v: make it 1
+                  tone: active
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 0"
+              tone: base
+        - title: The second setScore
+          text: score is still 0 in this render, so this line also asks for 0 + 1, which is 1.
+          lines:
+            - 5
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "0"
+                  tone: compare
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items:
+                - k: r0
+                  v: make it 1
+                  tone: dim
+                - k: r1
+                  v: make it 1
+                  tone: active
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 0"
+              tone: base
+        - title: The third setScore
+          text: The same again. Three requests, all saying make it 1.
+          lines:
+            - 6
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "0"
+                  tone: compare
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items:
+                - k: r0
+                  v: make it 1
+                  tone: dim
+                - k: r1
+                  v: make it 1
+                  tone: dim
+                - k: r2
+                  v: make it 1
+                  tone: active
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 0"
+              tone: base
+        - title: React renders again
+          text: React stores the new value and renders App again. Every request said 1, so score is 1. One click added one, not three.
+          vars: {}
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "1"
+                  tone: found
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items: []
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 1"
+              tone: bad
+    - label: setScore((s) => s + 1)
+      code: |-
+        const [score, setScore] = useState(0);
+
+        function addThree() {
+          setScore((s) => s + 1);
+          setScore((s) => s + 1);
+          setScore((s) => s + 1);
+        }
+      steps:
+        - title: The first render
+          text: "Same start: score is 0 in this render."
+          lines:
+            - 1
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "0"
+                  tone: active
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items: []
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 0"
+              tone: base
+        - title: "Click: queue an updater"
+          text: This time setScore gets a function, s => s + 1. It does not use the snapshot; React will call it later with the latest value.
+          lines:
+            - 4
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "0"
+                  tone: compare
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items:
+                - k: r0
+                  v: s => s + 1
+                  tone: active
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 0"
+              tone: base
+        - title: Two more updaters
+          text: The second and third lines queue the same function. Nothing has been worked out yet.
+          lines:
+            - 5
+            - 6
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "0"
+                  tone: compare
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items:
+                - k: r0
+                  v: s => s + 1
+                  tone: dim
+                - k: r1
+                  v: s => s + 1
+                  tone: active
+                - k: r2
+                  v: s => s + 1
+                  tone: active
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 0"
+              tone: base
+        - title: React runs them in order
+          text: "React passes each function the latest value, including updates already queued: 0 + 1 = 1, then 1 + 1 = 2, then 2 + 1 = 3."
+          vars:
+            first: 0 + 1 = 1
+            second: 1 + 1 = 2
+            third: 2 + 1 = 3
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "0"
+                  tone: dim
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items:
+                - k: r0
+                  v: s => s + 1
+                  tone: done
+                - k: r1
+                  v: s => s + 1
+                  tone: done
+                - k: r2
+                  v: s => s + 1
+                  tone: active
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 0"
+              tone: base
+        - title: "Score: 3"
+          text: React renders App again with score 3. When the new value depends on the old one, pass a function to the setter.
+          vars: {}
+          parts:
+            - kind: kv
+              id: k
+              label: This render's snapshot
+              slots: 1
+              rows:
+                - name: score
+                  value: "3"
+                  tone: found
+            - kind: cells
+              id: q
+              label: Requests waiting for React
+              items: []
+              slots: 3
+              width: 110
+              empty: none yet
+            - kind: note
+              id: p
+              text: "Page shows: Score: 3"
+              tone: found

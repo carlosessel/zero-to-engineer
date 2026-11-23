@@ -1,0 +1,108 @@
+- id: m-growth-git-archaeology
+  title: Finding out why the code is like this
+  hint: Watch three commits build the history, then see git log, git blame and git log -S each answer a different question about it.
+  language: Shell
+  code: |
+    git init -q -b main shop && cd shop
+    printf 'def shipping(pence):\n    return 0 if pence >= 3000 else 350\n' > pricing.py
+    git add pricing.py && git commit -q -m "Add flat shipping with free delivery from 30 pounds"
+    printf 'def shipping(pence, express=False):\n    base = 0 if pence >= 3000 else 350\n    return base + (400 if express else 0)\n' > pricing.py
+    git commit -q -am "Add express delivery for 4 pounds"
+    printf 'def shipping(pence, express=False):\n    base = 0 if pence >= 4000 else 350\n    return base + (400 if express else 0)\n' > pricing.py
+    git commit -q -am "Raise free delivery threshold to 40 pounds (finance request, ticket SHOP-212)"
+
+    echo "history of pricing.py:"
+    git log --format='%s' -- pricing.py
+    echo "who last changed the threshold line, and why:"
+    git blame -L 2,2 --porcelain pricing.py | grep '^summary'
+    echo "when did the 3000 threshold disappear?"
+    git log -S 3000 --format='%s' -- pricing.py
+  steps:
+    - title: "First commit: free from £30"
+      text: "A tiny repository is built. The first version of pricing.py gives free delivery from 3000 pence, and the commit message says so."
+      lines: [1, 2, 3]
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes: [{ k: c1, label: "c1 free at £30", x: 0.14, y: 0.5, tone: active }]
+          edges: []
+        - kind: kv
+          id: f
+          label: "pricing.py now"
+          slots: 2
+          rows:
+            - { name: free delivery from, value: "3000 pence" }
+            - { name: express option, value: "none" }
+        - { kind: terminal, id: out, slots: 4, lines: [] }
+    - title: "Second commit: express delivery"
+      text: "The function gains an express option for 400 pence. The threshold line still says 3000."
+      lines: [4, 5]
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes: [{ k: c1, label: "c1 free at £30", x: 0.14, y: 0.5 }, { k: c2, label: "c2 express £4", x: 0.5, y: 0.5, tone: active }]
+          edges: [{ a: c1, b: c2, directed: true }]
+        - kind: kv
+          id: f
+          label: "pricing.py now"
+          slots: 2
+          rows:
+            - { name: free delivery from, value: "3000 pence" }
+            - { name: express option, value: "+400 pence" }
+    - title: "Third commit: the threshold moves"
+      text: "The threshold becomes 4000, and the message records why: a finance request, ticket SHOP-212."
+      lines: [6, 7]
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes: [{ k: c1, label: "c1 free at £30", x: 0.14, y: 0.5 }, { k: c2, label: "c2 express £4", x: 0.5, y: 0.5 }, { k: c3, label: "c3 free at £40", x: 0.86, y: 0.5, tone: active }]
+          edges: [{ a: c1, b: c2, directed: true }, { a: c2, b: c3, directed: true }]
+        - kind: kv
+          id: f
+          label: "pricing.py now"
+          slots: 2
+          rows:
+            - { name: free delivery from, value: "4000 pence" }
+            - { name: express option, value: "+400 pence" }
+    - title: "git log: the file's history"
+      text: "Months later, someone wonders why the threshold is 4000. git log on the file lists every commit that changed it, newest first."
+      lines: [9, 10]
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes: [{ k: c1, label: "c1 free at £30", x: 0.14, y: 0.5, tone: compare }, { k: c2, label: "c2 express £4", x: 0.5, y: 0.5, tone: compare }, { k: c3, label: "c3 free at £40", x: 0.86, y: 0.5, tone: compare }]
+          edges: [{ a: c1, b: c2, directed: true }, { a: c2, b: c3, directed: true }]
+        - { kind: terminal, id: out, slots: 4, lines: ["Raise free delivery threshold to 40 pounds (finance request,", "  ticket SHOP-212)", "Add express delivery for 4 pounds", "Add flat shipping with free delivery from 30 pounds"] }
+    - title: "git blame: who changed this line"
+      text: "git blame on line 2, the threshold line, names the commit that last changed it. Its summary gives the reason and a ticket to read."
+      lines: [11, 12]
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes: [{ k: c1, label: "c1 free at £30", x: 0.14, y: 0.5, tone: dim }, { k: c2, label: "c2 express £4", x: 0.5, y: 0.5, tone: dim }, { k: c3, label: "c3 free at £40", x: 0.86, y: 0.5, tone: found, note: "last changed line 2" }]
+          edges: [{ a: c1, b: c2, directed: true }, { a: c2, b: c3, directed: true }]
+        - { kind: terminal, id: out, slots: 4, lines: ["summary Raise free delivery threshold to 40 pounds (finance request,", "  ticket SHOP-212)"] }
+    - title: "git log -S: when 3000 came and went"
+      text: "git log -S 3000 lists the commits where the text 3000 appeared or disappeared: the first and the third. The second commit kept it, so it is not listed."
+      lines: [13, 14]
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes: [{ k: c1, label: "c1 free at £30", x: 0.14, y: 0.5, tone: found, note: "3000 appeared" }, { k: c2, label: "c2 express £4", x: 0.5, y: 0.5, tone: dim }, { k: c3, label: "c3 free at £40", x: 0.86, y: 0.5, tone: found, note: "3000 disappeared" }]
+          edges: [{ a: c1, b: c2, directed: true }, { a: c2, b: c3, directed: true }]
+        - { kind: terminal, id: out, slots: 4, lines: ["Raise free delivery threshold to 40 pounds (finance request,", "  ticket SHOP-212)", "Add flat shipping with free delivery from 30 pounds"] }
+    - title: "Why messages say why"
+      text: "The question was answered in seconds, because each commit message explained why, not just what. Write yours for the next reader."
+      lines: [3, 5, 7]
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes: [{ k: c1, label: "c1 free at £30", x: 0.14, y: 0.5, tone: done }, { k: c2, label: "c2 express £4", x: 0.5, y: 0.5, tone: done }, { k: c3, label: "c3 free at £40", x: 0.86, y: 0.5, tone: done }]
+          edges: [{ a: c1, b: c2, directed: true }, { a: c2, b: c3, directed: true }]

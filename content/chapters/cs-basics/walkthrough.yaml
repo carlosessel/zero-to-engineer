@@ -1,0 +1,110 @@
+- id: cs-basics-while-loop
+  title: A while loop, one round at a time
+  hint: Watch the condition be checked before every round, and the two variables change until it becomes false.
+  language: C#
+  code: |
+    int dough = 1000;
+    int loaves = 0;
+    while (dough >= 450)
+    {
+        dough -= 450;
+        loaves++;
+    }
+    Console.WriteLine($"{loaves} loaves, {dough} g of dough left");
+  steps:
+    - title: Two variables
+      text: There are 1,000 grams of dough and no loaves yet. Both are int variables.
+      lines: [ 1, 2 ]
+      parts:
+        - kind: kv
+          id: m
+          label: Variables
+          slots: 2
+          rows:
+            - { name: dough, value: "1000", tone: active }
+            - { name: loaves, value: "0", tone: active }
+        - { kind: terminal, id: out, slots: 1, lines: [] }
+    - title: Check the condition
+      text: Before each round, while checks its condition. 1000 >= 450 is true, so the body runs.
+      lines: [ 3 ]
+      vars: { dough >= 450: 1000 >= 450 → true }
+      parts:
+        - kind: kv
+          id: m
+          label: Variables
+          slots: 2
+          rows:
+            - { name: dough, value: "1000", tone: compare }
+            - { name: loaves, value: "0" }
+    - title: Use 450 g of dough
+      text: dough -= 450 is short for dough = dough - 450. 1000 - 450 leaves 550.
+      lines: [ 5 ]
+      vars: {}
+      parts:
+        - kind: kv
+          id: m
+          label: Variables
+          slots: 2
+          rows:
+            - { name: dough, value: "550", tone: active }
+            - { name: loaves, value: "0" }
+    - title: One more loaf
+      text: loaves++ adds one. The end of the body sends the program back up to the condition.
+      lines: [ 6 ]
+      parts:
+        - kind: kv
+          id: m
+          label: Variables
+          slots: 2
+          rows:
+            - { name: dough, value: "550" }
+            - { name: loaves, value: "1", tone: active }
+    - title: Check again
+      text: 550 >= 450 is still true, so the body runs a second time.
+      lines: [ 3 ]
+      vars: { dough >= 450: 550 >= 450 → true }
+      parts:
+        - kind: kv
+          id: m
+          label: Variables
+          slots: 2
+          rows:
+            - { name: dough, value: "550", tone: compare }
+            - { name: loaves, value: "1" }
+    - title: Second round
+      text: 550 - 450 leaves 100 grams, and loaves goes up to 2.
+      lines: [ 5, 6 ]
+      vars: {}
+      parts:
+        - kind: kv
+          id: m
+          label: Variables
+          slots: 2
+          rows:
+            - { name: dough, value: "100", tone: active }
+            - { name: loaves, value: "2", tone: active }
+    - title: The condition is false
+      text: 100 >= 450 is false, so the loop ends and the program carries on after the closing brace. A while loop can run any number of times, including none.
+      lines: [ 3 ]
+      vars: { dough >= 450: 100 >= 450 → false }
+      parts:
+        - kind: kv
+          id: m
+          label: Variables
+          slots: 2
+          rows:
+            - { name: dough, value: "100", tone: bad }
+            - { name: loaves, value: "2" }
+    - title: Print the result
+      text: The interpolated string puts both values into the text.
+      lines: [ 8 ]
+      vars: {}
+      parts:
+        - kind: kv
+          id: m
+          label: Variables
+          slots: 2
+          rows:
+            - { name: dough, value: "100", tone: found }
+            - { name: loaves, value: "2", tone: found }
+        - { kind: terminal, id: out, slots: 1, lines: [ "2 loaves, 100 g of dough left" ] }

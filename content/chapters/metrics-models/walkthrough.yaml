@@ -1,0 +1,106 @@
+- id: metrics-models-confusion-matrix
+  title: Reading a confusion matrix
+  hint: Fill in the table for a fraud model on 1,000 made-up transactions, then read precision and recall from it.
+  language: Python
+  code: |
+    # y_test holds the true answers and preds holds the model's predictions.
+    from sklearn.metrics import classification_report, confusion_matrix
+    print(confusion_matrix(y_test, preds))
+    print(classification_report(y_test, preds))
+  steps:
+    - title: 1,000 transactions, 10 fraud
+      text: "Fraud is rare: 10 of these 1,000 transactions are fraud, 1%. The table will count every prediction by what was true and what the model said."
+      vars: { transactions: "1,000", "actually fraud": 10 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: cm
+              title: "confusion matrix"
+              columns: ["actual", "said not fraud", "said fraud"]
+              rows:
+                - { k: neg, cells: ["not fraud (990)", "", ""] }
+                - { k: pos, cells: ["fraud (10)", "", ""] }
+    - title: The lazy model
+      text: "A model that always says not fraud gets all 990 honest transactions right and misses all 10 frauds. Accuracy: 990 / 1,000 = 99%."
+      vars: { accuracy: "99%", "frauds caught": 0 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: cm
+              title: "confusion matrix"
+              columns: ["actual", "said not fraud", "said fraud"]
+              rows:
+                - { k: neg, cells: ["not fraud (990)", "990", "0"] }
+                - { k: pos, cells: ["fraud (10)", "10 missed", "0"], tone: bad }
+    - title: 99% accurate, useless
+      text: "Its recall is 0 / 10 = 0: it catches nothing. Accuracy hid that, because the rare class barely moves it. This is why you look at the full table."
+      vars: { accuracy: "99%", recall: "0 / 10 = 0" }
+    - title: A real model's predictions
+      text: "A trained model flags 15 transactions. 8 of them really are fraud; 7 are false alarms. It misses 2 frauds."
+      lines: [3]
+      vars: { flagged: 15 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: cm
+              title: "confusion matrix"
+              columns: ["actual", "said not fraud", "said fraud"]
+              rows:
+                - { k: neg, cells: ["not fraud (990)", "983 correct", "7 false alarms"] }
+                - { k: pos, cells: ["fraud (10)", "2 missed", "8 caught"] }
+        - kind: terminal
+          id: out
+          slots: 2
+          lines: ["[[983   7]", " [  2   8]]"]
+    - title: "Precision: of those flagged"
+      text: "Look down the said fraud column. 8 of the 15 flags were real, so precision is 8 / 15 ≈ 0.53. Low precision means false alarms."
+      lines: [4]
+      vars: { flagged: 15, precision: "8 / 15 ≈ 0.53" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: cm
+              title: "confusion matrix"
+              columns: ["actual", "said not fraud", "said fraud"]
+              rows:
+                - { k: neg, cells: ["not fraud (990)", "983 correct", "7 false alarms"], tone: compare }
+                - { k: pos, cells: ["fraud (10)", "2 missed", "8 caught"], tone: compare }
+    - title: "Recall: of the real frauds"
+      text: "Now look along the fraud row. 8 of the 10 frauds were caught, so recall is 8 / 10 = 0.8. Low recall means misses."
+      lines: [4]
+      vars: { precision: "8 / 15 ≈ 0.53", recall: "8 / 10 = 0.8" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: cm
+              title: "confusion matrix"
+              columns: ["actual", "said not fraud", "said fraud"]
+              rows:
+                - { k: neg, cells: ["not fraud (990)", "983 correct", "7 false alarms"], tone: dim }
+                - { k: pos, cells: ["fraud (10)", "2 missed", "8 caught"], tone: active }
+    - title: One number to balance both
+      text: "F1 combines precision and recall: 2 × 0.53 × 0.8 / (0.53 + 0.8) ≈ 0.64. Accuracy is 991 / 1,000 = 99.1%, barely above the lazy model, yet this one catches 8 frauds."
+      vars: { precision: "0.53", recall: "0.8", F1: "0.64", accuracy: "99.1%" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: cm
+              title: "confusion matrix"
+              columns: ["actual", "said not fraud", "said fraud"]
+              rows:
+                - { k: neg, cells: ["not fraud (990)", "983 correct", "7 false alarms"] }
+                - { k: pos, cells: ["fraud (10)", "2 missed", "8 caught"], tone: found }
+    - title: Which mistake costs more?
+      text: "Flag more and you raise recall but add false alarms; flag less and the reverse. Choose by the cost of each mistake, as with a cancer screen or a spam filter."

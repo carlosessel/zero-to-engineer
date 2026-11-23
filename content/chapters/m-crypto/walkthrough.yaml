@@ -1,0 +1,115 @@
+- id: m-crypto-aes-gcm
+  title: Authenticated encryption catches tampering
+  hint: Watch the card details become ciphertext plus a tag, and see what happens when anything is changed.
+  language: Python
+  code: |
+    key = AESGCM.generate_key(bit_length=256)
+    aead = AESGCM(key)
+    nonce = os.urandom(12)
+    ciphertext = aead.encrypt(nonce, b"card ending 4242, expires 09/29", b"customer:c-17")
+    print("ciphertext bytes:", len(ciphertext))
+    print("decrypted:", aead.decrypt(nonce, ciphertext, b"customer:c-17").decode())
+
+    tampered = bytes([ciphertext[0] ^ 1]) + ciphertext[1:]
+    for label, data, associated in [("tampered ciphertext", tampered, b"customer:c-17"), ("wrong customer", ciphertext, b"customer:c-4")]:
+        try:
+            aead.decrypt(nonce, data, associated)
+        except InvalidTag:
+            print(label, "-> rejected")
+  steps:
+    - title: One secret key
+      text: AES-GCM is symmetric, so the same 256-bit key both encrypts and decrypts. Only the service that stores the card details should hold it.
+      lines: [1, 2]
+      vars: { key: "256 random bits" }
+      parts:
+        - { kind: kv, id: in, label: "Inputs to encrypt", slots: 3, rows: [] }
+        - { kind: cells, id: ct, label: "ciphertext", items: [], slots: 2, width: 200, empty: "nothing encrypted yet" }
+        - { kind: terminal, id: out, lines: [], slots: 4 }
+    - title: A fresh nonce
+      text: A nonce is a number used once. Each message gets a new random 12-byte nonce; reusing one with the same key lets attackers recover data and forge messages.
+      lines: [3]
+      vars: { key: "256 random bits", nonce: "12 random bytes" }
+      parts:
+        - kind: kv
+          id: in
+          label: "Inputs to encrypt"
+          slots: 3
+          rows:
+            - { name: nonce, value: "12 random bytes", tone: active }
+    - title: Data and its context go in
+      text: The card details are encrypted. The associated data, customer:c-17, is not encrypted but is bound to the result, so the ciphertext belongs to this customer only.
+      lines: [4]
+      parts:
+        - kind: kv
+          id: in
+          label: "Inputs to encrypt"
+          slots: 3
+          rows:
+            - { name: nonce, value: "12 random bytes" }
+            - { name: data (secret), value: "card ending 4242, expires 09/29", tone: active }
+            - { name: associated data, value: "customer:c-17", tone: active }
+    - title: Ciphertext plus a tag
+      text: The output is 47 bytes. 31 are the scrambled data; the last 16 are the authentication tag, a check value that only someone with the key could compute.
+      lines: [4, 5]
+      parts:
+        - kind: cells
+          id: ct
+          label: "ciphertext (47 bytes)"
+          slots: 2
+          width: 200
+          items:
+            - { k: data, v: "31 bytes of data", tone: active }
+            - { k: tag, v: "16-byte tag", tone: found }
+        - { kind: terminal, id: out, lines: ["ciphertext bytes: 47"], slots: 4 }
+    - title: The right inputs decrypt
+      text: With the same key, nonce and associated data, the tag checks out and the original text comes back.
+      lines: [6]
+      parts:
+        - kind: cells
+          id: ct
+          label: "ciphertext (47 bytes)"
+          slots: 2
+          width: 200
+          items:
+            - { k: data, v: "31 bytes of data", tone: done }
+            - { k: tag, v: "16-byte tag", tone: found }
+        - { kind: terminal, id: out, lines: ["ciphertext bytes: 47", "decrypted: card ending 4242, expires 09/29"], slots: 4 }
+    - title: Flip one bit
+      text: An attacker changes a single bit of the first byte. Decryption recomputes the tag, it no longer matches, and InvalidTag is raised instead of returning altered data.
+      lines: [8, 9, 10, 11, 12, 13]
+      vars: { label: "tampered ciphertext" }
+      parts:
+        - kind: cells
+          id: ct
+          label: "tampered ciphertext"
+          slots: 2
+          width: 200
+          items:
+            - { k: data, v: "1 bit changed", tone: bad }
+            - { k: tag, v: "tag no longer fits", tone: bad }
+        - { kind: terminal, id: out, lines: ["ciphertext bytes: 47", "decrypted: card ending 4242, expires 09/29", "tampered ciphertext -> rejected"], slots: 4 }
+    - title: Copy it to another customer
+      text: The untouched ciphertext is tried with customer:c-4. The tag covers the associated data too, so this is rejected as well.
+      lines: [9, 10, 11, 12, 13]
+      vars: { label: "wrong customer" }
+      parts:
+        - kind: kv
+          id: in
+          label: "Inputs to decrypt"
+          slots: 3
+          rows:
+            - { name: nonce, value: "same 12 bytes" }
+            - { name: ciphertext, value: "unchanged 47 bytes" }
+            - { name: associated data, value: "customer:c-4", tone: bad }
+        - kind: cells
+          id: ct
+          label: "ciphertext (47 bytes)"
+          slots: 2
+          width: 200
+          items:
+            - { k: data, v: "31 bytes of data", tone: dim }
+            - { k: tag, v: "tag does not fit", tone: bad }
+        - { kind: terminal, id: out, lines: ["ciphertext bytes: 47", "decrypted: card ending 4242, expires 09/29", "tampered ciphertext -> rejected", "wrong customer -> rejected"], slots: 4 }
+    - title: Secret and tamper-proof
+      text: Authenticated encryption gives both secrecy and detection of any change. Unauthenticated modes such as ECB or plain CBC would let attackers modify ciphertexts unnoticed.
+      vars: {}

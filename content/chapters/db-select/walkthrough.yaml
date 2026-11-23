@@ -1,0 +1,172 @@
+- id: db-select-null
+  title: Where NULL rows go
+  hint: Watch each customer's row be tested by WHERE, and see why the customer with an unknown city vanishes until you ask about NULL.
+  language: SQL
+  code: |
+    SELECT name, city
+    FROM customers
+    WHERE city <> 'Leeds';
+
+    SELECT name, city,
+           city IS NULL AS city_unknown,
+           coalesce(city, 'not given') AS city_shown
+    FROM customers
+    WHERE city IS NULL OR city <> 'Leeds'
+    ORDER BY name;
+  steps:
+    - title: Nine customers
+      text: "The first query asks for every customer not in Leeds. One customer, Yaa, has no city recorded: her city is NULL, meaning unknown."
+      lines: [ 1, 2 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ name, city, <> 'Leeds' ]
+              rows:
+                - { k: Ama, cells: [ Ama, Leeds, "" ], tone: base }
+                - { k: Kofi, cells: [ Kofi, York, "" ], tone: base }
+                - { k: Esi, cells: [ Esi, Leeds, "" ], tone: base }
+                - { k: Yaa, cells: [ Yaa, null, "" ], tone: compare }
+                - { k: Kwame, cells: [ Kwame, Hull, "" ], tone: base }
+                - { k: Akosua, cells: [ Akosua, York, "" ], tone: base }
+                - { k: Kobina, cells: [ Kobina, Leeds, "" ], tone: base }
+                - { k: Afua, cells: [ Afua, Hull, "" ], tone: base }
+                - { k: Kweku, cells: [ Kweku, York, "" ], tone: base }
+            - { id: r, title: result, columns: [ name, city ], rows: [] }
+    - title: Test each row
+      text: "For each row, city <> 'Leeds' is worked out. York and Hull give true, Leeds gives false. For Yaa it is neither: any comparison with NULL is unknown."
+      lines: [ 3 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ name, city, <> 'Leeds' ]
+              rows:
+                - { k: Ama, cells: [ Ama, Leeds, "false" ], tone: dim }
+                - { k: Kofi, cells: [ Kofi, York, "true" ], tone: found }
+                - { k: Esi, cells: [ Esi, Leeds, "false" ], tone: dim }
+                - { k: Yaa, cells: [ Yaa, null, unknown ], tone: compare }
+                - { k: Kwame, cells: [ Kwame, Hull, "true" ], tone: found }
+                - { k: Akosua, cells: [ Akosua, York, "true" ], tone: found }
+                - { k: Kobina, cells: [ Kobina, Leeds, "false" ], tone: dim }
+                - { k: Afua, cells: [ Afua, Hull, "true" ], tone: found }
+                - { k: Kweku, cells: [ Kweku, York, "true" ], tone: found }
+            - { id: r, title: result, columns: [ name, city ], rows: [] }
+    - title: WHERE keeps only true
+      text: WHERE keeps a row only when the condition is true. Unknown is not true, so Yaa silently disappears along with the Leeds customers.
+      lines: [ 3 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ name, city, <> 'Leeds' ]
+              rows:
+                - { k: Ama, cells: [ Ama, Leeds, "false" ], tone: dim }
+                - { k: Kofi, cells: [ Kofi, York, "true" ], tone: found }
+                - { k: Esi, cells: [ Esi, Leeds, "false" ], tone: dim }
+                - { k: Yaa, cells: [ Yaa, null, unknown ], tone: compare }
+                - { k: Kwame, cells: [ Kwame, Hull, "true" ], tone: found }
+                - { k: Akosua, cells: [ Akosua, York, "true" ], tone: found }
+                - { k: Kobina, cells: [ Kobina, Leeds, "false" ], tone: dim }
+                - { k: Afua, cells: [ Afua, Hull, "true" ], tone: found }
+                - { k: Kweku, cells: [ Kweku, York, "true" ], tone: found }
+            - id: r
+              title: result
+              columns: [ name, city ]
+              rows:
+                - { k: Kofi, cells: [ Kofi, York ], tone: found }
+                - { k: Kwame, cells: [ Kwame, Hull ], tone: found }
+                - { k: Akosua, cells: [ Akosua, York ], tone: found }
+                - { k: Afua, cells: [ Afua, Hull ], tone: found }
+                - { k: Kweku, cells: [ Kweku, York ], tone: found }
+    - title: 5 rows, not 6
+      text: The result has five rows, matching the output in the chapter. If you wanted everyone outside Leeds, including people whose city is unknown, this answer is wrong.
+      lines: [ 1, 2, 3 ]
+      vars: { rows: 5 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ name, city, <> 'Leeds' ]
+              rows:
+                - { k: Ama, cells: [ Ama, Leeds, "false" ], tone: dim }
+                - { k: Kofi, cells: [ Kofi, York, "true" ], tone: found }
+                - { k: Esi, cells: [ Esi, Leeds, "false" ], tone: dim }
+                - { k: Yaa, cells: [ Yaa, null, unknown ], tone: bad }
+                - { k: Kwame, cells: [ Kwame, Hull, "true" ], tone: found }
+                - { k: Akosua, cells: [ Akosua, York, "true" ], tone: found }
+                - { k: Kobina, cells: [ Kobina, Leeds, "false" ], tone: dim }
+                - { k: Afua, cells: [ Afua, Hull, "true" ], tone: found }
+                - { k: Kweku, cells: [ Kweku, York, "true" ], tone: found }
+            - id: r
+              title: result
+              columns: [ name, city ]
+              rows:
+                - { k: Kofi, cells: [ Kofi, York ], tone: found }
+                - { k: Kwame, cells: [ Kwame, Hull ], tone: found }
+                - { k: Akosua, cells: [ Akosua, York ], tone: found }
+                - { k: Afua, cells: [ Afua, Hull ], tone: found }
+                - { k: Kweku, cells: [ Kweku, York ], tone: found }
+    - title: Ask about NULL directly
+      text: IS NULL is true for Yaa, so city IS NULL OR city <> 'Leeds' is true for her. Now six rows pass. (= NULL would never be true; IS NULL is the test.)
+      lines: [ 9 ]
+      vars: { rows: 6 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: customers
+              columns: [ name, city, condition ]
+              rows:
+                - { k: Ama, cells: [ Ama, Leeds, "false" ], tone: dim }
+                - { k: Kofi, cells: [ Kofi, York, "true" ], tone: found }
+                - { k: Esi, cells: [ Esi, Leeds, "false" ], tone: dim }
+                - { k: Yaa, cells: [ Yaa, null, "true" ], tone: found }
+                - { k: Kwame, cells: [ Kwame, Hull, "true" ], tone: found }
+                - { k: Akosua, cells: [ Akosua, York, "true" ], tone: found }
+                - { k: Kobina, cells: [ Kobina, Leeds, "false" ], tone: dim }
+                - { k: Afua, cells: [ Afua, Hull, "true" ], tone: found }
+                - { k: Kweku, cells: [ Kweku, York, "true" ], tone: found }
+            - id: r
+              title: result
+              columns: [ name, city ]
+              rows:
+                - { k: Afua, cells: [ Afua, Hull ], tone: found }
+                - { k: Akosua, cells: [ Akosua, York ], tone: found }
+                - { k: Kofi, cells: [ Kofi, York ], tone: found }
+                - { k: Kwame, cells: [ Kwame, Hull ], tone: found }
+                - { k: Kweku, cells: [ Kweku, York ], tone: found }
+                - { k: Yaa, cells: [ Yaa, null ], tone: found }
+    - title: Show a default
+      text: coalesce returns its first argument that is not NULL, so Yaa's city is shown as 'not given'. Sorted by name, this is the chapter's six-row result.
+      lines: [ 5, 6, 7, 8, 9, 10 ]
+      vars: { rows: 6 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: f
+              title: result
+              columns: [ name, city, city_unknown, city_shown ]
+              rows:
+                - { k: Afua, cells: [ Afua, Hull, f, Hull ], tone: base }
+                - { k: Akosua, cells: [ Akosua, York, f, York ], tone: base }
+                - { k: Kofi, cells: [ Kofi, York, f, York ], tone: base }
+                - { k: Kwame, cells: [ Kwame, Hull, f, Hull ], tone: base }
+                - { k: Kweku, cells: [ Kweku, York, f, York ], tone: base }
+                - { k: Yaa, cells: [ Yaa, null, t, not given ], tone: found }

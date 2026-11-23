@@ -1,0 +1,105 @@
+- id: m-consistency-consensus-raft
+  title: Raft through a network partition
+  hint: Watch the terms and logs on each node as a leader is elected, the network splits and heals, and only majority writes survive.
+  language: TypeScript
+  code: |
+    console.log(election("n1"));
+    console.log(replicate("n1", "price = 450"));
+    partition([["n1", "n2"], ["n3", "n4", "n5"]]);
+    console.log(replicate("n1", "price = 480"));
+    console.log(election("n3"));
+    console.log(replicate("n3", "price = 500"));
+    partition([ids]);
+    console.log(election("n1"));
+    console.log(replicate("n3", "price = 520"));
+    console.log("n1's log now:", nodes.get("n1")!.log.map((e) => e.cmd));
+  steps:
+    - title: "Five nodes, no leader"
+      text: "Five nodes, all in term 0 with empty logs. A majority is 3. Each note shows a node's term and the commands in its log."
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes: [{ label: n1, x: 0.05, y: 0.15, note: "term 0: empty" }, { label: n2, x: 0.05, y: 0.85, note: "term 0: empty" }, { label: n3, x: 0.6, y: 0.0, note: "term 0: empty" }, { label: n4, x: 0.95, y: 0.5, note: "term 0: empty" }, { label: n5, x: 0.6, y: 1.0, note: "term 0: empty" }]
+          edges: [{ a: n1, b: n2, tone: dim }, { a: n1, b: n3, tone: dim }, { a: n1, b: n4, tone: dim }, { a: n1, b: n5, tone: dim }, { a: n2, b: n3, tone: dim }, { a: n2, b: n4, tone: dim }, { a: n2, b: n5, tone: dim }, { a: n3, b: n4, tone: dim }, { a: n3, b: n5, tone: dim }, { a: n4, b: n5, tone: dim }]
+        - { kind: terminal, id: out, slots: 7, lines: [] }
+    - title: "n1 is elected in term 1"
+      text: "n1 starts an election: it moves to term 1, votes for itself and asks the others. All four vote for it, so with 5 votes it is leader."
+      lines: [1]
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes: [{ label: n1, x: 0.05, y: 0.15, note: "term 1: empty", tone: found }, { label: n2, x: 0.05, y: 0.85, note: "term 1: empty" }, { label: n3, x: 0.6, y: 0.0, note: "term 1: empty" }, { label: n4, x: 0.95, y: 0.5, note: "term 1: empty" }, { label: n5, x: 0.6, y: 1.0, note: "term 1: empty" }]
+          edges: [{ a: n1, b: n2, tone: dim }, { a: n1, b: n3, tone: dim }, { a: n1, b: n4, tone: dim }, { a: n1, b: n5, tone: dim }, { a: n2, b: n3, tone: dim }, { a: n2, b: n4, tone: dim }, { a: n2, b: n5, tone: dim }, { a: n3, b: n4, tone: dim }, { a: n3, b: n5, tone: dim }, { a: n4, b: n5, tone: dim }]
+        - { kind: terminal, id: out, slots: 7, lines: ["n1 elected leader in term 1 with 5 votes"] }
+    - title: "price = 450 is committed"
+      text: "The leader appends the command to its log and copies it to the others. It is on all 5 nodes, a majority, so it is committed and the client can be told it succeeded."
+      lines: [2]
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes: [{ label: n1, x: 0.05, y: 0.15, note: "term 1: 450", tone: found }, { label: n2, x: 0.05, y: 0.85, note: "term 1: 450" }, { label: n3, x: 0.6, y: 0.0, note: "term 1: 450" }, { label: n4, x: 0.95, y: 0.5, note: "term 1: 450" }, { label: n5, x: 0.6, y: 1.0, note: "term 1: 450" }]
+          edges: [{ a: n1, b: n2, tone: active }, { a: n1, b: n3, tone: active }, { a: n1, b: n4, tone: active }, { a: n1, b: n5, tone: active }, { a: n2, b: n3, tone: active }, { a: n2, b: n4, tone: active }, { a: n2, b: n5, tone: active }, { a: n3, b: n4, tone: active }, { a: n3, b: n5, tone: active }, { a: n4, b: n5, tone: active }]
+        - { kind: terminal, id: out, slots: 7, lines: ["n1 elected leader in term 1 with 5 votes", "price = 450: on 5 of 5, committed"] }
+    - title: "The network splits"
+      text: "Now n1 and n2 can only reach each other, and n3, n4 and n5 can only reach each other."
+      lines: [3]
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes: [{ label: n1, x: 0.05, y: 0.15, note: "term 1: 450", tone: found }, { label: n2, x: 0.05, y: 0.85, note: "term 1: 450" }, { label: n3, x: 0.6, y: 0.0, note: "term 1: 450", tone: compare }, { label: n4, x: 0.95, y: 0.5, note: "term 1: 450", tone: compare }, { label: n5, x: 0.6, y: 1.0, note: "term 1: 450", tone: compare }]
+          edges: [{ a: n1, b: n2, tone: dim }, { a: n3, b: n4, tone: dim }, { a: n3, b: n5, tone: dim }, { a: n4, b: n5, tone: dim }]
+        - { kind: terminal, id: out, slots: 7, lines: ["n1 elected leader in term 1 with 5 votes", "price = 450: on 5 of 5, committed"] }
+    - title: "price = 480 is not committed"
+      text: "The old leader n1 still accepts a write, but it reaches only n2: 2 of 5, not a majority. It is never committed, so its client must not be told it succeeded."
+      lines: [4]
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes: [{ label: n1, x: 0.05, y: 0.15, note: "term 1: 450 480", tone: bad }, { label: n2, x: 0.05, y: 0.85, note: "term 1: 450 480", tone: bad }, { label: n3, x: 0.6, y: 0.0, note: "term 1: 450" }, { label: n4, x: 0.95, y: 0.5, note: "term 1: 450" }, { label: n5, x: 0.6, y: 1.0, note: "term 1: 450" }]
+          edges: [{ a: n1, b: n2, tone: dim }, { a: n3, b: n4, tone: dim }, { a: n3, b: n5, tone: dim }, { a: n4, b: n5, tone: dim }]
+        - { kind: terminal, id: out, slots: 7, lines: ["n1 elected leader in term 1 with 5 votes", "price = 450: on 5 of 5, committed", "price = 480: on 2 of 5, NOT committed"] }
+    - title: "The majority side elects n3"
+      text: "n3 moves to term 2 and asks n4 and n5, whose logs are no newer than its own. With 3 votes, a majority, it becomes leader. Each term has at most one leader."
+      lines: [5]
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes: [{ label: n1, x: 0.05, y: 0.15, note: "term 1: 450 480" }, { label: n2, x: 0.05, y: 0.85, note: "term 1: 450 480" }, { label: n3, x: 0.6, y: 0.0, note: "term 2: 450", tone: found }, { label: n4, x: 0.95, y: 0.5, note: "term 2: 450", tone: active }, { label: n5, x: 0.6, y: 1.0, note: "term 2: 450", tone: active }]
+          edges: [{ a: n1, b: n2, tone: dim }, { a: n3, b: n4, tone: dim }, { a: n3, b: n5, tone: dim }, { a: n4, b: n5, tone: dim }]
+        - { kind: terminal, id: out, slots: 7, lines: ["n1 elected leader in term 1 with 5 votes", "price = 450: on 5 of 5, committed", "price = 480: on 2 of 5, NOT committed", "n3 elected leader in term 2 with 3 votes"] }
+    - title: "price = 500 is committed"
+      text: "n3 copies the command to n4 and n5. On 3 of 5 nodes is a majority, so it is committed, even though two nodes are cut off."
+      lines: [6]
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes: [{ label: n1, x: 0.05, y: 0.15, note: "term 1: 450 480" }, { label: n2, x: 0.05, y: 0.85, note: "term 1: 450 480" }, { label: n3, x: 0.6, y: 0.0, note: "term 2: 450 500", tone: found }, { label: n4, x: 0.95, y: 0.5, note: "term 2: 450 500" }, { label: n5, x: 0.6, y: 1.0, note: "term 2: 450 500" }]
+          edges: [{ a: n1, b: n2, tone: dim }, { a: n3, b: n4, tone: dim }, { a: n3, b: n5, tone: dim }, { a: n4, b: n5, tone: dim }]
+        - { kind: terminal, id: out, slots: 7, lines: ["n1 elected leader in term 1 with 5 votes", "price = 450: on 5 of 5, committed", "price = 480: on 2 of 5, NOT committed", "n3 elected leader in term 2 with 3 votes", "price = 500: on 3 of 5, committed"] }
+    - title: "The partition heals, n1 tries"
+      text: "n1 starts an election in term 2. Only n2 votes for it: n3, n4 and n5 hold a newer entry, from term 2, so n1's log is behind and they refuse. With 2 votes it is not elected."
+      lines: [7, 8]
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes: [{ label: n1, x: 0.05, y: 0.15, note: "term 2: 450 480", tone: bad }, { label: n2, x: 0.05, y: 0.85, note: "term 2: 450 480", tone: compare }, { label: n3, x: 0.6, y: 0.0, note: "term 2: 450 500" }, { label: n4, x: 0.95, y: 0.5, note: "term 2: 450 500" }, { label: n5, x: 0.6, y: 1.0, note: "term 2: 450 500" }]
+          edges: [{ a: n1, b: n2, tone: dim }, { a: n1, b: n3, tone: dim }, { a: n1, b: n4, tone: dim }, { a: n1, b: n5, tone: dim }, { a: n2, b: n3, tone: dim }, { a: n2, b: n4, tone: dim }, { a: n2, b: n5, tone: dim }, { a: n3, b: n4, tone: dim }, { a: n3, b: n5, tone: dim }, { a: n4, b: n5, tone: dim }]
+        - { kind: terminal, id: out, slots: 7, lines: ["n1 elected leader in term 1 with 5 votes", "price = 450: on 5 of 5, committed", "price = 480: on 2 of 5, NOT committed", "n3 elected leader in term 2 with 3 votes", "price = 500: on 3 of 5, committed", "n1 not elected in term 2 with 2 votes"] }
+    - title: "The old entry is overwritten"
+      text: "n3 replicates price = 520 to everyone, copying its log over n1's and n2's. price = 480 disappears, which is correct: nobody was ever told it succeeded. Committed entries were never lost."
+      lines: [9, 10]
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes: [{ label: n1, x: 0.05, y: 0.15, note: "term 2: 450 500 520" }, { label: n2, x: 0.05, y: 0.85, note: "term 2: 450 500 520" }, { label: n3, x: 0.6, y: 0.0, note: "term 2: 450 500 520", tone: found }, { label: n4, x: 0.95, y: 0.5, note: "term 2: 450 500 520" }, { label: n5, x: 0.6, y: 1.0, note: "term 2: 450 500 520" }]
+          edges: [{ a: n1, b: n2, tone: active }, { a: n1, b: n3, tone: active }, { a: n1, b: n4, tone: active }, { a: n1, b: n5, tone: active }, { a: n2, b: n3, tone: active }, { a: n2, b: n4, tone: active }, { a: n2, b: n5, tone: active }, { a: n3, b: n4, tone: active }, { a: n3, b: n5, tone: active }, { a: n4, b: n5, tone: active }]
+        - { kind: terminal, id: out, slots: 7, lines: ["n1 elected leader in term 1 with 5 votes", "price = 450: on 5 of 5, committed", "price = 480: on 2 of 5, NOT committed", "n3 elected leader in term 2 with 3 votes", "price = 500: on 3 of 5, committed", "n1 not elected in term 2 with 2 votes", "price = 520: on 5 of 5, committed"] }

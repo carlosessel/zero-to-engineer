@@ -1,0 +1,180 @@
+- id: db-transactions-locking-lost-update
+  title: Two sales, one lost
+  hint: Two staff sell two rye loaves each at the same moment. Compare computing the new stock in the application with letting the database do the arithmetic.
+  language: SQL
+  examples:
+    - label: Read, then write
+      code: |
+        -- Session A
+        SELECT quantity FROM stock WHERE sku = 'RYE-400';
+        UPDATE stock SET quantity = 3 WHERE sku = 'RYE-400';
+        COMMIT;
+        -- Session B
+        SELECT quantity FROM stock WHERE sku = 'RYE-400';
+        UPDATE stock SET quantity = 3 WHERE sku = 'RYE-400';
+        COMMIT;
+      steps:
+        - title: Five loaves in stock
+          text: The stock row for RYE-400 says 5. Sessions A and B each want to sell two loaves.
+          parts:
+            - kind: seq
+              id: s
+              actors: [Session A, Database, Session B]
+              slots: 6
+              messages: []
+            - kind: kv
+              id: row
+              label: "stock row RYE-400"
+              slots: 2
+              rows: [{ name: quantity, value: "5" }, { name: locked by, value: "nobody" }]
+        - title: A reads 5
+          text: Session A reads the quantity into the application, which works out 5 - 2 = 3.
+          lines: [2]
+          vars: { "A thinks": "5" }
+          parts:
+            - kind: seq
+              id: s
+              actors: [Session A, Database, Session B]
+              slots: 6
+              messages:
+                - { from: Session A, to: Database, label: "SELECT quantity", tone: active }
+                - { from: Database, to: Session A, label: "5", tone: found }
+        - title: B reads 5 too
+          text: Session B reads before A has written anything, so it also sees 5 and also works out 3.
+          lines: [6]
+          vars: { "A thinks": "5", "B thinks": "5" }
+          parts:
+            - kind: seq
+              id: s
+              actors: [Session A, Database, Session B]
+              slots: 6
+              messages:
+                - { from: Session A, to: Database, label: "SELECT quantity", tone: dim }
+                - { from: Database, to: Session A, label: "5", tone: dim }
+                - { from: Session B, to: Database, label: "SELECT quantity", tone: active }
+                - { from: Database, to: Session B, label: "5", tone: found }
+        - title: A writes 3 and locks the row
+          text: A's UPDATE sets the quantity to 3 and takes a lock on the row until A's transaction ends.
+          lines: [3]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Session A, Database, Session B]
+              slots: 6
+              messages:
+                - { from: Session A, to: Database, label: "SELECT quantity", tone: dim }
+                - { from: Database, to: Session A, label: "5", tone: dim }
+                - { from: Session B, to: Database, label: "SELECT quantity", tone: dim }
+                - { from: Database, to: Session B, label: "5", tone: dim }
+                - { from: Session A, to: Database, label: "SET quantity = 3", tone: active }
+            - kind: kv
+              id: row
+              label: "stock row RYE-400"
+              slots: 2
+              rows: [{ name: quantity, value: "3", tone: active }, { name: locked by, value: "Session A", tone: compare }]
+        - title: B waits for the lock
+          text: B's UPDATE needs the same row, so it waits for A's row lock.
+          lines: [7]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Session A, Database, Session B]
+              slots: 6
+              messages:
+                - { from: Session A, to: Database, label: "SELECT quantity", tone: dim }
+                - { from: Database, to: Session A, label: "5", tone: dim }
+                - { from: Session B, to: Database, label: "SELECT quantity", tone: dim }
+                - { from: Database, to: Session B, label: "5", tone: dim }
+                - { from: Session A, to: Database, label: "SET quantity = 3", tone: dim }
+                - { from: Session B, to: Database, label: "SET quantity = 3 (waits)", tone: compare }
+        - title: A commits, B writes 3 again
+          text: When A commits, the lock is released and B's update runs. It writes the 3 it worked out from its old read.
+          lines: [4, 8]
+          parts:
+            - kind: kv
+              id: row
+              label: "stock row RYE-400"
+              slots: 2
+              rows: [{ name: quantity, value: "3", tone: bad }, { name: locked by, value: "nobody" }]
+        - title: A sale has been lost
+          text: Four loaves were sold but the stock says only two were. Read Committed, PostgreSQL's default, does not prevent this, because each session computed the new value from an old read.
+          vars: { sold: "4", "stock went down by": "2" }
+    - label: Atomic update
+      code: |
+        -- Session A
+        UPDATE stock SET quantity = quantity - 2 WHERE sku = 'RYE-400' AND quantity >= 2 RETURNING quantity;
+        COMMIT;
+        -- Session B
+        UPDATE stock SET quantity = quantity - 2 WHERE sku = 'RYE-400' AND quantity >= 2 RETURNING quantity;
+        COMMIT;
+      steps:
+        - title: Five loaves in stock
+          text: This time neither session reads the quantity into the application. Each sends one UPDATE that does the subtraction inside the database.
+          parts:
+            - kind: seq
+              id: s
+              actors: [Session A, Database, Session B]
+              slots: 6
+              messages: []
+            - kind: kv
+              id: row
+              label: "stock row RYE-400"
+              slots: 2
+              rows: [{ name: quantity, value: "5" }, { name: locked by, value: "nobody" }]
+        - title: A subtracts 2
+          text: A's update checks there are at least 2, takes 2 from the current value and locks the row. RETURNING sends back the new quantity, 3.
+          lines: [2]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Session A, Database, Session B]
+              slots: 6
+              messages:
+                - { from: Session A, to: Database, label: "quantity - 2", tone: active }
+                - { from: Database, to: Session A, label: "3", tone: found }
+            - kind: kv
+              id: row
+              label: "stock row RYE-400"
+              slots: 2
+              rows: [{ name: quantity, value: "3", tone: active }, { name: locked by, value: "Session A", tone: compare }]
+        - title: B waits for the lock
+          text: B's update needs the same row, so it waits, just as before.
+          lines: [5]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Session A, Database, Session B]
+              slots: 6
+              messages:
+                - { from: Session A, to: Database, label: "quantity - 2", tone: dim }
+                - { from: Database, to: Session A, label: "3", tone: dim }
+                - { from: Session B, to: Database, label: "quantity - 2 (waits)", tone: compare }
+        - title: A commits, B re-reads the row
+          text: When A commits, B's update re-reads the row's new value, 3, rather than an old one. It takes 2 and writes 1.
+          lines: [3, 5]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Session A, Database, Session B]
+              slots: 6
+              messages:
+                - { from: Session A, to: Database, label: "quantity - 2", tone: dim }
+                - { from: Database, to: Session A, label: "3", tone: dim }
+                - { from: Session B, to: Database, label: "quantity - 2 (waits)", tone: dim }
+                - { from: Session A, to: Database, label: "COMMIT", tone: active }
+                - { from: Database, to: Session B, label: "1", tone: found }
+            - kind: kv
+              id: row
+              label: "stock row RYE-400"
+              slots: 2
+              rows: [{ name: quantity, value: "1", tone: found }, { name: locked by, value: "Session B", tone: compare }]
+        - title: Nothing is lost
+          text: Four loaves sold, stock down from 5 to 1. A third sale of two would match no row and return nothing, so the application can say the loaves are sold out.
+          lines: [6]
+          vars: { sold: "4", "stock went down by": "4" }
+          parts:
+            - kind: kv
+              id: row
+              label: "stock row RYE-400"
+              slots: 2
+              rows: [{ name: quantity, value: "1", tone: found }, { name: locked by, value: "nobody" }]

@@ -1,0 +1,130 @@
+- id: m-replication-partitioning-read-your-writes
+  title: A change that seems to vanish
+  hint: The follower applies each write 800 ms after the leader. Watch what Ama sees depending on which node answers her read.
+  language: TypeScript
+  code: |
+    const store = new ReplicatedStore(800);
+    store.write("ama", "profile:ama", "address: 4 Park Row", 0);
+    store.replicate(100);
+    console.log("follower at 100 ms:", store.readFromFollower("profile:ama"));
+    console.log("read-your-writes at 100 ms:", store.readYourWrites("ama", "profile:ama", 100));
+    store.replicate(900);
+    console.log("follower at 900 ms:", store.readFromFollower("profile:ama"));
+  steps:
+    - title: A leader and a lagging follower
+      text: All writes go to the leader. The follower copies them from the leader's log, here 800 ms late, and serves reads.
+      lines: [ 1 ]
+      vars: { lag: 800 ms }
+      parts:
+        - { kind: seq, id: s, actors: [ Ama, Leader, Follower ], slots: 8, messages: [] }
+        - kind: kv
+          id: kv
+          label: profile:ama on each node
+          slots: 2
+          rows:
+            - { name: leader, value: (nothing) }
+            - { name: follower, value: (nothing) }
+        - { kind: terminal, id: out, slots: 3, lines: [] }
+    - title: Ama saves her address
+      text: "The write lands on the leader at 0 ms and is added to its log. The leader reports success at once: this is asynchronous replication."
+      lines: [ 2 ]
+      vars: { lag: 800 ms, now: 0 ms }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Ama, Leader, Follower ]
+          slots: 8
+          messages:
+            - { from: Ama, to: Leader, label: write profile:ama (0 ms), tone: active }
+        - kind: kv
+          id: kv
+          label: profile:ama on each node
+          slots: 2
+          rows:
+            - { name: leader, value: "address: 4 Park Row", tone: active }
+            - { name: follower, value: (nothing) }
+    - title: Too early to copy
+      text: At 100 ms the follower checks the log. The entry is not due until 800 ms, so nothing is applied yet.
+      lines: [ 3 ]
+      vars: { lag: 800 ms, now: 100 ms }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Ama, Leader, Follower ]
+          slots: 8
+          messages:
+            - { from: Ama, to: Leader, label: write profile:ama (0 ms), tone: dim }
+            - { from: Leader, to: Follower, label: "log entry, due at 800 ms", tone: compare }
+    - title: The page reloads from the follower
+      text: Ama's page reads her profile from the follower, which has not caught up. Her change seems to have vanished.
+      lines: [ 4 ]
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Ama, Leader, Follower ]
+          slots: 8
+          messages:
+            - { from: Ama, to: Leader, label: write profile:ama (0 ms), tone: dim }
+            - { from: Leader, to: Follower, label: "log entry, due at 800 ms", tone: dim }
+            - { from: Ama, to: Follower, label: read at 100 ms, tone: active }
+            - { from: Follower, to: Ama, label: (not found), tone: bad }
+        - kind: kv
+          id: kv
+          label: profile:ama on each node
+          slots: 2
+          rows:
+            - { name: leader, value: "address: 4 Park Row" }
+            - { name: follower, value: (nothing), tone: bad }
+        - { kind: terminal, id: out, slots: 3, lines: [ "follower at 100 ms: (not found)" ] }
+    - title: Read your own writes from the leader
+      text: readYourWrites sends a user who wrote in the last 5 seconds to the leader. Ama wrote 100 ms ago, so she sees her new address.
+      lines: [ 5 ]
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Ama, Leader, Follower ]
+          slots: 8
+          messages:
+            - { from: Ama, to: Leader, label: write profile:ama (0 ms), tone: dim }
+            - { from: Leader, to: Follower, label: "log entry, due at 800 ms", tone: dim }
+            - { from: Ama, to: Follower, label: read at 100 ms, tone: dim }
+            - { from: Follower, to: Ama, label: (not found), tone: dim }
+            - { from: Ama, to: Leader, label: read-your-writes at 100 ms, tone: active }
+            - { from: Leader, to: Ama, label: "address: 4 Park Row", tone: found }
+        - kind: kv
+          id: kv
+          label: profile:ama on each node
+          slots: 2
+          rows:
+            - { name: leader, value: "address: 4 Park Row", tone: found }
+            - { name: follower, value: (nothing) }
+        - { kind: terminal, id: out, slots: 3, lines: [ "follower at 100 ms: (not found)", "read-your-writes at 100 ms: address: 4 Park Row" ] }
+    - title: The follower catches up
+      text: By 900 ms the entry is due, and the follower applies it. Reads from it now return the address too.
+      lines: [ 6, 7 ]
+      vars: { lag: 800 ms, now: 900 ms }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Ama, Leader, Follower ]
+          slots: 8
+          messages:
+            - { from: Ama, to: Leader, label: write profile:ama (0 ms), tone: dim }
+            - { from: Leader, to: Follower, label: "log entry, due at 800 ms", tone: done }
+            - { from: Ama, to: Follower, label: read at 100 ms, tone: dim }
+            - { from: Follower, to: Ama, label: (not found), tone: dim }
+            - { from: Ama, to: Leader, label: read-your-writes at 100 ms, tone: dim }
+            - { from: Leader, to: Ama, label: "address: 4 Park Row", tone: dim }
+            - { from: Ama, to: Follower, label: read at 900 ms, tone: active }
+            - { from: Follower, to: Ama, label: "address: 4 Park Row", tone: found }
+        - kind: kv
+          id: kv
+          label: profile:ama on each node
+          slots: 2
+          rows:
+            - { name: leader, value: "address: 4 Park Row" }
+            - { name: follower, value: "address: 4 Park Row", tone: found }
+        - { kind: terminal, id: out, slots: 3, lines: [ "follower at 100 ms: (not found)", "read-your-writes at 100 ms: address: 4 Park Row", "follower at 900 ms: address: 4 Park Row" ] }
+    - title: Stale, not wrong
+      text: The follower was never wrong, only behind. Usually the lag is milliseconds, but under load it can be seconds, so reads that decide what to write next should go to the leader.
+      vars: {}

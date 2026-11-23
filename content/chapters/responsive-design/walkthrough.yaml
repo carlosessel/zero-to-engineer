@@ -1,0 +1,97 @@
+- id: responsive-design-breakpoints
+  title: A grid that widens with the window
+  hint: Widen the window step by step and watch which media queries switch on, and how many columns the cards get.
+  language: CSS
+  code: |
+    .cards {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    @media (min-width: 600px) {
+      .cards {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+
+    @media (min-width: 900px) {
+      .cards {
+        grid-template-columns: 1fr 1fr 1fr;
+      }
+    }
+  steps:
+    - title: A narrow phone
+      text: This CSS is mobile first. The rule outside any media query is for the smallest screens, so a phone gets one column.
+      lines: [1, 2, 3, 4, 5]
+      vars: { "window width": 375px, columns: 1 }
+      parts:
+        - kind: kv
+          id: q
+          label: "Media queries at this width"
+          slots: 2
+          rows:
+            - { name: "min-width: 600px", value: "false, skipped", tone: dim }
+            - { name: "min-width: 900px", value: "false, skipped", tone: dim }
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - { id: g, title: ".cards", columns: [column 1], rows: [[card 1], [card 2], [card 3], [card 4], [card 5], [card 6]] }
+    - title: Still too narrow
+      text: At 599 pixels neither condition is true yet. Nothing changes until the window reaches a breakpoint.
+      lines: [7]
+      vars: { "window width": 599px, columns: 1 }
+    - title: The first breakpoint
+      text: At 600 pixels, min-width 600px becomes true and its rule applies. It comes later than the first rule, so it wins, and the cards form two columns.
+      lines: [7, 8, 9, 10, 11]
+      vars: { "window width": 600px, columns: 2 }
+      parts:
+        - kind: kv
+          id: q
+          label: "Media queries at this width"
+          slots: 2
+          rows:
+            - { name: "min-width: 600px", value: "true, applies", tone: found }
+            - { name: "min-width: 900px", value: "false, skipped", tone: dim }
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - { id: g, title: ".cards", columns: [column 1, column 2], rows: [{ cells: [card 1, card 2], tone: active }, { cells: [card 3, card 4], tone: active }, { cells: [card 5, card 6], tone: active }] }
+    - title: Between breakpoints
+      text: At 800 pixels the layout is the same two columns; the columns are simply wider, because 1fr shares whatever space there is.
+      lines: [9]
+      vars: { "window width": 800px, columns: 2 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - { id: g, title: ".cards", columns: [column 1, column 2], rows: [[card 1, card 2], [card 3, card 4], [card 5, card 6]] }
+    - title: The second breakpoint
+      text: At 900 pixels both conditions are true. Both rules apply, and the later one wins, so the cards form three columns.
+      lines: [13, 14, 15, 16, 17]
+      vars: { "window width": 900px, columns: 3 }
+      parts:
+        - kind: kv
+          id: q
+          label: "Media queries at this width"
+          slots: 2
+          rows:
+            - { name: "min-width: 600px", value: "true, but overridden", tone: dim }
+            - { name: "min-width: 900px", value: "true, applies", tone: found }
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - { id: g, title: ".cards", columns: [column 1, column 2, column 3], rows: [{ cells: [card 1, card 2, card 3], tone: active }, { cells: [card 4, card 5, card 6], tone: active }] }
+    - title: Each query only adds
+      text: Shrink the window and the steps run backwards. Small screens get the simplest CSS with nothing to undo, and each query adds a little as the screen grows.
+      vars: { "window width": "any", columns: "1, 2 or 3" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - { id: g, title: ".cards", columns: [column 1, column 2, column 3], rows: [[card 1, card 2, card 3], [card 4, card 5, card 6]] }

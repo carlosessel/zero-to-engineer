@@ -258,6 +258,8 @@ await app.StopAsync();
 
 It prints the timing middleware's lines around each request: the first is stopped by the key check with `401`, the second reaches the endpoint and returns `rye, bagel`. The timing middleware sees both because it runs first. A hand-written key check like this is only for illustration; real services use ASP.NET Core's authentication and authorisation middleware (<Ref to="be-auth-stacks" />). The usual order is: exception handler, HTTPS redirection, CORS, authentication, authorisation, then your endpoints.
 
+<Walkthrough name="be-api-aspnet-middleware" />
+
 ## Services in handlers
 
 Handlers rarely do the work themselves; they call **services**: classes that hold business logic or data access. You register services with the builder, and ASP.NET Core passes them into any handler that asks for them as a parameter. This is **dependency injection**, covered in depth in <Ref to="be-dependency-injection" />:

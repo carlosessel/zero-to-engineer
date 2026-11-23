@@ -1,0 +1,133 @@
+- id: db-views-functions-materialised-refresh
+  title: A stored result goes stale
+  hint: Watch the live tables and the materialised view drift apart when a new order arrives, and come back together on refresh.
+  language: SQL
+  code: |
+    CREATE MATERIALIZED VIEW daily_revenue AS
+    SELECT o.placed_at::date AS day, o.shop_id, sum(l.quantity * l.unit_price_pence) AS revenue_pence
+    FROM orders AS o
+    JOIN order_lines AS l ON l.order_id = o.id
+    WHERE o.status <> 'cancelled'
+    GROUP BY day, o.shop_id;
+
+    CREATE UNIQUE INDEX daily_revenue_key ON daily_revenue (day, shop_id);
+
+    SELECT sum(revenue_pence) AS total FROM daily_revenue;
+
+    INSERT INTO orders VALUES (21, 2, 2, '2026-11-13 09:00+00', 'shop', 'paid');
+    INSERT INTO order_lines VALUES (21, 7, 2, 2400);
+
+    SELECT sum(revenue_pence) AS before_refresh FROM daily_revenue;
+    REFRESH MATERIALIZED VIEW CONCURRENTLY daily_revenue;
+    SELECT sum(revenue_pence) AS after_refresh FROM daily_revenue;
+  steps:
+    - title: Run once, store the result
+      text: "Creating a materialised view runs its query straight away and stores the rows it returns: revenue per day and shop. An ordinary view would store nothing."
+      lines: [ 1, 2, 3, 4, 5, 6 ]
+      parts:
+        - kind: kv
+          id: live
+          label: The tables now (what the query would give)
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "29325" }
+        - kind: kv
+          id: mv
+          label: Stored in daily_revenue
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "29325", tone: active }
+            - { name: contents, value: "stored rows, one per day and shop" }
+        - { kind: terminal, id: out, slots: 3, lines: [] }
+    - title: Index the stored rows
+      text: Because the result is stored like a table, it can be indexed. This unique index on (day, shop_id) is also what CONCURRENTLY needs later.
+      lines: [ 8 ]
+      parts:
+        - kind: kv
+          id: mv
+          label: Stored in daily_revenue
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "29325" }
+            - { name: contents, value: "indexed by (day, shop_id)" }
+    - title: Reading is quick
+      text: Selecting from daily_revenue reads the stored rows; the joins and grouping are not run again. The total is 29,325 pence.
+      lines: [ 10 ]
+      parts:
+        - kind: kv
+          id: mv
+          label: Stored in daily_revenue
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "29325", tone: found }
+            - { name: contents, value: "indexed by (day, shop_id)" }
+        - { kind: terminal, id: out, slots: 3, lines: [ "total: 29325" ] }
+    - title: A new order arrives
+      text: Order 21 is two chocolate cakes at 2,400 pence each, 4,800 in all. The tables now hold 34,125 pence of revenue.
+      lines: [ 12, 13 ]
+      vars: { new revenue: 2 × 2400 = 4800 }
+      parts:
+        - kind: kv
+          id: live
+          label: The tables now (what the query would give)
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "34125", tone: active }
+            - { name: order 21, value: 2 × 2400 = 4800, tone: active }
+        - kind: kv
+          id: mv
+          label: Stored in daily_revenue
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "29325" }
+            - { name: contents, value: "indexed by (day, shop_id)" }
+    - title: The view has not noticed
+      text: The stored rows were computed before order 21 existed, so the view still says 29,325. A materialised view is out of date until it is refreshed.
+      lines: [ 15 ]
+      vars: {}
+      parts:
+        - kind: kv
+          id: live
+          label: The tables now (what the query would give)
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "34125", tone: compare }
+            - { name: order 21, value: 2 × 2400 = 4800 }
+        - kind: kv
+          id: mv
+          label: Stored in daily_revenue
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "29325", tone: bad }
+            - { name: contents, value: "stale: computed before order 21" }
+        - { kind: terminal, id: out, slots: 3, lines: [ "total: 29325", "before_refresh: 29325" ] }
+    - title: Refresh
+      text: REFRESH runs the query again and replaces the stored rows. With CONCURRENTLY, readers keep using the old contents while it works.
+      lines: [ 16 ]
+      parts:
+        - kind: kv
+          id: mv
+          label: Stored in daily_revenue
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "34125", tone: active }
+            - { name: contents, value: recomputed from the tables }
+    - title: Back in step
+      text: "The view now matches the tables: 34,125 pence. Use materialised views where a result is expensive to compute and may be a little stale, refreshed on a schedule."
+      lines: [ 17 ]
+      parts:
+        - kind: kv
+          id: live
+          label: The tables now (what the query would give)
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "34125", tone: done }
+            - { name: order 21, value: 2 × 2400 = 4800 }
+        - kind: kv
+          id: mv
+          label: Stored in daily_revenue
+          slots: 2
+          rows:
+            - { name: "revenue, all days", value: "34125", tone: found }
+            - { name: contents, value: up to date }
+        - { kind: terminal, id: out, slots: 3, lines: [ "total: 29325", "before_refresh: 29325", "after_refresh: 34125" ] }

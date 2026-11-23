@@ -1,0 +1,128 @@
+- id: m-relational-mvcc-snapshot
+  title: A reader keeps its snapshot
+  hint: Watch the stock count change while a reader's transaction is still open. The reader is not blocked, and it does not see the change until it starts again.
+  language: Python
+  code: |
+    reader.execute("BEGIN")
+    print("reader sees:", on_hand(reader))
+    writer.execute("UPDATE stock SET on_hand = 7 WHERE sku = 'RYE-400'")
+    print("writer committed 7; writer sees:", on_hand(writer))
+    print("reader, same transaction, still sees:", on_hand(reader))
+    reader.execute("COMMIT")
+    print("reader, new transaction, sees:", on_hand(reader))
+  steps:
+    - title: One row, one version
+      text: The stock table holds one row, RYE-400, with 10 loaves on hand. Two separate connections, reader and writer, are open on the same database file.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Reader, Database, Writer]
+          slots: 6
+          messages: []
+        - kind: kv
+          id: v
+          label: "Committed versions of RYE-400"
+          slots: 2
+          rows: [{ k: v1, name: "version 1", value: "on_hand = 10" }]
+        - { kind: terminal, id: out, lines: [], slots: 4 }
+    - title: The reader begins
+      text: BEGIN starts a transaction. From its first read, the reader works from a snapshot of the committed versions at that moment.
+      lines: [1, 2]
+      vars: { "reader's snapshot": "version 1" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Reader, Database, Writer]
+          slots: 6
+          messages:
+            - { from: Reader, to: Database, label: "BEGIN, read on_hand", tone: active }
+            - { from: Database, to: Reader, label: "10", tone: found }
+        - kind: kv
+          id: v
+          label: "Committed versions of RYE-400"
+          slots: 2
+          rows: [{ k: v1, name: "version 1", value: "on_hand = 10", tone: compare }]
+        - { kind: terminal, id: out, lines: ["reader sees: 10"], slots: 4 }
+    - title: The writer is not blocked
+      text: The writer updates the row while the reader's transaction is still open. Under MVCC the update makes a new version instead of overwriting the old one, so it does not have to wait for the reader.
+      lines: [3]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Reader, Database, Writer]
+          slots: 6
+          messages:
+            - { from: Reader, to: Database, label: "BEGIN, read on_hand", tone: dim }
+            - { from: Database, to: Reader, label: "10", tone: dim }
+            - { from: Writer, to: Database, label: "UPDATE on_hand = 7", tone: active }
+        - kind: kv
+          id: v
+          label: "Committed versions of RYE-400"
+          slots: 2
+          rows:
+            - { k: v1, name: "version 1", value: "on_hand = 10", tone: compare }
+            - { k: v2, name: "version 2", value: "on_hand = 7", tone: active }
+    - title: The writer sees its change
+      text: The update was committed straight away, so a fresh read by the writer gets the new version.
+      lines: [4]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Reader, Database, Writer]
+          slots: 6
+          messages:
+            - { from: Reader, to: Database, label: "BEGIN, read on_hand", tone: dim }
+            - { from: Database, to: Reader, label: "10", tone: dim }
+            - { from: Writer, to: Database, label: "UPDATE on_hand = 7", tone: dim }
+            - { from: Database, to: Writer, label: "7", tone: found }
+        - { kind: terminal, id: out, lines: ["reader sees: 10", "writer committed 7; writer sees: 7"], slots: 4 }
+    - title: The reader still sees 10
+      text: Inside the same transaction, the reader keeps reading from its snapshot. It sees a consistent picture, as if nothing had changed.
+      lines: [5]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Reader, Database, Writer]
+          slots: 6
+          messages:
+            - { from: Reader, to: Database, label: "BEGIN, read on_hand", tone: dim }
+            - { from: Database, to: Reader, label: "10", tone: dim }
+            - { from: Writer, to: Database, label: "UPDATE on_hand = 7", tone: dim }
+            - { from: Database, to: Writer, label: "7", tone: dim }
+            - { from: Reader, to: Database, label: "read on_hand again", tone: active }
+            - { from: Database, to: Reader, label: "10 (from its snapshot)", tone: compare }
+        - kind: kv
+          id: v
+          label: "Committed versions of RYE-400"
+          slots: 2
+          rows:
+            - { k: v1, name: "version 1", value: "on_hand = 10", tone: compare }
+            - { k: v2, name: "version 2", value: "on_hand = 7" }
+        - { kind: terminal, id: out, lines: ["reader sees: 10", "writer committed 7; writer sees: 7", "reader, same transaction, still sees: 10"], slots: 4 }
+    - title: A new transaction, a new snapshot
+      text: After COMMIT, the reader's next read starts from a fresh snapshot, which includes the writer's change.
+      lines: [6, 7]
+      vars: { "reader's snapshot": "version 2" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Reader, Database, Writer]
+          slots: 6
+          messages:
+            - { from: Reader, to: Database, label: "BEGIN, read on_hand", tone: dim }
+            - { from: Database, to: Reader, label: "10", tone: dim }
+            - { from: Writer, to: Database, label: "UPDATE on_hand = 7", tone: dim }
+            - { from: Database, to: Writer, label: "7", tone: dim }
+            - { from: Reader, to: Database, label: "COMMIT, read again", tone: active }
+            - { from: Database, to: Reader, label: "7", tone: found }
+        - kind: kv
+          id: v
+          label: "Committed versions of RYE-400"
+          slots: 2
+          rows:
+            - { k: v1, name: "version 1", value: "on_hand = 10", tone: dim }
+            - { k: v2, name: "version 2", value: "on_hand = 7", tone: found }
+        - { kind: terminal, id: out, lines: ["reader sees: 10", "writer committed 7; writer sees: 7", "reader, same transaction, still sees: 10", "reader, new transaction, sees: 7"], slots: 4 }
+    - title: The old version must be cleaned up
+      text: No transaction can see version 1 any more, so it is waste. PostgreSQL's VACUUM and InnoDB's purge remove such versions; a long-running transaction stops that clean-up.
+      vars: {}

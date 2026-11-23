@@ -1,0 +1,91 @@
+- id: m-reliability-burn-rate
+  title: Page, ticket or nothing
+  hint: Watch the same SLO of 99.9% judged against four different patterns of errors, and see which ones wake someone up.
+  language: TypeScript
+  code: |
+    function burnRate(errorRatio: number, sloPercent: number) {
+      return errorRatio / (1 - sloPercent / 100);
+    }
+
+    function decide(lastHour: number, last5Min: number, last3Days: number, slo = 99.9): string {
+      const fast = burnRate(lastHour, slo) >= 14.4 && burnRate(last5Min, slo) >= 14.4;
+      const slow = burnRate(last3Days, slo) >= 1;
+      return fast ? "PAGE: fast burn" : slow ? "TICKET: slow burn" : "ok";
+    }
+
+    console.log(decide(0.0002, 0.0001, 0.0004));
+    console.log(decide(0.02, 0.03, 0.002));
+    console.log(decide(0.02, 0.0005, 0.0012));
+    console.log(decide(0.0008, 0.0006, 0.0013));
+  steps:
+    - title: The budget is 0.1%
+      text: An SLO of 99.9% allows 0.1% of requests to fail. The burn rate divides the real error ratio by that 0.1%, so a burn rate of 1 would use exactly the whole budget by the end of the window.
+      lines: [1, 2, 3]
+      vars: { "allowed error ratio": "0.001" }
+      parts:
+        - kind: kv
+          id: r
+          label: "Burn rates"
+          slots: 3
+          rows:
+            - { name: last hour, value: "-" }
+            - { name: last 5 minutes, value: "-" }
+            - { name: last 3 days, value: "-" }
+        - { kind: terminal, id: out, slots: 4, lines: [] }
+    - title: Two rules
+      text: Page only when the last hour and the last five minutes both burn at 14.4 or more. Open a ticket when the last three days burn at 1 or more.
+      lines: [6, 7, 8]
+    - title: "Case 1: well within budget"
+      text: Errors of 0.02%, 0.01% and 0.04% give burn rates well under 1. Nothing to do, so it prints ok.
+      lines: [11]
+      parts:
+        - kind: kv
+          id: r
+          label: "Burn rates"
+          slots: 3
+          rows:
+            - { name: last hour, value: "0.2", tone: found }
+            - { name: last 5 minutes, value: "0.1", tone: found }
+            - { name: last 3 days, value: "0.4", tone: found }
+        - { kind: terminal, id: out, slots: 4, lines: ["ok"] }
+    - title: "Case 2: an outage now"
+      text: 2% errors over the last hour is a burn rate of 20, and the last five minutes are worse. Both are over 14.4, so it pages someone.
+      lines: [12]
+      parts:
+        - kind: kv
+          id: r
+          label: "Burn rates"
+          slots: 3
+          rows:
+            - { name: last hour, value: "20", tone: bad }
+            - { name: last 5 minutes, value: "30", tone: bad }
+            - { name: last 3 days, value: "2", tone: compare }
+        - { kind: terminal, id: out, slots: 4, lines: ["ok", "PAGE: fast burn"] }
+    - title: "Case 3: a bad hour that has stopped"
+      text: The last hour still burns at 20, but the last five minutes are at 0.5, so the problem is over and nobody is woken. The three-day rate of 1.2 still earns a ticket.
+      lines: [13]
+      parts:
+        - kind: kv
+          id: r
+          label: "Burn rates"
+          slots: 3
+          rows:
+            - { name: last hour, value: "20", tone: compare }
+            - { name: last 5 minutes, value: "0.5", tone: found }
+            - { name: last 3 days, value: "1.2", tone: bad }
+        - { kind: terminal, id: out, slots: 4, lines: ["ok", "PAGE: fast burn", "TICKET: slow burn"] }
+    - title: "Case 4: a slow, steady leak"
+      text: A steady 0.13% error rate never looks dramatic, but a three-day burn rate of 1.3 would use up the budget early. Another ticket.
+      lines: [14]
+      parts:
+        - kind: kv
+          id: r
+          label: "Burn rates"
+          slots: 3
+          rows:
+            - { name: last hour, value: "0.8", tone: found }
+            - { name: last 5 minutes, value: "0.6", tone: found }
+            - { name: last 3 days, value: "1.3", tone: bad }
+        - { kind: terminal, id: out, slots: 4, lines: ["ok", "PAGE: fast burn", "TICKET: slow burn", "TICKET: slow burn"] }
+    - title: What this buys
+      text: Brief blips do not page, real outages page within minutes, and slow leaks are caught before the budget is gone.

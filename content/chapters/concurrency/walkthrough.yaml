@@ -1,0 +1,131 @@
+- id: concurrency-race-condition
+  title: Two withdrawals at once
+  hint: Two threads, A and B, each withdraw 80 from the same balance of 100. Watch the timing, then switch to the fix.
+  language: Python
+  examples:
+    - label: "The race"
+      code: |
+        balance = 100
+
+        def withdraw(amount):
+            global balance
+            if balance >= amount:         # A checks: 100 >= 80, fine
+                # ... B runs here and also sees 100 ...
+                balance = balance - amount
+
+        # Two withdrawals of 80 at once can both pass the check.
+        # The account ends at -60.
+      steps:
+        - title: One balance, shared
+          text: Threads share memory, so both A and B read and change the same balance. It starts at 100.
+          lines: [1]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread A, balance, Thread B]
+              slots: 6
+              messages: []
+            - { kind: kv, id: mem, label: "Shared memory", rows: [{ name: balance, value: "100" }], slots: 1 }
+        - title: A checks
+          text: A asks whether there is enough. 100 >= 80, so A goes ahead.
+          lines: [5]
+          vars: { "A sees": 100 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread A, balance, Thread B]
+              slots: 6
+              messages:
+                - { from: Thread A, to: balance, label: "read 100", tone: active }
+                - { from: Thread A, to: Thread A, label: "100 >= 80, fine", tone: found }
+        - title: B runs here
+          text: Before A has subtracted anything, B is switched in. It also reads 100, so it also passes the check.
+          lines: [5, 6]
+          vars: { "A sees": 100, "B sees": 100 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread A, balance, Thread B]
+              slots: 6
+              messages:
+                - { from: Thread A, to: balance, label: "read 100", tone: dim }
+                - { from: Thread A, to: Thread A, label: "100 >= 80, fine", tone: dim }
+                - { from: Thread B, to: balance, label: "read 100", tone: active }
+                - { from: Thread B, to: Thread B, label: "fine", tone: compare }
+        - title: A subtracts
+          text: A works out 100 − 80 and stores 20.
+          lines: [7]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread A, balance, Thread B]
+              slots: 6
+              messages:
+                - { from: Thread A, to: balance, label: "read 100", tone: dim }
+                - { from: Thread A, to: Thread A, label: "100 >= 80, fine", tone: dim }
+                - { from: Thread B, to: balance, label: "read 100", tone: dim }
+                - { from: Thread B, to: Thread B, label: "fine", tone: dim }
+                - { from: Thread A, to: balance, label: "write 100 − 80 = 20", tone: active }
+            - { kind: kv, id: mem, label: "Shared memory", rows: [{ name: balance, value: "20", tone: active }], slots: 1 }
+        - title: B subtracts too
+          text: B already passed its check, so it subtracts as well. balance is now 20, and 20 − 80 is −60.
+          lines: [7]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread A, balance, Thread B]
+              slots: 6
+              messages:
+                - { from: Thread A, to: balance, label: "read 100", tone: dim }
+                - { from: Thread A, to: Thread A, label: "100 >= 80, fine", tone: dim }
+                - { from: Thread B, to: balance, label: "read 100", tone: dim }
+                - { from: Thread B, to: Thread B, label: "fine", tone: dim }
+                - { from: Thread A, to: balance, label: "write 100 − 80 = 20", tone: dim }
+                - { from: Thread B, to: balance, label: "write 20 − 80 = −60", tone: bad }
+            - { kind: kv, id: mem, label: "Shared memory", rows: [{ name: balance, value: "-60", tone: bad }], slots: 1 }
+        - title: The result depended on timing
+          text: Run one after the other, the second withdrawal would have been refused. Only this unlucky ordering breaks it, which is why it passes on your laptop and fails under load.
+          lines: [9, 10]
+    - label: "The fix: an atomic update"
+      code: |
+        UPDATE accounts SET balance = balance - 80 WHERE id = 1 AND balance >= 80
+      steps:
+        - title: Check and change in one statement
+          text: Let the database do it. The check (balance >= 80) and the change are one atomic update, so no one can slip in between them.
+          lines: [1]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread A, Database, Thread B]
+              slots: 4
+              messages: []
+            - { kind: kv, id: mem, label: "accounts, id 1", rows: [{ name: balance, value: "100" }], slots: 1 }
+        - title: A's update
+          text: 100 >= 80, so the row matches and becomes 20, all in one step.
+          lines: [1]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread A, Database, Thread B]
+              slots: 4
+              messages:
+                - { from: Thread A, to: Database, label: "UPDATE … balance >= 80", tone: active }
+                - { from: Database, to: Thread A, label: "1 row changed", tone: found }
+            - { kind: kv, id: mem, label: "accounts, id 1", rows: [{ name: balance, value: "20", tone: active }], slots: 1 }
+        - title: B's update
+          text: B's statement now finds 20, and 20 >= 80 is false. No row matches, so nothing changes.
+          lines: [1]
+          parts:
+            - kind: seq
+              id: s
+              actors: [Thread A, Database, Thread B]
+              slots: 4
+              messages:
+                - { from: Thread A, to: Database, label: "UPDATE … balance >= 80", tone: dim }
+                - { from: Database, to: Thread A, label: "1 row changed", tone: dim }
+                - { from: Thread B, to: Database, label: "UPDATE … balance >= 80", tone: active }
+                - { from: Database, to: Thread B, label: "0 rows changed", tone: bad }
+        - title: Never below zero
+          text: One withdrawal succeeded and one was refused, whatever the timing. The balance ends at 20.
+          parts:
+            - { kind: kv, id: mem, label: "accounts, id 1", rows: [{ name: balance, value: "20", tone: found }], slots: 1 }

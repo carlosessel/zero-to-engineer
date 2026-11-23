@@ -1,0 +1,118 @@
+- id: m-debugging-bisect
+  title: Bisecting 1,000 versions in 10 tests
+  hint: Each test looks at the version halfway through the suspects, and throws away the half that cannot hold the first bad one.
+  language: TypeScript
+  code: |
+    function firstBad(versions: number, isBad: (v: number) => boolean): [number, number] {
+      let low = 1;
+      let high = versions;
+      let tests = 0;
+      while (low < high) {
+        const mid = Math.floor((low + high) / 2);
+        tests++;
+        if (isBad(mid)) high = mid;
+        else low = mid + 1;
+      }
+      return [low, tests];
+    }
+
+    console.log(firstBad(1000, (v) => v >= 637));
+  steps:
+    - title: Every version is a suspect
+      text: Version 1 was good and version 1,000 is bad; somewhere between, one change broke it. Here the first bad one is 637, but the search does not know that. git bisect does the same search over commits.
+      lines: [2, 3, 4, 14]
+      vars: { low: 1, high: 1000, tests: 0 }
+      parts:
+        - { kind: note, id: range, text: "Suspects: versions 1 to 1000 (1000 left)", tone: compare }
+        - { kind: terminal, id: log, slots: 10, lines: [] }
+    - title: "Test 1: version 500"
+      text: Halfway is 500. It is good, so the first bad version must come after it. In one test, half the suspects are gone.
+      lines: [6, 7, 9]
+      vars: { low: 501, high: 1000, mid: 500, tests: 1 }
+      parts:
+        - { kind: note, id: range, text: "Suspects: versions 501 to 1000 (500 left)", tone: compare }
+        - kind: terminal
+          id: log
+          slots: 10
+          lines: ["test 1: version 500 is good  -> keep 501 to 1000"]
+    - title: "Test 2: version 750"
+      text: 750 is bad. The first bad version is 750 or earlier, so high moves down to 750. The bad one itself is kept as a suspect.
+      lines: [6, 7, 8]
+      vars: { low: 501, high: 750, mid: 750, tests: 2 }
+      parts:
+        - { kind: note, id: range, text: "Suspects: versions 501 to 750 (250 left)", tone: compare }
+        - kind: terminal
+          id: log
+          slots: 10
+          lines: ["test 1: version 500 is good  -> keep 501 to 1000", "test 2: version 750 is bad   -> keep 501 to 750"]
+    - title: "Test 3: version 625"
+      text: 625 is good, so low jumps past it to 626.
+      lines: [6, 7, 9]
+      vars: { low: 626, high: 750, mid: 625, tests: 3 }
+      parts:
+        - { kind: note, id: range, text: "Suspects: versions 626 to 750 (125 left)", tone: compare }
+        - kind: terminal
+          id: log
+          slots: 10
+          lines:
+            - "test 1: version 500 is good  -> keep 501 to 1000"
+            - "test 2: version 750 is bad   -> keep 501 to 750"
+            - "test 3: version 625 is good  -> keep 626 to 750"
+    - title: "Tests 4 to 6: three bad in a row"
+      text: 688, 657 and 641 are all bad, so high keeps moving down. After six tests only 16 suspects remain out of 1,000.
+      lines: [6, 7, 8]
+      vars: { low: 626, high: 641, mid: 641, tests: 6 }
+      parts:
+        - { kind: note, id: range, text: "Suspects: versions 626 to 641 (16 left)", tone: compare }
+        - kind: terminal
+          id: log
+          slots: 10
+          lines:
+            - "test 1: version 500 is good  -> keep 501 to 1000"
+            - "test 2: version 750 is bad   -> keep 501 to 750"
+            - "test 3: version 625 is good  -> keep 626 to 750"
+            - "test 4: version 688 is bad   -> keep 626 to 688"
+            - "test 5: version 657 is bad   -> keep 626 to 657"
+            - "test 6: version 641 is bad   -> keep 626 to 641"
+    - title: "Tests 7 and 8: closing in"
+      text: 633 is good, so low becomes 634. Then 637 is bad, so high becomes 637. Four suspects left.
+      lines: [6, 7, 8, 9]
+      vars: { low: 634, high: 637, mid: 637, tests: 8 }
+      parts:
+        - { kind: note, id: range, text: "Suspects: versions 634 to 637 (4 left)", tone: compare }
+        - kind: terminal
+          id: log
+          slots: 10
+          lines:
+            - "test 1: version 500 is good  -> keep 501 to 1000"
+            - "test 2: version 750 is bad   -> keep 501 to 750"
+            - "test 3: version 625 is good  -> keep 626 to 750"
+            - "test 4: version 688 is bad   -> keep 626 to 688"
+            - "test 5: version 657 is bad   -> keep 626 to 657"
+            - "test 6: version 641 is bad   -> keep 626 to 641"
+            - "test 7: version 633 is good  -> keep 634 to 641"
+            - "test 8: version 637 is bad   -> keep 634 to 637"
+    - title: "Tests 9 and 10: the last good ones"
+      text: 635 is good, then 636 is good. low becomes 637, the same as high, so the loop stops.
+      lines: [5, 6, 7, 9]
+      vars: { low: 637, high: 637, mid: 636, tests: 10 }
+      parts:
+        - { kind: note, id: range, text: "Suspects: version 637 only (1 left)", tone: found }
+        - kind: terminal
+          id: log
+          slots: 10
+          lines:
+            - "test 1: version 500 is good  -> keep 501 to 1000"
+            - "test 2: version 750 is bad   -> keep 501 to 750"
+            - "test 3: version 625 is good  -> keep 626 to 750"
+            - "test 4: version 688 is bad   -> keep 626 to 688"
+            - "test 5: version 657 is bad   -> keep 626 to 657"
+            - "test 6: version 641 is bad   -> keep 626 to 641"
+            - "test 7: version 633 is good  -> keep 634 to 641"
+            - "test 8: version 637 is bad   -> keep 634 to 637"
+            - "test 9: version 635 is good  -> keep 636 to 637"
+            - "test 10: version 636 is good -> keep 637 to 637"
+    - title: "Found: version 637, in 10 tests"
+      text: The function returns [637, 10]. Each test halved the range, so 1,000 versions took about ten tests. The same halving works on commits, input files and settings.
+      lines: [11, 14]
+      vars: { result: "[637, 10]" }

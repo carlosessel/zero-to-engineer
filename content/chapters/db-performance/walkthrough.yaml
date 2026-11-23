@@ -1,0 +1,86 @@
+- id: db-performance-vacuum-bloat
+  title: Dead rows and VACUUM
+  hint: Watch the row versions pile up as every row is updated twice, then see VACUUM free their space for the next update.
+  language: SQL
+  code: |
+    SELECT pg_size_pretty(pg_relation_size('import_test')) AS before_update;
+
+    UPDATE import_test SET value = value || '!';
+    UPDATE import_test SET value = value || '!';
+
+    SELECT pg_size_pretty(pg_relation_size('import_test')) AS after_two_updates;
+
+    VACUUM import_test;
+    UPDATE import_test SET value = value || '!';
+
+    SELECT pg_size_pretty(pg_relation_size('import_test')) AS after_vacuum_and_update;
+  steps:
+    - title: A thousand rows
+      text: import_test holds 1,000 rows, one version of each. The table takes up 48 kB on disk.
+      lines: [1]
+      parts:
+        - kind: kv
+          id: v
+          label: "Row versions in import_test"
+          slots: 3
+          rows:
+            - { name: live versions, value: "1,000" }
+            - { name: dead versions, value: "0" }
+            - { name: space free to reuse, value: "none" }
+        - { kind: terminal, id: out, lines: ["before_update: 48 kB"], slots: 3 }
+    - title: An update writes new versions
+      text: PostgreSQL never overwrites a row in place. The UPDATE writes a new version of every row and marks each old one dead, so the table now holds two versions of everything.
+      lines: [3]
+      parts:
+        - kind: kv
+          id: v
+          label: "Row versions in import_test"
+          slots: 3
+          rows:
+            - { name: live versions, value: "1,000", tone: active }
+            - { name: dead versions, value: "1,000", tone: bad }
+            - { name: space free to reuse, value: "none" }
+    - title: Another update, more dead versions
+      text: The second update does the same again. Dead versions stay where they are, because another transaction might still need to see them.
+      lines: [4]
+      parts:
+        - kind: kv
+          id: v
+          label: "Row versions in import_test"
+          slots: 3
+          rows:
+            - { name: live versions, value: "1,000", tone: active }
+            - { name: dead versions, value: "2,000", tone: bad }
+            - { name: space free to reuse, value: "none" }
+    - title: The table has grown
+      text: The same 1,000 rows now take 128 kB, nearly three times the space. Space allocated but mostly dead is bloat, and it makes scans read more pages.
+      lines: [6]
+      parts:
+        - { kind: terminal, id: out, lines: ["before_update: 48 kB", "after_two_updates: 128 kB"], slots: 3 }
+    - title: VACUUM cleans up
+      text: VACUUM finds the dead versions no transaction can see any more and makes their space reusable.
+      lines: [8]
+      parts:
+        - kind: kv
+          id: v
+          label: "Row versions in import_test"
+          slots: 3
+          rows:
+            - { name: live versions, value: "1,000" }
+            - { name: dead versions, value: "0", tone: done }
+            - { name: space free to reuse, value: "where the dead versions were", tone: found }
+    - title: The next update reuses the space
+      text: The third update writes 1,000 new versions into the freed space instead of adding pages, so the table stays at 128 kB.
+      lines: [9, 11]
+      parts:
+        - kind: kv
+          id: v
+          label: "Row versions in import_test"
+          slots: 3
+          rows:
+            - { name: live versions, value: "1,000", tone: active }
+            - { name: dead versions, value: "1,000", tone: bad }
+            - { name: space free to reuse, value: "partly used again", tone: compare }
+        - { kind: terminal, id: out, lines: ["before_update: 48 kB", "after_two_updates: 128 kB", "after_vacuum_and_update: 128 kB"], slots: 3 }
+    - title: Why autovacuum matters
+      text: Autovacuum runs VACUUM for you when enough rows have changed. Long-running or idle-in-transaction sessions stop it cleaning up, and the table bloats.

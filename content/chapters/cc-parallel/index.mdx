@@ -66,6 +66,8 @@ claude --worktree fix-login
 
 This creates a worktree at `.claude/worktrees/fix-login/` on a new branch called `worktree-fix-login` and starts a session in it. Start another in a second terminal with a different name. (Add `.claude/worktrees/` to `.gitignore`.)
 
+<Walkthrough name="cc-parallel-worktrees" />
+
 A worktree is a fresh checkout, so files Git ignores, such as `.env`, are not there and dependencies are not installed. List small ignored files each worktree needs in a `.worktreeinclude` file at the root of the repository (same format as `.gitignore`), and Claude Code copies them in; keep the install command in `CLAUDE.md` so Claude runs it in a new checkout. The desktop app does the same for every session automatically (<Ref to="cc-surfaces" />), and a subagent can be given its own worktree with `isolation: worktree` in its header.
 
 ### Background sessions

@@ -1,0 +1,58 @@
+- id: fine-tuning-lora
+  title: How LoRA trains so few numbers
+  hint: Count the numbers in one weight matrix, freeze them, and see how small the add-on matrices that do the learning are.
+  language: Python
+  code: |
+    from peft import LoraConfig, get_peft_model
+
+    config = LoraConfig(r=8, lora_alpha=16, lora_dropout=0.05,
+                        target_modules=["q_proj", "v_proj"],   # depends on the model
+                        task_type="CAUSAL_LM")
+    model = get_peft_model(base_model, config)
+    model.print_trainable_parameters()      # a fraction of a percent
+  steps:
+    - title: One weight matrix
+      text: "Take one weight matrix inside a large model, say 4,096 rows by 4,096 columns. That one matrix holds 16,777,216 numbers, and the model has many such matrices."
+      vars: { "W shape": "4,096 × 4,096", "numbers in W": "16,777,216" }
+      parts:
+        - kind: cells
+          id: c
+          label: "numbers in this layer"
+          width: 200
+          items: [{ k: w, v: "W: 16,777,216", tone: active }]
+          slots: 2
+    - title: Full fine-tuning would change them all
+      text: "Updating every one of those numbers, in every matrix, needs a lot of memory and compute. That is why full fine-tuning of a large model is expensive."
+    - title: Freeze the original
+      text: "LoRA leaves W exactly as it is. Its numbers are frozen and get no updates, so what the model already knows is kept."
+      parts:
+        - kind: cells
+          id: c
+          label: "numbers in this layer"
+          width: 200
+          items: [{ k: w, v: "W: 16,777,216 frozen", tone: dim }]
+          slots: 2
+    - title: Add two thin matrices
+      text: "Beside W it adds two small matrices with r = 8: one 8 × 4,096 and one 4,096 × 8. Multiplied together they make a change the same shape as W, which is added to it."
+      lines: [3]
+      vars: { r: 8, "A shape": "8 × 4,096", "B shape": "4,096 × 8" }
+      parts:
+        - kind: cells
+          id: c
+          label: "numbers in this layer"
+          width: 200
+          items: [{ k: w, v: "W: 16,777,216 frozen", tone: dim }, { k: ab, v: "A + B: 65,536 trainable", tone: found }]
+          slots: 2
+    - title: Count what trains
+      text: "8 × 4,096 + 4,096 × 8 = 65,536 numbers. That is 65,536 / 16,777,216 ≈ 0.39% of this matrix: well under 1%."
+      lines: [3]
+      vars: { r: 8, trainable: "65,536", share: "≈ 0.39%" }
+    - title: Only some matrices get them
+      text: "target_modules picks which matrices get LoRA add-ons; here the ones named q_proj and v_proj. The names depend on the model. Every other weight is simply frozen."
+      lines: [4]
+      vars: { target_modules: "q_proj, v_proj" }
+    - title: Check the fraction
+      text: "get_peft_model wraps the base model, and print_trainable_parameters reports how few numbers will train: a fraction of a percent of the whole."
+      lines: [6, 7]
+    - title: Why it fits on one GPU
+      text: "Gradients and optimiser state are only needed for the small add-ons, not the frozen weights. With a 4-bit base model (QLoRA) this fits on a single free Colab GPU."

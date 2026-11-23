@@ -1,0 +1,95 @@
+- id: python-logic-while-loop
+  title: A while loop, round by round
+  hint: Watch the condition being checked again before every round, and the loop stop the moment it is False.
+  language: Python
+  code: |
+    count = 3
+    while count > 0:
+        print(count)
+        count = count - 1
+    print("Go!")
+  steps:
+    - title: count = 3
+      text: The loop needs something that changes. count starts at 3.
+      lines: [1]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 1
+          rows: [{ name: count, value: "3", tone: active }]
+        - { kind: terminal, id: out, lines: [], slots: 4 }
+    - title: Check the condition
+      text: while asks its question first. 3 > 0 is True, so the indented lines run.
+      lines: [2]
+      vars: { "count > 0": "3 > 0 is True" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 1
+          rows: [{ name: count, value: "3", tone: compare }]
+    - title: Print, then count down
+      text: The body prints 3, then makes count one smaller. Without that last line the condition would stay True for ever.
+      lines: [3, 4]
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 1
+          rows: [{ name: count, value: "2", tone: active }]
+        - { kind: terminal, id: out, lines: ["3"], slots: 4 }
+    - title: Back to the top
+      text: At the end of the body Python goes back to the while line and asks again. 2 > 0 is True, so round two runs.
+      lines: [2]
+      vars: { "count > 0": "2 > 0 is True" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 1
+          rows: [{ name: count, value: "2", tone: compare }]
+    - title: Round two
+      text: It prints 2, and count becomes 1.
+      lines: [3, 4]
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 1
+          rows: [{ name: count, value: "1", tone: active }]
+        - { kind: terminal, id: out, lines: ["3", "2"], slots: 4 }
+    - title: Round three
+      text: 1 > 0 is still True, so it prints 1 and count becomes 0.
+      lines: [2, 3, 4]
+      vars: { "count > 0": "1 > 0 is True" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 1
+          rows: [{ name: count, value: "0", tone: active }]
+        - { kind: terminal, id: out, lines: ["3", "2", "1"], slots: 4 }
+    - title: The condition is False
+      text: 0 > 0 is False. The loop stops here, and Python skips the indented lines.
+      lines: [2]
+      vars: { "count > 0": "0 > 0 is False" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 1
+          rows: [{ name: count, value: "0", tone: bad }]
+    - title: After the loop
+      text: The first line that is not indented runs next. A while loop repeats until something changes, here count reaching 0.
+      lines: [5]
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 1
+          rows: [{ name: count, value: "0", tone: dim }]
+        - { kind: terminal, id: out, lines: ["3", "2", "1", "Go!"], slots: 4 }

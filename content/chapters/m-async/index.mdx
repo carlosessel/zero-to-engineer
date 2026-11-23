@@ -43,6 +43,8 @@ It prints the lines in the order of their numbers. The script itself runs first,
 - **Never block the event loop.** While your code runs, nothing else can: a 2-second CPU-heavy loop (parsing a huge JSON file, a synchronous crypto call, a catastrophic regular expression) freezes every request on the server. Move CPU-heavy work to **worker threads** or another service.
 - A long chain of microtasks can also starve timers and I/O.
 
+<Walkthrough name="m-async-event-loop" />
+
 ## Futures and promises
 
 A **future** or **promise** is an object representing a result that is not ready yet. It is **pending**, then either **fulfilled** with a value or **rejected** with an error. You attach what should happen next instead of waiting. Every platform has one: `Promise` in JavaScript, `CompletableFuture` in Java, `Task` and `Task<T>` in .NET.

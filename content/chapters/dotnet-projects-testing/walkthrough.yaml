@@ -1,0 +1,117 @@
+- id: dotnet-projects-testing-solution-layout
+  title: Building the Bakery solution
+  hint: Run the commands one at a time and watch the solution, its two projects and the reference between them appear.
+  language: Shell
+  code: |
+    mkdir Bakery && cd Bakery
+    dotnet new sln --name Bakery
+    dotnet new classlib --name Bakery.Core --output src/Bakery.Core
+    dotnet new xunit --name Bakery.Core.Tests --output tests/Bakery.Core.Tests
+    dotnet sln add src/Bakery.Core tests/Bakery.Core.Tests
+    dotnet add tests/Bakery.Core.Tests reference src/Bakery.Core
+    rm src/Bakery.Core/Class1.cs tests/Bakery.Core.Tests/UnitTest1.cs
+    dotnet test
+  steps:
+    - title: An empty folder
+      text: The whole service will live in one folder, Bakery. Nothing in it is a project yet.
+      lines: [1]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: dir, label: "Bakery/", x: 0.5, y: 0, tone: active, note: "empty folder" }
+          edges: []
+    - title: A solution file
+      text: A solution groups projects so one command can build and test them all. On its own it holds nothing yet.
+      lines: [2]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: dir, label: "Bakery.sln", x: 0.5, y: 0, tone: active, note: "no projects yet" }
+          edges: []
+    - title: A class library for the rules
+      text: classlib makes a project with no OutputType Exe, so it builds a .dll for other projects to use. The template adds a placeholder Class1.cs.
+      lines: [3]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: dir, label: "Bakery.sln", x: 0.5, y: 0, note: "no projects yet" }
+            - { k: core, label: "Bakery.Core", x: 0.12, y: 1, tone: active, note: "library + Class1.cs" }
+          edges: []
+    - title: A test project
+      text: The xunit template makes a project ready for tests, with a placeholder UnitTest1.cs. Neither new project is part of the solution yet.
+      lines: [4]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: dir, label: "Bakery.sln", x: 0.5, y: 0, note: "no projects yet" }
+            - { k: core, label: "Bakery.Core", x: 0.12, y: 1, note: "library + Class1.cs" }
+            - { k: tests, label: "Bakery.Core.Tests", x: 0.84, y: 1, tone: active, note: "xUnit + UnitTest1.cs" }
+          edges: []
+    - title: Add both to the solution
+      text: dotnet sln add records the two projects in the solution file. Now dotnet build and dotnet test in this folder will cover both.
+      lines: [5]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: dir, label: "Bakery.sln", x: 0.5, y: 0, tone: active, note: "2 projects" }
+            - { k: core, label: "Bakery.Core", x: 0.12, y: 1, note: "library + Class1.cs" }
+            - { k: tests, label: "Bakery.Core.Tests", x: 0.84, y: 1, note: "xUnit + UnitTest1.cs" }
+          edges:
+            - { a: dir, b: core, directed: true, label: contains, tone: active }
+            - { a: dir, b: tests, directed: true, label: contains, tone: active }
+    - title: Tests reference the library
+      text: The test project now references Bakery.Core, so tests can use its classes. The arrow points one way only; the library never knows its tests exist.
+      lines: [6]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: dir, label: "Bakery.sln", x: 0.5, y: 0, note: "2 projects" }
+            - { k: core, label: "Bakery.Core", x: 0.12, y: 1, note: "library + Class1.cs" }
+            - { k: tests, label: "Bakery.Core.Tests", x: 0.84, y: 1, tone: active, note: "xUnit + UnitTest1.cs" }
+          edges:
+            - { a: dir, b: core, directed: true, label: contains, tone: dim }
+            - { a: dir, b: tests, directed: true, label: contains, tone: dim }
+            - { a: tests, b: core, directed: true, label: references, tone: active }
+    - title: Clear out the placeholders
+      text: The last line deletes the template's placeholder files. Next, PriceCalculator.cs goes into the library and PriceCalculatorTests.cs into the test project.
+      lines: [7]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: dir, label: "Bakery.sln", x: 0.5, y: 0, note: "2 projects" }
+            - { k: core, label: "Bakery.Core", x: 0.12, y: 1, tone: done, note: PriceCalculator.cs }
+            - { k: tests, label: "Bakery.Core.Tests", x: 0.84, y: 1, tone: done, note: "PriceCalculatorTests.cs" }
+          edges:
+            - { a: dir, b: core, directed: true, label: contains, tone: dim }
+            - { a: dir, b: tests, directed: true, label: contains, tone: dim }
+            - { a: tests, b: core, directed: true, label: references }
+    - title: One command tests everything
+      text: Run from the solution folder, dotnet test builds both projects and runs every test. Two facts and three theory rows make five.
+      lines: [8]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: dir, label: "Bakery.sln", x: 0.5, y: 0, tone: active, note: "dotnet test" }
+            - { k: core, label: "Bakery.Core", x: 0.12, y: 1, tone: compare, note: PriceCalculator.cs }
+            - { k: tests, label: "Bakery.Core.Tests", x: 0.84, y: 1, tone: found, note: "5 tests passed" }
+          edges:
+            - { a: dir, b: core, directed: true, label: builds, tone: active }
+            - { a: dir, b: tests, directed: true, label: "builds, runs", tone: active }
+            - { a: tests, b: core, directed: true, label: references }
+        - { kind: terminal, id: out, slots: 1, lines: ["Passed!  - Failed: 0, Passed: 5, Skipped: 0, Total: 5"] }

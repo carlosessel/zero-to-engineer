@@ -1,0 +1,175 @@
+- id: cl-agents-agent-loop
+  title: The agent loop, one request
+  hint: "Follow one bakery order through the loop: the model asks for tools, your code runs and checks them, until it answers."
+  language: Python
+  code: |
+    STOCK = {"sourdough loaf": 6, "rye loaf": 0, "cinnamon bun": 12}
+    ORDERS = []
+
+    def run_tool(name, args):
+        product = args["product"].strip().lower()
+        if product not in STOCK:
+            return f"Unknown product. Known products: {', '.join(STOCK)}."
+        if name == "check_stock":
+            return f"{STOCK[product]} {product} left."
+        if name == "place_order":
+            if args["quantity"] > STOCK[product]:
+                return f"Only {STOCK[product]} {product} left; order not placed."
+            STOCK[product] -= args["quantity"]
+            ORDERS.append((product, args["quantity"]))
+            return f"Reserved {args['quantity']} {product}."
+        return f"Unknown tool {name}."
+
+    def run_agent(request, max_steps=10):
+        messages = [{"role": "user", "content": request}]
+        for step in range(max_steps):
+            msg = client.messages.create(model="claude-opus-5-5", max_tokens=2000, tools=tools, messages=messages)
+            messages.append({"role": "assistant", "content": msg.content})
+            if msg.stop_reason != "tool_use":
+                return "".join(b.text for b in msg.content if b.type == "text")
+            results = []
+            for block in msg.content:
+                if block.type == "tool_use":
+                    output = run_tool(block.name, block.input)
+                    print(f"  step {step + 1}: {block.name}({json.dumps(block.input)}) -> {output}")
+                    results.append({"type": "tool_result", "tool_use_id": block.id, "content": output})
+            messages.append({"role": "user", "content": results})
+        return "Stopped: too many steps without finishing."
+
+    print(run_agent("Please reserve two sourdough loaves for me."))
+    print(ORDERS)
+  steps:
+    - title: The request
+      text: run_agent starts the history with the customer's request and calls the model with the tools. The loop allows at most 10 steps.
+      lines: [ 18, 19, 20, 21 ]
+      vars: { step: 0, messages: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Your code, Claude API ]
+          slots: 8
+          messages:
+            - { from: Your code, to: Claude API, label: "user: reserve two sourdough loaves", tone: active }
+        - kind: kv
+          id: st
+          label: STOCK and ORDERS
+          slots: 2
+          rows:
+            - { name: sourdough loaf, value: "6", tone: base }
+            - { name: ORDERS, value: "[]", tone: base }
+        - { kind: terminal, id: t, slots: 6, lines: [] }
+    - title: The model asks for a tool
+      text: "Here the model replies with a tool_use block rather than an answer: it wants to check stock first, as place_order's description asks. stop_reason is tool_use, so the loop carries on."
+      lines: [ 21, 22, 23 ]
+      vars: { step: 0, stop_reason: tool_use, messages: 2 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Your code, Claude API ]
+          slots: 8
+          messages:
+            - { from: Your code, to: Claude API, label: "user: reserve two sourdough loaves", tone: dim }
+            - { from: Claude API, to: Your code, label: "tool_use: check_stock(sourdough loaf)", tone: compare }
+    - title: Your code runs it
+      text: Your code, not the model, runs the tool. run_tool checks the product is known, then reports the stock.
+      lines: [ 4, 5, 6, 8, 9, 28 ]
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Your code, Claude API ]
+          slots: 8
+          messages:
+            - { from: Your code, to: Claude API, label: "user: reserve two sourdough loaves", tone: dim }
+            - { from: Claude API, to: Your code, label: "tool_use: check_stock(sourdough loaf)", tone: dim }
+            - { from: Your code, to: Your code, label: "run_tool: 6 sourdough loaf left.", tone: found }
+        - kind: kv
+          id: st
+          label: STOCK and ORDERS
+          slots: 2
+          rows:
+            - { name: sourdough loaf, value: "6", tone: compare }
+            - { name: ORDERS, value: "[]", tone: compare }
+        - { kind: terminal, id: t, slots: 6, lines: [ '  step 1: check_stock({"product": "sourdough loaf"})', "    -> 6 sourdough loaf left." ] }
+    - title: The result goes back
+      text: The result goes back as a tool_result block with the matching tool_use_id, added to the history. The whole history is sent again.
+      lines: [ 30, 31, 20, 21 ]
+      vars: { step: 1, messages: 3 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Your code, Claude API ]
+          slots: 8
+          messages:
+            - { from: Your code, to: Claude API, label: "user: reserve two sourdough loaves", tone: dim }
+            - { from: Claude API, to: Your code, label: "tool_use: check_stock(sourdough loaf)", tone: dim }
+            - { from: Your code, to: Your code, label: "run_tool: 6 sourdough loaf left.", tone: dim }
+            - { from: Your code, to: Claude API, label: history + tool_result, tone: active }
+    - title: Now place the order
+      text: With the stock known, the model asks to reserve two loaves. stop_reason is tool_use again.
+      lines: [ 21, 22, 23 ]
+      vars: { step: 1, stop_reason: tool_use, messages: 4 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Your code, Claude API ]
+          slots: 8
+          messages:
+            - { from: Your code, to: Claude API, label: "user: reserve two sourdough loaves", tone: dim }
+            - { from: Claude API, to: Your code, label: "tool_use: check_stock(sourdough loaf)", tone: dim }
+            - { from: Your code, to: Your code, label: "run_tool: 6 sourdough loaf left.", tone: dim }
+            - { from: Your code, to: Claude API, label: history + tool_result, tone: dim }
+            - { from: Claude API, to: Your code, label: "tool_use: place_order(sourdough loaf, 2)", tone: compare }
+    - title: Your code decides what happens
+      text: run_tool checks the quantity against the stock before doing anything. Two is not more than six, so the stock drops and the order is recorded.
+      lines: [ 10, 11, 13, 14, 15 ]
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Your code, Claude API ]
+          slots: 8
+          messages:
+            - { from: Your code, to: Claude API, label: "user: reserve two sourdough loaves", tone: dim }
+            - { from: Claude API, to: Your code, label: "tool_use: check_stock(sourdough loaf)", tone: dim }
+            - { from: Your code, to: Your code, label: "run_tool: 6 sourdough loaf left.", tone: dim }
+            - { from: Your code, to: Claude API, label: history + tool_result, tone: dim }
+            - { from: Claude API, to: Your code, label: "tool_use: place_order(sourdough loaf, 2)", tone: dim }
+            - { from: Your code, to: Your code, label: "run_tool: Reserved 2 sourdough loaf.", tone: found }
+        - kind: kv
+          id: st
+          label: STOCK and ORDERS
+          slots: 2
+          rows:
+            - { name: sourdough loaf, value: "4", tone: active }
+            - { name: ORDERS, value: "[('sourdough loaf', 2)]", tone: active }
+        - { kind: terminal, id: t, slots: 6, lines: [ '  step 1: check_stock({"product": "sourdough loaf"})', "    -> 6 sourdough loaf left.", '  step 2: place_order({"product": "sourdough loaf", "quantity": 2})', "    -> Reserved 2 sourdough loaf." ] }
+    - title: A final answer
+      text: After the second tool_result, the model answers in text. stop_reason is no longer tool_use, so run_agent returns the text and the loop ends.
+      lines: [ 23, 24 ]
+      vars: { step: 2, stop_reason: end_turn, messages: 6 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ Your code, Claude API ]
+          slots: 8
+          messages:
+            - { from: Your code, to: Claude API, label: "user: reserve two sourdough loaves", tone: dim }
+            - { from: Claude API, to: Your code, label: "tool_use: check_stock(sourdough loaf)", tone: dim }
+            - { from: Your code, to: Your code, label: "run_tool: 6 sourdough loaf left.", tone: dim }
+            - { from: Your code, to: Claude API, label: history + tool_result, tone: dim }
+            - { from: Claude API, to: Your code, label: "tool_use: place_order(sourdough loaf, 2)", tone: dim }
+            - { from: Your code, to: Your code, label: "run_tool: Reserved 2 sourdough loaf.", tone: dim }
+            - { from: Your code, to: Claude API, label: history + tool_result, tone: active }
+            - { from: Claude API, to: Your code, label: "end_turn: a text answer", tone: found }
+    - title: Checked at every step
+      text: The model proposed each action; your code checked and carried it out. With a step limit and helpful error messages, the loop cannot run for ever and can recover from mistakes.
+      lines: [ 35 ]
+      vars: {}
+      parts:
+        - kind: kv
+          id: st
+          label: STOCK and ORDERS
+          slots: 2
+          rows:
+            - { name: sourdough loaf, value: "4", tone: found }
+            - { name: ORDERS, value: "[('sourdough loaf', 2)]", tone: found }
+        - { kind: terminal, id: t, slots: 6, lines: [ '  step 1: check_stock({"product": "sourdough loaf"})', "    -> 6 sourdough loaf left.", '  step 2: place_order({"product": "sourdough loaf", "quantity": 2})', "    -> Reserved 2 sourdough loaf.", (the model's answer), "[('sourdough loaf', 2)]" ] }

@@ -1,0 +1,137 @@
+- id: m-nosql-partition-sort-key
+  title: One query, one partition
+  hint: Watch the partition key choose a customer, then the sort key narrow to November's orders, already in order.
+  language: TypeScript
+  code: |
+    type Item = { pk: string; sk: string; data: Record<string, unknown> };
+
+    const table: Item[] = [
+      { pk: "CUSTOMER#c-17", sk: "PROFILE", data: { name: "Ama", tier: "gold" } },
+      { pk: "CUSTOMER#c-17", sk: "ORDER#2026-10-30#o-5", data: { pence: 900 } },
+      { pk: "CUSTOMER#c-17", sk: "ORDER#2026-11-02#o-7", data: { pence: 5400 } },
+      { pk: "CUSTOMER#c-17", sk: "ORDER#2026-11-12#o-9", data: { pence: 1250 } },
+      { pk: "CUSTOMER#c-4", sk: "ORDER#2026-11-05#o-8", data: { pence: 450 } },
+    ];
+
+    function query(pk: string, skPrefix: string, from = "", to = "￿"): Item[] {
+      return table
+        .filter((i) => i.pk === pk && i.sk.startsWith(skPrefix) && i.sk >= from && i.sk <= to)
+        .sort((a, b) => a.sk.localeCompare(b.sk));
+    }
+
+    console.log(query("CUSTOMER#c-17", "ORDER#", "ORDER#2026-11", "ORDER#2026-11￿").map((i) => i.sk));
+    console.log(query("CUSTOMER#c-17", "PROFILE")[0].data);
+  steps:
+    - title: Items with two keys
+      text: Every item has a partition key (pk), which decides which server holds it, and a sort key (sk), which orders items within a partition.
+      lines: [ 3, 4, 5, 6, 7, 8, 9 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: i
+              title: table
+              columns: [ pk, sk, data ]
+              rows:
+                - { k: i0, cells: [ CUSTOMER#c-17, PROFILE, "name: Ama, tier: gold" ] }
+                - { k: i1, cells: [ CUSTOMER#c-17, ORDER#2026-10-30#o-5, "pence: 900" ] }
+                - { k: i2, cells: [ CUSTOMER#c-17, ORDER#2026-11-02#o-7, "pence: 5400" ] }
+                - { k: i3, cells: [ CUSTOMER#c-17, ORDER#2026-11-12#o-9, "pence: 1250" ] }
+                - { k: i4, cells: [ CUSTOMER#c-4, ORDER#2026-11-05#o-8, "pence: 450" ] }
+        - { kind: terminal, id: out, slots: 2, lines: [] }
+    - title: The partition key picks a customer
+      text: The query asks for CUSTOMER#c-17. Customer c-4's order lives in another partition and is never looked at. In DynamoDB, this is one request to one partition.
+      lines: [ 11, 13, 17 ]
+      vars: { pk: CUSTOMER#c-17 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: i
+              title: table
+              columns: [ pk, sk, data ]
+              rows:
+                - { k: i0, cells: [ CUSTOMER#c-17, PROFILE, "name: Ama, tier: gold" ], tone: compare }
+                - { k: i1, cells: [ CUSTOMER#c-17, ORDER#2026-10-30#o-5, "pence: 900" ], tone: compare }
+                - { k: i2, cells: [ CUSTOMER#c-17, ORDER#2026-11-02#o-7, "pence: 5400" ], tone: compare }
+                - { k: i3, cells: [ CUSTOMER#c-17, ORDER#2026-11-12#o-9, "pence: 1250" ], tone: compare }
+                - { k: i4, cells: [ CUSTOMER#c-4, ORDER#2026-11-05#o-8, "pence: 450" ], tone: dim }
+    - title: The sort key prefix picks orders
+      text: Ama's profile sits in the same partition, but its sort key does not start with ORDER#, so it is left out.
+      lines: [ 13, 17 ]
+      vars: { pk: CUSTOMER#c-17, sk starts with: ORDER# }
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: i
+              title: table
+              columns: [ pk, sk, data ]
+              rows:
+                - { k: i0, cells: [ CUSTOMER#c-17, PROFILE, "name: Ama, tier: gold" ], tone: dim }
+                - { k: i1, cells: [ CUSTOMER#c-17, ORDER#2026-10-30#o-5, "pence: 900" ], tone: compare }
+                - { k: i2, cells: [ CUSTOMER#c-17, ORDER#2026-11-02#o-7, "pence: 5400" ], tone: compare }
+                - { k: i3, cells: [ CUSTOMER#c-17, ORDER#2026-11-12#o-9, "pence: 1250" ], tone: compare }
+                - { k: i4, cells: [ CUSTOMER#c-4, ORDER#2026-11-05#o-8, "pence: 450" ], tone: dim }
+    - title: A range of sort keys picks November
+      text: Sort keys starting ORDER#2026-11 lie between ORDER#2026-11 and the same text followed by the highest character. The October order falls outside.
+      lines: [ 13, 17 ]
+      vars: { pk: CUSTOMER#c-17, sk from: ORDER#2026-11, sk to: ORDER#2026-11 + highest }
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: i
+              title: table
+              columns: [ pk, sk, data ]
+              rows:
+                - { k: i0, cells: [ CUSTOMER#c-17, PROFILE, "name: Ama, tier: gold" ], tone: dim }
+                - { k: i1, cells: [ CUSTOMER#c-17, ORDER#2026-10-30#o-5, "pence: 900" ], tone: dim }
+                - { k: i2, cells: [ CUSTOMER#c-17, ORDER#2026-11-02#o-7, "pence: 5400" ], tone: found }
+                - { k: i3, cells: [ CUSTOMER#c-17, ORDER#2026-11-12#o-9, "pence: 1250" ], tone: found }
+                - { k: i4, cells: [ CUSTOMER#c-4, ORDER#2026-11-05#o-8, "pence: 450" ], tone: dim }
+    - title: Already in date order
+      text: The date is inside the sort key, so sorting by sk lists the orders oldest first. The key design does the work a WHERE and ORDER BY would do.
+      lines: [ 14, 17 ]
+      parts:
+        - { kind: terminal, id: out, slots: 2, lines: [ '["ORDER#2026-11-02#o-7", "ORDER#2026-11-12#o-9"]' ] }
+    - title: The profile from the same partition
+      text: A second query with the prefix PROFILE fetches Ama's details. Her profile and orders live together because the application reads them together.
+      lines: [ 18 ]
+      vars: { pk: CUSTOMER#c-17, sk starts with: PROFILE }
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: i
+              title: table
+              columns: [ pk, sk, data ]
+              rows:
+                - { k: i0, cells: [ CUSTOMER#c-17, PROFILE, "name: Ama, tier: gold" ], tone: found }
+                - { k: i1, cells: [ CUSTOMER#c-17, ORDER#2026-10-30#o-5, "pence: 900" ], tone: dim }
+                - { k: i2, cells: [ CUSTOMER#c-17, ORDER#2026-11-02#o-7, "pence: 5400" ], tone: dim }
+                - { k: i3, cells: [ CUSTOMER#c-17, ORDER#2026-11-12#o-9, "pence: 1250" ], tone: dim }
+                - { k: i4, cells: [ CUSTOMER#c-4, ORDER#2026-11-05#o-8, "pence: 450" ], tone: dim }
+        - { kind: terminal, id: out, slots: 2, lines: [ '["ORDER#2026-11-02#o-7", "ORDER#2026-11-12#o-9"]', '{ name: "Ama", tier: "gold" }' ] }
+    - title: Queries you did not plan for
+      text: All orders over £50 across every customer fits neither key, so it needs a full scan or a new index. Design the keys around the queries you will run.
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: i
+              title: table
+              columns: [ pk, sk, data ]
+              rows:
+                - { k: i0, cells: [ CUSTOMER#c-17, PROFILE, "name: Ama, tier: gold" ], tone: compare }
+                - { k: i1, cells: [ CUSTOMER#c-17, ORDER#2026-10-30#o-5, "pence: 900" ], tone: compare }
+                - { k: i2, cells: [ CUSTOMER#c-17, ORDER#2026-11-02#o-7, "pence: 5400" ], tone: compare }
+                - { k: i3, cells: [ CUSTOMER#c-17, ORDER#2026-11-12#o-9, "pence: 1250" ], tone: compare }
+                - { k: i4, cells: [ CUSTOMER#c-4, ORDER#2026-11-05#o-8, "pence: 450" ], tone: compare }

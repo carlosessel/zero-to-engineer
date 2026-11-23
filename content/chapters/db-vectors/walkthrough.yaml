@@ -1,0 +1,136 @@
+- id: db-vectors-nearest
+  title: Finding the nearest products
+  hint: Watch every product's embedding be measured against the question's, then sorted, then cut to the nearest four.
+  language: SQL
+  code: |
+    SELECT p.name, round((e.embedding <=> '[0.2, 0.7, 0.7, 0]')::numeric, 3) AS cosine_distance
+    FROM product_embeddings AS e
+    JOIN products AS p ON p.id = e.product_id
+    ORDER BY e.embedding <=> '[0.2, 0.7, 0.7, 0]'
+    LIMIT 4;
+  steps:
+    - title: Products as vectors
+      text: Each product has a hand-made embedding of four numbers, roughly meaning bread, sweet, buttery and drink. Rye loaf is mostly bread; breakfast tea is mostly drink.
+      lines: [ 2, 3 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: e
+              title: product_embeddings
+              columns: [ name, embedding, cosine_distance ]
+              rows:
+                - { k: Rye loaf, cells: [ Rye loaf, "[0.9,0.1,0.1,0]", "" ] }
+                - { k: Sourdough, cells: [ Sourdough, "[0.9,0.1,0.2,0]", "" ] }
+                - { k: Bagel, cells: [ Bagel, "[0.8,0.1,0.1,0]", "" ] }
+                - { k: Croissant, cells: [ Croissant, "[0.3,0.3,0.9,0]", "" ] }
+                - { k: Cinnamon bun, cells: [ Cinnamon bun, "[0.2,0.8,0.5,0]", "" ] }
+                - { k: Almond croissant, cells: [ Almond croissant, "[0.3,0.6,0.8,0]", "" ] }
+                - { k: Chocolate cake, cells: [ Chocolate cake, "[0.1,0.9,0.4,0]", "" ] }
+                - { k: Lemon drizzle, cells: [ Lemon drizzle, "[0.1,0.8,0.3,0]", "" ] }
+                - { k: Strawberry jam, cells: [ Strawberry jam, "[0,0.7,0,0.2]", "" ] }
+                - { k: Breakfast tea, cells: [ Breakfast tea, "[0,0.1,0,0.9]", "" ] }
+        - kind: note
+          id: q
+          text: "dimensions: [bread, sweet, buttery, drink]"
+    - title: The question as a vector
+      text: A customer asks for "something sweet and buttery". Its embedding is low on bread, high on sweet and buttery, and zero on drink.
+      lines: [ 1 ]
+      vars: { query: "[0.2, 0.7, 0.7, 0]" }
+      parts:
+        - kind: note
+          id: q
+          text: '"something sweet and buttery" = [0.2, 0.7, 0.7, 0]'
+          tone: active
+    - title: Measure every product
+      text: "The <=> operator gives the cosine distance from the question to each embedding: smaller means more similar. Without an index, every row is compared."
+      lines: [ 1 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: e
+              title: product_embeddings
+              columns: [ name, embedding, cosine_distance ]
+              rows:
+                - { k: Rye loaf, cells: [ Rye loaf, "[0.9,0.1,0.1,0]", "0.652" ], tone: compare }
+                - { k: Sourdough, cells: [ Sourdough, "[0.9,0.1,0.2,0]", "0.584" ], tone: compare }
+                - { k: Bagel, cells: [ Bagel, "[0.8,0.1,0.1,0]", "0.634" ], tone: compare }
+                - { k: Croissant, cells: [ Croissant, "[0.3,0.3,0.9,0]", "0.104" ], tone: compare }
+                - { k: Cinnamon bun, cells: [ Cinnamon bun, "[0.2,0.8,0.5,0]", "0.025" ], tone: compare }
+                - { k: Almond croissant, cells: [ Almond croissant, "[0.3,0.6,0.8,0]", "0.014" ], tone: compare }
+                - { k: Chocolate cake, cells: [ Chocolate cake, "[0.1,0.9,0.4,0]", "0.070" ], tone: compare }
+                - { k: Lemon drizzle, cells: [ Lemon drizzle, "[0.1,0.8,0.3,0]", "0.091" ], tone: compare }
+                - { k: Strawberry jam, cells: [ Strawberry jam, "[0,0.7,0,0.2]", "0.334" ], tone: compare }
+                - { k: Breakfast tea, cells: [ Breakfast tea, "[0,0.1,0,0.9]", "0.923" ], tone: compare }
+    - title: Near and far
+      text: Almond croissant, pointing almost the same way as the question, is only 0.014 away. Breakfast tea points towards drink and is 0.923 away.
+      lines: [ 1 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: e
+              title: product_embeddings
+              columns: [ name, embedding, cosine_distance ]
+              rows:
+                - { k: Rye loaf, cells: [ Rye loaf, "[0.9,0.1,0.1,0]", "0.652" ] }
+                - { k: Sourdough, cells: [ Sourdough, "[0.9,0.1,0.2,0]", "0.584" ] }
+                - { k: Bagel, cells: [ Bagel, "[0.8,0.1,0.1,0]", "0.634" ] }
+                - { k: Croissant, cells: [ Croissant, "[0.3,0.3,0.9,0]", "0.104" ] }
+                - { k: Cinnamon bun, cells: [ Cinnamon bun, "[0.2,0.8,0.5,0]", "0.025" ] }
+                - { k: Almond croissant, cells: [ Almond croissant, "[0.3,0.6,0.8,0]", "0.014" ], tone: found }
+                - { k: Chocolate cake, cells: [ Chocolate cake, "[0.1,0.9,0.4,0]", "0.070" ] }
+                - { k: Lemon drizzle, cells: [ Lemon drizzle, "[0.1,0.8,0.3,0]", "0.091" ] }
+                - { k: Strawberry jam, cells: [ Strawberry jam, "[0,0.7,0,0.2]", "0.334" ] }
+                - { k: Breakfast tea, cells: [ Breakfast tea, "[0,0.1,0,0.9]", "0.923" ], tone: bad }
+    - title: Sort by distance
+      text: ORDER BY puts the nearest first. Pastries and cakes rise to the top; breads and tea sink to the bottom.
+      lines: [ 4 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: e
+              title: product_embeddings
+              columns: [ name, embedding, cosine_distance ]
+              rows:
+                - { k: Almond croissant, cells: [ Almond croissant, "[0.3,0.6,0.8,0]", "0.014" ], tone: active }
+                - { k: Cinnamon bun, cells: [ Cinnamon bun, "[0.2,0.8,0.5,0]", "0.025" ], tone: active }
+                - { k: Chocolate cake, cells: [ Chocolate cake, "[0.1,0.9,0.4,0]", "0.070" ], tone: active }
+                - { k: Lemon drizzle, cells: [ Lemon drizzle, "[0.1,0.8,0.3,0]", "0.091" ], tone: active }
+                - { k: Croissant, cells: [ Croissant, "[0.3,0.3,0.9,0]", "0.104" ] }
+                - { k: Strawberry jam, cells: [ Strawberry jam, "[0,0.7,0,0.2]", "0.334" ] }
+                - { k: Sourdough, cells: [ Sourdough, "[0.9,0.1,0.2,0]", "0.584" ] }
+                - { k: Bagel, cells: [ Bagel, "[0.8,0.1,0.1,0]", "0.634" ] }
+                - { k: Rye loaf, cells: [ Rye loaf, "[0.9,0.1,0.1,0]", "0.652" ] }
+                - { k: Breakfast tea, cells: [ Breakfast tea, "[0,0.1,0,0.9]", "0.923" ] }
+    - title: Keep the nearest four
+      text: "LIMIT 4 returns almond croissant, cinnamon bun, chocolate cake and lemon drizzle. No word in the question had to match their names: this is semantic search."
+      lines: [ 5 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 10
+          tables:
+            - id: e
+              title: product_embeddings
+              columns: [ name, embedding, cosine_distance ]
+              rows:
+                - { k: Almond croissant, cells: [ Almond croissant, "[0.3,0.6,0.8,0]", "0.014" ], tone: found }
+                - { k: Cinnamon bun, cells: [ Cinnamon bun, "[0.2,0.8,0.5,0]", "0.025" ], tone: found }
+                - { k: Chocolate cake, cells: [ Chocolate cake, "[0.1,0.9,0.4,0]", "0.070" ], tone: found }
+                - { k: Lemon drizzle, cells: [ Lemon drizzle, "[0.1,0.8,0.3,0]", "0.091" ], tone: found }
+                - { k: Croissant, cells: [ Croissant, "[0.3,0.3,0.9,0]", "0.104" ], tone: dim }
+                - { k: Strawberry jam, cells: [ Strawberry jam, "[0,0.7,0,0.2]", "0.334" ], tone: dim }
+                - { k: Sourdough, cells: [ Sourdough, "[0.9,0.1,0.2,0]", "0.584" ], tone: dim }
+                - { k: Bagel, cells: [ Bagel, "[0.8,0.1,0.1,0]", "0.634" ], tone: dim }
+                - { k: Rye loaf, cells: [ Rye loaf, "[0.9,0.1,0.1,0]", "0.652" ], tone: dim }
+                - { k: Breakfast tea, cells: [ Breakfast tea, "[0,0.1,0,0.9]", "0.923" ], tone: dim }
+    - title: At scale, an index
+      text: Comparing with every row is fine for thousands of products and too slow for millions. HNSW and IVFFlat indexes find nearly the same answer much faster, trading a little accuracy.
+      vars: {}

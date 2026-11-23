@@ -144,6 +144,8 @@ DETAIL:  Key (oven, during)=(1, ["2026-11-15 06:30:00+00","2026-11-15 07:30:00+0
 
 `tstzrange` is a **range type**: `[` includes the start and `)` excludes the end, so a booking ending at 07:00 and one starting at 07:00 do not overlap. The constraint refused the third booking (oven 1, overlapping Yaw's) and accepted the fourth. Enforcing this in application code is surprisingly hard under concurrency; the database gets it right every time.
 
+<Walkthrough name="db-tables-constraints-no-overlap" />
+
 ## Generated columns
 
 A **generated column** is computed from other columns of the same row and kept up to date by the database. It cannot be written directly:

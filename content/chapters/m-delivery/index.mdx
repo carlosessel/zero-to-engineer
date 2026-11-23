@@ -173,6 +173,8 @@ console.log(canaryVerdict(baseline, { requests: 5_000, errors: 9, p99Ms: 410 }))
 
 It prints `wait: not enough canary traffic yet`, then `promote to the next step` (0.22% errors against a 0.20% baseline is within tolerance), then `roll back: error rate 1.20% vs 0.20%`, and `roll back: p99 410 ms vs 240 ms`. Comparing against the **current version at the same time**, not against a fixed number, cancels out daily traffic patterns. Real canary analysis uses statistics over several metrics and minimum sample sizes; the principle is the same.
 
+<Walkthrough name="m-delivery-canary" />
+
 ## Rollback and roll forward
 
 When a release goes wrong, the first goal is to **restore service**, not to find the bug. **Roll back** to the previous artefact (another reason to keep artefacts immutable and deploys automated), or turn off the feature flag. **Roll forward** (deploy a fix) only when the fix is small and certain, or when rolling back is impossible. What makes rollback impossible is usually the database: a migration that dropped a column the old version still needs. This is why schema changes use **expand and contract** and ship separately from the code that relies on them (<Ref to="m-schema-design" />).

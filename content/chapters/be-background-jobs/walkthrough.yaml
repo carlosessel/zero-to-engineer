@@ -1,0 +1,183 @@
+- id: be-background-jobs-retry-worker
+  title: A worker retrying with backoff
+  hint: Requests only add jobs to the queue; watch the worker take them one at a time, and wait longer after each failure.
+  language: TypeScript
+  code: |
+    async function runWorker(queue: JobQueue<ReceiptJob>): Promise<void> {
+      for (let job = await queue.next(); job; job = await queue.next()) {
+        for (let attempt = 1; ; attempt++) {
+          try {
+            await sendReceipt(job);
+            console.log(`  receipt for ${job.orderId} sent (attempt ${attempt})`);
+            break;
+          } catch (error) {
+            if (attempt === 5) {
+              console.error(`  receipt for ${job.orderId} gave up: ${(error as Error).message}`);
+              break;
+            }
+            const delay = 100 * 2 ** (attempt - 1);
+            console.log(`  receipt for ${job.orderId} failed: ${(error as Error).message}; retrying in ${delay} ms`);
+            await sleep(delay);
+          }
+        }
+      }
+    }
+
+    const queue = new JobQueue<ReceiptJob>(100);
+    const worker = runWorker(queue);
+
+    let runs = 0;
+    const report = setInterval(() => console.log(`  report run ${++runs}`), 600);
+
+    for (const orderId of ["o-1", "o-2", "o-3"]) {
+      queue.push({ orderId, email: "ama@example.com" });
+      console.log(`request for ${orderId} answered at once; receipt queued`);
+    }
+
+    async function shutdown(): Promise<void> {
+      clearInterval(report);
+      queue.close();
+      await worker;
+      console.log("stopped cleanly");
+    }
+  steps:
+    - title: The worker waits for work
+      text: The worker starts before any orders arrive. It asks the queue for the next job, and since the queue is empty, it waits without blocking anything.
+      lines: [2, 22]
+      parts:
+        - { kind: cells, id: q, label: "queue", items: [], slots: 3, width: 70, empty: "empty" }
+        - { kind: cells, id: w, label: "worker is handling", items: [{ k: wait, v: "waiting", tone: compare }], slots: 1, width: 110 }
+        - { kind: terminal, id: out, lines: [], slots: 11 }
+    - title: Three requests, answered at once
+      text: Each request pushes a "send receipt" job and answers straight away. The first job goes straight to the waiting worker; the other two are stored in the queue.
+      lines: [27, 28, 29]
+      parts:
+        - { kind: cells, id: q, label: "queue", items: [{ k: o-2, v: o-2, tone: active }, { k: o-3, v: o-3, tone: active }], slots: 3, width: 70, empty: "empty" }
+        - { kind: cells, id: w, label: "worker is handling", items: [{ k: o-1, v: o-1, tone: active }], slots: 1, width: 110 }
+        - kind: terminal
+          id: out
+          slots: 11
+          lines:
+            - "request for o-1 answered at once; receipt queued"
+            - "request for o-2 answered at once; receipt queued"
+            - "request for o-3 answered at once; receipt queued"
+    - title: o-1 is sent first time
+      text: The worker awaits sendReceipt. It succeeds on attempt 1, so the worker logs it and breaks out of the retry loop.
+      lines: [5, 6, 7]
+      vars: { job: o-1, attempt: 1 }
+      parts:
+        - { kind: cells, id: w, label: "worker is handling", items: [{ k: o-1, v: o-1, tone: found }], slots: 1, width: 110 }
+        - kind: terminal
+          id: out
+          slots: 11
+          lines:
+            - "request for o-1 answered at once; receipt queued"
+            - "request for o-2 answered at once; receipt queued"
+            - "request for o-3 answered at once; receipt queued"
+            - "  receipt for o-1 sent (attempt 1)"
+    - title: o-2 fails, wait 100 ms
+      text: The worker takes o-2. The email service times out, so the catch block works out the delay, 100 × 2⁰ = 100 ms, and sleeps before trying again.
+      lines: [8, 13, 14, 15]
+      vars: { job: o-2, attempt: 1, delay: "100 ms" }
+      parts:
+        - { kind: cells, id: q, label: "queue", items: [{ k: o-3, v: o-3 }], slots: 3, width: 70, empty: "empty" }
+        - { kind: cells, id: w, label: "worker is handling", items: [{ k: o-2, v: o-2, tone: bad }], slots: 1, width: 110 }
+        - kind: terminal
+          id: out
+          slots: 11
+          lines:
+            - "request for o-1 answered at once; receipt queued"
+            - "request for o-2 answered at once; receipt queued"
+            - "request for o-3 answered at once; receipt queued"
+            - "  receipt for o-1 sent (attempt 1)"
+            - "  receipt for o-2 failed: email service timed out; retrying in 100 ms"
+    - title: Fails again, wait twice as long
+      text: Attempt 2 fails too. The delay doubles to 100 × 2¹ = 200 ms, so a struggling service gets more and more time to recover.
+      lines: [13, 14, 15]
+      vars: { job: o-2, attempt: 2, delay: "200 ms" }
+      parts:
+        - kind: terminal
+          id: out
+          slots: 11
+          lines:
+            - "request for o-1 answered at once; receipt queued"
+            - "request for o-2 answered at once; receipt queued"
+            - "request for o-3 answered at once; receipt queued"
+            - "  receipt for o-1 sent (attempt 1)"
+            - "  receipt for o-2 failed: email service timed out; retrying in 100 ms"
+            - "  receipt for o-2 failed: email service timed out; retrying in 200 ms"
+    - title: Third time lucky
+      text: Attempt 3 succeeds. Had it failed five times, the worker would have logged "gave up" and moved on rather than retrying for ever.
+      lines: [5, 6, 9, 10]
+      vars: { job: o-2, attempt: 3 }
+      parts:
+        - { kind: cells, id: w, label: "worker is handling", items: [{ k: o-2, v: o-2, tone: found }], slots: 1, width: 110 }
+        - kind: terminal
+          id: out
+          slots: 11
+          lines:
+            - "request for o-1 answered at once; receipt queued"
+            - "request for o-2 answered at once; receipt queued"
+            - "request for o-3 answered at once; receipt queued"
+            - "  receipt for o-1 sent (attempt 1)"
+            - "  receipt for o-2 failed: email service timed out; retrying in 100 ms"
+            - "  receipt for o-2 failed: email service timed out; retrying in 200 ms"
+            - "  receipt for o-2 sent (attempt 3)"
+    - title: o-3, then wait again
+      text: The worker takes the last job, sends it first time, and goes back to waiting on an empty queue.
+      lines: [2, 5, 6]
+      vars: { job: o-3, attempt: 1 }
+      parts:
+        - { kind: cells, id: q, label: "queue", items: [], slots: 3, width: 70, empty: "empty" }
+        - { kind: cells, id: w, label: "worker is handling", items: [{ k: wait, v: "waiting", tone: compare }], slots: 1, width: 110 }
+        - kind: terminal
+          id: out
+          slots: 11
+          lines:
+            - "request for o-1 answered at once; receipt queued"
+            - "request for o-2 answered at once; receipt queued"
+            - "request for o-3 answered at once; receipt queued"
+            - "  receipt for o-1 sent (attempt 1)"
+            - "  receipt for o-2 failed: email service timed out; retrying in 100 ms"
+            - "  receipt for o-2 failed: email service timed out; retrying in 200 ms"
+            - "  receipt for o-2 sent (attempt 3)"
+            - "  receipt for o-3 sent (attempt 1)"
+    - title: The report runs on its own timer
+      text: Separately, setInterval runs the report every 600 ms, standing in for "every night". Because the timer and the worker run independently, these lines can appear a little earlier or later.
+      lines: [25]
+      vars: {}
+      parts:
+        - kind: terminal
+          id: out
+          slots: 11
+          lines:
+            - "request for o-1 answered at once; receipt queued"
+            - "request for o-2 answered at once; receipt queued"
+            - "request for o-3 answered at once; receipt queued"
+            - "  receipt for o-1 sent (attempt 1)"
+            - "  receipt for o-2 failed: email service timed out; retrying in 100 ms"
+            - "  receipt for o-2 failed: email service timed out; retrying in 200 ms"
+            - "  receipt for o-2 sent (attempt 3)"
+            - "  receipt for o-3 sent (attempt 1)"
+            - "  report run 1"
+            - "  report run 2"
+    - title: A graceful shutdown
+      text: shutdown stops the timer and closes the queue. The waiting worker gets "no more jobs", its loop ends, and only once it has finished does the program say it stopped cleanly.
+      lines: [33, 34, 35, 36]
+      parts:
+        - { kind: cells, id: w, label: "worker is handling", items: [{ k: wait, v: "finished", tone: done }], slots: 1, width: 110 }
+        - kind: terminal
+          id: out
+          slots: 11
+          lines:
+            - "request for o-1 answered at once; receipt queued"
+            - "request for o-2 answered at once; receipt queued"
+            - "request for o-3 answered at once; receipt queued"
+            - "  receipt for o-1 sent (attempt 1)"
+            - "  receipt for o-2 failed: email service timed out; retrying in 100 ms"
+            - "  receipt for o-2 failed: email service timed out; retrying in 200 ms"
+            - "  receipt for o-2 sent (attempt 3)"
+            - "  receipt for o-3 sent (attempt 1)"
+            - "  report run 1"
+            - "  report run 2"
+            - "stopped cleanly"

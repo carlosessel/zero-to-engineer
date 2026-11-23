@@ -1,0 +1,151 @@
+- id: cc-mcp-bakery-server
+  title: A question answered through an MCP server
+  hint: Follow one question from you, through Claude Code, to the bakery-stock server and back.
+  language: Python
+  code: |
+    from mcp.server.mcpserver import MCPServer
+
+    mcp = MCPServer("bakery-stock")
+
+    STOCK = {"sourdough loaf": 6, "rye loaf": 0, "cinnamon bun": 12}
+
+
+    @mcp.tool()
+    def check_stock(product: str) -> str:
+        """How many of a product are left today. Use the product's full name, for example 'rye loaf'."""
+        name = product.strip().lower()
+        if name not in STOCK:
+            return f"Unknown product '{product}'. Known products: {', '.join(sorted(STOCK))}."
+        return f"{STOCK[name]} {name} left."
+
+
+    @mcp.tool()
+    def sold_out() -> list[str]:
+        """List the products that are sold out today."""
+        return sorted(name for name, count in STOCK.items() if count == 0)
+
+
+    if __name__ == "__main__":
+        mcp.run(transport="stdio")
+  steps:
+    - title: Claude Code starts the server
+      text: This is a local server, so Claude Code starts the program itself and talks to it through standard input and output, called stdio.
+      lines: [ 23, 24 ]
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude Code, bakery server ]
+          slots: 6
+          messages:
+            - { from: Claude Code, to: bakery server, label: "start: python bakery_stock.py", tone: active }
+        - kind: kv
+          id: stock
+          label: STOCK, inside the server
+          slots: 3
+          rows:
+            - { name: sourdough loaf, value: "6", tone: base }
+            - { name: rye loaf, value: "0", tone: base }
+            - { name: cinnamon bun, value: "12", tone: base }
+    - title: The server lists its tools
+      text: "@mcp.tool() turned two ordinary functions into tools. The SDK describes each one from its name, parameters and docstring."
+      lines: [ 8, 9, 10, 17, 18, 19 ]
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude Code, bakery server ]
+          slots: 6
+          messages:
+            - { from: Claude Code, to: bakery server, label: "start: python bakery_stock.py", tone: dim }
+            - { from: bakery server, to: Claude Code, label: "tools: check_stock, sold_out", tone: found }
+        - kind: kv
+          id: ctx
+          label: The model's view of the tools
+          slots: 2
+          rows:
+            - { name: check_stock, value: "name only, for now", tone: active }
+            - { name: sold_out, value: "name only, for now", tone: active }
+    - title: Only names, until needed
+      text: "To keep the context small, Claude Code loads MCP tools on demand by default: only their names enter the context until one is needed."
+      lines: []
+      parts:
+        - kind: kv
+          id: ctx
+          label: The model's view of the tools
+          slots: 2
+          rows:
+            - { name: check_stock, value: "name only, for now", tone: compare }
+            - { name: sold_out, value: "name only, for now", tone: compare }
+    - title: You ask a question
+      text: You ask which products are sold out. Nothing in your files can answer that, but one of the tools can.
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude Code, bakery server ]
+          slots: 6
+          messages:
+            - { from: Claude Code, to: bakery server, label: "start: python bakery_stock.py", tone: dim }
+            - { from: bakery server, to: Claude Code, label: "tools: check_stock, sold_out", tone: dim }
+            - { from: You, to: Claude Code, label: Which products are sold out?, tone: active }
+    - title: Claude calls a tool
+      text: The docstring "List the products that are sold out today" matches the question, so Claude calls sold_out. The docstring is the tool's instructions to the model.
+      lines: [ 17, 18, 19 ]
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude Code, bakery server ]
+          slots: 6
+          messages:
+            - { from: Claude Code, to: bakery server, label: "start: python bakery_stock.py", tone: dim }
+            - { from: bakery server, to: Claude Code, label: "tools: check_stock, sold_out", tone: dim }
+            - { from: You, to: Claude Code, label: Which products are sold out?, tone: dim }
+            - { from: Claude Code, to: bakery server, label: call sold_out(), tone: active }
+        - kind: kv
+          id: ctx
+          label: The model's view of the tools
+          slots: 2
+          rows:
+            - { name: check_stock, value: name only, tone: dim }
+            - { name: sold_out, value: List the products that are sold out..., tone: active }
+    - title: The function runs
+      text: Inside the server, sold_out keeps every product whose count is 0. Only rye loaf qualifies.
+      lines: [ 20 ]
+      vars: { result: '["rye loaf"]' }
+      parts:
+        - kind: kv
+          id: stock
+          label: STOCK, inside the server
+          slots: 3
+          rows:
+            - { name: sourdough loaf, value: "6", tone: dim }
+            - { name: rye loaf, value: "0", tone: found }
+            - { name: cinnamon bun, value: "12", tone: dim }
+    - title: The result comes back
+      text: The server returns the list to Claude Code, and the result is added to the context for Claude to read.
+      lines: [ 20 ]
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude Code, bakery server ]
+          slots: 6
+          messages:
+            - { from: Claude Code, to: bakery server, label: "start: python bakery_stock.py", tone: dim }
+            - { from: bakery server, to: Claude Code, label: "tools: check_stock, sold_out", tone: dim }
+            - { from: You, to: Claude Code, label: Which products are sold out?, tone: dim }
+            - { from: Claude Code, to: bakery server, label: call sold_out(), tone: dim }
+            - { from: bakery server, to: Claude Code, label: '["rye loaf"]', tone: found }
+    - title: The answer
+      text: Claude answers rye loaf. A real version would read from a database or internal API instead of a dictionary; the conversation would look the same.
+      lines: []
+      vars: {}
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude Code, bakery server ]
+          slots: 6
+          messages:
+            - { from: Claude Code, to: bakery server, label: "start: python bakery_stock.py", tone: dim }
+            - { from: bakery server, to: Claude Code, label: "tools: check_stock, sold_out", tone: dim }
+            - { from: You, to: Claude Code, label: Which products are sold out?, tone: dim }
+            - { from: Claude Code, to: bakery server, label: call sold_out(), tone: dim }
+            - { from: bakery server, to: Claude Code, label: '["rye loaf"]', tone: dim }
+            - { from: Claude Code, to: You, label: Rye loaf is sold out., tone: found }

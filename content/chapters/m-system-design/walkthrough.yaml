@@ -1,0 +1,164 @@
+- id: m-system-design-chat-sequence
+  title: A sequence number per conversation
+  hint: Watch each conversation's counter, what gets stored, and what happens when Kofi's message is sent twice.
+  language: TypeScript
+  code: |
+    type Message = { conversation: string; seq: number; clientId: string; from: string; text: string };
+
+    class ConversationStore {
+      private counters = new Map<string, number>();
+      private byClientId = new Map<string, Message>();
+      messages: Message[] = [];
+
+      send(conversation: string, clientId: string, from: string, text: string): Message {
+        const existing = this.byClientId.get(clientId);
+        if (existing) return existing;
+        const seq = (this.counters.get(conversation) ?? 0) + 1;
+        this.counters.set(conversation, seq);
+        const message = { conversation, seq, clientId, from, text };
+        this.messages.push(message);
+        this.byClientId.set(clientId, message);
+        return message;
+      }
+
+      since(conversation: string, afterSeq: number) {
+        return this.messages.filter((m) => m.conversation === conversation && m.seq > afterSeq).map((m) => `${m.seq} ${m.from}: ${m.text}`);
+      }
+    }
+
+    const chat = new ConversationStore();
+    chat.send("bakers", "a-1", "Ama", "Ovens on at 5?");
+    chat.send("bakers", "k-1", "Kofi", "Yes, I'll bring flour");
+    chat.send("bakers", "k-1", "Kofi", "Yes, I'll bring flour");
+    chat.send("family", "a-2", "Ama", "Home late tonight");
+    chat.send("bakers", "e-1", "Esi", "Rye or white?");
+    console.log(chat.since("bakers", 1));
+    console.log(chat.since("family", 0));
+  steps:
+    - title: An empty store
+      text: The store keeps one counter per conversation, every message, and an index of messages by the id the client chose.
+      lines: [24]
+      parts:
+        - { kind: kv, id: ctr, label: "Counters (one per conversation)", slots: 2, rows: [] }
+        - { kind: kv, id: msgs, label: "Stored messages (conversation, seq, client id)", slots: 4, rows: [] }
+    - title: Ama's first message
+      text: Client id a-1 has not been seen, so it is new. The bakers counter starts at 0, so this message gets sequence 1.
+      lines: [25, 9, 11, 12, 14]
+      vars: { seq: "0 + 1 = 1" }
+      parts:
+        - kind: kv
+          id: ctr
+          label: "Counters (one per conversation)"
+          slots: 2
+          rows: [{ name: bakers, value: "1", tone: active }]
+        - kind: kv
+          id: msgs
+          label: "Stored messages (conversation, seq, client id)"
+          slots: 4
+          rows: [{ name: "bakers 1 (a-1)", value: "Ama: Ovens on at 5?", tone: active }]
+    - title: Kofi replies
+      text: A new client id again, so the bakers counter moves on to 2.
+      lines: [26, 11, 12, 14]
+      vars: { seq: "1 + 1 = 2" }
+      parts:
+        - kind: kv
+          id: ctr
+          label: "Counters (one per conversation)"
+          slots: 2
+          rows: [{ name: bakers, value: "2", tone: active }]
+        - kind: kv
+          id: msgs
+          label: "Stored messages (conversation, seq, client id)"
+          slots: 4
+          rows:
+            - { name: "bakers 1 (a-1)", value: "Ama: Ovens on at 5?" }
+            - { name: "bakers 2 (k-1)", value: "Kofi: Yes, I'll bring flour", tone: active }
+    - title: Kofi's phone retries
+      text: The same message arrives again with the same client id, k-1. It is found in the index and the stored message is returned. Nothing new is stored and the counter does not move.
+      lines: [27, 9, 10]
+      vars: { existing: "bakers 2 (k-1)" }
+      parts:
+        - kind: kv
+          id: ctr
+          label: "Counters (one per conversation)"
+          slots: 2
+          rows: [{ name: bakers, value: "2", tone: compare }]
+        - kind: kv
+          id: msgs
+          label: "Stored messages (conversation, seq, client id)"
+          slots: 4
+          rows:
+            - { name: "bakers 1 (a-1)", value: "Ama: Ovens on at 5?" }
+            - { name: "bakers 2 (k-1)", value: "Kofi: Yes, I'll bring flour", tone: found }
+    - title: A different conversation
+      text: Ama writes in family. That conversation has its own counter, which starts at 0, so her message is family 1. The two conversations never share a sequence.
+      lines: [28, 11, 12]
+      vars: { seq: "0 + 1 = 1" }
+      parts:
+        - kind: kv
+          id: ctr
+          label: "Counters (one per conversation)"
+          slots: 2
+          rows: [{ name: bakers, value: "2" }, { name: family, value: "1", tone: active }]
+        - kind: kv
+          id: msgs
+          label: "Stored messages (conversation, seq, client id)"
+          slots: 4
+          rows:
+            - { name: "bakers 1 (a-1)", value: "Ama: Ovens on at 5?" }
+            - { name: "bakers 2 (k-1)", value: "Kofi: Yes, I'll bring flour" }
+            - { name: "family 1 (a-2)", value: "Ama: Home late tonight", tone: active }
+    - title: Back in bakers
+      text: Esi's message continues the bakers sequence at 3, with no gap, however many family messages came in between.
+      lines: [29, 11, 12]
+      vars: { seq: "2 + 1 = 3" }
+      parts:
+        - kind: kv
+          id: ctr
+          label: "Counters (one per conversation)"
+          slots: 2
+          rows: [{ name: bakers, value: "3", tone: active }, { name: family, value: "1" }]
+        - kind: kv
+          id: msgs
+          label: "Stored messages (conversation, seq, client id)"
+          slots: 4
+          rows:
+            - { name: "bakers 1 (a-1)", value: "Ama: Ovens on at 5?" }
+            - { name: "bakers 2 (k-1)", value: "Kofi: Yes, I'll bring flour" }
+            - { name: "family 1 (a-2)", value: "Ama: Home late tonight" }
+            - { name: "bakers 3 (e-1)", value: "Esi: Rye or white?", tone: active }
+    - title: Catching up after a gap
+      text: A client that has seen bakers message 1 asks for everything after it. It gets exactly messages 2 and 3, in order.
+      lines: [30, 20]
+      vars: {}
+      parts:
+        - kind: kv
+          id: msgs
+          label: "Stored messages (conversation, seq, client id)"
+          slots: 4
+          rows:
+            - { name: "bakers 1 (a-1)", value: "Ama: Ovens on at 5?", tone: dim }
+            - { name: "bakers 2 (k-1)", value: "Kofi: Yes, I'll bring flour", tone: found }
+            - { name: "family 1 (a-2)", value: "Ama: Home late tonight", tone: dim }
+            - { name: "bakers 3 (e-1)", value: "Esi: Rye or white?", tone: found }
+        - kind: terminal
+          id: out
+          slots: 2
+          lines: ['["2 Kofi: Yes, I''ll bring flour", "3 Esi: Rye or white?"]']
+    - title: Each conversation on its own
+      text: Asking family for everything after 0 returns its single message. Ordering per conversation is easy to keep consistent; a global order across all chats would be a needless bottleneck.
+      lines: [31]
+      parts:
+        - kind: kv
+          id: msgs
+          label: "Stored messages (conversation, seq, client id)"
+          slots: 4
+          rows:
+            - { name: "bakers 1 (a-1)", value: "Ama: Ovens on at 5?", tone: dim }
+            - { name: "bakers 2 (k-1)", value: "Kofi: Yes, I'll bring flour", tone: dim }
+            - { name: "family 1 (a-2)", value: "Ama: Home late tonight", tone: found }
+            - { name: "bakers 3 (e-1)", value: "Esi: Rye or white?", tone: dim }
+        - kind: terminal
+          id: out
+          slots: 2
+          lines: ['["2 Kofi: Yes, I''ll bring flour", "3 Esi: Rye or white?"]', '["1 Ama: Home late tonight"]']

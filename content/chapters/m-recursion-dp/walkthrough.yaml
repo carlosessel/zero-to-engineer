@@ -1,0 +1,70 @@
+- id: m-recursion-dp-fewest-coins
+  title: Filling the fewest-coins table
+  hint: Watch the table fill from 0p upwards, each amount built from answers already in the table.
+  language: TypeScript
+  code: |
+    function fewestCoins(coins: number[], amount: number): number {
+      const fewest = new Array(amount + 1).fill(Infinity);
+      fewest[0] = 0;
+      for (let a = 1; a <= amount; a++) {
+        for (const c of coins) {
+          if (c <= a && fewest[a - c] + 1 < fewest[a]) fewest[a] = fewest[a - c] + 1;
+        }
+      }
+      return fewest[amount];
+    }
+  steps:
+    - title: "Start with the smallest question"
+      text: "Subproblem: fewest[a] is the fewest coins that make a pence. Making 0p needs no coins. Every other amount starts as Infinity, meaning not made yet."
+      lines: [2, 3]
+      vars: { "coins": "1, 4, 5", "amount": 12 }
+      parts:
+        - { kind: cells, id: t, label: "fewest[a]: fewest coins to make a pence", indices: true, slots: 13, width: 40, items: [{ k: "a0", v: "0", tone: found }, { k: "a1", v: "∞", tone: dim }, { k: "a2", v: "∞", tone: dim }, { k: "a3", v: "∞", tone: dim }, { k: "a4", v: "∞", tone: dim }, { k: "a5", v: "∞", tone: dim }, { k: "a6", v: "∞", tone: dim }, { k: "a7", v: "∞", tone: dim }, { k: "a8", v: "∞", tone: dim }, { k: "a9", v: "∞", tone: dim }, { k: "a10", v: "∞", tone: dim }, { k: "a11", v: "∞", tone: dim }, { k: "a12", v: "∞", tone: dim }] }
+    - title: "1p, 2p and 3p"
+      text: "Only the 1p coin fits, so each amount is one more coin than the amount 1p less: 1, 2 and 3 coins."
+      lines: [4, 5, 6]
+      vars: { "a": 1 to 3 }
+      parts:
+        - { kind: cells, id: t, label: "fewest[a]: fewest coins to make a pence", indices: true, slots: 13, width: 40, pointers: [{ name: a, at: 3 }], items: [{ k: "a0", v: "0" }, { k: "a1", v: "1", tone: active }, { k: "a2", v: "2", tone: active }, { k: "a3", v: "3", tone: active }, { k: "a4", v: "∞", tone: dim }, { k: "a5", v: "∞", tone: dim }, { k: "a6", v: "∞", tone: dim }, { k: "a7", v: "∞", tone: dim }, { k: "a8", v: "∞", tone: dim }, { k: "a9", v: "∞", tone: dim }, { k: "a10", v: "∞", tone: dim }, { k: "a11", v: "∞", tone: dim }, { k: "a12", v: "∞", tone: dim }] }
+    - title: "4p: the 4p coin wins"
+      text: "Try each coin as the last one. Last coin 1p: fewest[3] + 1 = 4. Last coin 4p: fewest[0] + 1 = 1. Keep the smaller, 1."
+      lines: [5, 6]
+      vars: { "a": 4, "1p last": 3 + 1 = 4, "4p last": 0 + 1 = 1 }
+      parts:
+        - { kind: cells, id: t, label: "fewest[a]: fewest coins to make a pence", indices: true, slots: 13, width: 40, pointers: [{ name: a, at: 4 }], items: [{ k: "a0", v: "0", tone: compare }, { k: "a1", v: "1" }, { k: "a2", v: "2" }, { k: "a3", v: "3", tone: compare }, { k: "a4", v: "1", tone: active }, { k: "a5", v: "∞", tone: dim }, { k: "a6", v: "∞", tone: dim }, { k: "a7", v: "∞", tone: dim }, { k: "a8", v: "∞", tone: dim }, { k: "a9", v: "∞", tone: dim }, { k: "a10", v: "∞", tone: dim }, { k: "a11", v: "∞", tone: dim }, { k: "a12", v: "∞", tone: dim }] }
+    - title: "5p: one coin again"
+      text: "Last coin 5p gives fewest[0] + 1 = 1, beating 1p (2) and 4p (2). Every answer reads values already in the table."
+      lines: [5, 6]
+      vars: { "a": 5, "1p last": 1 + 1 = 2, "4p last": 1 + 1 = 2, "5p last": 0 + 1 = 1 }
+      parts:
+        - { kind: cells, id: t, label: "fewest[a]: fewest coins to make a pence", indices: true, slots: 13, width: 40, pointers: [{ name: a, at: 5 }], items: [{ k: "a0", v: "0", tone: compare }, { k: "a1", v: "1" }, { k: "a2", v: "2" }, { k: "a3", v: "3" }, { k: "a4", v: "1" }, { k: "a5", v: "1", tone: active }, { k: "a6", v: "∞", tone: dim }, { k: "a7", v: "∞", tone: dim }, { k: "a8", v: "∞", tone: dim }, { k: "a9", v: "∞", tone: dim }, { k: "a10", v: "∞", tone: dim }, { k: "a11", v: "∞", tone: dim }, { k: "a12", v: "∞", tone: dim }] }
+    - title: "6p and 7p"
+      text: "6p is 5p + 1p, two coins. 7p needs three, whichever coin goes last. The table grows from small amounts to larger ones."
+      lines: [4, 5, 6]
+      vars: { "a": 6 and 7 }
+      parts:
+        - { kind: cells, id: t, label: "fewest[a]: fewest coins to make a pence", indices: true, slots: 13, width: 40, pointers: [{ name: a, at: 7 }], items: [{ k: "a0", v: "0" }, { k: "a1", v: "1" }, { k: "a2", v: "2" }, { k: "a3", v: "3" }, { k: "a4", v: "1" }, { k: "a5", v: "1" }, { k: "a6", v: "2", tone: active }, { k: "a7", v: "3", tone: active }, { k: "a8", v: "∞", tone: dim }, { k: "a9", v: "∞", tone: dim }, { k: "a10", v: "∞", tone: dim }, { k: "a11", v: "∞", tone: dim }, { k: "a12", v: "∞", tone: dim }] }
+    - title: "8p: two 4p coins"
+      text: "Last coin 1p: fewest[7] + 1 = 4. Last coin 4p: fewest[4] + 1 = 2. Last coin 5p: fewest[3] + 1 = 4. The best is 2."
+      lines: [5, 6]
+      vars: { "a": 8, "1p last": 3 + 1 = 4, "4p last": 1 + 1 = 2, "5p last": 3 + 1 = 4 }
+      parts:
+        - { kind: cells, id: t, label: "fewest[a]: fewest coins to make a pence", indices: true, slots: 13, width: 40, pointers: [{ name: a, at: 8 }], items: [{ k: "a0", v: "0" }, { k: "a1", v: "1" }, { k: "a2", v: "2" }, { k: "a3", v: "3", tone: compare }, { k: "a4", v: "1", tone: compare }, { k: "a5", v: "1" }, { k: "a6", v: "2" }, { k: "a7", v: "3", tone: compare }, { k: "a8", v: "2", tone: active }, { k: "a9", v: "∞", tone: dim }, { k: "a10", v: "∞", tone: dim }, { k: "a11", v: "∞", tone: dim }, { k: "a12", v: "∞", tone: dim }] }
+    - title: "9p, 10p and 11p"
+      text: "9p is 4 + 5, 10p is 5 + 5, both two coins. 11p needs three. Each takes just three look-ups, one per coin."
+      lines: [4, 5, 6]
+      vars: { "a": 9 to 11 }
+      parts:
+        - { kind: cells, id: t, label: "fewest[a]: fewest coins to make a pence", indices: true, slots: 13, width: 40, pointers: [{ name: a, at: 11 }], items: [{ k: "a0", v: "0" }, { k: "a1", v: "1" }, { k: "a2", v: "2" }, { k: "a3", v: "3" }, { k: "a4", v: "1" }, { k: "a5", v: "1" }, { k: "a6", v: "2" }, { k: "a7", v: "3" }, { k: "a8", v: "2" }, { k: "a9", v: "2", tone: active }, { k: "a10", v: "2", tone: active }, { k: "a11", v: "3", tone: active }, { k: "a12", v: "∞", tone: dim }] }
+    - title: "12p: the answer"
+      text: "Last coin 1p: fewest[11] + 1 = 4. Last coin 4p: fewest[8] + 1 = 3. Last coin 5p: fewest[7] + 1 = 4. So 12p needs 3 coins."
+      lines: [5, 6, 9]
+      vars: { "a": 12, "1p last": 3 + 1 = 4, "4p last": 2 + 1 = 3, "5p last": 3 + 1 = 4 }
+      parts:
+        - { kind: cells, id: t, label: "fewest[a]: fewest coins to make a pence", indices: true, slots: 13, width: 40, pointers: [{ name: a, at: 12 }], items: [{ k: "a0", v: "0" }, { k: "a1", v: "1" }, { k: "a2", v: "2" }, { k: "a3", v: "3" }, { k: "a4", v: "1" }, { k: "a5", v: "1" }, { k: "a6", v: "2" }, { k: "a7", v: "3", tone: compare }, { k: "a8", v: "2", tone: compare }, { k: "a9", v: "2" }, { k: "a10", v: "2" }, { k: "a11", v: "3", tone: compare }, { k: "a12", v: "3", tone: found }] }
+    - title: "Better than greedy"
+      text: "Taking the largest coin that fits gives 5 + 5 + 1 + 1, four coins. The table found 4 + 4 + 4, three coins, by trying every last coin. 12 amounts times 3 coins: O(amount × coins)."
+      lines: [9]
+      vars: { "fewest[12]": 3, "greedy": 4 coins }
+      parts:
+        - { kind: cells, id: t, label: "fewest[a]: fewest coins to make a pence", indices: true, slots: 13, width: 40, items: [{ k: "a0", v: "0" }, { k: "a1", v: "1" }, { k: "a2", v: "2" }, { k: "a3", v: "3" }, { k: "a4", v: "1", tone: found }, { k: "a5", v: "1" }, { k: "a6", v: "2" }, { k: "a7", v: "3" }, { k: "a8", v: "2", tone: found }, { k: "a9", v: "2" }, { k: "a10", v: "2" }, { k: "a11", v: "3" }, { k: "a12", v: "3", tone: found }] }

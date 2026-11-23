@@ -1,0 +1,83 @@
+- id: python-fast-gather
+  title: Three waits at the same time
+  hint: Watch the three calls start, pause at await together, and finish together after one second.
+  language: Python
+  code: |
+    import asyncio
+
+    async def ask(q: str) -> str:
+        await asyncio.sleep(1)            # stands in for a model call
+        return q.upper()
+
+    async def main():
+        answers = await asyncio.gather(*(ask(q) for q in ["a", "b", "c"]))
+        print(answers)                    # takes 1 second, not 3
+
+    asyncio.run(main())
+  steps:
+    - title: Start main
+      text: asyncio.run starts the async function main. Nothing has been asked yet.
+      lines: [11]
+      vars: { time: "0 s" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, ask a, ask b, ask c]
+          slots: 7
+          messages: []
+        - { kind: terminal, id: out, lines: [], slots: 1 }
+    - title: gather starts three calls
+      text: The comprehension makes one ask call for each of "a", "b" and "c", and asyncio.gather starts them all.
+      lines: [8]
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, ask a, ask b, ask c]
+          slots: 7
+          messages:
+            - { from: main, to: ask a, label: 'ask("a")', tone: active }
+            - { from: main, to: ask b, label: 'ask("b")', tone: active }
+            - { from: main, to: ask c, label: 'ask("c")', tone: active }
+    - title: Each one pauses at await
+      text: Each call reaches await asyncio.sleep(1) and pauses there for one second. While one waits, the others get to run, so all three are soon waiting.
+      lines: [4]
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, ask a, ask b, ask c]
+          slots: 7
+          messages:
+            - { from: main, to: ask a, label: 'ask("a")', tone: dim }
+            - { from: main, to: ask b, label: 'ask("b")', tone: dim }
+            - { from: main, to: ask c, label: 'ask("c")', tone: dim }
+            - { from: ask a, to: ask a, label: "await", tone: compare }
+            - { from: ask b, to: ask b, label: "await", tone: compare }
+            - { from: ask c, to: ask c, label: "await", tone: compare }
+    - title: One second passes
+      text: The three waits overlap. In a real program each would be a slow model call, all in progress together.
+      lines: [4]
+      vars: { time: "1 s" }
+    - title: Each returns its answer
+      text: After the wait, each call carries on and returns q.upper(), so "a" becomes "A".
+      lines: [5]
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, ask a, ask b, ask c]
+          slots: 7
+          messages:
+            - { from: ask a, to: ask a, label: "await", tone: dim }
+            - { from: ask b, to: ask b, label: "await", tone: dim }
+            - { from: ask c, to: ask c, label: "await", tone: dim }
+            - { from: ask a, to: main, label: '"A"', tone: found }
+            - { from: ask b, to: main, label: '"B"', tone: found }
+            - { from: ask c, to: main, label: '"C"', tone: found }
+    - title: gather collects them
+      text: gather waits until all three have finished, then hands back their results as one list, in the order they were asked.
+      lines: [8, 9]
+      vars: { time: "1 s", answers: "['A', 'B', 'C']" }
+      parts:
+        - { kind: terminal, id: out, lines: ["['A', 'B', 'C']"], slots: 1 }
+    - title: 1 second, not 3
+      text: One after another, three one-second calls would take 3 seconds. Waiting at the same time, they take about 1. That is why AI code runs model calls this way.
+      lines: [9]

@@ -1,0 +1,119 @@
+- id: ml-idea-split-fit-predict
+  title: Split, fit, predict, score
+  hint: Watch the test rows stay locked away while the model learns, so the final score is about data it has never seen.
+  language: Python
+  code: |
+    from sklearn.datasets import load_breast_cancer
+    from sklearn.model_selection import train_test_split
+    from sklearn.ensemble import RandomForestClassifier
+    from sklearn.metrics import accuracy_score
+
+    X, y = load_breast_cancer(return_X_y=True)
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=0.2, random_state=42)
+
+    model = RandomForestClassifier(random_state=42)
+    model.fit(X_train, y_train)              # learn from examples
+    preds = model.predict(X_test)            # predict on unseen data
+    print(accuracy_score(y_test, preds))
+  steps:
+    - title: Load the examples
+      text: "X holds the features: 569 rows, each with 30 measurements. y holds the label for each row, 0 or 1, the answer to be predicted."
+      lines: [6]
+      vars: { "X.shape": "(569, 30)", "y.shape": "(569,)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: data, label: "569 rows", x: 0, y: 0.5, tone: active, note: "X and y" }
+          edges: []
+    - title: Split before anything else
+      text: "train_test_split shuffles the rows and keeps 20% aside: 114 rows for testing, 455 for training. random_state=42 makes the shuffle the same every run."
+      lines: [7, 8]
+      vars: { "X_train.shape": "(455, 30)", "X_test.shape": "(114, 30)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: data, label: "569 rows", x: 0, y: 0.5, tone: dim, note: "X and y" }
+            - { k: train, label: "455 train rows", x: 0.33, y: 0.1, tone: active }
+            - { k: test, label: "114 test rows", x: 0.33, y: 0.9, tone: compare, note: "locked away" }
+          edges:
+            - { a: data, b: train, directed: true, label: "80%" }
+            - { a: data, b: test, directed: true, label: "20%" }
+    - title: An untrained model
+      text: "A random forest starts with nothing learned. It is a function with settings that training will fill in."
+      lines: [10]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: data, label: "569 rows", x: 0, y: 0.5, tone: dim, note: "X and y" }
+            - { k: train, label: "455 train rows", x: 0.33, y: 0.1 }
+            - { k: test, label: "114 test rows", x: 0.33, y: 0.9, tone: compare, note: "locked away" }
+            - { k: model, label: "model", x: 0.7, y: 0.1, tone: active, note: "not trained" }
+          edges:
+            - { a: data, b: train, directed: true, tone: dim }
+            - { a: data, b: test, directed: true, tone: dim }
+    - title: fit learns from the training rows
+      text: "fit shows the model the 455 training rows together with their answers. It adjusts itself to map features to labels. The test rows play no part."
+      lines: [11]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: data, label: "569 rows", x: 0, y: 0.5, tone: dim, note: "X and y" }
+            - { k: train, label: "455 train rows", x: 0.33, y: 0.1, tone: active }
+            - { k: test, label: "114 test rows", x: 0.33, y: 0.9, tone: compare, note: "locked away" }
+            - { k: model, label: "model", x: 0.7, y: 0.1, tone: done, note: "trained" }
+          edges:
+            - { a: data, b: train, directed: true, tone: dim }
+            - { a: data, b: test, directed: true, tone: dim }
+            - { a: train, b: model, directed: true, label: "fit", tone: active }
+    - title: predict on rows it has never seen
+      text: "Now the test features go in, without their answers. The model returns one predicted label for each of the 114 rows."
+      lines: [12]
+      vars: { "X_train.shape": "(455, 30)", "X_test.shape": "(114, 30)", "preds.shape": "(114,)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: data, label: "569 rows", x: 0, y: 0.5, tone: dim, note: "X and y" }
+            - { k: train, label: "455 train rows", x: 0.33, y: 0.1, tone: dim }
+            - { k: test, label: "114 test rows", x: 0.33, y: 0.9, tone: active, note: "X_test only" }
+            - { k: model, label: "model", x: 0.7, y: 0.1, tone: done, note: "trained" }
+            - { k: preds, label: "preds", x: 0.7, y: 0.9, tone: active }
+          edges:
+            - { a: data, b: train, directed: true, tone: dim }
+            - { a: data, b: test, directed: true, tone: dim }
+            - { a: train, b: model, directed: true, label: "fit", tone: dim }
+            - { a: test, b: preds, directed: true }
+            - { a: model, b: preds, directed: true, label: "predict", tone: active }
+    - title: Compare with the real answers
+      text: "accuracy_score compares the 114 predictions with y_test, the answers kept back, and gives the share that match."
+      lines: [13]
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: data, label: "569 rows", x: 0, y: 0.5, tone: dim, note: "X and y" }
+            - { k: train, label: "455 train rows", x: 0.33, y: 0.1, tone: dim }
+            - { k: test, label: "114 test rows", x: 0.33, y: 0.9, tone: compare, note: "y_test" }
+            - { k: model, label: "model", x: 0.7, y: 0.1, tone: dim, note: "trained" }
+            - { k: preds, label: "preds", x: 0.7, y: 0.9, tone: compare }
+            - { k: score, label: "accuracy", x: 1, y: 0.5, tone: found }
+          edges:
+            - { a: data, b: train, directed: true, tone: dim }
+            - { a: data, b: test, directed: true, tone: dim }
+            - { a: train, b: model, directed: true, label: "fit", tone: dim }
+            - { a: test, b: preds, directed: true, tone: dim }
+            - { a: model, b: preds, directed: true, label: "predict", tone: dim }
+            - { a: preds, b: score, directed: true, tone: active }
+    - title: Why the split matters
+      text: "The model never saw the test rows while learning, so the score says how it will do on new data. Swap in another algorithm and fit and predict stay the same."

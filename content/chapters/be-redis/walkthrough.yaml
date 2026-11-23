@@ -1,0 +1,130 @@
+- id: be-redis-cache-aside
+  title: Cache-aside, miss then hit
+  hint: Watch where getMenu finds the menu on each request, and how often the slow database is asked.
+  language: TypeScript
+  code: |
+    async function getMenu() {
+      const cached = await redis.get("menu:v1");
+      if (cached) return JSON.parse(cached) as { sku: string; pricePence: number }[];
+      const menu = await loadMenuFromDatabase();
+      const ttl = 300 + Math.floor(Math.random() * 60); // jitter, so keys do not all expire together
+      await redis.set("menu:v1", JSON.stringify(menu), { EX: ttl });
+      return menu;
+    }
+
+    for (let i = 0; i < 5; i++) await getMenu();
+
+    // The price changes: update the database, then delete the cached copy.
+    await redis.del("menu:v1");
+    const menu = await getMenu();
+  steps:
+    - title: An empty cache
+      text: Redis holds nothing under menu:v1 yet. The database has the menu, but each query to it is slow.
+      vars: { databaseCalls: 0 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Service, Redis, Database]
+          slots: 6
+          messages: []
+        - { kind: kv, id: redis, label: "In Redis", slots: 1, rows: [] }
+    - title: "Request 1: look in the cache"
+      text: getMenu always asks Redis first. The key does not exist, so GET returns nothing; this is a cache miss.
+      lines: [2, 3]
+      vars: { databaseCalls: 0, cached: "null" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Service, Redis, Database]
+          slots: 6
+          messages:
+            - { from: Service, to: Redis, label: "GET menu:v1", tone: active }
+            - { from: Redis, to: Service, label: "(nothing)", tone: bad }
+    - title: Load from the database
+      text: On a miss the service does the slow work once, loading the menu from the database.
+      lines: [4]
+      vars: { databaseCalls: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Service, Redis, Database]
+          slots: 6
+          messages:
+            - { from: Service, to: Redis, label: "GET menu:v1", tone: dim }
+            - { from: Redis, to: Service, label: "(nothing)", tone: dim }
+            - { from: Service, to: Database, label: "load menu", tone: active }
+            - { from: Database, to: Service, label: "RYE-400, CRO-090", tone: found }
+    - title: Store it with an expiry
+      text: The menu is saved as JSON with an expiry of 300 to 359 seconds. The random part, jitter, stops many keys expiring at the same moment.
+      lines: [5, 6, 7]
+      vars: { databaseCalls: 1, ttl: "300 to 359 s" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Service, Redis, Database]
+          slots: 6
+          messages:
+            - { from: Service, to: Redis, label: "GET menu:v1", tone: dim }
+            - { from: Redis, to: Service, label: "(nothing)", tone: dim }
+            - { from: Service, to: Database, label: "load menu", tone: dim }
+            - { from: Database, to: Service, label: "RYE-400, CRO-090", tone: dim }
+            - { from: Service, to: Redis, label: "SET menu:v1 … EX ttl", tone: active }
+        - kind: kv
+          id: redis
+          label: "In Redis"
+          slots: 1
+          rows: [{ name: "menu:v1", value: "[RYE-400, CRO-090], expires", tone: active }]
+    - title: Requests 2 to 5 are hits
+      text: Now GET finds the key, so getMenu returns straight away. The database is not asked again.
+      lines: [2, 3, 10]
+      vars: { databaseCalls: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Service, Redis, Database]
+          slots: 6
+          messages:
+            - { from: Service, to: Redis, label: "GET menu:v1 (×4)", tone: active }
+            - { from: Redis, to: Service, label: "the cached menu (×4)", tone: found }
+        - kind: kv
+          id: redis
+          label: "In Redis"
+          slots: 1
+          rows: [{ name: "menu:v1", value: "[RYE-400, CRO-090], expires", tone: found }]
+        - { kind: terminal, id: out, slots: 2, lines: ["five requests, database calls: 1"] }
+    - title: A price changes
+      text: The database is updated, then the cached copy is deleted rather than updated. Deleting avoids an older value overwriting a newer one.
+      lines: [12, 13]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Service, Redis, Database]
+          slots: 6
+          messages:
+            - { from: Service, to: Redis, label: "DEL menu:v1", tone: active }
+        - kind: kv
+          id: redis
+          label: "In Redis"
+          slots: 1
+          rows: []
+    - title: The next request misses again
+      text: The next getMenu misses, loads the fresh menu from the database and caches it again. The database was asked twice in all.
+      lines: [14]
+      vars: { databaseCalls: 2 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Service, Redis, Database]
+          slots: 6
+          messages:
+            - { from: Service, to: Redis, label: "DEL menu:v1", tone: dim }
+            - { from: Service, to: Redis, label: "GET menu:v1", tone: dim }
+            - { from: Redis, to: Service, label: "(nothing)", tone: bad }
+            - { from: Service, to: Database, label: "load menu", tone: active }
+            - { from: Service, to: Redis, label: "SET menu:v1 … EX ttl", tone: active }
+        - kind: kv
+          id: redis
+          label: "In Redis"
+          slots: 1
+          rows: [{ name: "menu:v1", value: "fresh menu, expires", tone: found }]
+        - { kind: terminal, id: out, slots: 2, lines: ["five requests, database calls: 1", "after invalidation, database calls: 2 first item: RYE-400"] }

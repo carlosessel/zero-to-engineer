@@ -1,0 +1,116 @@
+- id: git-basics-first-commits
+  title: Working folder, staging area, commits
+  hint: Follow index.html from the working folder into the staging area and into a commit, twice.
+  language: Shell
+  code: |
+    git init
+    git status
+    git add index.html
+    git commit -m "Add first page"
+    git diff
+    git add index.html
+    git commit -m "Reword the introduction"
+    git log --oneline
+  steps:
+    - title: An empty repository
+      text: git init makes the folder a repository by adding a hidden .git folder. There are no commits yet and nothing is staged.
+      lines: [1]
+      parts:
+        - kind: tables
+          id: areas
+          slots: 1
+          tables:
+            - { id: w, title: Working folder, columns: [file, state], rows: [] }
+            - { id: s, title: Staging area, columns: [file], rows: [] }
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { label: "No commits yet", x: 0.5, y: 0.5, tone: dim }
+          edges: []
+    - title: A new file is untracked
+      text: You create index.html in VS Code. git status sees it but says it is untracked; Git has never saved it.
+      lines: [2]
+      parts:
+        - kind: tables
+          id: areas
+          slots: 1
+          tables:
+            - { id: w, title: Working folder, columns: [file, state], rows: [{ cells: [index.html, untracked], tone: compare }] }
+            - { id: s, title: Staging area, columns: [file], rows: [] }
+    - title: Stage it
+      text: git add puts the file's current contents in the staging area, the list of changes for the next commit. Think of packing a parcel.
+      lines: [3]
+      parts:
+        - kind: tables
+          id: areas
+          slots: 1
+          tables:
+            - { id: w, title: Working folder, columns: [file, state], rows: [[index.html, staged]] }
+            - { id: s, title: Staging area, columns: [file], rows: [{ cells: [index.html], tone: active }] }
+    - title: Commit seals the snapshot
+      text: git commit saves what is staged as a snapshot with a message and a hash, here 3f2a9c1. The staging area is empty again and the working tree is clean.
+      lines: [4]
+      parts:
+        - kind: tables
+          id: areas
+          slots: 1
+          tables:
+            - { id: w, title: Working folder, columns: [file, state], rows: [[index.html, clean]] }
+            - { id: s, title: Staging area, columns: [file], rows: [] }
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: c1, label: "3f2a9c1", x: 0.3, y: 0.5, tone: found, note: "Add first page" }
+            - { label: main, x: 0.85, y: 0.5, note: HEAD }
+          edges:
+            - { a: main, b: c1, directed: true }
+    - title: Edit and compare
+      text: You reword the sentence and save. The file is now modified, and git diff shows the removed line with - and the added line with +.
+      lines: [5]
+      parts:
+        - kind: tables
+          id: areas
+          slots: 1
+          tables:
+            - { id: w, title: Working folder, columns: [file, state], rows: [{ cells: [index.html, modified], tone: compare }] }
+            - { id: s, title: Staging area, columns: [file], rows: [] }
+    - title: Stage the change
+      text: The same git add puts the new version in the staging area, ready for the next snapshot.
+      lines: [6]
+      parts:
+        - kind: tables
+          id: areas
+          slots: 1
+          tables:
+            - { id: w, title: Working folder, columns: [file, state], rows: [[index.html, staged]] }
+            - { id: s, title: Staging area, columns: [file], rows: [{ cells: [index.html], tone: active }] }
+    - title: A second commit
+      text: The new commit 8c41d0e comes after the first. main moves to it, and HEAD, meaning where you are now, moves with it.
+      lines: [7]
+      parts:
+        - kind: tables
+          id: areas
+          slots: 1
+          tables:
+            - { id: w, title: Working folder, columns: [file, state], rows: [[index.html, clean]] }
+            - { id: s, title: Staging area, columns: [file], rows: [] }
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: c1, label: "3f2a9c1", x: 0.1, y: 0.5, tone: done, note: "Add first page" }
+            - { k: c2, label: "8c41d0e", x: 0.5, y: 0.5, tone: found, note: "Reword the introduction" }
+            - { label: main, x: 0.9, y: 0.5, note: HEAD }
+          edges:
+            - { a: c1, b: c2, directed: true }
+            - { a: main, b: c2, directed: true }
+    - title: Read the history
+      text: git log --oneline lists the commits, newest first. Each can be looked at again, compared or undone later.
+      lines: [8]
+      parts:
+        - kind: terminal
+          id: t
+          slots: 3
+          lines: ["$ git log --oneline", "8c41d0e (HEAD -> main) Reword the introduction", "3f2a9c1 Add first page"]

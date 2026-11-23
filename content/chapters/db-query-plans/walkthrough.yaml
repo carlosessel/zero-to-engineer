@@ -1,0 +1,133 @@
+- id: db-query-plans-inside-out
+  title: Reading a plan from the inside out
+  hint: Rows flow upwards. Watch each node of the EXPLAIN ANALYZE plan run, starting from the most indented ones.
+  language: Query plan
+  code: |
+    HashAggregate (actual rows=4.00 loops=1)
+      Group Key: c.city
+      Batches: 1  Memory Usage: 32kB
+      ->  Hash Join (actual rows=3444.00 loops=1)
+            Hash Cond: (o.customer_id = c.id)
+            ->  Seq Scan on plan_orders o (actual rows=3444.00 loops=1)
+                  Filter: (placed_on >= '2026-06-01'::date)
+                  Rows Removed by Filter: 21556
+            ->  Hash (actual rows=5000.00 loops=1)
+                  Buckets: 8192  Batches: 1  Memory Usage: 208kB
+                  ->  Seq Scan on plan_customers c (actual rows=5000.00 loops=1)
+  steps:
+    - title: A tree of nodes
+      text: Each line starting with a name is a node, and indented nodes feed their rows to the node above. The top line runs last, so read from the innermost nodes out.
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: HashAggregate, x: 0.5, y: 0 }
+            - { label: Hash Join, x: 0.5, y: 0.33 }
+            - { label: Seq Scan o, x: 0.15, y: 0.66 }
+            - { label: Hash, x: 0.8, y: 0.66 }
+            - { label: Seq Scan c, x: 0.8, y: 1 }
+          edges:
+            - { a: Seq Scan c, b: Hash, directed: true }
+            - { a: Hash, b: Hash Join, directed: true }
+            - { a: Seq Scan o, b: Hash Join, directed: true }
+            - { a: Hash Join, b: HashAggregate, directed: true }
+    - title: Scan every customer
+      text: The most indented node reads the whole plan_customers table. It has no filter, so all 5,000 customers come out.
+      lines: [11]
+      vars: { rows: "5000" }
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: HashAggregate, x: 0.5, y: 0 }
+            - { label: Hash Join, x: 0.5, y: 0.33 }
+            - { label: Seq Scan o, x: 0.15, y: 0.66 }
+            - { label: Hash, x: 0.8, y: 0.66 }
+            - { label: Seq Scan c, x: 0.8, y: 1, tone: active, note: "5000 rows" }
+          edges:
+            - { a: Seq Scan c, b: Hash, directed: true, tone: active }
+            - { a: Hash, b: Hash Join, directed: true }
+            - { a: Seq Scan o, b: Hash Join, directed: true }
+            - { a: Hash Join, b: HashAggregate, directed: true }
+    - title: Build a hash table
+      text: The Hash node puts the 5,000 customers into a hash table keyed by id, so any customer can be found in one step. It fitted in memory, in one batch.
+      lines: [9, 10]
+      vars: { rows: "5000" }
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: HashAggregate, x: 0.5, y: 0 }
+            - { label: Hash Join, x: 0.5, y: 0.33 }
+            - { label: Seq Scan o, x: 0.15, y: 0.66 }
+            - { label: Hash, x: 0.8, y: 0.66, tone: active, note: "5000 rows" }
+            - { label: Seq Scan c, x: 0.8, y: 1, tone: done, note: "5000 rows" }
+          edges:
+            - { a: Seq Scan c, b: Hash, directed: true, tone: done }
+            - { a: Hash, b: Hash Join, directed: true, tone: active }
+            - { a: Seq Scan o, b: Hash Join, directed: true }
+            - { a: Hash Join, b: HashAggregate, directed: true }
+    - title: Scan the orders, filtering
+      text: The other input reads all 25,000 orders and keeps only those placed from June 2026 on. 3,444 pass; 21,556 were read and thrown away, a sign that an index might help.
+      lines: [6, 7, 8]
+      vars: { kept: "3444", "removed by filter": "21556" }
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: HashAggregate, x: 0.5, y: 0 }
+            - { label: Hash Join, x: 0.5, y: 0.33 }
+            - { label: Seq Scan o, x: 0.15, y: 0.66, tone: active, note: "3444 rows" }
+            - { label: Hash, x: 0.8, y: 0.66, tone: done, note: "5000 rows" }
+            - { label: Seq Scan c, x: 0.8, y: 1, tone: done, note: "5000 rows" }
+          edges:
+            - { a: Seq Scan c, b: Hash, directed: true, tone: done }
+            - { a: Hash, b: Hash Join, directed: true, tone: done }
+            - { a: Seq Scan o, b: Hash Join, directed: true, tone: active }
+            - { a: Hash Join, b: HashAggregate, directed: true }
+    - title: Join each order to its customer
+      text: For each of the 3,444 orders, the Hash Join looks up o.customer_id in the hash table of customers. Every order has a customer, so 3,444 joined rows come out.
+      lines: [4, 5]
+      vars: { rows: "3444" }
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: HashAggregate, x: 0.5, y: 0 }
+            - { label: Hash Join, x: 0.5, y: 0.33, tone: active, note: "3444 rows" }
+            - { label: Seq Scan o, x: 0.15, y: 0.66, tone: done, note: "3444 rows" }
+            - { label: Hash, x: 0.8, y: 0.66, tone: done, note: "5000 rows" }
+            - { label: Seq Scan c, x: 0.8, y: 1, tone: done, note: "5000 rows" }
+          edges:
+            - { a: Seq Scan c, b: Hash, directed: true, tone: done }
+            - { a: Hash, b: Hash Join, directed: true, tone: done }
+            - { a: Seq Scan o, b: Hash Join, directed: true, tone: done }
+            - { a: Hash Join, b: HashAggregate, directed: true, tone: active }
+    - title: Group by city
+      text: The top node groups the joined rows by c.city using another hash table, and counts each group. There are four cities, so four rows come out.
+      lines: [1, 2, 3]
+      vars: { rows: "4" }
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: HashAggregate, x: 0.5, y: 0, tone: found, note: "4 rows" }
+            - { label: Hash Join, x: 0.5, y: 0.33, tone: done, note: "3444 rows" }
+            - { label: Seq Scan o, x: 0.15, y: 0.66, tone: done, note: "3444 rows" }
+            - { label: Hash, x: 0.8, y: 0.66, tone: done, note: "5000 rows" }
+            - { label: Seq Scan c, x: 0.8, y: 1, tone: done, note: "5000 rows" }
+          edges:
+            - { a: Seq Scan c, b: Hash, directed: true, tone: done }
+            - { a: Hash, b: Hash Join, directed: true, tone: done }
+            - { a: Seq Scan o, b: Hash Join, directed: true, tone: done }
+            - { a: Hash Join, b: HashAggregate, directed: true, tone: done }
+    - title: Compare estimates with reality
+      text: Plain EXPLAIN estimated 3,453 rows from the orders scan; 3,444 really came out. Estimates this close mean the planner chose its plan on good information.
+      lines: [6]
+      vars: { estimated: "3453", actual: "3444" }

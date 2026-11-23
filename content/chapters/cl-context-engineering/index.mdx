@@ -75,6 +75,8 @@ The reply contains a `compaction` block; you start the next request's `messages`
 
 The lightest form of compaction is simply **clearing old tool results**: once a file's contents or a search's results have been used, the raw output rarely needs to stay.
 
+<Walkthrough name="cl-context-engineering-long-task" />
+
 ### 2. Context editing
 
 **Context editing** (beta when checked) lets the API clear old content automatically as the conversation grows: for example, removing all but the last few tool results once the input passes a threshold, or old thinking blocks. You set it once in the request's `context_management` field, with rules such as how many recent tool uses to keep and which tools never to clear. The documentation warns that clearing content changes the prompt's beginning, so it invalidates the prompt cache from that point: clear in larger steps rather than a little every turn.

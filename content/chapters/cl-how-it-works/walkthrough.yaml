@@ -1,0 +1,129 @@
+- id: cl-how-it-works-resent-history
+  title: The whole conversation is sent every time
+  hint: Watch what the app sends to the model on each turn. The model keeps nothing; the history travels with every request.
+  language: Python
+  code: |
+    conversation = [
+        {"role": "user", "content": "My name is Ama. What is a context window?"},
+        {"role": "assistant", "content": "It is everything the model can see when it writes a reply..."},
+        {"role": "user", "content": "And what was my name?"},
+    ]
+
+    # The model can answer "Ama" only because the first message is sent again.
+    for turn in conversation:
+        print(f'{turn["role"]:>9}: {turn["content"]}')
+    print(len(conversation), "messages are sent with this one request")
+  steps:
+    - title: The first message
+      text: Ama asks her first question. The app puts it into the context and sends it to the model. So far the context holds one message.
+      lines: [2]
+      vars: { "messages sent": 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, App, Model]
+          slots: 6
+          messages:
+            - { from: You, to: App, label: "My name is Ama. What is...?", tone: active }
+            - { from: App, to: Model, label: "send 1 message", tone: active }
+        - kind: kv
+          id: ctx
+          label: "Context sent with this request"
+          slots: 3
+          rows:
+            - { k: m1, name: user, value: "My name is Ama. What is a context...", tone: active }
+    - title: The model replies
+      text: The model predicts a reply from what is in the context and sends it back. Then it keeps nothing; it remembers nothing between replies.
+      lines: [3]
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, App, Model]
+          slots: 6
+          messages:
+            - { from: You, to: App, label: "My name is Ama. What is...?", tone: dim }
+            - { from: App, to: Model, label: "send 1 message", tone: dim }
+            - { from: Model, to: App, label: "It is everything the model...", tone: found }
+        - kind: kv
+          id: ctx
+          label: "Context sent with this request"
+          slots: 3
+          rows:
+            - { k: m1, name: user, value: "My name is Ama. What is a context...", tone: dim }
+    - title: A follow-up question
+      text: Ama asks a question that only makes sense with the earlier messages. The model has not stored them anywhere.
+      lines: [4]
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, App, Model]
+          slots: 6
+          messages:
+            - { from: You, to: App, label: "My name is Ama. What is...?", tone: dim }
+            - { from: App, to: Model, label: "send 1 message", tone: dim }
+            - { from: Model, to: App, label: "It is everything the model...", tone: dim }
+            - { from: You, to: App, label: "And what was my name?", tone: active }
+    - title: The app sends everything again
+      text: So the app sends the whole conversation again, all three messages, not just the new one. The model reads it from the start.
+      lines: [1, 2, 3, 4, 5]
+      vars: { "messages sent": 3 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, App, Model]
+          slots: 6
+          messages:
+            - { from: You, to: App, label: "My name is Ama. What is...?", tone: dim }
+            - { from: App, to: Model, label: "send 1 message", tone: dim }
+            - { from: Model, to: App, label: "It is everything the model...", tone: dim }
+            - { from: You, to: App, label: "And what was my name?", tone: dim }
+            - { from: App, to: Model, label: "send all 3 messages", tone: active }
+        - kind: kv
+          id: ctx
+          label: "Context sent with this request"
+          slots: 3
+          rows:
+            - { k: m1, name: user, value: "My name is Ama. What is a context...", tone: active }
+            - { k: m2, name: assistant, value: "It is everything the model can see...", tone: active }
+            - { k: m3, name: user, value: "And what was my name?", tone: active }
+    - title: The answer comes from the resent history
+      text: The model can answer "Ama" only because the first message was sent again. It feels like a continuing conversation because the history is resent every time.
+      lines: [7]
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, App, Model]
+          slots: 6
+          messages:
+            - { from: You, to: App, label: "My name is Ama. What is...?", tone: dim }
+            - { from: App, to: Model, label: "send 1 message", tone: dim }
+            - { from: Model, to: App, label: "It is everything the model...", tone: dim }
+            - { from: You, to: App, label: "And what was my name?", tone: dim }
+            - { from: App, to: Model, label: "send all 3 messages", tone: dim }
+            - { from: Model, to: App, label: "Ama", tone: found }
+        - kind: kv
+          id: ctx
+          label: "Context sent with this request"
+          slots: 3
+          rows:
+            - { k: m1, name: user, value: "My name is Ama. What is a context...", tone: found }
+            - { k: m2, name: assistant, value: "It is everything the model can see..." }
+            - { k: m3, name: user, value: "And what was my name?" }
+    - title: A new conversation starts from nothing
+      text: "In a new conversation the context holds only the new message. What is not in the context does not exist for Claude, so it cannot know Ama's name. Long conversations cost more for the same reason: every reply rereads it all."
+      vars: { "messages sent": 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, App, Model]
+          slots: 6
+          messages:
+            - { from: You, to: App, label: "What was my name?", tone: active }
+            - { from: App, to: Model, label: "send 1 message", tone: active }
+            - { from: Model, to: App, label: "I don't know", tone: bad }
+        - kind: kv
+          id: ctx
+          label: "Context sent with this request"
+          slots: 3
+          rows:
+            - { k: m4, name: user, value: "What was my name?", tone: active }

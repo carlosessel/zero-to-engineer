@@ -1,0 +1,219 @@
+- id: agents-workflow-vs-agent
+  title: Workflow or agent?
+  hint: Switch between the two. In a workflow you fix the steps; in an agent the model chooses each step from what it has just seen.
+  examples:
+    - label: Workflow
+      steps:
+        - title: "A fixed sequence"
+          text: "You designed these steps in advance. Every request goes through the same four, in the same order."
+          vars: { "steps decided by": "you" }
+          parts:
+            - kind: graph
+              id: g
+              height: 180
+              nodes:
+                - { k: req, label: "request", x: 0, y: 0.5, tone: base }
+                - { k: cls, label: "classify", x: 0.27, y: 0.5, tone: base }
+                - { k: ret, label: "retrieve", x: 0.5, y: 0.5, tone: base }
+                - { k: dra, label: "draft", x: 0.73, y: 0.5, tone: base }
+                - { k: chk, label: "check", x: 1, y: 0.5, tone: base }
+              edges:
+                - { a: req, b: cls, directed: true, tone: base }
+                - { a: cls, b: ret, directed: true, tone: base }
+                - { a: ret, b: dra, directed: true, tone: base }
+                - { a: dra, b: chk, directed: true, tone: base }
+        - title: "Classify"
+          text: "A cheap call works out what kind of request this is."
+          parts:
+            - kind: graph
+              id: g
+              height: 180
+              nodes:
+                - { k: req, label: "request", x: 0, y: 0.5, tone: base }
+                - { k: cls, label: "classify", x: 0.27, y: 0.5, tone: active }
+                - { k: ret, label: "retrieve", x: 0.5, y: 0.5, tone: base }
+                - { k: dra, label: "draft", x: 0.73, y: 0.5, tone: base }
+                - { k: chk, label: "check", x: 1, y: 0.5, tone: base }
+              edges:
+                - { a: req, b: cls, directed: true, tone: active }
+                - { a: cls, b: ret, directed: true, tone: base }
+                - { a: ret, b: dra, directed: true, tone: base }
+                - { a: dra, b: chk, directed: true, tone: base }
+        - title: "Retrieve"
+          text: "Code fetches the documents that kind of request needs."
+          parts:
+            - kind: graph
+              id: g
+              height: 180
+              nodes:
+                - { k: req, label: "request", x: 0, y: 0.5, tone: base }
+                - { k: cls, label: "classify", x: 0.27, y: 0.5, tone: done }
+                - { k: ret, label: "retrieve", x: 0.5, y: 0.5, tone: active }
+                - { k: dra, label: "draft", x: 0.73, y: 0.5, tone: base }
+                - { k: chk, label: "check", x: 1, y: 0.5, tone: base }
+              edges:
+                - { a: req, b: cls, directed: true, tone: done }
+                - { a: cls, b: ret, directed: true, tone: active }
+                - { a: ret, b: dra, directed: true, tone: base }
+                - { a: dra, b: chk, directed: true, tone: base }
+        - title: "Draft"
+          text: "A call writes the answer from those documents."
+          parts:
+            - kind: graph
+              id: g
+              height: 180
+              nodes:
+                - { k: req, label: "request", x: 0, y: 0.5, tone: base }
+                - { k: cls, label: "classify", x: 0.27, y: 0.5, tone: done }
+                - { k: ret, label: "retrieve", x: 0.5, y: 0.5, tone: done }
+                - { k: dra, label: "draft", x: 0.73, y: 0.5, tone: active }
+                - { k: chk, label: "check", x: 1, y: 0.5, tone: base }
+              edges:
+                - { a: req, b: cls, directed: true, tone: done }
+                - { a: cls, b: ret, directed: true, tone: done }
+                - { a: ret, b: dra, directed: true, tone: active }
+                - { a: dra, b: chk, directed: true, tone: base }
+        - title: "Check"
+          text: "A last call checks the draft before it is sent."
+          parts:
+            - kind: graph
+              id: g
+              height: 180
+              nodes:
+                - { k: req, label: "request", x: 0, y: 0.5, tone: base }
+                - { k: cls, label: "classify", x: 0.27, y: 0.5, tone: done }
+                - { k: ret, label: "retrieve", x: 0.5, y: 0.5, tone: done }
+                - { k: dra, label: "draft", x: 0.73, y: 0.5, tone: done }
+                - { k: chk, label: "check", x: 1, y: 0.5, tone: active }
+              edges:
+                - { a: req, b: cls, directed: true, tone: done }
+                - { a: cls, b: ret, directed: true, tone: done }
+                - { a: ret, b: dra, directed: true, tone: done }
+                - { a: dra, b: chk, directed: true, tone: active }
+        - title: "Predictable"
+          text: "Same steps every time, so cost and speed are known in advance and failures are easy to find. Use this whenever the steps can be known beforehand."
+          vars: { "steps decided by": "you", "calls per request": 4 }
+          parts:
+            - kind: graph
+              id: g
+              height: 180
+              nodes:
+                - { k: req, label: "request", x: 0, y: 0.5, tone: base }
+                - { k: cls, label: "classify", x: 0.27, y: 0.5, tone: done }
+                - { k: ret, label: "retrieve", x: 0.5, y: 0.5, tone: done }
+                - { k: dra, label: "draft", x: 0.73, y: 0.5, tone: done }
+                - { k: chk, label: "check", x: 1, y: 0.5, tone: done }
+              edges:
+                - { a: req, b: cls, directed: true, tone: done }
+                - { a: cls, b: ret, directed: true, tone: done }
+                - { a: ret, b: dra, directed: true, tone: done }
+                - { a: dra, b: chk, directed: true, tone: done }
+    - label: Agent
+      steps:
+        - title: "An open goal"
+          text: "Debugging code is a job whose steps cannot be known in advance. The agent gets a goal, tools, a step limit and a budget."
+          vars: { "step limit": 10, "steps used": 0 }
+          parts:
+            - kind: graph
+              id: g
+              height: 200
+              nodes:
+                - { k: goal, label: "goal", x: 0, y: 0.5, tone: active }
+                - { k: mod, label: "model decides", x: 0.45, y: 0.5, tone: base }
+                - { k: tool, label: "run a tool", x: 1, y: 0.15, tone: base }
+                - { k: done, label: "stop", x: 1, y: 0.85, tone: base }
+              edges:
+                - { a: goal, b: mod, directed: true }
+                - { a: mod, b: tool, directed: true, label: "choose" }
+                - { a: tool, b: mod, directed: true, label: "result" }
+                - { a: mod, b: done, directed: true, label: "finished" }
+            - kind: terminal
+              id: tr
+              slots: 5
+              lines: []
+        - title: "The model picks a step"
+          text: "It decides to run the tests first. Every step is written to the trace so you can see later why it did what it did."
+          vars: { "step limit": 10, "steps used": 1 }
+          parts:
+            - kind: graph
+              id: g
+              height: 200
+              nodes:
+                - { k: goal, label: "goal", x: 0, y: 0.5, tone: base }
+                - { k: mod, label: "model decides", x: 0.45, y: 0.5, tone: active, note: "step 1" }
+                - { k: tool, label: "run a tool", x: 1, y: 0.15, tone: active }
+                - { k: done, label: "stop", x: 1, y: 0.85, tone: base }
+              edges:
+                - { a: goal, b: mod, directed: true }
+                - { a: mod, b: tool, directed: true, label: "choose", tone: active }
+                - { a: tool, b: mod, directed: true, label: "result", tone: active }
+                - { a: mod, b: done, directed: true, label: "finished" }
+            - kind: terminal
+              id: tr
+              slots: 5
+              lines: ["step 1: run tests -> 1 failing"]
+        - title: "The result shapes the next step"
+          text: "A failing test means it should look at the code. Nobody wrote that plan; the model chose it from what it saw."
+          vars: { "step limit": 10, "steps used": 2 }
+          parts:
+            - kind: graph
+              id: g
+              height: 200
+              nodes:
+                - { k: goal, label: "goal", x: 0, y: 0.5, tone: base }
+                - { k: mod, label: "model decides", x: 0.45, y: 0.5, tone: active, note: "step 2" }
+                - { k: tool, label: "run a tool", x: 1, y: 0.15, tone: active }
+                - { k: done, label: "stop", x: 1, y: 0.85, tone: base }
+              edges:
+                - { a: goal, b: mod, directed: true }
+                - { a: mod, b: tool, directed: true, label: "choose", tone: active }
+                - { a: tool, b: mod, directed: true, label: "result", tone: active }
+                - { a: mod, b: done, directed: true, label: "finished" }
+            - kind: terminal
+              id: tr
+              slots: 5
+              lines: ["step 1: run tests -> 1 failing", "step 2: read the failing file"]
+        - title: "Act"
+          text: "It edits one line. Changing files is a real action, which is why permissions are limited and irreversible steps need a person's approval."
+          vars: { "step limit": 10, "steps used": 3 }
+          parts:
+            - kind: graph
+              id: g
+              height: 200
+              nodes:
+                - { k: goal, label: "goal", x: 0, y: 0.5, tone: base }
+                - { k: mod, label: "model decides", x: 0.45, y: 0.5, tone: active, note: "step 3" }
+                - { k: tool, label: "run a tool", x: 1, y: 0.15, tone: active }
+                - { k: done, label: "stop", x: 1, y: 0.85, tone: base }
+              edges:
+                - { a: goal, b: mod, directed: true }
+                - { a: mod, b: tool, directed: true, label: "choose", tone: active }
+                - { a: tool, b: mod, directed: true, label: "result", tone: active }
+                - { a: mod, b: done, directed: true, label: "finished" }
+            - kind: terminal
+              id: tr
+              slots: 5
+              lines: ["step 1: run tests -> 1 failing", "step 2: read the failing file", "step 3: edit one line"]
+        - title: "Check and stop"
+          text: "It runs the tests again; they pass, so it stops. Had it kept failing, the step limit of 10 would have stopped it before the bill grew."
+          vars: { "step limit": 10, "steps used": 4 }
+          parts:
+            - kind: graph
+              id: g
+              height: 200
+              nodes:
+                - { k: goal, label: "goal", x: 0, y: 0.5, tone: base }
+                - { k: mod, label: "model decides", x: 0.45, y: 0.5, tone: active, note: "step 4" }
+                - { k: tool, label: "run a tool", x: 1, y: 0.15, tone: base }
+                - { k: done, label: "stop", x: 1, y: 0.85, tone: found }
+              edges:
+                - { a: goal, b: mod, directed: true }
+                - { a: mod, b: tool, directed: true, label: "choose" }
+                - { a: tool, b: mod, directed: true, label: "result" }
+                - { a: mod, b: done, directed: true, label: "finished", tone: active }
+            - kind: terminal
+              id: tr
+              slots: 5
+              lines: ["step 1: run tests -> 1 failing", "step 2: read the failing file", "step 3: edit one line", "step 4: run tests -> all pass"]
+        - title: "Flexible, less predictable"
+          text: "Another bug might take 2 steps or hit the limit at 10. That flexibility is the point of an agent, and the reason to prefer a workflow when you can."

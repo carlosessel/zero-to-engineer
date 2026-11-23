@@ -105,6 +105,8 @@ Every process sees memory as one large, private range of addresses starting from
 
 Two numbers describe a process's memory: its **virtual size** (all the addresses it has reserved, often huge and mostly harmless) and its **resident set size** (RSS, the RAM it is actually using). When you investigate memory, look at RSS.
 
+<Walkthrough name="m-operating-systems-virtual-memory" />
+
 ## System calls
 
 User-space code cannot touch hardware directly. To read a file, open a network connection, start a process or get the time, a program makes a **system call** (syscall): a controlled request to the kernel. The CPU switches into kernel mode, the kernel checks permissions and does the work, and control returns. Common ones on Linux are `open`, `read`, `write`, `close`, `socket`, `connect`, `fork`, `execve` and `mmap`.

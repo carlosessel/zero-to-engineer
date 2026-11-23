@@ -1,0 +1,102 @@
+- id: app-architecture-streaming
+  title: One question through your backend
+  hint: Follow a question from the browser to the model provider and the answer back, streamed piece by piece, with the API key never leaving the backend.
+  language: Python
+  code: |
+    app = FastAPI()
+
+    class Ask(BaseModel):
+        question: str
+
+    @app.post("/ask")
+    def ask(body: Ask):
+        def gen():
+            with client.messages.stream(model=MODEL, max_tokens=2000,
+                    messages=[{"role": "user", "content": body.question}]) as s:
+                for text in s.text_stream:
+                    yield text
+        return StreamingResponse(gen(), media_type="text/plain")
+  steps:
+    - title: "The browser asks"
+      text: "The page sends POST /ask with a JSON body holding the question. It sends no API key: anything in a web page can be extracted by anyone."
+      lines: [6]
+      vars: { question: "What is overfitting?" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, "Your backend", "Model provider"]
+          slots: 7
+          messages:
+            - { from: "Browser", to: "Your backend", label: "POST /ask {question}", tone: active }
+        - kind: kv
+          id: k
+          label: "Where the API key is"
+          slots: 3
+          rows:
+            - { name: "Browser", value: "none", tone: base }
+    - title: "Check the request"
+      text: "FastAPI reads the body into the Ask model. A body without a question string is rejected here, before any money is spent on a model call."
+      lines: [3, 4, 7]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, "Your backend", "Model provider"]
+          slots: 7
+          messages:
+            - { from: "Browser", to: "Your backend", label: "POST /ask {question}", tone: dim }
+            - { from: "Your backend", to: "Your backend", label: "check body against Ask", tone: active }
+    - title: "Start the response at once"
+      text: "ask returns a StreamingResponse straight away. Its body will be whatever gen() yields, sent as it is produced."
+      lines: [8, 13]
+    - title: "Call the provider"
+      text: "Inside gen(), the backend opens a streaming call to the model provider. The client attaches the API key, which lives only on the backend."
+      lines: [9, 10]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, "Your backend", "Model provider"]
+          slots: 7
+          messages:
+            - { from: "Browser", to: "Your backend", label: "POST /ask {question}", tone: dim }
+            - { from: "Your backend", to: "Your backend", label: "check body against Ask", tone: dim }
+            - { from: "Your backend", to: "Model provider", label: "stream request + API key", tone: active }
+        - kind: kv
+          id: k
+          label: "Where the API key is"
+          slots: 3
+          rows:
+            - { name: "Browser", value: "none: anyone could read it here", tone: bad }
+            - { name: "Your backend", value: "ANTHROPIC_API_KEY, kept secret", tone: found }
+            - { name: "Model provider", value: "checks it", tone: base }
+    - title: "Pass each piece along"
+      text: "As soon as the first piece of text arrives, gen() yields it and it goes straight on to the browser."
+      lines: [11, 12]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, "Your backend", "Model provider"]
+          slots: 7
+          messages:
+            - { from: "Browser", to: "Your backend", label: "POST /ask {question}", tone: dim }
+            - { from: "Your backend", to: "Your backend", label: "check body against Ask", tone: dim }
+            - { from: "Your backend", to: "Model provider", label: "stream request + API key", tone: dim }
+            - { from: "Model provider", to: "Your backend", label: "text piece 1", tone: active }
+            - { from: "Your backend", to: "Browser", label: "piece 1", tone: active }
+    - title: "Words appear as they come"
+      text: "The rest follows the same path, piece by piece. The user starts reading after the first token, so the wait feels short, even if the whole answer takes several seconds."
+      lines: [11, 12]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, "Your backend", "Model provider"]
+          slots: 7
+          messages:
+            - { from: "Browser", to: "Your backend", label: "POST /ask {question}", tone: dim }
+            - { from: "Your backend", to: "Your backend", label: "check body against Ask", tone: dim }
+            - { from: "Your backend", to: "Model provider", label: "stream request + API key", tone: dim }
+            - { from: "Model provider", to: "Your backend", label: "text piece 1", tone: dim }
+            - { from: "Your backend", to: "Browser", label: "piece 1", tone: dim }
+            - { from: "Model provider", to: "Your backend", label: "text piece 2, 3, …", tone: active }
+            - { from: "Your backend", to: "Browser", label: "piece 2, 3, …", tone: found }
+    - title: "Why the backend sits in the middle"
+      text: "It holds the key, and it is the place for logins, per-user rate limits, logging and retrieval. The browser only ever talks to you."

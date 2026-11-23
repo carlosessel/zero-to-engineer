@@ -1,0 +1,139 @@
+- id: m-ethics-reidentification
+  title: Finding people in an "anonymised" table
+  hint: Watch the rows fall into groups by postcode, birth year and sex, and see which groups hold just one person.
+  language: Python
+  code: |
+    from collections import Counter
+
+    rows = [
+        {"postcode": "LS1", "birth_year": 1990, "sex": "F", "condition": "asthma"},
+        {"postcode": "LS1", "birth_year": 1990, "sex": "F", "condition": "diabetes"},
+        {"postcode": "LS1", "birth_year": 1985, "sex": "M", "condition": "asthma"},
+        {"postcode": "LS6", "birth_year": 1972, "sex": "F", "condition": "migraine"},
+        {"postcode": "LS6", "birth_year": 1990, "sex": "M", "condition": "asthma"},
+    ]
+    quasi_identifiers = ("postcode", "birth_year", "sex")
+    groups = Counter(tuple(r[q] for q in quasi_identifiers) for r in rows)
+    unique = [key for key, count in groups.items() if count == 1]
+    print("smallest group size (k):", min(groups.values()))
+    print("people identifiable by postcode, birth year and sex alone:", len(unique), "of", len(rows))
+  steps:
+    - title: "No names, so anonymous?"
+      text: "The table has no names or ids, only a postcode area, birth year, sex and a medical condition. Removing names is not enough to make data anonymous."
+      lines: [3, 4, 5, 6, 7, 8, 9]
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: rows
+              title: "the \"anonymised\" table"
+              columns: [postcode, birth_year, sex, condition]
+              rows: [{ k: r1, cells: ["LS1", "1990", "F", "asthma"] }, { k: r2, cells: ["LS1", "1990", "F", "diabetes"] }, { k: r3, cells: ["LS1", "1985", "M", "asthma"] }, { k: r4, cells: ["LS6", "1972", "F", "migraine"] }, { k: r5, cells: ["LS6", "1990", "M", "asthma"] }]
+        - { kind: kv, id: g, label: "groups by postcode, birth year and sex", slots: 4, rows: [] }
+    - title: "Quasi-identifiers"
+      text: "Postcode, birth year and sex are not names, but together they narrow down who someone is. The code groups the rows by these three columns and counts each group."
+      lines: [10, 11]
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: rows
+              title: "the \"anonymised\" table"
+              columns: [postcode, birth_year, sex, condition]
+              rows: [{ k: r1, cells: ["LS1", "1990", "F", "asthma"], tone: compare }, { k: r2, cells: ["LS1", "1990", "F", "diabetes"], tone: compare }, { k: r3, cells: ["LS1", "1985", "M", "asthma"], tone: compare }, { k: r4, cells: ["LS6", "1972", "F", "migraine"], tone: compare }, { k: r5, cells: ["LS6", "1990", "M", "asthma"], tone: compare }]
+        - { kind: kv, id: g, label: "groups by postcode, birth year and sex", slots: 4, rows: [] }
+    - title: "LS1, 1990, F: two people"
+      text: "Two rows share these values. Someone who knows only that a neighbour matches them cannot tell whether she has asthma or diabetes."
+      lines: [11]
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: rows
+              title: "the \"anonymised\" table"
+              columns: [postcode, birth_year, sex, condition]
+              rows: [{ k: r1, cells: ["LS1", "1990", "F", "asthma"], tone: active }, { k: r2, cells: ["LS1", "1990", "F", "diabetes"], tone: active }, { k: r3, cells: ["LS1", "1985", "M", "asthma"] }, { k: r4, cells: ["LS6", "1972", "F", "migraine"] }, { k: r5, cells: ["LS6", "1990", "M", "asthma"] }]
+        - kind: kv
+          id: g
+          label: "groups by postcode, birth year and sex"
+          slots: 4
+          rows:
+            - { k: g1, name: "LS1, 1990, F", value: "2 people", tone: found }
+    - title: "LS1, 1985, M: just one"
+      text: "Only one row matches, so anyone who knows these three facts about a person learns his condition: asthma."
+      lines: [11]
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: rows
+              title: "the \"anonymised\" table"
+              columns: [postcode, birth_year, sex, condition]
+              rows: [{ k: r1, cells: ["LS1", "1990", "F", "asthma"], tone: dim }, { k: r2, cells: ["LS1", "1990", "F", "diabetes"], tone: dim }, { k: r3, cells: ["LS1", "1985", "M", "asthma"], tone: bad }, { k: r4, cells: ["LS6", "1972", "F", "migraine"] }, { k: r5, cells: ["LS6", "1990", "M", "asthma"] }]
+        - kind: kv
+          id: g
+          label: "groups by postcode, birth year and sex"
+          slots: 4
+          rows:
+            - { k: g1, name: "LS1, 1990, F", value: "2 people" }
+            - { k: g2, name: "LS1, 1985, M", value: "1 person", tone: bad }
+    - title: "Two more groups of one"
+      text: "LS6, 1972, F and LS6, 1990, M are also unique. Each of these people can be picked out by facts a neighbour might know."
+      lines: [11, 12]
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: rows
+              title: "the \"anonymised\" table"
+              columns: [postcode, birth_year, sex, condition]
+              rows: [{ k: r1, cells: ["LS1", "1990", "F", "asthma"], tone: dim }, { k: r2, cells: ["LS1", "1990", "F", "diabetes"], tone: dim }, { k: r3, cells: ["LS1", "1985", "M", "asthma"], tone: bad }, { k: r4, cells: ["LS6", "1972", "F", "migraine"], tone: bad }, { k: r5, cells: ["LS6", "1990", "M", "asthma"], tone: bad }]
+        - kind: kv
+          id: g
+          label: "groups by postcode, birth year and sex"
+          slots: 4
+          rows:
+            - { k: g1, name: "LS1, 1990, F", value: "2 people" }
+            - { k: g2, name: "LS1, 1985, M", value: "1 person", tone: bad }
+            - { k: g3, name: "LS6, 1972, F", value: "1 person", tone: bad }
+            - { k: g4, name: "LS6, 1990, M", value: "1 person", tone: bad }
+    - title: "k = 1, three of five exposed"
+      text: "The smallest group has 1 row, so k is 1, and 3 of the 5 people are identifiable by postcode, birth year and sex alone."
+      lines: [13, 14]
+      vars: { "smallest group size (k)": 1, identifiable: "3 of 5" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: rows
+              title: "the \"anonymised\" table"
+              columns: [postcode, birth_year, sex, condition]
+              rows: [{ k: r1, cells: ["LS1", "1990", "F", "asthma"] }, { k: r2, cells: ["LS1", "1990", "F", "diabetes"] }, { k: r3, cells: ["LS1", "1985", "M", "asthma"], tone: bad }, { k: r4, cells: ["LS6", "1972", "F", "migraine"], tone: bad }, { k: r5, cells: ["LS6", "1990", "M", "asthma"], tone: bad }]
+    - title: "Reducing the risk"
+      text: "Generalising values (age bands, shorter postcodes) to reach k-anonymity, adding noise, or publishing only aggregates all help. For sensitive data like this, get expert help."
+      lines: [10]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: rows
+              title: "the \"anonymised\" table"
+              columns: [postcode, birth_year, sex, condition]
+              rows: [{ k: r1, cells: ["LS1", "1990", "F", "asthma"] }, { k: r2, cells: ["LS1", "1990", "F", "diabetes"] }, { k: r3, cells: ["LS1", "1985", "M", "asthma"] }, { k: r4, cells: ["LS6", "1972", "F", "migraine"] }, { k: r5, cells: ["LS6", "1990", "M", "asthma"] }]
+        - kind: kv
+          id: g
+          label: "groups by postcode, birth year and sex"
+          slots: 4
+          rows:
+            - { k: g1, name: "LS1, 1990, F", value: "2 people" }
+            - { k: g2, name: "LS1, 1985, M", value: "1 person" }
+            - { k: g3, name: "LS6, 1972, F", value: "1 person" }
+            - { k: g4, name: "LS6, 1990, M", value: "1 person" }

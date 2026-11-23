@@ -1,0 +1,98 @@
+- id: m-networking-https-latency
+  title: Where the first 180 ms go
+  hint: Follow one fresh HTTPS request from curl, round trip by round trip, and watch the clock add up.
+  language: Shell
+  code: |
+    curl -s -o /dev/null -w 'dns %{time_namelookup}s, connect %{time_connect}s, tls %{time_appconnect}s, first byte %{time_starttransfer}s, http %{http_version}\n' https://www.example.com/
+    dns 0.051105s, connect 0.068595s, tls 0.120504s, first byte 0.181851s, http 2
+  steps:
+    - title: One request, timed
+      text: curl fetches https://www.example.com/ and reports when each stage finished. The times add up from the start, so the differences tell the story.
+      lines: [1]
+      vars: { clock: "0 ms" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [curl, DNS resolver, Server]
+          slots: 9
+          messages: []
+    - title: Name to address
+      text: IP needs an address, not a name, so curl first asks a DNS resolver. The answer came back after 51 ms.
+      lines: [2]
+      vars: { clock: "51 ms", "DNS": "51 ms" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [curl, DNS resolver, Server]
+          slots: 9
+          messages:
+            - { from: curl, to: DNS resolver, label: "where is www.example.com?", tone: active }
+            - { from: DNS resolver, to: curl, label: "its IP address", tone: found }
+    - title: The TCP handshake
+      text: Before any data, TCP exchanges three packets, SYN, SYN-ACK and ACK. That costs one round trip, here 69 − 51 = 18 ms.
+      lines: [2]
+      vars: { clock: "69 ms", "DNS": "51 ms", "TCP": "18 ms" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [curl, DNS resolver, Server]
+          slots: 9
+          messages:
+            - { from: curl, to: DNS resolver, label: "where is www.example.com?", tone: dim }
+            - { from: DNS resolver, to: curl, label: "its IP address", tone: dim }
+            - { from: curl, to: Server, label: "SYN", tone: active }
+            - { from: Server, to: curl, label: "SYN-ACK", tone: active }
+            - { from: curl, to: Server, label: "ACK", tone: active }
+    - title: The TLS handshake
+      text: TLS 1.3 adds one more round trip to agree on encryption, and curl checks the server's certificate to be sure who it is talking to. That took 121 − 69 = 52 ms.
+      lines: [2]
+      vars: { clock: "121 ms", "DNS": "51 ms", "TCP": "18 ms", "TLS": "52 ms" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [curl, DNS resolver, Server]
+          slots: 9
+          messages:
+            - { from: curl, to: DNS resolver, label: "where is www.example.com?", tone: dim }
+            - { from: DNS resolver, to: curl, label: "its IP address", tone: dim }
+            - { from: curl, to: Server, label: "SYN", tone: dim }
+            - { from: Server, to: curl, label: "SYN-ACK", tone: dim }
+            - { from: curl, to: Server, label: "ACK", tone: dim }
+            - { from: curl, to: Server, label: "TLS: start handshake", tone: active }
+            - { from: Server, to: curl, label: "TLS: reply and certificate", tone: active }
+    - title: At last, the request
+      text: Only now can the HTTP request go. One more round trip plus the server's work brought the first byte of the reply, 182 − 121 = 61 ms.
+      lines: [2]
+      vars: { clock: "182 ms", "DNS": "51 ms", "TCP": "18 ms", "TLS": "52 ms", "request": "61 ms" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [curl, DNS resolver, Server]
+          slots: 9
+          messages:
+            - { from: curl, to: DNS resolver, label: "where is www.example.com?", tone: dim }
+            - { from: DNS resolver, to: curl, label: "its IP address", tone: dim }
+            - { from: curl, to: Server, label: "SYN", tone: dim }
+            - { from: Server, to: curl, label: "SYN-ACK", tone: dim }
+            - { from: curl, to: Server, label: "ACK", tone: dim }
+            - { from: curl, to: Server, label: "TLS: start handshake", tone: dim }
+            - { from: Server, to: curl, label: "TLS: reply and certificate", tone: dim }
+            - { from: curl, to: Server, label: "GET / (over HTTP/2)", tone: active }
+            - { from: Server, to: curl, label: "first byte of the response", tone: found }
+    - title: Most of it was waiting
+      text: Over 180 ms passed before the first byte, and the server's own work was a small part of it. The rest was round trips for set-up.
+      vars: { clock: "182 ms", "set-up before request": "121 ms", "request": "61 ms" }
+    - title: Reuse the connection
+      text: A second request on the same open connection skips DNS, TCP and TLS and needs about one round trip. That is why HTTP clients keep connections in a pool instead of opening new ones.
+      vars: { "next request": "about 1 round trip" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [curl, DNS resolver, Server]
+          slots: 9
+          messages:
+            - { from: curl, to: DNS resolver, label: "skipped", tone: dim }
+            - { from: curl, to: Server, label: "TCP: skipped", tone: dim }
+            - { from: curl, to: Server, label: "TLS: skipped", tone: dim }
+            - { from: curl, to: Server, label: "next request", tone: active }
+            - { from: Server, to: curl, label: "response", tone: found }

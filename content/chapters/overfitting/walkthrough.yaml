@@ -1,0 +1,79 @@
+- id: overfitting-leakage
+  title: How test data leaks into training
+  hint: Compare working out a normalisation average before and after the split, and see where the test rows sneak in.
+  steps:
+    - title: Six rows of data
+      text: "Say a model needs each value rescaled around the average, a common preparation step. Four rows will train the model; two are kept for the test."
+      parts:
+        - kind: cells
+          id: rows
+          label: "one feature, six rows"
+          bars: true
+          width: 70
+          indices: true
+          items: [{ k: a, v: 50 }, { k: b, v: 60 }, { k: c, v: 70 }, { k: d, v: 80 }, { k: e, v: 90, tone: compare }, { k: f, v: 210, tone: compare }]
+          slots: 6
+        - { kind: note, id: n, text: "rows 0 to 3: training     rows 4 and 5: test", tone: base }
+    - title: "The leaky way: average everything"
+      text: "Work out the average over all six rows first: 560 / 6 ≈ 93.3. It feels harmless, because no answers were looked at."
+      vars: { "average used": "93.3 (all six rows)" }
+      parts:
+        - kind: cells
+          id: rows
+          label: "one feature, six rows"
+          bars: true
+          width: 70
+          indices: true
+          items: [{ k: a, v: 50, tone: active }, { k: b, v: 60, tone: active }, { k: c, v: 70, tone: active }, { k: d, v: 80, tone: active }, { k: e, v: 90, tone: active }, { k: f, v: 210, tone: active }]
+          slots: 6
+        - { kind: note, id: n, text: "average = (50 + 60 + 70 + 80 + 90 + 210) / 6 ≈ 93.3", tone: active }
+    - title: The test rows shaped it
+      text: "The 210 in the test rows dragged the average up from 65 to 93.3. The training data has now been prepared using information from the test set: that is leakage."
+      parts:
+        - kind: cells
+          id: rows
+          label: "one feature, six rows"
+          bars: true
+          width: 70
+          indices: true
+          items: [{ k: a, v: 50 }, { k: b, v: 60 }, { k: c, v: 70 }, { k: d, v: 80 }, { k: e, v: 90, tone: bad }, { k: f, v: 210, tone: bad }]
+          slots: 6
+        - { kind: note, id: n, text: "93.3 includes the test rows: the model has had a peek", tone: bad }
+    - title: "The safe way: split first"
+      text: "Start again. Split before doing anything else, and put the test rows out of reach."
+      vars: {}
+      parts:
+        - kind: cells
+          id: rows
+          label: "one feature, six rows"
+          bars: true
+          width: 70
+          indices: true
+          items: [{ k: a, v: 50 }, { k: b, v: 60 }, { k: c, v: 70 }, { k: d, v: 80 }, { k: e, v: 90, tone: dim }, { k: f, v: 210, tone: dim }]
+          slots: 6
+        - { kind: note, id: n, text: "test rows 4 and 5: set aside, untouched", tone: compare }
+    - title: Average the training rows only
+      text: "Now the average comes from the four training rows: 260 / 4 = 65. Nothing about the test rows has touched it."
+      vars: { "average used": "65 (training rows only)" }
+      parts:
+        - kind: cells
+          id: rows
+          label: "one feature, six rows"
+          bars: true
+          width: 70
+          indices: true
+          items: [{ k: a, v: 50, tone: active }, { k: b, v: 60, tone: active }, { k: c, v: 70, tone: active }, { k: d, v: 80, tone: active }, { k: e, v: 90, tone: dim }, { k: f, v: 210, tone: dim }]
+          slots: 6
+        - { kind: note, id: n, text: "average = (50 + 60 + 70 + 80) / 4 = 65", tone: found }
+    - title: An honest test
+      text: "The test rows are used once, at the end, as genuinely new data. Leaky models score superbly and then fail in production; split first, then do everything else."
+      parts:
+        - kind: cells
+          id: rows
+          label: "one feature, six rows"
+          bars: true
+          width: 70
+          indices: true
+          items: [{ k: a, v: 50, tone: done }, { k: b, v: 60, tone: done }, { k: c, v: 70, tone: done }, { k: d, v: 80, tone: done }, { k: e, v: 90, tone: found }, { k: f, v: 210, tone: found }]
+          slots: 6
+        - { kind: note, id: n, text: "train on rows 0 to 3, score once on rows 4 and 5", tone: found }

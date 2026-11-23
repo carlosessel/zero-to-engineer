@@ -101,6 +101,8 @@ WHERE id IN (1, 15);
 
 `AT TIME ZONE` turns an instant into the wall-clock time in a named zone. Order 1 was placed on 1 October, when London was on summer time (UTC+1); order 15 on 3 November, after the clocks went back (UTC+0): the database knows the rules for every zone. `extract(dow ...)` gives the day of the week, 0 for Sunday. **"Which day was this order?" depends on the time zone**: a shop's daily report must group by the local date, `(placed_at AT TIME ZONE 'Europe/London')::date`, or late-evening orders land on the wrong day.
 
+<Walkthrough name="db-types-functions-time-zones" />
+
 Date arithmetic uses intervals:
 
 ```sql

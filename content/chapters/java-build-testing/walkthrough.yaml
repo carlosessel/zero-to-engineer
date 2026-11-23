@@ -1,0 +1,98 @@
+- id: java-build-testing-parameterized
+  title: One test, three rows of data
+  hint: Watch JUnit run the same test method once per row of the CsvSource, then catch a bug at the boundary.
+  language: Java
+  code: |
+    @ParameterizedTest
+    @CsvSource({ "2999, 3349", "3000, 3000", "4500, 4500" })
+    void deliveryIsFreeFromThirtyPounds(int subtotal, int expected) {
+        var lines = List.of(new Line("CAKE", subtotal, 1));
+
+        assertEquals(expected, calculator.total(lines));
+    }
+
+    // in PriceCalculator.total
+    int subtotal = subtotal(lines);
+    return subtotal >= FREE_DELIVERY_FROM_PENCE ? subtotal : subtotal + DELIVERY_PENCE;
+  steps:
+    - title: Rows of data
+      text: Each string in @CsvSource is one row. JUnit splits it at the comma and passes the two numbers in as subtotal and expected.
+      lines: [1, 2, 3]
+      parts:
+        - kind: tables
+          id: runs
+          slots: 3
+          tables:
+            - id: r
+              title: test runs
+              columns: [subtotal, expected, actual, result]
+              rows:
+                - ["2999", "3349", "", ""]
+                - ["3000", "3000", "", ""]
+                - ["4500", "4500", "", ""]
+    - title: "Row 1: arrange and act"
+      text: The test builds a basket with one CAKE line costing 2999p, then calls total. 2999 is below 3000, so 350p delivery is added.
+      lines: [4, 6, 11]
+      vars: { subtotal: 2999, expected: 3349 }
+      parts:
+        - kind: tables
+          id: runs
+          slots: 3
+          tables:
+            - id: r
+              title: test runs
+              columns: [subtotal, expected, actual, result]
+              rows:
+                - { cells: ["2999", "3349", "3349", ""], tone: active }
+                - ["3000", "3000", "", ""]
+                - ["4500", "4500", "", ""]
+    - title: "Row 1: assert"
+      text: assertEquals compares the expected value with the actual one. They match, so this run passes.
+      lines: [6]
+      parts:
+        - kind: tables
+          id: runs
+          slots: 3
+          tables:
+            - id: r
+              title: test runs
+              columns: [subtotal, expected, actual, result]
+              rows:
+                - { cells: ["2999", "3349", "3349", PASSED], tone: found }
+                - ["3000", "3000", "", ""]
+                - ["4500", "4500", "", ""]
+    - title: "Rows 2 and 3"
+      text: The same method runs again with new values. 3000 >= 3000 is true, so delivery is free; 4500 is free too. Both pass.
+      lines: [6, 11]
+      vars: {}
+      parts:
+        - kind: tables
+          id: runs
+          slots: 3
+          tables:
+            - id: r
+              title: test runs
+              columns: [subtotal, expected, actual, result]
+              rows:
+                - { cells: ["2999", "3349", "3349", PASSED], tone: found }
+                - { cells: ["3000", "3000", "3000", PASSED], tone: found }
+                - { cells: ["4500", "4500", "4500", PASSED], tone: found }
+    - title: Break the rule on purpose
+      text: "Change >= to > in total. Now 3000 > 3000 is false, so the 3000 row gets 350p delivery added: actual 3350, expected 3000."
+      lines: [11]
+      vars: { "3000 > 3000": "false" }
+      parts:
+        - kind: tables
+          id: runs
+          slots: 3
+          tables:
+            - id: r
+              title: test runs
+              columns: [subtotal, expected, actual, result]
+              rows:
+                - { cells: ["2999", "3349", "3349", PASSED], tone: found }
+                - { cells: ["3000", "3000", "3350", FAILED], tone: bad }
+                - { cells: ["4500", "4500", "4500", PASSED], tone: found }
+    - title: The boundary caught it
+      text: Only the boundary row fails, and the report shows the expected and actual values. Seeing a test fail for the right reason is how you know it tests something.
+      vars: {}

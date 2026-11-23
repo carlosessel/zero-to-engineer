@@ -1,0 +1,138 @@
+- id: javascript-like-button
+  title: A click changes the page
+  hint: The script runs once and then waits. Watch what happens each time the button is clicked.
+  language: HTML
+  code: |
+    <button id="like">Like</button> <span id="count">0</span>
+    <script>
+      let likes = 0;
+      const button = document.querySelector("#like");
+      const label = document.querySelector("#count");
+      button.addEventListener("click", () => {
+        likes += 1;
+        label.textContent = likes;
+      });
+    </script>
+  steps:
+    - title: HTML becomes the DOM
+      text: The browser turns the HTML into a tree of objects, the DOM. Each element, such as the button and the span, is now an object JavaScript can reach.
+      lines: [1]
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { k: button, label: "button #like", x: 0.1, y: 0.1, tone: active }
+            - { k: span, label: "span #count", x: 0.9, y: 0.1, tone: active, note: "shows 0" }
+          edges: []
+        - { kind: kv, id: js, label: "Names in the script", rows: [], slots: 3 }
+    - title: A variable for the count
+      text: let makes a variable that can change later. likes starts at 0.
+      lines: [3]
+      parts:
+        - kind: kv
+          id: js
+          label: "Names in the script"
+          slots: 3
+          rows: [{ name: likes, value: "0", tone: active }]
+    - title: Find the elements
+      text: "querySelector finds an element in the DOM; #like means the element whose id is like. Now button and label point at real things on the page."
+      lines: [4, 5]
+      parts:
+        - kind: kv
+          id: js
+          label: "Names in the script"
+          slots: 3
+          rows:
+            - { name: likes, value: "0" }
+            - { name: button, value: "the button #like", tone: active }
+            - { k: span-label, name: label, value: "the span #count", tone: active }
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { k: button, label: "button #like", x: 0.1, y: 0.1, tone: compare }
+            - { k: span, label: "span #count", x: 0.9, y: 0.1, tone: compare, note: "shows 0" }
+          edges: []
+    - title: Listen for clicks
+      text: addEventListener hands the button a function to run on every click. The function does not run now. The script ends and the page waits.
+      lines: [6, 9]
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { k: button, label: "button #like", x: 0.1, y: 0.1 }
+            - { k: span, label: "span #count", x: 0.9, y: 0.1, note: "shows 0" }
+            - { k: fn, label: "click function", x: 0.5, y: 0.9, tone: compare, note: "waiting" }
+          edges:
+            - { a: button, b: fn, directed: true, label: "on click" }
+            - { a: fn, b: span, directed: true }
+    - title: A click
+      text: The click is an event. The browser runs the function, which adds 1 to likes.
+      lines: [7]
+      vars: { event: click }
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { k: button, label: "button #like", x: 0.1, y: 0.1, tone: active }
+            - { k: span, label: "span #count", x: 0.9, y: 0.1, note: "shows 0" }
+            - { k: fn, label: "click function", x: 0.5, y: 0.9, tone: active, note: "running" }
+          edges:
+            - { a: button, b: fn, directed: true, label: "on click", tone: active }
+            - { a: fn, b: span, directed: true }
+        - kind: kv
+          id: js
+          label: "Names in the script"
+          slots: 3
+          rows:
+            - { name: likes, value: "1", tone: active }
+            - { name: button, value: "the button #like" }
+            - { k: span-label, name: label, value: "the span #count" }
+    - title: The page changes
+      text: Setting textContent changes the span's text in the DOM, and the screen shows 1. The page was never reloaded.
+      lines: [8]
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { k: button, label: "button #like", x: 0.1, y: 0.1 }
+            - { k: span, label: "span #count", x: 0.9, y: 0.1, tone: found, note: "shows 1" }
+            - { k: fn, label: "click function", x: 0.5, y: 0.9, tone: active, note: "running" }
+          edges:
+            - { a: button, b: fn, directed: true, label: "on click" }
+            - { a: fn, b: span, directed: true, tone: active, label: "textContent = 1" }
+        - kind: kv
+          id: js
+          label: "Names in the script"
+          slots: 3
+          rows:
+            - { name: likes, value: "1" }
+            - { name: button, value: "the button #like" }
+            - { k: span-label, name: label, value: "the span #count", tone: compare }
+    - title: Again, and again
+      text: likes keeps its value between clicks, so a second click makes it 2 and the span shows 2. Each click runs the same function once.
+      lines: [7, 8]
+      vars: { event: "click (second)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { k: button, label: "button #like", x: 0.1, y: 0.1, tone: active }
+            - { k: span, label: "span #count", x: 0.9, y: 0.1, tone: found, note: "shows 2" }
+            - { k: fn, label: "click function", x: 0.5, y: 0.9, tone: compare, note: "waiting" }
+          edges:
+            - { a: button, b: fn, directed: true, label: "on click" }
+            - { a: fn, b: span, directed: true }
+        - kind: kv
+          id: js
+          label: "Names in the script"
+          slots: 3
+          rows:
+            - { name: likes, value: "2", tone: active }
+            - { name: button, value: "the button #like" }
+            - { k: span-label, name: label, value: "the span #count" }

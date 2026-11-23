@@ -1,0 +1,103 @@
+- id: web-the-map-buy-a-book
+  title: One click through the whole system
+  hint: Follow the bookshop example and watch which part does the work at each step, front end or back end.
+  steps:
+    - title: Asking for the page
+      text: You open the bookshop's site. Your browser asks the shop's server for the page and downloads its HTML, CSS and JavaScript.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database, Payments]
+          slots: 6
+          messages:
+            - { from: Browser, to: Server, label: "send me the page", tone: active }
+            - { from: Server, to: Browser, label: "HTML, CSS, JavaScript", tone: found }
+        - { kind: note, id: n, text: "Front end asks, back end sends", tone: compare }
+    - title: Drawing the page
+      text: The browser reads the HTML, CSS and JavaScript and draws the page. This all happens in the browser, so it is front end.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database, Payments]
+          slots: 6
+          messages:
+            - { from: Browser, to: Server, label: "send me the page", tone: dim }
+            - { from: Server, to: Browser, label: "HTML, CSS, JavaScript", tone: dim }
+            - { from: Browser, to: Browser, label: "draw the page", tone: active }
+        - { kind: note, id: n, text: "Front end", tone: active }
+    - title: Searching
+      text: You type "gardening" into the search box. JavaScript in the page notices the typing and asks the server for matching books.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database, Payments]
+          slots: 6
+          messages:
+            - { from: Browser, to: Server, label: "books about gardening?", tone: active }
+        - { kind: note, id: n, text: "Front end, then a request to the back end", tone: active }
+    - title: The server looks it up
+      text: The server looks up "gardening" in its database and sends back a list of books as data, not as a finished page.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database, Payments]
+          slots: 6
+          messages:
+            - { from: Browser, to: Server, label: "books about gardening?", tone: dim }
+            - { from: Server, to: Database, label: "look up gardening", tone: active }
+            - { from: Database, to: Server, label: "matching books", tone: found }
+            - { from: Server, to: Browser, label: "list of books (data)", tone: found }
+        - { kind: note, id: n, text: "Back end", tone: active }
+    - title: Showing the results
+      text: JavaScript in the page turns that data into a list you can see, with pictures and prices.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database, Payments]
+          slots: 6
+          messages:
+            - { from: Browser, to: Server, label: "books about gardening?", tone: dim }
+            - { from: Server, to: Database, label: "look up gardening", tone: dim }
+            - { from: Database, to: Server, label: "matching books", tone: dim }
+            - { from: Server, to: Browser, label: "list of books (data)", tone: dim }
+            - { from: Browser, to: Browser, label: "draw the list", tone: active }
+        - { kind: note, id: n, text: "Front end", tone: active }
+    - title: Pressing Buy
+      text: You press "Buy" and the page sends your order to the server. Before anything else, the server checks you are logged in and the book is in stock.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database, Payments]
+          slots: 6
+          messages:
+            - { from: Browser, to: Server, label: "buy this book", tone: active }
+            - { from: Server, to: Server, label: "logged in? in stock?", tone: compare }
+        - { kind: note, id: n, text: "Back end applies the rules", tone: active }
+    - title: Payment and record
+      text: The server takes the payment through a payment company, then records the order in the database so it lasts.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database, Payments]
+          slots: 6
+          messages:
+            - { from: Browser, to: Server, label: "buy this book", tone: dim }
+            - { from: Server, to: Server, label: "logged in? in stock?", tone: dim }
+            - { from: Server, to: Payments, label: "take the payment", tone: active }
+            - { from: Server, to: Database, label: "record the order", tone: active }
+        - { kind: note, id: n, text: "Back end", tone: active }
+    - title: Order confirmed
+      text: The server replies "Order confirmed" and the page shows a green message. Every application in this course has this shape, browser to server to database, and back.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database, Payments]
+          slots: 6
+          messages:
+            - { from: Browser, to: Server, label: "buy this book", tone: dim }
+            - { from: Server, to: Server, label: "logged in? in stock?", tone: dim }
+            - { from: Server, to: Payments, label: "take the payment", tone: dim }
+            - { from: Server, to: Database, label: "record the order", tone: dim }
+            - { from: Server, to: Browser, label: "Order confirmed", tone: found }
+            - { from: Browser, to: Browser, label: "green message", tone: found }
+        - { kind: note, id: n, text: "Back end replies, front end shows it", tone: found }

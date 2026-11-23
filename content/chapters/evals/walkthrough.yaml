@@ -1,0 +1,119 @@
+- id: evals-run
+  title: Running an eval
+  hint: Follow each test case through classify, the clean-up of its reply, the comparison and the running score.
+  language: Python
+  code: |
+    cases = [
+        {"input": "How much for a screen repair?", "expected": "pricing"},
+        {"input": "My phone came back still broken", "expected": "complaint"},
+        # ... 50 or more, including awkward ones
+    ]
+
+    def run_eval(classify) -> float:
+        hits = 0
+        for c in cases:
+            got = classify(c["input"]).splitlines()[0].strip().lower()
+            ok = got == c["expected"]
+            hits += ok
+            if not ok:
+                print("FAIL", c["input"], "->", got)
+        return hits / len(cases)
+
+    print(run_eval(classify))
+  steps:
+    - title: Test inputs with known answers
+      text: "Each case pairs an input with the answer you expect. Only two are shown; a real set has 50 or more, including awkward ones."
+      lines: [1, 2, 3, 4, 5]
+      vars: { hits: 0 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: c
+              title: cases
+              columns: [input, expected, got, ok]
+              rows:
+                - { k: a, cells: ["How much for a…", pricing, "", ""] }
+                - { k: b, cells: ["Came back broken…", complaint, "", ""] }
+        - kind: terminal
+          id: out
+          slots: 2
+          lines: []
+    - title: Run the system on case 1
+      text: "classify sends the input to the model. In this run the reply is \"Pricing\" on the first line, then a sentence explaining why."
+      lines: [9, 10]
+      vars: { hits: 0, reply: "Pricing / The customer asks…" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: c
+              title: cases
+              columns: [input, expected, got, ok]
+              rows:
+                - { k: a, cells: ["How much for a…", pricing, "", ""], tone: active }
+                - { k: b, cells: ["Came back broken…", complaint, "", ""] }
+    - title: Clean up before comparing
+      text: "splitlines()[0] keeps the first line, strip() drops spaces and lower() makes it \"pricing\". Without this, a capital letter would count as a failure."
+      lines: [10]
+      vars: { hits: 0, got: pricing }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: c
+              title: cases
+              columns: [input, expected, got, ok]
+              rows:
+                - { k: a, cells: ["How much for a…", pricing, pricing, ""], tone: active }
+                - { k: b, cells: ["Came back broken…", complaint, "", ""] }
+    - title: A pass
+      text: "got equals expected, so ok is True. Adding True to hits counts as 1."
+      lines: [11, 12]
+      vars: { hits: 1, ok: "True" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: c
+              title: cases
+              columns: [input, expected, got, ok]
+              rows:
+                - { k: a, cells: ["How much for a…", pricing, pricing, "True"], tone: found }
+                - { k: b, cells: ["Came back broken…", complaint, "", ""] }
+    - title: Case 2 comes back wrong
+      text: "Suppose this time the first line of the reply is \"other\". It does not equal \"complaint\", so ok is False and hits stays at 1."
+      lines: [9, 10, 11, 12]
+      vars: { hits: 1, got: other, ok: "False" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: c
+              title: cases
+              columns: [input, expected, got, ok]
+              rows:
+                - { k: a, cells: ["How much for a…", pricing, pricing, "True"] }
+                - { k: b, cells: ["Came back broken…", complaint, other, "False"], tone: bad }
+    - title: Failures are printed
+      text: "Each failure is printed with its input and what came back. Reading these is the most useful part of the loop: they tell you what to change."
+      lines: [13, 14]
+      parts:
+        - kind: terminal
+          id: out
+          slots: 2
+          lines: ["FAIL My phone came back still broken -> other"]
+    - title: One score
+      text: "hits / len(cases) is 1 / 2 = 0.5. Change one thing in the prompt, run it again, and compare this number."
+      lines: [15, 17]
+      vars: { hits: 1, "len(cases)": 2, score: 0.5 }
+      parts:
+        - kind: terminal
+          id: out
+          slots: 2
+          lines: ["FAIL My phone came back still broken -> other", "0.5"]

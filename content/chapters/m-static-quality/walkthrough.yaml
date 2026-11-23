@@ -1,0 +1,97 @@
+- id: m-static-quality-complexity
+  title: Counting the paths through a function
+  hint: The analyser never runs shipping. It walks the code's tree and adds one for every decision point it finds.
+  language: Python
+  code: |
+    def shipping(country, weight_kg, express, member):
+        if country == "UK":
+            cost = 350 if weight_kg <= 2 else 350 + (weight_kg - 2) * 100
+        elif country in ("FR", "DE"):
+            cost = 900
+        else:
+            cost = 1500
+        if express and not member:
+            cost *= 2
+        for _ in range(3):
+            pass
+        return cost
+
+    def vat(pence):
+        return round(pence * 0.2)
+  steps:
+    - title: Start at one
+      text: The tool parses the source into an abstract syntax tree and finds each function. A function with no decisions has one path through it, so the score starts at 1.
+      lines: [1]
+      vars: { function: shipping, score: 1 }
+      parts:
+        - { kind: cells, id: d, label: "decision points found", items: [], slots: 6, width: 90, empty: "none yet" }
+    - title: An if adds a path
+      text: "if country == \"UK\" can go two ways, so it adds one path."
+      lines: [2]
+      vars: { function: shipping, score: 2 }
+      parts:
+        - kind: cells
+          id: d
+          label: "decision points found"
+          slots: 6
+          width: 90
+          items: [{ k: d1, v: "if", tone: active }]
+    - title: So does a conditional expression
+      text: The one-line "350 if ... else ..." is also a decision, even though it sits inside an assignment.
+      lines: [3]
+      vars: { function: shipping, score: 3 }
+      parts:
+        - kind: cells
+          id: d
+          label: "decision points found"
+          slots: 6
+          width: 90
+          items: [{ k: d1, v: "if" }, { k: d2, v: "if-else", tone: active }]
+    - title: The elif is another if
+      text: In the tree, an elif is an if nested in the else. It adds one more.
+      lines: [4]
+      vars: { function: shipping, score: 4 }
+      parts:
+        - kind: cells
+          id: d
+          label: "decision points found"
+          slots: 6
+          width: 90
+          items: [{ k: d1, v: "if" }, { k: d2, v: "if-else" }, { k: d3, v: "elif", tone: active }]
+    - title: An if with an and
+      text: The if adds one, and the and adds another, because express can be false and skip checking member. The not is not a decision, so it adds nothing.
+      lines: [8]
+      vars: { function: shipping, score: 6 }
+      parts:
+        - kind: cells
+          id: d
+          label: "decision points found"
+          slots: 6
+          width: 90
+          items: [{ k: d1, v: "if" }, { k: d2, v: "if-else" }, { k: d3, v: "elif" }, { k: d4, v: "if", tone: active }, { k: d5, v: "and", tone: active }]
+    - title: A loop is a decision too
+      text: Each time round, a for loop decides whether to go again, so it adds one more path.
+      lines: [10]
+      vars: { function: shipping, score: 7 }
+      parts:
+        - kind: cells
+          id: d
+          label: "decision points found"
+          slots: 6
+          width: 90
+          items: [{ k: d1, v: "if" }, { k: d2, v: "if-else" }, { k: d3, v: "elif" }, { k: d4, v: "if" }, { k: d5, v: "and" }, { k: d6, v: "for", tone: active }]
+    - title: Over the limit
+      text: shipping scores 7, above this script's limit of 5, so it is flagged. vat has no decisions and scores 1. The limit is a prompt to consider splitting, not a law.
+      lines: [14, 15]
+      vars: { shipping: 7, vat: 1 }
+      parts:
+        - kind: cells
+          id: d
+          label: "decision points found"
+          slots: 6
+          width: 90
+          items: [{ k: d1, v: "if", tone: done }, { k: d2, v: "if-else", tone: done }, { k: d3, v: "elif", tone: done }, { k: d4, v: "if", tone: done }, { k: d5, v: "and", tone: done }, { k: d6, v: "for", tone: done }]
+        - kind: terminal
+          id: out
+          slots: 2
+          lines: ["shipping: complexity 7  <- consider splitting", "vat: complexity 1"]

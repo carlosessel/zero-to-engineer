@@ -1,0 +1,72 @@
+- id: deploy-container
+  title: From Dockerfile to running container
+  hint: Watch the image being built one instruction at a time, then a container started from it.
+  language: Docker
+  code: |
+    FROM python:3.12-slim
+    WORKDIR /app
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+    COPY . .
+    CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+
+    docker build -t task-api .
+    docker run -p 8000:8000 task-api
+  steps:
+    - title: Start from a base image
+      text: FROM picks an existing image to build on, here a small Linux with Python 3.12 already installed.
+      lines: [1]
+      parts:
+        - { kind: cells, id: img, label: "The image, built line by line", orient: column, slots: 5, items: [{ v: python:3.12-slim, tone: active }] }
+        - { kind: terminal, id: t, lines: [], slots: 3 }
+    - title: A folder to work in
+      text: WORKDIR makes /app the folder that the following instructions work in.
+      lines: [2]
+      parts:
+        - { kind: cells, id: img, label: "The image, built line by line", orient: column, slots: 5, items: [python:3.12-slim, { v: folder /app, tone: active }] }
+    - title: Install the libraries
+      text: The list of libraries is copied in first, then pip installs them inside the image. Everything the app needs ends up packaged with it.
+      lines: [3, 4]
+      parts:
+        - { kind: cells, id: img, label: "The image, built line by line", orient: column, slots: 5, items: [python:3.12-slim, folder /app, { v: installed libs, tone: active }] }
+    - title: Add your code
+      text: COPY . . copies the project's files into /app.
+      lines: [5]
+      parts:
+        - { kind: cells, id: img, label: "The image, built line by line", orient: column, slots: 5, items: [python:3.12-slim, folder /app, installed libs, { v: your code, tone: active }] }
+    - title: What to run on start
+      text: CMD does not run anything now. It records the command a container will run when it starts, here the uvicorn server on port 8000.
+      lines: [6]
+      parts:
+        - { kind: cells, id: img, label: "The image, built line by line", orient: column, slots: 5, items: [python:3.12-slim, folder /app, installed libs, your code, { v: CMD uvicorn, tone: compare }] }
+    - title: Build the image
+      text: docker build follows the Dockerfile and saves the result as an image called task-api. The image is the packaged application.
+      lines: [8]
+      parts:
+        - { kind: cells, id: img, label: "Image task-api", orient: column, slots: 5, items: [{ v: python:3.12-slim, tone: found }, { v: folder /app, tone: found }, { v: installed libs, tone: found }, { v: your code, tone: found }, { v: CMD uvicorn, tone: found }] }
+        - { kind: terminal, id: t, lines: ["$ docker build -t task-api ."], slots: 3 }
+    - title: Run a container
+      text: docker run starts a running copy of the image, a container, and its CMD starts the server. -p 8000:8000 connects port 8000 on your computer to port 8000 inside it.
+      lines: [9]
+      parts:
+        - { kind: cells, id: img, label: "Image task-api", orient: column, slots: 5, items: [python:3.12-slim, folder /app, installed libs, your code, CMD uvicorn] }
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: host, label: "localhost:8000", x: 0.15, y: 0.5, note: "your computer" }
+            - { k: box, label: "container :8000", x: 0.8, y: 0.5, tone: active, note: "uvicorn running" }
+          edges:
+            - { a: host, b: box, directed: true, label: "-p 8000:8000", tone: active }
+        - { kind: terminal, id: t, lines: ["$ docker build -t task-api .", "$ docker run -p 8000:8000 task-api"], slots: 3 }
+    - title: The same everywhere
+      text: The same image runs identically on your laptop, on staging and in production. What differs between them, such as the database address, comes from environment variables.
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: host, label: "localhost:8000", x: 0.15, y: 0.5, note: "your computer" }
+            - { k: box, label: "container :8000", x: 0.8, y: 0.5, tone: found, note: "uvicorn running" }
+          edges:
+            - { a: host, b: box, directed: true, label: "-p 8000:8000" }

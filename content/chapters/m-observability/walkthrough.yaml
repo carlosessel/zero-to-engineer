@@ -1,0 +1,133 @@
+- id: m-observability-trace-spans
+  title: How one checkout becomes a trace
+  hint: Watch each service start a span, pass the trace context on in a header, and see where the 1.7 seconds went.
+  language: TypeScript
+  code: |
+    const gateway = startSpan("GET /checkout", 0);
+    const orders = startSpan("orders: place order", 2, gateway);
+    console.log("header sent to the orders service:", traceparent(gateway));
+    const db = startSpan("postgres: INSERT orders", 5, orders);
+    db.endMs = 9;
+    const payments = startSpan("payments: charge card", 10, orders);
+    console.log("header sent to the payments service:", traceparent(orders));
+    const provider = startSpan("cardco: POST /charges", 12, payments);
+    provider.endMs = 1712;
+    payments.endMs = 1715;
+    orders.endMs = 1718;
+    gateway.endMs = 1720;
+  steps:
+    - title: The first span
+      text: The checkout request arrives at the gateway, which starts the first span at 0 ms. It has no parent, so it starts a new trace with a new trace id.
+      lines: [1]
+      vars: { "trace id": "…4bf92f35" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Gateway, Orders, Postgres, Payments, Cardco]
+          slots: 5
+          messages: []
+        - kind: kv
+          id: spans
+          label: "Spans recorded (all share the trace id)"
+          slots: 5
+          rows:
+            - { name: GET /checkout, value: "span 1, no parent, from 0 ms", tone: active }
+    - title: Context goes with the call
+      text: The gateway calls the orders service and sends a traceparent header holding the trace id and its own span id. Orders starts span 2 with span 1 as its parent.
+      lines: [2, 3]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Gateway, Orders, Postgres, Payments, Cardco]
+          slots: 5
+          messages:
+            - { from: Gateway, to: Orders, label: "traceparent: span 1", tone: active }
+        - kind: kv
+          id: spans
+          label: "Spans recorded (all share the trace id)"
+          slots: 5
+          rows:
+            - { name: GET /checkout, value: "span 1, no parent, from 0 ms" }
+            - { name: place order, value: "span 2, parent 1, from 2 ms", tone: active }
+    - title: A quick database insert
+      text: Orders inserts the order in PostgreSQL. That span starts at 5 ms and ends at 9 ms, so it took 4 ms.
+      lines: [4, 5]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Gateway, Orders, Postgres, Payments, Cardco]
+          slots: 5
+          messages:
+            - { from: Gateway, to: Orders, label: "traceparent: span 1", tone: dim }
+            - { from: Orders, to: Postgres, label: "INSERT orders", tone: active }
+        - kind: kv
+          id: spans
+          label: "Spans recorded (all share the trace id)"
+          slots: 5
+          rows:
+            - { name: GET /checkout, value: "span 1, no parent, from 0 ms" }
+            - { name: place order, value: "span 2, parent 1, from 2 ms" }
+            - { name: INSERT orders, value: "span 3, parent 2, 4 ms", tone: found }
+    - title: On to payments
+      text: Orders calls the payments service, passing the same trace id but now its own span id. Payments starts span 4 as a child of span 2.
+      lines: [6, 7]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Gateway, Orders, Postgres, Payments, Cardco]
+          slots: 5
+          messages:
+            - { from: Gateway, to: Orders, label: "traceparent: span 1", tone: dim }
+            - { from: Orders, to: Postgres, label: "INSERT orders", tone: dim }
+            - { from: Orders, to: Payments, label: "traceparent: span 2", tone: active }
+        - kind: kv
+          id: spans
+          label: "Spans recorded (all share the trace id)"
+          slots: 5
+          rows:
+            - { name: GET /checkout, value: "span 1, no parent, from 0 ms" }
+            - { name: place order, value: "span 2, parent 1, from 2 ms" }
+            - { name: INSERT orders, value: "span 3, parent 2, 4 ms" }
+            - { name: charge card, value: "span 4, parent 2, from 10 ms", tone: active }
+    - title: The card provider is slow
+      text: Payments calls the external card provider, cardco. Its span starts at 12 ms and ends at 1712 ms, 1700 ms in all.
+      lines: [8, 9]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Gateway, Orders, Postgres, Payments, Cardco]
+          slots: 5
+          messages:
+            - { from: Gateway, to: Orders, label: "traceparent: span 1", tone: dim }
+            - { from: Orders, to: Postgres, label: "INSERT orders", tone: dim }
+            - { from: Orders, to: Payments, label: "traceparent: span 2", tone: dim }
+            - { from: Payments, to: Cardco, label: "POST /charges", tone: active }
+            - { from: Cardco, to: Payments, label: "answer after 1700 ms", tone: bad }
+        - kind: kv
+          id: spans
+          label: "Spans recorded (all share the trace id)"
+          slots: 5
+          rows:
+            - { name: GET /checkout, value: "span 1, no parent, from 0 ms" }
+            - { name: place order, value: "span 2, parent 1, from 2 ms" }
+            - { name: INSERT orders, value: "span 3, parent 2, 4 ms" }
+            - { name: charge card, value: "span 4, parent 2, from 10 ms" }
+            - { name: POST /charges, value: "span 5, parent 4, 1700 ms", tone: bad }
+    - title: The parents finish
+      text: Each parent ends just after its child returns. Payments ends at 1715 ms, orders at 1718 ms and the gateway at 1720 ms.
+      lines: [10, 11, 12]
+      parts:
+        - kind: kv
+          id: spans
+          label: "Spans recorded (all share the trace id)"
+          slots: 5
+          rows:
+            - { name: GET /checkout, value: "span 1, no parent, 1720 ms", tone: done }
+            - { name: place order, value: "span 2, parent 1, 1716 ms", tone: done }
+            - { name: INSERT orders, value: "span 3, parent 2, 4 ms" }
+            - { name: charge card, value: "span 4, parent 2, 1705 ms", tone: done }
+            - { name: POST /charges, value: "span 5, parent 4, 1700 ms", tone: bad }
+    - title: Read the tree
+      text: Following the parents shows the slow path. The 1.7-second checkout is almost all the card provider; tuning the 4 ms database insert would not help.
+      parts:
+        - { kind: note, id: n, text: "GET /checkout 1720 ms → place order → charge card → POST /charges 1700 ms", tone: found }

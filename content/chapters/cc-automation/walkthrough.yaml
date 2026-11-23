@@ -1,0 +1,153 @@
+- id: cc-automation-batch-loop
+  title: A careful batch job
+  hint: Watch a headless batch run on three trial files, each run fenced in by its flags.
+  language: Shell
+  code: |
+    for file in $(cat files.txt); do
+      claude --bare -p "Migrate $file to the new logger API and commit. Reply OK or FAIL." \
+        --allowedTools "Read,Edit,Bash(git add *),Bash(git commit *)" \
+        --permission-mode dontAsk \
+        --max-turns 20
+    done
+  steps:
+    - title: Three files first
+      text: The job will migrate many files to a new logger API, one run per file. Following the best-practices advice, files.txt starts with just three, to see what goes wrong.
+      lines: [ 1 ]
+      parts:
+        - kind: cells
+          id: f
+          label: files.txt (a trial of three)
+          width: 130
+          slots: 3
+          items:
+            - { k: src/orders.js, v: src/orders.js, tone: base }
+            - { k: src/billing.js, v: src/billing.js, tone: base }
+            - { k: src/stock.js, v: src/stock.js, tone: base }
+        - kind: kv
+          id: r
+          label: What each run may do
+          slots: 4
+          rows:
+            - { name: allowed tools, value: "Read, Edit, git add, git commit", tone: base }
+            - { name: anything else, value: refused (dontAsk), tone: base }
+            - { name: turn limit, value: stops after 20 turns, tone: base }
+            - { name: settings loaded, value: none (--bare), tone: base }
+        - { kind: terminal, id: t, slots: 3, lines: [] }
+    - title: Fenced in before it starts
+      text: Each run may only read, edit and commit. dontAsk refuses anything else instead of waiting for a person who is not there, and --max-turns 20 stops it if it goes round in circles.
+      lines: [ 3, 4, 5 ]
+      parts:
+        - kind: kv
+          id: r
+          label: What each run may do
+          slots: 4
+          rows:
+            - { name: allowed tools, value: "Read, Edit, git add, git commit", tone: active }
+            - { name: anything else, value: refused (dontAsk), tone: active }
+            - { name: turn limit, value: stops after 20 turns, tone: active }
+            - { name: settings loaded, value: none (--bare), tone: base }
+    - title: The same everywhere
+      text: --bare ignores hooks, skills, plugins, MCP servers and CLAUDE.md files, so the run behaves the same wherever it runs.
+      lines: [ 2 ]
+      parts:
+        - kind: kv
+          id: r
+          label: What each run may do
+          slots: 4
+          rows:
+            - { name: allowed tools, value: "Read, Edit, git add, git commit", tone: base }
+            - { name: anything else, value: refused (dontAsk), tone: base }
+            - { name: turn limit, value: stops after 20 turns, tone: base }
+            - { name: settings loaded, value: none (--bare), tone: active }
+    - title: First file
+      text: The loop runs claude on src/orders.js. It reads the file, edits it, commits, and replies OK.
+      lines: [ 1, 2 ]
+      vars: { file: src/orders.js }
+      parts:
+        - kind: cells
+          id: f
+          label: files.txt (a trial of three)
+          width: 130
+          slots: 3
+          items:
+            - { k: src/orders.js, v: src/orders.js, tone: active }
+            - { k: src/billing.js, v: src/billing.js, tone: base }
+            - { k: src/stock.js, v: src/stock.js, tone: base }
+          pointers:
+            - { name: file, at: 0 }
+        - kind: kv
+          id: r
+          label: What each run may do
+          slots: 4
+          rows:
+            - { name: allowed tools, value: "Read, Edit, git add, git commit", tone: base }
+            - { name: anything else, value: refused (dontAsk), tone: base }
+            - { name: turn limit, value: stops after 20 turns, tone: base }
+            - { name: settings loaded, value: none (--bare), tone: base }
+        - { kind: terminal, id: t, slots: 3, lines: [ OK ] }
+    - title: Second file
+      text: Suppose the second file needs something outside the list, such as a command that is not git add or git commit. dontAsk refuses it, and the run replies FAIL instead of guessing.
+      lines: [ 3, 4 ]
+      vars: { file: src/billing.js }
+      parts:
+        - kind: cells
+          id: f
+          label: files.txt (a trial of three)
+          width: 130
+          slots: 3
+          items:
+            - { k: src/orders.js, v: src/orders.js, tone: done }
+            - { k: src/billing.js, v: src/billing.js, tone: bad }
+            - { k: src/stock.js, v: src/stock.js, tone: base }
+          pointers:
+            - { name: file, at: 1 }
+        - kind: kv
+          id: r
+          label: What each run may do
+          slots: 4
+          rows:
+            - { name: allowed tools, value: "Read, Edit, git add, git commit", tone: base }
+            - { name: anything else, value: refused (dontAsk), tone: bad }
+            - { name: turn limit, value: stops after 20 turns, tone: base }
+            - { name: settings loaded, value: none (--bare), tone: base }
+        - { kind: terminal, id: t, slots: 3, lines: [ OK, FAIL ] }
+    - title: Third file
+      text: Each run is separate, so one failure does not stop the others. The third file migrates and commits.
+      lines: [ 1, 2 ]
+      vars: { file: src/stock.js }
+      parts:
+        - kind: cells
+          id: f
+          label: files.txt (a trial of three)
+          width: 130
+          slots: 3
+          items:
+            - { k: src/orders.js, v: src/orders.js, tone: done }
+            - { k: src/billing.js, v: src/billing.js, tone: bad }
+            - { k: src/stock.js, v: src/stock.js, tone: active }
+          pointers:
+            - { name: file, at: 2 }
+        - kind: kv
+          id: r
+          label: What each run may do
+          slots: 4
+          rows:
+            - { name: allowed tools, value: "Read, Edit, git add, git commit", tone: base }
+            - { name: anything else, value: refused (dontAsk), tone: base }
+            - { name: turn limit, value: stops after 20 turns, tone: base }
+            - { name: settings loaded, value: none (--bare), tone: base }
+        - { kind: terminal, id: t, slots: 3, lines: [ OK, FAIL, OK ] }
+    - title: Fix the prompt, then the rest
+      text: Now you know what went wrong on a small trial, not after hundreds of files. Fix the prompt or the allowed tools, then run the rest of the list.
+      vars: {}
+      parts:
+        - kind: cells
+          id: f
+          label: files.txt (a trial of three)
+          width: 130
+          slots: 3
+          items:
+            - { k: src/orders.js, v: src/orders.js, tone: done }
+            - { k: src/billing.js, v: src/billing.js, tone: compare }
+            - { k: src/stock.js, v: src/stock.js, tone: done }
+        - { kind: terminal, id: t, slots: 3, lines: [ OK, FAIL, OK ] }

@@ -1,0 +1,84 @@
+- id: java-basics-while-loop
+  title: A while loop, round by round
+  hint: Watch the condition being checked before every round, and the two variables change inside the loop.
+  language: Java
+  code: |
+    int stock = 10;
+    int sold = 0;
+    while (stock >= 4) {
+        stock -= 4;
+        sold++;
+    }
+    System.out.println(sold + " sold, " + stock + " left");
+  steps:
+    - title: Two variables
+      text: Two int variables are created. stock is how many loaves are left; sold counts how many packs of four have been sold.
+      lines: [1, 2]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 2
+          rows: [{ name: stock, value: "10", tone: active }, { name: sold, value: "0", tone: active }]
+        - { kind: terminal, id: out, lines: [], slots: 1 }
+    - title: Check the condition
+      text: A while loop checks its condition before every round. 10 >= 4 is true, so the body runs.
+      lines: [3]
+      vars: { "stock >= 4": "10 >= 4 is true" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 2
+          rows: [{ name: stock, value: "10", tone: compare }, { name: sold, value: "0" }]
+    - title: "Round 1: take four, count one"
+      text: "stock -= 4 is short for stock = stock - 4, so stock becomes 6. sold++ adds one to sold."
+      lines: [4, 5]
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 2
+          rows: [{ name: stock, value: "6", tone: active }, { name: sold, value: "1", tone: active }]
+    - title: Back to the top
+      text: At the closing brace Java jumps back to the condition. 6 >= 4 is still true, so the body runs again.
+      lines: [3]
+      vars: { "stock >= 4": "6 >= 4 is true" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 2
+          rows: [{ name: stock, value: "6", tone: compare }, { name: sold, value: "1" }]
+    - title: "Round 2"
+      text: stock drops from 6 to 2, and sold goes up to 2.
+      lines: [4, 5]
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 2
+          rows: [{ name: stock, value: "2", tone: active }, { name: sold, value: "2", tone: active }]
+    - title: The condition is false
+      text: 2 >= 4 is false, so the loop stops and Java carries on with the line after the closing brace. The body never runs with too little stock.
+      lines: [3]
+      vars: { "stock >= 4": "2 >= 4 is false" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 2
+          rows: [{ name: stock, value: "2", tone: bad }, { name: sold, value: "2" }]
+    - title: Print the result
+      text: The + signs join the numbers and text into one string. The loop ran exactly twice, as many times as the condition stayed true.
+      lines: [7]
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Variables"
+          slots: 2
+          rows: [{ name: stock, value: "2", tone: found }, { name: sold, value: "2", tone: found }]
+        - { kind: terminal, id: out, lines: ["2 sold, 2 left"], slots: 1 }

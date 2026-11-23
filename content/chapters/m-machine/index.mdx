@@ -117,6 +117,8 @@ Same answer, same number of additions, about 25 times slower. Why?
 - **Row by row**, each read is the next integer in memory. One cache miss brings in a line holding 16 integers (64 bytes ÷ 4 bytes each), so 15 of every 16 reads are cache hits, and the prefetcher sees the steady pattern and loads ahead.
 - **Column by column**, each read jumps to a different row: 4,096 integers (16 KB) away from the last one. Every read is in a different cache line, so almost every read is a miss, and by the time the loop comes back to the next column, those lines have been pushed out of the cache.
 
+<Walkthrough name="m-machine-cache-lines" />
+
 The program runs three rounds because Java's runtime starts slowly and speeds up as it compiles the hot loops (<Ref to="m-runtimes" />); the first round is usually slower for both. The exact numbers will differ on your machine, but the gap will be large. Run it yourself: save it as `Main.java` and run `java Main.java`.
 
 ### Arrays and pointers

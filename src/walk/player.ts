@@ -61,6 +61,8 @@ function setup(root: HTMLElement, lesson: Lesson): void {
   const play = $<HTMLButtonElement>('[data-wk=play]');
   const slider = $<HTMLInputElement>('.wk-slider');
   const code = $<HTMLElement>('.wk-code code');
+  const codebox = $<HTMLElement>('.wk-codebox');
+  const detail = $<HTMLElement>('.wk-detail');
   const vars = $<HTMLElement>('.wk-vars');
   const picker = root.querySelector<HTMLSelectElement>('.wk-example');
 
@@ -108,7 +110,10 @@ function setup(root: HTMLElement, lesson: Lesson): void {
     frames = lesson.frames(example);
     height = stageHeight(frames);
     slider.max = String(frames.length - 1);
-    code.innerHTML = renderCode(lesson.code(example));
+    const src = lesson.code(example);
+    code.innerHTML = renderCode(src);
+    codebox.hidden = !src;
+    detail.classList.toggle('wk-nocode', !src);
     // A new example draws from scratch: nothing should slide across from the old one.
     svg.replaceChildren();
     show(0);
@@ -129,9 +134,17 @@ function setup(root: HTMLElement, lesson: Lesson): void {
   load(0);
 }
 
+/** A lesson whose steps were written into the page (walkthrough.yaml lessons). */
+function embedded(root: HTMLElement): Lesson | undefined {
+  const el = root.querySelector('script.wk-data');
+  if (!el?.textContent) return undefined;
+  const data = JSON.parse(el.textContent) as { codes: string[]; frames: Frame[][] };
+  return { id: root.dataset.walk!, title: '', hint: '', language: '', examples: [], code: (e) => data.codes[e] ?? '', frames: (e) => data.frames[e] ?? [] };
+}
+
 export function initWalkthroughs(): void {
   document.querySelectorAll<HTMLElement>('.walk[data-walk]:not(.wk-ready)').forEach((root) => {
-    const lesson = LESSONS[root.dataset.walk!];
+    const lesson = embedded(root) ?? LESSONS[root.dataset.walk!];
     if (lesson) setup(root, lesson);
   });
 }

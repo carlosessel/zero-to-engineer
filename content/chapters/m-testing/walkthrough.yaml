@@ -1,0 +1,102 @@
+- id: m-testing-mutation-kill
+  title: Does any test notice the mutant?
+  hint: A mutation tool changes one character of the delivery rule. Watch the same tests run against the real code and the mutant.
+  language: TypeScript
+  code: |
+    const original = (subtotal: number) => (subtotal >= 3000 ? 0 : 350);
+    const mutant = (subtotal: number) => (subtotal > 3000 ? 0 : 350);
+
+    const weakTests = [[1000, 350], [5000, 0]];
+    const boundaryTests = [...weakTests, [3000, 0]];
+
+    const killedBy = (tests: number[][]) => tests.some(([input, expected]) => mutant(input) !== expected);
+    const passOriginal = (tests: number[][]) => tests.every(([input, expected]) => original(input) === expected);
+
+    console.log(passOriginal(weakTests), killedBy(weakTests));
+    console.log(passOriginal(boundaryTests), killedBy(boundaryTests));
+  steps:
+    - title: The real rule
+      text: Delivery is free from £30, which is 3000 pence, and costs 350 pence below that. The real code says >= 3000.
+      lines: [1]
+      parts:
+        - { kind: note, id: n, text: "original: subtotal >= 3000 ? 0 : 350", tone: base }
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: r
+              title: tests
+              columns: [subtotal, expected, original, mutant]
+              rows: []
+        - { kind: terminal, id: out, lines: [], slots: 2 }
+    - title: A small change, a mutant
+      text: A mutation tool makes a tiny change, here >= becomes >. The only difference is at exactly 3000. A good test suite should notice.
+      lines: [2]
+      parts:
+        - { kind: note, id: n, text: "mutant: subtotal > 3000 ? 0 : 350   (>= became >)", tone: compare }
+    - title: Two ordinary tests
+      text: The first test set checks a small basket and a large one. Both expected values are worked out by hand.
+      lines: [4]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: r
+              title: tests
+              columns: [subtotal, expected, original, mutant]
+              rows: [{ cells: ["1000", "350", "", ""], tone: active }, { cells: ["5000", "0", "", ""], tone: active }]
+    - title: They pass on the real code
+      text: original(1000) is 350 and original(5000) is 0, as expected. Every line of the rule has run, so coverage is full.
+      lines: [8]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: r
+              title: tests
+              columns: [subtotal, expected, original, mutant]
+              rows: [{ cells: ["1000", "350", "350 pass", ""], tone: found }, { cells: ["5000", "0", "0 pass", ""], tone: found }]
+    - title: The mutant survives
+      text: The mutant gives the same answers for 1000 and 5000, so no test fails. The mutant survived, which means these tests cannot tell >= from >.
+      lines: [7, 10]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: r
+              title: tests
+              columns: [subtotal, expected, original, mutant]
+              rows: [{ cells: ["1000", "350", "350 pass", "350 pass"], tone: compare }, { cells: ["5000", "0", "0 pass", "0 pass"], tone: compare }]
+        - { kind: terminal, id: out, lines: ["true false"], slots: 2 }
+    - title: Add the boundary
+      text: The second set adds the case most bugs hide in, exactly £30. At 3000 the basket should get free delivery.
+      lines: [5]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: r
+              title: tests
+              columns: [subtotal, expected, original, mutant]
+              rows: [{ cells: ["1000", "350", "350 pass", "350 pass"] }, { cells: ["5000", "0", "0 pass", "0 pass"] }, { cells: ["3000", "0", "", ""], tone: active }]
+    - title: The mutant is killed
+      text: original(3000) is 0, so the real code still passes. The mutant asks whether 3000 > 3000, which is false, and charges 350. That test fails, so the mutant is killed.
+      lines: [11]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: r
+              title: tests
+              columns: [subtotal, expected, original, mutant]
+              rows: [{ cells: ["1000", "350", "350 pass", "350 pass"] }, { cells: ["5000", "0", "0 pass", "0 pass"] }, { cells: ["3000", "0", "0 pass", "350 FAIL"], tone: bad }]
+        - { kind: terminal, id: out, lines: ["true false", "true true"], slots: 2 }
+    - title: What it measured
+      text: Both test sets pass and both give full coverage, but only the one with the boundary case notices the change. Mutation testing measures whether tests detect changes, which coverage cannot.
+      parts:
+        - { kind: note, id: n, text: "weak tests: mutant survived   boundary tests: mutant killed", tone: found }

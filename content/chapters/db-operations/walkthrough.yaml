@@ -1,0 +1,131 @@
+- id: db-operations-point-in-time
+  title: Recovering to just before a mistake
+  hint: Watch a base backup plus the archived write-ahead log rebuild the database on a new server, stopping one moment before a bad DELETE.
+  language: Config
+  code: |
+    # In postgresql.conf, ship every completed WAL segment to an archive (tools such as pgBackRest do this for you)
+    archive_mode = on
+    archive_command = 'pgbackrest --stanza=bakery archive-push %p'
+
+    # To recover to just before a mistake, restore the latest base backup, then set:
+    recovery_target_time = '2026-11-14 10:41:00+00'
+  steps:
+    - title: A base backup
+      text: A base backup is a copy of the database's data files at one moment. On its own it can only take you back to that moment.
+      parts:
+        - kind: cells
+          id: p
+          label: "production: what happened, in order"
+          slots: 5
+          width: 110
+          items:
+            - { k: b, v: base backup, tone: active }
+        - { kind: cells, id: r, label: new recovery server, slots: 5, width: 110, items: [], empty: not started }
+    - title: Every change goes to the WAL
+      text: PostgreSQL writes every change to the write-ahead log before the data files. With archiving on, each finished WAL segment is copied to an archive.
+      lines: [ 1, 2, 3 ]
+      parts:
+        - kind: cells
+          id: p
+          label: "production: what happened, in order"
+          slots: 5
+          width: 110
+          items:
+            - { k: b, v: base backup }
+            - { k: w1, v: WAL, tone: active }
+            - { k: w2, v: WAL, tone: active }
+    - title: A bad DELETE at 10:42
+      text: At 10:42 someone runs DELETE FROM orders with no WHERE. Every order is gone from production, and the delete itself is written to the WAL like any other change.
+      vars: { mistake: 10:42 }
+      parts:
+        - kind: cells
+          id: p
+          label: "production: what happened, in order"
+          slots: 5
+          width: 110
+          items:
+            - { k: b, v: base backup }
+            - { k: w1, v: WAL }
+            - { k: w2, v: WAL }
+            - { k: del, v: DELETE 10:42, tone: bad }
+    - title: The shop keeps trading
+      text: New orders arrive after the mistake. Restoring over production would throw them away, so production is left running.
+      parts:
+        - kind: cells
+          id: p
+          label: "production: what happened, in order"
+          slots: 5
+          width: 110
+          items:
+            - { k: b, v: base backup }
+            - { k: w1, v: WAL }
+            - { k: w2, v: WAL }
+            - { k: del, v: DELETE 10:42, tone: bad }
+            - { k: new, v: new orders, tone: active }
+    - title: Restore onto a new server
+      text: The latest base backup is restored to a separate, new server. It now holds the database as it was when that backup was taken.
+      lines: [ 5 ]
+      parts:
+        - kind: cells
+          id: p
+          label: "production: what happened, in order"
+          slots: 5
+          width: 110
+          items:
+            - { k: b, v: base backup }
+            - { k: w1, v: WAL }
+            - { k: w2, v: WAL }
+            - { k: del, v: DELETE 10:42, tone: bad }
+            - { k: new, v: new orders }
+        - kind: cells
+          id: r
+          label: new recovery server
+          slots: 5
+          width: 110
+          items:
+            - { k: b, v: base backup, tone: active }
+          empty: not started
+    - title: Replay the WAL, then stop
+      text: "The new server replays the archived WAL in order, redoing each change, and stops at recovery_target_time: 10:41, before the delete."
+      lines: [ 6 ]
+      vars: { mistake: 10:42, recovery_target_time: 10:41:00 }
+      parts:
+        - kind: cells
+          id: r
+          label: new recovery server
+          slots: 5
+          width: 110
+          items:
+            - { k: b, v: base backup, tone: done }
+            - { k: w1, v: WAL, tone: active }
+            - { k: w2, v: WAL, tone: active }
+            - { k: del, v: stop here, tone: compare }
+          empty: not started
+    - title: Copy the orders back
+      text: The recovered server still has the deleted orders. Copying them back into production restores them and keeps the orders placed since 10:42.
+      parts:
+        - kind: cells
+          id: p
+          label: "production: what happened, in order"
+          slots: 5
+          width: 110
+          items:
+            - { k: b, v: base backup }
+            - { k: w1, v: WAL }
+            - { k: w2, v: WAL }
+            - { k: del, v: DELETE 10:42, tone: dim }
+            - { k: new, v: new orders, tone: found }
+        - kind: cells
+          id: r
+          label: new recovery server
+          slots: 5
+          width: 110
+          items:
+            - { k: b, v: base backup, tone: done }
+            - { k: w1, v: WAL, tone: done }
+            - { k: w2, v: WAL, tone: done }
+            - { k: del, v: orders copied, tone: found }
+          empty: not started
+    - title: Only if it has been tested
+      text: "This works only with a base backup and an unbroken WAL archive. Restore regularly to prove it, and time it: that time is your real RTO."
+      vars: {}

@@ -1,0 +1,71 @@
+- id: web-setup-first-run
+  title: From empty folder to first program
+  hint: Watch the terminal as you make the project folder, hit the commonest install snag, run hello.js and check your tools.
+  language: Shell
+  code: |
+    mkdir web-course
+    cd web-course
+    node hello.js
+    node hello.js
+    node --version
+    npm --version
+    git --version
+  steps:
+    - title: A terminal, waiting
+      text: The terminal runs one command at a time and prints any answer underneath. Nothing has been made yet.
+      parts:
+        - { kind: kv, id: k, label: "Where things stand", slots: 3, rows: [{ name: folder, value: "(none yet)" }] }
+        - { kind: terminal, id: t, slots: 9, lines: [] }
+    - title: Make a folder
+      text: mkdir makes a new folder called web-course. It prints nothing; silence usually means it worked.
+      lines: [1]
+      parts:
+        - { kind: kv, id: k, label: "Where things stand", slots: 3, rows: [{ name: folder, value: "web-course (made)", tone: active }] }
+        - { kind: terminal, id: t, slots: 9, lines: ["$ mkdir web-course"] }
+    - title: Move into it
+      text: cd moves the terminal into the folder, so later commands find the files you put there. In VS Code you open this same folder.
+      lines: [2]
+      parts:
+        - { kind: kv, id: k, label: "Where things stand", slots: 3, rows: [{ name: folder, value: "inside web-course", tone: active }] }
+        - { kind: terminal, id: t, slots: 9, lines: ["$ mkdir web-course", "$ cd web-course"] }
+    - title: An old terminal does not know Node
+      text: "You installed Node, then ran hello.js in a terminal that was already open. It says command not found: a terminal only knows programs installed before it started."
+      lines: [3]
+      parts:
+        - kind: kv
+          id: k
+          label: "Where things stand"
+          slots: 3
+          rows: [{ name: folder, value: "inside web-course" }, { name: terminal, value: "opened before installing Node", tone: bad }]
+        - { kind: terminal, id: t, slots: 9, lines: ["$ mkdir web-course", "$ cd web-course", "$ node hello.js", "zsh: command not found: node"] }
+    - title: A new terminal, and it runs
+      text: "Close the terminal and open a new one (in VS Code, Terminal → New Terminal starts in your project folder). Now Node runs hello.js and prints its line."
+      lines: [4]
+      parts:
+        - kind: kv
+          id: k
+          label: "Where things stand"
+          slots: 3
+          rows: [{ name: folder, value: "inside web-course" }, { name: terminal, value: "new, opened after installing", tone: found }]
+        - { kind: terminal, id: t, slots: 9, lines: ["$ node hello.js", "Hello from Node, Ama"] }
+    - title: Check Node
+      text: node --version prints the version installed. Any number means the terminal can find Node.
+      lines: [5]
+      parts:
+        - { kind: terminal, id: t, slots: 9, lines: ["$ node hello.js", "Hello from Node, Ama", "$ node --version", "v26.13.1"] }
+    - title: Check npm and Git
+      text: npm came with Node; Git was installed on its own. Each prints a version number. Your numbers may be higher.
+      lines: [6, 7]
+      parts:
+        - kind: terminal
+          id: t
+          slots: 9
+          lines: ["$ node hello.js", "Hello from Node, Ama", "$ node --version", "v26.13.1", "$ npm --version", "11.8.0", "$ git --version", "git version 2.50.1"]
+    - title: Ready
+      text: Every tool answered with a version, so everything is installed and found. After installing anything new, remember to open a new terminal first.
+      parts:
+        - kind: kv
+          id: k
+          label: "Where things stand"
+          slots: 3
+          rows: [{ name: folder, value: "inside web-course" }, { name: terminal, value: "new, opened after installing" }, { name: tools, value: "node, npm and git all found", tone: found }]

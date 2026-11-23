@@ -1,0 +1,123 @@
+- id: ops-trace
+  title: One request, one trace
+  hint: Watch a trace record fill in for a single request, then see how reading it points to the real problem.
+  steps:
+    - title: "A request arrives"
+      text: "A trace starts with what was asked. This shop assistant and its numbers are made up for the example."
+      parts:
+        - kind: kv
+          id: tr
+          label: "trace for one request"
+          slots: 10
+          rows:
+            - { name: "question", value: "Do you fix water damage?", tone: active }
+    - title: "Which versions answered"
+      text: "Record the prompt version and the pinned model version. When quality changes, you can tell which change caused it."
+      parts:
+        - kind: kv
+          id: tr
+          label: "trace for one request"
+          slots: 10
+          rows:
+            - { name: "question", value: "Do you fix water damage?", tone: base }
+            - { name: "prompt version", value: "support-v7", tone: active }
+            - { name: "model version", value: "pinned name, from config", tone: active }
+    - title: "What was retrieved"
+      text: "Record which chunks retrieval found, and the tool calls made. Here retrieval found nothing about repairs."
+      parts:
+        - kind: kv
+          id: tr
+          label: "trace for one request"
+          slots: 10
+          rows:
+            - { name: "question", value: "Do you fix water damage?", tone: base }
+            - { name: "prompt version", value: "support-v7", tone: base }
+            - { name: "model version", value: "pinned name, from config", tone: base }
+            - { name: "retrieved chunks", value: "2: opening hours, delivery times", tone: active }
+            - { name: "tool calls", value: "none", tone: active }
+    - title: "What came back"
+      text: "Record the full response and the tokens in and out. Tokens are what you pay for."
+      parts:
+        - kind: kv
+          id: tr
+          label: "trace for one request"
+          slots: 10
+          rows:
+            - { name: "question", value: "Do you fix water damage?", tone: base }
+            - { name: "prompt version", value: "support-v7", tone: base }
+            - { name: "model version", value: "pinned name, from config", tone: base }
+            - { name: "retrieved chunks", value: "2: opening hours, delivery times", tone: base }
+            - { name: "tool calls", value: "none", tone: base }
+            - { name: "response", value: "I do not know.", tone: active }
+            - { name: "tokens in / out", value: "1,850 / 12", tone: active }
+    - title: "How long, and how much"
+      text: "Latency and cost per request come from the same record. Across many traces they give your median and slowest 5%."
+      parts:
+        - kind: kv
+          id: tr
+          label: "trace for one request"
+          slots: 10
+          rows:
+            - { name: "question", value: "Do you fix water damage?", tone: base }
+            - { name: "prompt version", value: "support-v7", tone: base }
+            - { name: "model version", value: "pinned name, from config", tone: base }
+            - { name: "retrieved chunks", value: "2: opening hours, delivery times", tone: base }
+            - { name: "tool calls", value: "none", tone: base }
+            - { name: "response", value: "I do not know.", tone: base }
+            - { name: "tokens in / out", value: "1,850 / 12", tone: base }
+            - { name: "latency", value: "2.1 s", tone: active }
+            - { name: "cost", value: "tokens × your price per token", tone: active }
+    - title: "What the user thought"
+      text: "The user gave a thumbs down. Feedback joined to the trace shows exactly which request disappointed someone."
+      parts:
+        - kind: kv
+          id: tr
+          label: "trace for one request"
+          slots: 10
+          rows:
+            - { name: "question", value: "Do you fix water damage?", tone: base }
+            - { name: "prompt version", value: "support-v7", tone: base }
+            - { name: "model version", value: "pinned name, from config", tone: base }
+            - { name: "retrieved chunks", value: "2: opening hours, delivery times", tone: base }
+            - { name: "tool calls", value: "none", tone: base }
+            - { name: "response", value: "I do not know.", tone: base }
+            - { name: "tokens in / out", value: "1,850 / 12", tone: base }
+            - { name: "latency", value: "2.1 s", tone: base }
+            - { name: "cost", value: "tokens × your price per token", tone: base }
+            - { name: "user feedback", value: "thumbs down", tone: bad }
+    - title: "Reading it explains it"
+      text: "The answer was not wrong in itself: retrieval fetched the wrong chunks, so the model honestly said it did not know. Without the retrieved chunks in the trace, you would blame the model."
+      parts:
+        - kind: kv
+          id: tr
+          label: "trace for one request"
+          slots: 10
+          rows:
+            - { name: "question", value: "Do you fix water damage?", tone: base }
+            - { name: "prompt version", value: "support-v7", tone: base }
+            - { name: "model version", value: "pinned name, from config", tone: base }
+            - { name: "retrieved chunks", value: "2: opening hours, delivery times", tone: bad }
+            - { name: "tool calls", value: "none", tone: base }
+            - { name: "response", value: "I do not know.", tone: compare }
+            - { name: "tokens in / out", value: "1,850 / 12", tone: base }
+            - { name: "latency", value: "2.1 s", tone: base }
+            - { name: "cost", value: "tokens × your price per token", tone: base }
+            - { name: "user feedback", value: "thumbs down", tone: bad }
+    - title: "Turn it into a fix"
+      text: "Add this question as a new eval case, fix retrieval, and check the eval before release. Reading real traces every week finds problems like this faster than anything else."
+      parts:
+        - kind: kv
+          id: tr
+          label: "trace for one request"
+          slots: 10
+          rows:
+            - { name: "question", value: "Do you fix water damage?", tone: found }
+            - { name: "prompt version", value: "support-v7", tone: base }
+            - { name: "model version", value: "pinned name, from config", tone: base }
+            - { name: "retrieved chunks", value: "2: opening hours, delivery times", tone: found }
+            - { name: "tool calls", value: "none", tone: base }
+            - { name: "response", value: "I do not know.", tone: base }
+            - { name: "tokens in / out", value: "1,850 / 12", tone: base }
+            - { name: "latency", value: "2.1 s", tone: base }
+            - { name: "cost", value: "tokens × your price per token", tone: base }
+            - { name: "user feedback", value: "thumbs down", tone: base }

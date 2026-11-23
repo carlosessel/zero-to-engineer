@@ -1,0 +1,165 @@
+- id: first-call-history
+  title: How a chat remembers
+  hint: Watch the history list grow, and see that every call sends all of it again.
+  language: Python
+  code: |
+    history = []
+    while True:
+        history.append({"role": "user", "content": input("> ")})
+        msg = client.messages.create(model=MODEL, max_tokens=2000, messages=history)
+        reply = reply_text(msg)
+        history.append({"role": "assistant", "content": reply})
+        print(reply)
+  steps:
+    - title: "An empty history"
+      text: "history is a plain Python list that your code owns. The model keeps nothing between calls, so this list is the only memory there is."
+      lines: [1]
+      parts:
+        - kind: tables
+          id: h
+          slots: 4
+          tables:
+            - id: hist
+              title: "history (sent with every call)"
+              columns: [role, content]
+              rows: []
+        - kind: terminal
+          id: out
+          slots: 4
+          lines: []
+        - kind: seq
+          id: s
+          actors: [Your code, Model]
+          slots: 4
+          messages: []
+    - title: "The user asks"
+      text: "input reads a question, and your code appends it to history as a user message."
+      lines: [3]
+      parts:
+        - kind: tables
+          id: h
+          slots: 4
+          tables:
+            - id: hist
+              title: "history (sent with every call)"
+              columns: [role, content]
+              rows:
+                - { k: m0, cells: [user, "What is overfitting?"], tone: active }
+        - kind: terminal
+          id: out
+          slots: 4
+          lines: ["> What is overfitting?"]
+    - title: "Call 1 sends one message"
+      text: "messages=history sends the whole list, which so far holds one message. The model answers it."
+      lines: [4]
+      parts:
+        - kind: tables
+          id: h
+          slots: 4
+          tables:
+            - id: hist
+              title: "history (sent with every call)"
+              columns: [role, content]
+              rows:
+                - { k: m0, cells: [user, "What is overfitting?"], tone: compare }
+        - kind: seq
+          id: s
+          actors: [Your code, Model]
+          slots: 4
+          messages:
+            - { from: "Your code", to: "Model", label: "call 1: 1 message", tone: active }
+            - { from: "Model", to: "Your code", label: "reply", tone: found }
+    - title: "Save the reply"
+      text: "Your code appends the reply to history as an assistant message and prints it. Without this line the next call would not know what was said."
+      lines: [5, 6, 7]
+      parts:
+        - kind: tables
+          id: h
+          slots: 4
+          tables:
+            - id: hist
+              title: "history (sent with every call)"
+              columns: [role, content]
+              rows:
+                - { k: m0, cells: [user, "What is overfitting?"] }
+                - { k: m1, cells: [assistant, "(reply about overfitting)"], tone: active }
+        - kind: terminal
+          id: out
+          slots: 4
+          lines: ["> What is overfitting?", "(reply about overfitting)"]
+    - title: "A follow-up question"
+      text: "The user types “Give me an example.” On its own that question makes no sense: an example of what?"
+      lines: [3]
+      parts:
+        - kind: tables
+          id: h
+          slots: 4
+          tables:
+            - id: hist
+              title: "history (sent with every call)"
+              columns: [role, content]
+              rows:
+                - { k: m0, cells: [user, "What is overfitting?"] }
+                - { k: m1, cells: [assistant, "(reply about overfitting)"] }
+                - { k: m2, cells: [user, "Give me an example."], tone: active }
+        - kind: terminal
+          id: out
+          slots: 4
+          lines: ["> What is overfitting?", "(reply about overfitting)", "> Give me an example."]
+    - title: "Call 2 resends everything"
+      text: "This call sends all three messages. The model reads the earlier turns again, so it knows the example should be about overfitting."
+      lines: [4]
+      parts:
+        - kind: tables
+          id: h
+          slots: 4
+          tables:
+            - id: hist
+              title: "history (sent with every call)"
+              columns: [role, content]
+              rows:
+                - { k: m0, cells: [user, "What is overfitting?"], tone: compare }
+                - { k: m1, cells: [assistant, "(reply about overfitting)"], tone: compare }
+                - { k: m2, cells: [user, "Give me an example."], tone: compare }
+        - kind: seq
+          id: s
+          actors: [Your code, Model]
+          slots: 4
+          messages:
+            - { from: "Your code", to: "Model", label: "call 1: 1 message", tone: dim }
+            - { from: "Model", to: "Your code", label: "reply", tone: dim }
+            - { from: "Your code", to: "Model", label: "call 2: 3 messages", tone: active }
+            - { from: "Model", to: "Your code", label: "reply", tone: found }
+    - title: "The chat looks continuous"
+      text: "The reply is appended and printed. To the user the model seems to remember; really your code reminded it of everything."
+      lines: [6, 7]
+      parts:
+        - kind: tables
+          id: h
+          slots: 4
+          tables:
+            - id: hist
+              title: "history (sent with every call)"
+              columns: [role, content]
+              rows:
+                - { k: m0, cells: [user, "What is overfitting?"] }
+                - { k: m1, cells: [assistant, "(reply about overfitting)"] }
+                - { k: m2, cells: [user, "Give me an example."] }
+                - { k: m3, cells: [assistant, "(an example of overfitting)"], tone: active }
+        - kind: terminal
+          id: out
+          slots: 4
+          lines: ["> What is overfitting?", "(reply about overfitting)", "> Give me an example.", "(an example of overfitting)"]
+    - title: "The cost of remembering"
+      text: "Every call resends the whole history, so each one costs more than the last and the list will eventually exceed the context window. Real applications trim or summarise old turns."
+      lines: [4]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Your code, Model]
+          slots: 4
+          messages:
+            - { from: "Your code", to: "Model", label: "call 1: 1 message", tone: dim }
+            - { from: "Model", to: "Your code", label: "reply", tone: dim }
+            - { from: "Your code", to: "Model", label: "call 2: 3 messages", tone: dim }
+            - { from: "Your code", to: "Model", label: "call 3: 5 messages, and so on", tone: bad }

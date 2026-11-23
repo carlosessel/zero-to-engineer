@@ -1,0 +1,167 @@
+- id: js-logic-functions-for-loop
+  title: A for loop, one pass at a time
+  hint: Watch the counter i, the check before each pass and the step after it.
+  language: JavaScript
+  code: |
+    for (let i = 1; i <= 5; i++) {
+      console.log(`Step ${i}`);
+    }
+  steps:
+    - title: Make the counter
+      text: "let i = 1 runs once, at the very start. It makes the counter the loop will use."
+      lines: [1]
+      vars: { i: 1 }
+      parts:
+        - { kind: note, id: n, text: "start: let i = 1", tone: active }
+        - { kind: terminal, id: out, lines: [], slots: 5 }
+    - title: Check before the pass
+      text: "Before every pass, the loop asks i <= 5. 1 <= 5 is true, so the block in curly brackets runs."
+      lines: [1]
+      parts:
+        - { kind: note, id: n, text: "check: 1 <= 5 is true, so run the block", tone: found }
+    - title: The first pass
+      text: The block prints Step 1, using the current value of i.
+      lines: [2]
+      parts:
+        - { kind: note, id: n, text: "run: console.log(`Step 1`)", tone: active }
+        - { kind: terminal, id: out, lines: ["Step 1"], slots: 5 }
+    - title: Step the counter
+      text: After every pass, i++ adds one to the counter. i is now 2, and the loop goes back to the check.
+      lines: [1]
+      vars: { i: 2 }
+      parts:
+        - { kind: note, id: n, text: "after: i++ makes i 2", tone: compare }
+    - title: Round and round
+      text: "Check, run, step: each pass through the loop is one iteration. Passes for 2, 3 and 4 print their lines the same way."
+      lines: [2]
+      vars: { i: 5 }
+      parts:
+        - { kind: note, id: n, text: "check 5 <= 5 is true, run, then i++", tone: active }
+        - { kind: terminal, id: out, lines: ["Step 1", "Step 2", "Step 3", "Step 4", "Step 5"], slots: 5 }
+    - title: The check fails
+      text: After the fifth pass i++ makes i 6. 6 <= 5 is false, so the loop stops and the program carries on after the closing bracket.
+      lines: [1, 3]
+      vars: { i: 6 }
+      parts:
+        - { kind: note, id: n, text: "check: 6 <= 5 is false, so the loop ends", tone: bad }
+    - title: Five passes
+      text: "i was 1, 2, 3, 4 and 5 inside the block. Check the first and last values like this to catch off-by-one mistakes: i < 5 would print only four lines."
+      parts:
+        - { kind: note, id: n, text: "start once; check before, step after each pass", tone: found }
+
+- id: js-logic-functions-calls
+  title: A function calling a function
+  hint: Follow each call out and each returned value back, and see when a function ends.
+  language: JavaScript
+  code: |
+    function isEven(n) {
+      return n % 2 === 0;
+    }
+
+    function describe(n) {
+      if (isEven(n)) {
+        return `${n} is even`;
+      }
+      return `${n} is odd`;
+    }
+
+    for (let i = 1; i <= 4; i++) {
+      console.log(describe(i));
+    }
+  steps:
+    - title: Declaring is not running
+      text: The two function declarations only define isEven and describe. Nothing inside them runs until something calls them. The loop is the first code that does any work.
+      lines: [1, 5]
+      parts:
+        - { kind: seq, id: s, actors: [loop, describe, isEven], slots: 8, messages: [] }
+        - { kind: terminal, id: out, lines: [], slots: 4 }
+    - title: The loop calls describe(1)
+      text: "With i at 1, the loop calls describe. The argument 1 arrives in describe's parameter n."
+      lines: [13]
+      vars: { i: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [loop, describe, isEven]
+          slots: 8
+          messages:
+            - { from: loop, to: describe, label: "describe(1)", tone: active }
+    - title: describe calls isEven(1)
+      text: "To decide its if, describe needs an answer, so it calls isEven with its own n. describe waits while isEven runs."
+      lines: [6]
+      vars: { i: 1, n: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [loop, describe, isEven]
+          slots: 8
+          messages:
+            - { from: loop, to: describe, label: "describe(1)", tone: dim }
+            - { from: describe, to: isEven, label: "isEven(1)", tone: active }
+    - title: isEven returns false
+      text: "1 % 2 is 1, and 1 === 0 is false. return hands false back to describe and ends isEven."
+      lines: [2]
+      parts:
+        - kind: seq
+          id: s
+          actors: [loop, describe, isEven]
+          slots: 8
+          messages:
+            - { from: loop, to: describe, label: "describe(1)", tone: dim }
+            - { from: describe, to: isEven, label: "isEven(1)", tone: dim }
+            - { from: isEven, to: describe, label: "false", tone: bad }
+    - title: describe returns "1 is odd"
+      text: The if is false, so its block is skipped and the last return runs. It hands the string back to the loop, which prints it.
+      lines: [9, 13]
+      parts:
+        - kind: seq
+          id: s
+          actors: [loop, describe, isEven]
+          slots: 8
+          messages:
+            - { from: loop, to: describe, label: "describe(1)", tone: dim }
+            - { from: describe, to: isEven, label: "isEven(1)", tone: dim }
+            - { from: isEven, to: describe, label: "false", tone: dim }
+            - { from: describe, to: loop, label: "\"1 is odd\"", tone: found }
+        - { kind: terminal, id: out, lines: ["1 is odd"], slots: 4 }
+    - title: Again with 2
+      text: "Next pass, i is 2. The same calls happen with new values: 2 % 2 is 0, so isEven returns true."
+      lines: [2, 13]
+      vars: { i: 2, n: 2 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [loop, describe, isEven]
+          slots: 8
+          messages:
+            - { from: loop, to: describe, label: "describe(1)", tone: dim }
+            - { from: describe, to: isEven, label: "isEven(1)", tone: dim }
+            - { from: isEven, to: describe, label: "false", tone: dim }
+            - { from: describe, to: loop, label: "\"1 is odd\"", tone: dim }
+            - { from: loop, to: describe, label: "describe(2)", tone: active }
+            - { from: describe, to: isEven, label: "isEven(2)", tone: active }
+            - { from: isEven, to: describe, label: "true", tone: found }
+    - title: The first return ends it
+      text: "The if is true, so return `2 is even` runs. Once return runs, the function ends, so the second return never runs and no else is needed."
+      lines: [7]
+      parts:
+        - kind: seq
+          id: s
+          actors: [loop, describe, isEven]
+          slots: 8
+          messages:
+            - { from: loop, to: describe, label: "describe(1)", tone: dim }
+            - { from: describe, to: isEven, label: "isEven(1)", tone: dim }
+            - { from: isEven, to: describe, label: "false", tone: dim }
+            - { from: describe, to: loop, label: "\"1 is odd\"", tone: dim }
+            - { from: loop, to: describe, label: "describe(2)", tone: dim }
+            - { from: describe, to: isEven, label: "isEven(2)", tone: dim }
+            - { from: isEven, to: describe, label: "true", tone: dim }
+            - { from: describe, to: loop, label: "\"2 is even\"", tone: found }
+        - { kind: terminal, id: out, lines: ["1 is odd", "2 is even"], slots: 4 }
+    - title: Small pieces, reused
+      text: Passes for 3 and 4 repeat the same pattern. Each function does one small job, and describe reuses isEven instead of repeating its maths.
+      lines: [12, 13, 14]
+      vars: {}
+      parts:
+        - { kind: terminal, id: out, lines: ["1 is odd", "2 is even", "3 is odd", "4 is even"], slots: 4 }

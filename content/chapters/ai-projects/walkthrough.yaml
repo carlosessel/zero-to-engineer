@@ -1,0 +1,234 @@
+- id: ai-projects-build-stages
+  title: Building one project, stage by stage
+  hint: Watch project 5, ask-my-documents, come together one working stage at a time, ending with the rules every project shares.
+  steps:
+    - title: "The plan"
+      text: "Project 5, ask-my-documents, built in stages. Each box names the chapter that teaches it; nothing is lit until it works."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: dim, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: dim, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: dim, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: dim, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: dim, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: dim, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: dim, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: dim, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: dim }
+            - { a: chunk, b: search, directed: true, tone: dim }
+            - { a: search, b: answer, directed: true, tone: dim }
+            - { a: answer, b: stream, directed: true, tone: dim }
+            - { a: stream, b: eval, directed: true, tone: dim }
+            - { a: eval, b: readme, directed: true, tone: dim }
+            - { a: readme, b: write, directed: true, tone: dim }
+    - title: "Load the documents"
+      text: "Pick documents you know well, such as a school handbook, and extract clean text. Look at the extracted text yourself; bad extraction silently ruins retrieval."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: active, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: dim, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: dim, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: dim, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: dim, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: dim, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: dim, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: dim, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: dim }
+            - { a: chunk, b: search, directed: true, tone: dim }
+            - { a: search, b: answer, directed: true, tone: dim }
+            - { a: answer, b: stream, directed: true, tone: dim }
+            - { a: stream, b: eval, directed: true, tone: dim }
+            - { a: eval, b: readme, directed: true, tone: dim }
+            - { a: readme, b: write, directed: true, tone: dim }
+    - title: "Chunk and embed"
+      text: "Split the text into passages of a few hundred tokens and store their embeddings in a vector database."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: done, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: active, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: dim, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: dim, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: dim, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: dim, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: dim, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: dim, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: active }
+            - { a: chunk, b: search, directed: true, tone: dim }
+            - { a: search, b: answer, directed: true, tone: dim }
+            - { a: answer, b: stream, directed: true, tone: dim }
+            - { a: stream, b: eval, directed: true, tone: dim }
+            - { a: eval, b: readme, directed: true, tone: dim }
+            - { a: readme, b: write, directed: true, tone: dim }
+    - title: "Hybrid search"
+      text: "Combine embedding search with keyword search, so both the meaning and the exact words of a question can find a passage."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: done, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: done, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: active, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: dim, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: dim, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: dim, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: dim, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: dim, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: done }
+            - { a: chunk, b: search, directed: true, tone: active }
+            - { a: search, b: answer, directed: true, tone: dim }
+            - { a: answer, b: stream, directed: true, tone: dim }
+            - { a: stream, b: eval, directed: true, tone: dim }
+            - { a: eval, b: readme, directed: true, tone: dim }
+            - { a: readme, b: write, directed: true, tone: dim }
+    - title: "Answer with citations"
+      text: "Put the retrieved chunks in the prompt and tell the model to answer only from them and cite which ones it used."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: done, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: done, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: done, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: active, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: dim, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: dim, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: dim, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: dim, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: done }
+            - { a: chunk, b: search, directed: true, tone: done }
+            - { a: search, b: answer, directed: true, tone: active }
+            - { a: answer, b: stream, directed: true, tone: dim }
+            - { a: stream, b: eval, directed: true, tone: dim }
+            - { a: eval, b: readme, directed: true, tone: dim }
+            - { a: readme, b: write, directed: true, tone: dim }
+    - title: "Stream it to an app"
+      text: "A backend holds the key and streams the answer, so users see words appear instead of waiting."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: done, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: done, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: done, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: done, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: active, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: dim, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: dim, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: dim, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: done }
+            - { a: chunk, b: search, directed: true, tone: done }
+            - { a: search, b: answer, directed: true, tone: done }
+            - { a: answer, b: stream, directed: true, tone: active }
+            - { a: stream, b: eval, directed: true, tone: dim }
+            - { a: eval, b: readme, directed: true, tone: dim }
+            - { a: readme, b: write, directed: true, tone: dim }
+    - title: "Measure retrieval"
+      text: "Build a retrieval eval: questions with the passages that should be found. Report the score; most RAG failures are here."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: done, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: done, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: done, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: done, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: done, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: active, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: dim, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: dim, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: done }
+            - { a: chunk, b: search, directed: true, tone: done }
+            - { a: search, b: answer, directed: true, tone: done }
+            - { a: answer, b: stream, directed: true, tone: done }
+            - { a: stream, b: eval, directed: true, tone: active }
+            - { a: eval, b: readme, directed: true, tone: dim }
+            - { a: readme, b: write, directed: true, tone: dim }
+    - title: "Show it"
+      text: "A public repository with a README and a short demo video, so anyone can see it working."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: done, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: done, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: done, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: done, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: done, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: done, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: active, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: dim, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: done }
+            - { a: chunk, b: search, directed: true, tone: done }
+            - { a: search, b: answer, directed: true, tone: done }
+            - { a: answer, b: stream, directed: true, tone: done }
+            - { a: stream, b: eval, directed: true, tone: done }
+            - { a: eval, b: readme, directed: true, tone: active }
+            - { a: readme, b: write, directed: true, tone: dim }
+    - title: "Say what failed"
+      text: "The last rule for every project: a paragraph on what failed and how you fixed it. That paragraph is what interviewers read."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: done, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: done, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: done, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: done, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: done, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: done, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: done, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: active, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: done }
+            - { a: chunk, b: search, directed: true, tone: done }
+            - { a: search, b: answer, directed: true, tone: done }
+            - { a: answer, b: stream, directed: true, tone: done }
+            - { a: stream, b: eval, directed: true, tone: done }
+            - { a: eval, b: readme, directed: true, tone: done }
+            - { a: readme, b: write, directed: true, tone: active }
+    - title: "Done"
+      text: "Every stage is lit. The last three, an eval with a score, a README with a demo and an honest write-up, apply to all eight projects on the ladder."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: load, label: "load documents", x: 0.05, y: 0, tone: done, note: "rag" }
+            - { k: chunk, label: "chunk + embed", x: 0.36, y: 0, tone: done, note: "rag" }
+            - { k: search, label: "hybrid search", x: 0.66, y: 0, tone: done, note: "rag" }
+            - { k: answer, label: "answer + cite", x: 0.95, y: 0, tone: done, note: "rag" }
+            - { k: stream, label: "stream to app", x: 0.95, y: 1, tone: done, note: "app-architecture" }
+            - { k: eval, label: "retrieval eval", x: 0.66, y: 1, tone: done, note: "evals" }
+            - { k: readme, label: "README + video", x: 0.36, y: 1, tone: done, note: "every project" }
+            - { k: write, label: "what failed", x: 0.05, y: 1, tone: done, note: "every project" }
+          edges:
+            - { a: load, b: chunk, directed: true, tone: done }
+            - { a: chunk, b: search, directed: true, tone: done }
+            - { a: search, b: answer, directed: true, tone: done }
+            - { a: answer, b: stream, directed: true, tone: done }
+            - { a: stream, b: eval, directed: true, tone: done }
+            - { a: eval, b: readme, directed: true, tone: done }
+            - { a: readme, b: write, directed: true, tone: done }

@@ -1,0 +1,121 @@
+- id: cs-objects-account
+  title: An object guards its own balance
+  hint: Watch each method call change the Account object, and the one call that breaks the rule be refused.
+  language: C#
+  code: |
+    var account = new Account("Ama");
+    account.Deposit(50.00m);
+    account.Withdraw(12.50m);
+    Console.WriteLine($"{account.Owner} has £{account.Balance}");
+
+    try
+    {
+        account.Withdraw(100m);
+    }
+    catch (InvalidOperationException e)
+    {
+        Console.WriteLine($"Refused: {e.Message}");
+    }
+    Console.WriteLine($"Still £{account.Balance}");
+  steps:
+    - title: new makes an object
+      text: new Account("Ama") runs the constructor, which sets Owner. Balance starts at zero, the default for a decimal.
+      lines: [ 1 ]
+      parts:
+        - kind: kv
+          id: o
+          label: The Account object
+          slots: 2
+          rows:
+            - { name: Owner (read-only), value: Ama }
+            - { name: Balance, value: "0", tone: active }
+        - kind: note
+          id: r
+          text: only Deposit and Withdraw can change Balance
+        - { kind: terminal, id: out, slots: 3, lines: [] }
+    - title: Deposit
+      text: Deposit checks the amount is positive, then adds it. Code outside the class cannot set Balance directly, because its setter is private.
+      lines: [ 2 ]
+      vars: { amount: "50.00" }
+      parts:
+        - kind: kv
+          id: o
+          label: The Account object
+          slots: 2
+          rows:
+            - { name: Owner (read-only), value: Ama }
+            - { name: Balance, value: "50.00", tone: active }
+        - kind: note
+          id: r
+          text: "50.00 > 0: allowed"
+          tone: found
+    - title: Withdraw
+      text: Withdraw checks there is enough money, then subtracts. 12.50 is less than 50.00, so it goes ahead.
+      lines: [ 3 ]
+      vars: { amount: "12.50" }
+      parts:
+        - kind: kv
+          id: o
+          label: The Account object
+          slots: 2
+          rows:
+            - { name: Owner (read-only), value: Ama }
+            - { name: Balance, value: "37.50", tone: active }
+        - kind: note
+          id: r
+          text: "12.50 <= 50.00: allowed"
+          tone: found
+    - title: Read the properties
+      text: Anyone may read Owner and Balance. The interpolated string puts them into the text.
+      lines: [ 4 ]
+      vars: {}
+      parts:
+        - kind: kv
+          id: o
+          label: The Account object
+          slots: 2
+          rows:
+            - { name: Owner (read-only), value: Ama }
+            - { name: Balance, value: "37.50", tone: compare }
+        - kind: note
+          id: r
+          text: reading is always allowed
+        - { kind: terminal, id: out, slots: 3, lines: [ Ama has £37.50 ] }
+    - title: Ask for too much
+      text: 100 is more than the 37.50 in the account, so Withdraw throws an InvalidOperationException before touching the balance.
+      lines: [ 8 ]
+      vars: { amount: "100" }
+      parts:
+        - kind: kv
+          id: o
+          label: The Account object
+          slots: 2
+          rows:
+            - { name: Owner (read-only), value: Ama }
+            - { name: Balance, value: "37.50", tone: compare }
+        - kind: note
+          id: r
+          text: "100 > 37.50: Insufficient funds"
+          tone: bad
+    - title: Catch the refusal
+      text: The exception jumps straight to the matching catch block, which prints its message.
+      lines: [ 10, 11, 12, 13 ]
+      vars: {}
+      parts:
+        - { kind: terminal, id: out, slots: 3, lines: [ Ama has £37.50, "Refused: Insufficient funds" ] }
+    - title: The rule held
+      text: "The balance is unchanged. Because the rule lives in one method of the class, no other code can break it: this is encapsulation."
+      lines: [ 14 ]
+      parts:
+        - kind: kv
+          id: o
+          label: The Account object
+          slots: 2
+          rows:
+            - { name: Owner (read-only), value: Ama }
+            - { name: Balance, value: "37.50", tone: found }
+        - kind: note
+          id: r
+          text: "never below zero: enforced in one place"
+          tone: done
+        - { kind: terminal, id: out, slots: 3, lines: [ Ama has £37.50, "Refused: Insufficient funds", Still £37.50 ] }

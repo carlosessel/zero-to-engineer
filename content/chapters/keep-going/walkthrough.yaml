@@ -1,0 +1,120 @@
+- id: keep-going-interview-map
+  title: Four questions you can now answer
+  hint: Light up each interview question from the chapter and the course chapter that answers it.
+  steps:
+    - title: "Four interview questions"
+      text: "The chapter lists four things you should be able to explain in an interview. Each one maps to a chapter you have done."
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: q1, label: "evaluate a system", x: 0.1, y: 0, tone: base }
+            - { k: q2, label: "debug a RAG answer", x: 0.1, y: 0.33, tone: base }
+            - { k: q3, label: "halve the cost", x: 0.1, y: 0.66, tone: base }
+            - { k: q4, label: "stop injection", x: 0.1, y: 1, tone: base }
+            - { k: c1, label: "evals", x: 0.88, y: 0, tone: dim }
+            - { k: c2, label: "rag", x: 0.88, y: 0.33, tone: dim }
+            - { k: c3, label: "app-architecture", x: 0.88, y: 0.66, tone: dim }
+            - { k: c4, label: "safety-security", x: 0.88, y: 1, tone: dim }
+          edges: []
+        - { kind: note, id: n, text: "models predict from context: give it, measure, contain", tone: base }
+    - title: "How would you evaluate a system?"
+      text: "Build a small, real test set with edge cases, grade it with code, a model or a person, and run it on every prompt or model change."
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: q1, label: "evaluate a system", x: 0.1, y: 0, tone: active }
+            - { k: q2, label: "debug a RAG answer", x: 0.1, y: 0.33, tone: base }
+            - { k: q3, label: "halve the cost", x: 0.1, y: 0.66, tone: base }
+            - { k: q4, label: "stop injection", x: 0.1, y: 1, tone: base }
+            - { k: c1, label: "evals", x: 0.88, y: 0, tone: found }
+            - { k: c2, label: "rag", x: 0.88, y: 0.33, tone: dim }
+            - { k: c3, label: "app-architecture", x: 0.88, y: 0.66, tone: dim }
+            - { k: c4, label: "safety-security", x: 0.88, y: 1, tone: dim }
+          edges:
+            - { a: q1, b: c1, directed: true, tone: active }
+        - { kind: note, id: n, text: "measure the result", tone: found }
+    - title: "How would you debug a bad RAG answer?"
+      text: "Check retrieval first: were the right chunks fetched? Most failures come from chunking, messy text extraction or questions phrased unlike the documents."
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: q1, label: "evaluate a system", x: 0.1, y: 0, tone: done }
+            - { k: q2, label: "debug a RAG answer", x: 0.1, y: 0.33, tone: active }
+            - { k: q3, label: "halve the cost", x: 0.1, y: 0.66, tone: base }
+            - { k: q4, label: "stop injection", x: 0.1, y: 1, tone: base }
+            - { k: c1, label: "evals", x: 0.88, y: 0, tone: done }
+            - { k: c2, label: "rag", x: 0.88, y: 0.33, tone: found }
+            - { k: c3, label: "app-architecture", x: 0.88, y: 0.66, tone: dim }
+            - { k: c4, label: "safety-security", x: 0.88, y: 1, tone: dim }
+          edges:
+            - { a: q1, b: c1, directed: true, tone: done }
+            - { a: q2, b: c2, directed: true, tone: active }
+        - { kind: note, id: n, text: "give it the right context", tone: found }
+    - title: "How would you cut cost in half?"
+      text: "Use the smallest model that passes your eval, trim the prompt, cache repeated work and batch what is not urgent."
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: q1, label: "evaluate a system", x: 0.1, y: 0, tone: done }
+            - { k: q2, label: "debug a RAG answer", x: 0.1, y: 0.33, tone: done }
+            - { k: q3, label: "halve the cost", x: 0.1, y: 0.66, tone: active }
+            - { k: q4, label: "stop injection", x: 0.1, y: 1, tone: base }
+            - { k: c1, label: "evals", x: 0.88, y: 0, tone: done }
+            - { k: c2, label: "rag", x: 0.88, y: 0.33, tone: done }
+            - { k: c3, label: "app-architecture", x: 0.88, y: 0.66, tone: found }
+            - { k: c4, label: "safety-security", x: 0.88, y: 1, tone: dim }
+          edges:
+            - { a: q1, b: c1, directed: true, tone: done }
+            - { a: q2, b: c2, directed: true, tone: done }
+            - { a: q3, b: c3, directed: true, tone: active }
+        - { kind: note, id: n, text: "measure, then spend less on context", tone: found }
+    - title: "How would you defend against prompt injection?"
+      text: "There is no complete fix, so limit the damage: least privilege for tools, human approval for risky actions, model output treated as untrusted."
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: q1, label: "evaluate a system", x: 0.1, y: 0, tone: done }
+            - { k: q2, label: "debug a RAG answer", x: 0.1, y: 0.33, tone: done }
+            - { k: q3, label: "halve the cost", x: 0.1, y: 0.66, tone: done }
+            - { k: q4, label: "stop injection", x: 0.1, y: 1, tone: active }
+            - { k: c1, label: "evals", x: 0.88, y: 0, tone: done }
+            - { k: c2, label: "rag", x: 0.88, y: 0.33, tone: done }
+            - { k: c3, label: "app-architecture", x: 0.88, y: 0.66, tone: done }
+            - { k: c4, label: "safety-security", x: 0.88, y: 1, tone: found }
+          edges:
+            - { a: q1, b: c1, directed: true, tone: done }
+            - { a: q2, b: c2, directed: true, tone: done }
+            - { a: q3, b: c3, directed: true, tone: done }
+            - { a: q4, b: c4, directed: true, tone: active }
+        - { kind: note, id: n, text: "contain the failures", tone: found }
+    - title: "Four sentences, four chapters"
+      text: "Models predict from context. Give them the right context. Measure the result. Contain the failures. Every new technique is a variation on those."
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { k: q1, label: "evaluate a system", x: 0.1, y: 0, tone: done }
+            - { k: q2, label: "debug a RAG answer", x: 0.1, y: 0.33, tone: done }
+            - { k: q3, label: "halve the cost", x: 0.1, y: 0.66, tone: done }
+            - { k: q4, label: "stop injection", x: 0.1, y: 1, tone: done }
+            - { k: c1, label: "evals", x: 0.88, y: 0, tone: done }
+            - { k: c2, label: "rag", x: 0.88, y: 0.33, tone: done }
+            - { k: c3, label: "app-architecture", x: 0.88, y: 0.66, tone: done }
+            - { k: c4, label: "safety-security", x: 0.88, y: 1, tone: done }
+          edges:
+            - { a: q1, b: c1, directed: true, tone: done }
+            - { a: q2, b: c2, directed: true, tone: done }
+            - { a: q3, b: c3, directed: true, tone: done }
+            - { a: q4, b: c4, directed: true, tone: done }
+        - { kind: note, id: n, text: "models predict from context: give it, measure, contain", tone: found }

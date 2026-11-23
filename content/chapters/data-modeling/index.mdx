@@ -16,6 +16,8 @@ status: migrated
 
 If a customer’s city is copied onto every order, a move means updating a hundred rows, and missing one leaves the data contradicting itself. Keep the city only on the customer and join when you need it. Break this rule deliberately, for speed, and only with evidence.
 
+<Walkthrough name="data-modeling-normalisation" />
+
 ## Let the database enforce the rules
 
 Use `NOT NULL`, `UNIQUE`, foreign keys and sensible types. Application code has bugs; constraints hold regardless. Store money as whole numbers of the smallest unit or a decimal type, never as floating point. Store times in UTC.

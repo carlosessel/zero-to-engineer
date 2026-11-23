@@ -1,0 +1,110 @@
+- id: m-working-well-rice
+  title: Ranking ideas with RICE
+  hint: Watch each idea get its score from four guesses, then see the order change when they are ranked.
+  language: TypeScript
+  code: |
+    type Idea = { name: string; reach: number; impact: number; confidence: number; effortWeeks: number };
+
+    const ideas: Idea[] = [
+      { name: "Fix failed-payment retries", reach: 4000, impact: 2, confidence: 0.9, effortWeeks: 1 },
+      { name: "Loyalty programme", reach: 12000, impact: 1, confidence: 0.5, effortWeeks: 8 },
+      { name: "Dark mode", reach: 3000, impact: 0.5, confidence: 0.8, effortWeeks: 2 },
+      { name: "Faster product search", reach: 15000, impact: 1, confidence: 0.7, effortWeeks: 3 },
+    ];
+
+    const score = (i: Idea) => (i.reach * i.impact * i.confidence) / i.effortWeeks;
+    for (const idea of ideas.toSorted((a, b) => score(b) - score(a))) {
+      console.log(`${Math.round(score(idea)).toString().padStart(5)}  ${idea.name}`);
+    }
+  steps:
+    - title: "Four ideas, one team"
+      text: "There is more to do than time. Each idea gets a guess for reach (customers affected), impact, confidence (0 to 1) and effort in weeks."
+      lines: [1, 2, 3, 4, 5, 6, 7, 8]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: ideas
+              title: "ideas"
+              columns: [idea, score]
+              rows: [{ k: r, cells: ["Fix failed-payment retries", "?"] }, { k: l, cells: ["Loyalty programme", "?"] }, { k: d, cells: ["Dark mode", "?"] }, { k: s, cells: ["Faster product search", "?"] }]
+    - title: "Fix failed-payment retries"
+      text: "The score is reach × impact × confidence ÷ effort. 4000 × 2 × 0.9 ÷ 1 = 7200: many customers, a big effect, high confidence, one week."
+      lines: [4, 10]
+      vars: { reach: 4000, impact: 2, confidence: 0.9, effortWeeks: 1, score: 7200 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: ideas
+              title: "ideas"
+              columns: [idea, score]
+              rows: [{ k: r, cells: ["Fix failed-payment retries", "7200"], tone: active }, { k: l, cells: ["Loyalty programme", "?"] }, { k: d, cells: ["Dark mode", "?"] }, { k: s, cells: ["Faster product search", "?"] }]
+    - title: "Loyalty programme"
+      text: "12000 × 1 × 0.5 ÷ 8 = 750. It reaches the most people, but confidence is low and it takes 8 weeks."
+      lines: [5, 10]
+      vars: { reach: 12000, impact: 1, confidence: 0.5, effortWeeks: 8, score: 750 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: ideas
+              title: "ideas"
+              columns: [idea, score]
+              rows: [{ k: r, cells: ["Fix failed-payment retries", "7200"] }, { k: l, cells: ["Loyalty programme", "750"], tone: active }, { k: d, cells: ["Dark mode", "?"] }, { k: s, cells: ["Faster product search", "?"] }]
+    - title: "Dark mode"
+      text: "3000 × 0.5 × 0.8 ÷ 2 = 600. A small effect for few people."
+      lines: [6, 10]
+      vars: { reach: 3000, impact: 0.5, confidence: 0.8, effortWeeks: 2, score: 600 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: ideas
+              title: "ideas"
+              columns: [idea, score]
+              rows: [{ k: r, cells: ["Fix failed-payment retries", "7200"] }, { k: l, cells: ["Loyalty programme", "750"] }, { k: d, cells: ["Dark mode", "600"], tone: active }, { k: s, cells: ["Faster product search", "?"] }]
+    - title: "Faster product search"
+      text: "15000 × 1 × 0.7 ÷ 3 = 3500."
+      lines: [7, 10]
+      vars: { reach: 15000, impact: 1, confidence: 0.7, effortWeeks: 3, score: 3500 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: ideas
+              title: "ideas"
+              columns: [idea, score]
+              rows: [{ k: r, cells: ["Fix failed-payment retries", "7200"] }, { k: l, cells: ["Loyalty programme", "750"] }, { k: d, cells: ["Dark mode", "600"] }, { k: s, cells: ["Faster product search", "3500"], tone: active }]
+    - title: "Ranked by score"
+      text: "Sorting by score puts the unglamorous fix first and the big new feature third, until its uncertain impact is tested more cheaply."
+      lines: [11, 12, 13]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: ideas
+              title: "ideas, highest score first"
+              columns: [idea, score]
+              rows: [{ k: r, cells: ["Fix failed-payment retries", "7200"], tone: found }, { k: s, cells: ["Faster product search", "3500"] }, { k: l, cells: ["Loyalty programme", "750"] }, { k: d, cells: ["Dark mode", "600"] }]
+    - title: "Guesses made visible"
+      text: "The numbers are guesses. The point is not precision but writing the assumptions down, so people can challenge them and the trade-off is argued in the open."
+      lines: [10]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: ideas
+              title: "ideas, highest score first"
+              columns: [idea, score]
+              rows: [{ k: r, cells: ["Fix failed-payment retries", "7200"] }, { k: s, cells: ["Faster product search", "3500"] }, { k: l, cells: ["Loyalty programme", "750"] }, { k: d, cells: ["Dark mode", "600"] }]

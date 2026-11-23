@@ -1,0 +1,92 @@
+- id: m-discrete-maths-loop-invariant
+  title: Checking a loop invariant
+  hint: "After every step, check the invariant: total is the sum of everything to the left of i."
+  language: TypeScript
+  code: |
+    function sum(values: number[]): number {
+      let total = 0;
+      // Invariant: at the start of each iteration, total is the sum of values[0 .. i-1].
+      for (let i = 0; i < values.length; i++) {
+        total += values[i];
+      }
+      // When the loop ends, i = values.length, so total is the sum of every value.
+      return total;
+    }
+
+    console.log(sum([4, 2.5, 3]), sum([]));
+  steps:
+    - title: Before the loop
+      text: i is 0, so values[0 .. i-1] is no values at all, and their sum is 0. total is 0, so the invariant is true at the start.
+      lines: [2, 3, 4]
+      vars: { i: 0, total: 0 }
+      parts:
+        - kind: cells
+          id: v
+          label: "values"
+          indices: true
+          slots: 3
+          width: 60
+          pointers: [{ name: i, at: 0 }]
+          items: [{ k: a, v: 4 }, { k: b, v: 2.5 }, { k: c, v: 3 }]
+        - { kind: note, id: inv, text: "sum of values[0 .. -1] = 0 (no values); total = 0: invariant holds", tone: found }
+    - title: First iteration
+      text: total += values[0] makes total 4. Then i becomes 1. The sum of values[0 .. 0] is 4, so the invariant is true again.
+      lines: [4, 5]
+      vars: { i: 1, total: 4 }
+      parts:
+        - kind: cells
+          id: v
+          label: "values"
+          indices: true
+          slots: 3
+          width: 60
+          pointers: [{ name: i, at: 1 }]
+          items: [{ k: a, v: 4, tone: done }, { k: b, v: 2.5 }, { k: c, v: 3 }]
+        - { kind: note, id: inv, text: "sum of values[0 .. 0] = 4; total = 4: invariant holds", tone: found }
+    - title: Second iteration
+      text: Adding values[1] gives 6.5, and i becomes 2. Whatever the old total was, adding the next value and moving i keeps the statement true.
+      lines: [4, 5]
+      vars: { i: 2, total: 6.5 }
+      parts:
+        - kind: cells
+          id: v
+          label: "values"
+          indices: true
+          slots: 3
+          width: 60
+          pointers: [{ name: i, at: 2 }]
+          items: [{ k: a, v: 4, tone: done }, { k: b, v: 2.5, tone: done }, { k: c, v: 3 }]
+        - { kind: note, id: inv, text: "sum of values[0 .. 1] = 4 + 2.5 = 6.5; total = 6.5: invariant holds", tone: found }
+    - title: Third iteration
+      text: Adding values[2] gives 9.5, and i becomes 3. The invariant still holds.
+      lines: [4, 5]
+      vars: { i: 3, total: 9.5 }
+      parts:
+        - kind: cells
+          id: v
+          label: "values"
+          indices: true
+          slots: 3
+          width: 60
+          items: [{ k: a, v: 4, tone: done }, { k: b, v: 2.5, tone: done }, { k: c, v: 3, tone: done }]
+        - { kind: note, id: inv, text: "sum of values[0 .. 2] = 9.5; total = 9.5: invariant holds", tone: found }
+    - title: The loop ends
+      text: i is 3, the length, so the loop stops. The invariant says total is the sum of values[0 .. 2], which is every value. So 9.5 is right, without testing every possible list.
+      lines: [4, 7, 8]
+      vars: { i: 3, total: 9.5 }
+      parts:
+        - kind: cells
+          id: v
+          label: "values"
+          indices: true
+          slots: 3
+          width: 60
+          items: [{ k: a, v: 4, tone: found }, { k: b, v: 2.5, tone: found }, { k: c, v: 3, tone: found }]
+        - { kind: note, id: inv, text: "i = values.length, so total = the sum of every value = 9.5", tone: found }
+    - title: The empty list too
+      text: For sum([]), i starts at 0, which already equals the length, so the loop never runs. The invariant held at the start, so total, 0, is the sum of every value. It prints 9.5 0.
+      lines: [4, 8, 11]
+      vars: { i: 0, total: 0 }
+      parts:
+        - { kind: cells, id: v, label: "values", indices: true, slots: 3, width: 60, items: [], empty: "empty list" }
+        - { kind: note, id: inv, text: "i = 0 = values.length; total = 0 = the sum of no values", tone: found }

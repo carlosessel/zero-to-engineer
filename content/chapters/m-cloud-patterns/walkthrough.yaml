@@ -1,0 +1,68 @@
+- id: m-cloud-patterns-load-levelling
+  title: A queue absorbs a burst
+  hint: Watch the queue jump when the burst arrives, then drain at the workers' steady 60 jobs per tick.
+  language: TypeScript
+  code: |
+    function simulate(arrivals: number[], perTick: number) {
+      let queued = 0;
+      let maxQueue = 0;
+      let maxWait = 0;
+      const waits: number[] = [];
+      for (const arriving of arrivals) {
+        queued += arriving;
+        maxQueue = Math.max(maxQueue, queued);
+        queued = Math.max(0, queued - perTick);
+        waits.push(Math.ceil(queued / perTick));
+        maxWait = Math.max(maxWait, waits.at(-1)!);
+      }
+      return { totalArrived: arrivals.reduce((a, b) => a + b, 0), maxQueue, maxWaitTicks: maxWait, leftAtEnd: queued };
+    }
+
+    const burst = [10, 10, 400, 350, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10];
+    console.log(simulate(burst, 60));
+  steps:
+    - title: "A quiet start"
+      text: "Each tick, the arriving jobs join the queue and the workers take up to 60. In ticks 1 and 2, only 10 jobs arrive, so the queue empties every tick."
+      lines: [7, 8, 10]
+      vars: { tick: 2, perTick: 60, queued: 0 }
+      parts:
+        - { kind: cells, id: a, label: "jobs arriving each tick", bars: true, slots: 16, width: 30, items: [{ k: "a1", v: 10 }, { k: "a2", v: 10, tone: compare }] }
+        - { kind: cells, id: q, label: "jobs left in the queue after each tick", bars: true, slots: 16, width: 30, items: [{ k: "t1", v: 0 }, { k: "t2", v: 0, tone: active }] }
+    - title: "The burst: 400 jobs"
+      text: "400 jobs arrive at once. The workers still take only 60, so 340 are left waiting. Nothing is rejected and no server falls over."
+      lines: [7, 8, 9, 10]
+      vars: { tick: 3, arriving: 400, queued: 340, "wait (ticks)": 6 }
+      parts:
+        - { kind: cells, id: a, label: "jobs arriving each tick", bars: true, slots: 16, width: 30, items: [{ k: "a1", v: 10 }, { k: "a2", v: 10 }, { k: "a3", v: 400, tone: compare }] }
+        - { kind: cells, id: q, label: "jobs left in the queue after each tick", bars: true, slots: 16, width: 30, items: [{ k: "t1", v: 0 }, { k: "t2", v: 0 }, { k: "t3", v: 340, tone: compare }] }
+    - title: "Another 350"
+      text: "350 more arrive. The queue reaches 690 before the workers take their 60, leaving 630. The last of these will wait 11 ticks."
+      lines: [7, 8, 9, 10, 11]
+      vars: { tick: 4, arriving: 350, maxQueue: 690, queued: 630, "wait (ticks)": 11 }
+      parts:
+        - { kind: cells, id: a, label: "jobs arriving each tick", bars: true, slots: 16, width: 30, items: [{ k: "a1", v: 10 }, { k: "a2", v: 10 }, { k: "a3", v: 400 }, { k: "a4", v: 350, tone: compare }] }
+        - { kind: cells, id: q, label: "jobs left in the queue after each tick", bars: true, slots: 16, width: 30, items: [{ k: "t1", v: 0 }, { k: "t2", v: 0 }, { k: "t3", v: 340 }, { k: "t4", v: 630, tone: bad }] }
+    - title: "Draining at a steady rate"
+      text: "Now only 10 arrive per tick while the workers take 60, so the queue shrinks by 50 each tick. The service runs at the rate it can sustain."
+      lines: [7, 8, 10]
+      vars: { tick: 10, queued: 330, "wait (ticks)": 6 }
+      parts:
+        - { kind: cells, id: a, label: "jobs arriving each tick", bars: true, slots: 16, width: 30, items: [{ k: "a1", v: 10 }, { k: "a2", v: 10 }, { k: "a3", v: 400 }, { k: "a4", v: 350 }, { k: "a5", v: 10 }, { k: "a6", v: 10 }, { k: "a7", v: 10 }, { k: "a8", v: 10 }, { k: "a9", v: 10 }, { k: "a10", v: 10 }] }
+        - { kind: cells, id: q, label: "jobs left in the queue after each tick", bars: true, slots: 16, width: 30, items: [{ k: "t1", v: 0 }, { k: "t2", v: 0 }, { k: "t3", v: 340 }, { k: "t4", v: 630 }, { k: "t5", v: 580, tone: active }, { k: "t6", v: 530, tone: active }, { k: "t7", v: 480, tone: active }, { k: "t8", v: 430, tone: active }, { k: "t9", v: 380, tone: active }, { k: "t10", v: 330, tone: active }] }
+    - title: "Almost empty"
+      text: "By tick 16 only 30 jobs are left, waiting 1 tick."
+      lines: [10, 11]
+      vars: { tick: 16, queued: 30, "wait (ticks)": 1 }
+      parts:
+        - { kind: cells, id: a, label: "jobs arriving each tick", bars: true, slots: 16, width: 30, items: [{ k: "a1", v: 10 }, { k: "a2", v: 10 }, { k: "a3", v: 400 }, { k: "a4", v: 350 }, { k: "a5", v: 10 }, { k: "a6", v: 10 }, { k: "a7", v: 10 }, { k: "a8", v: 10 }, { k: "a9", v: 10 }, { k: "a10", v: 10 }, { k: "a11", v: 10 }, { k: "a12", v: 10 }, { k: "a13", v: 10 }, { k: "a14", v: 10 }, { k: "a15", v: 10 }, { k: "a16", v: 10 }] }
+        - { kind: cells, id: q, label: "jobs left in the queue after each tick", bars: true, slots: 16, width: 30, items: [{ k: "t1", v: 0 }, { k: "t2", v: 0 }, { k: "t3", v: 340 }, { k: "t4", v: 630 }, { k: "t5", v: 580 }, { k: "t6", v: 530 }, { k: "t7", v: 480 }, { k: "t8", v: 430 }, { k: "t9", v: 380 }, { k: "t10", v: 330 }, { k: "t11", v: 280, tone: active }, { k: "t12", v: 230, tone: active }, { k: "t13", v: 180, tone: active }, { k: "t14", v: 130, tone: active }, { k: "t15", v: 80, tone: active }, { k: "t16", v: 30, tone: active }] }
+    - title: "Absorbed"
+      text: "In tick 17 the last 30 are done, and the queue stays empty to the end. 930 jobs arrived and all were done, with nothing rejected and no extra servers. The price was a wait of up to 11 ticks."
+      lines: [13, 17]
+      vars: { totalArrived: 930, maxQueue: 690, maxWaitTicks: 11, leftAtEnd: 0 }
+      parts:
+        - { kind: cells, id: a, label: "jobs arriving each tick", bars: true, slots: 16, width: 30, items: [{ k: "a1", v: 10 }, { k: "a2", v: 10 }, { k: "a3", v: 400 }, { k: "a4", v: 350 }, { k: "a5", v: 10 }, { k: "a6", v: 10 }, { k: "a7", v: 10 }, { k: "a8", v: 10 }, { k: "a9", v: 10 }, { k: "a10", v: 10 }, { k: "a11", v: 10 }, { k: "a12", v: 10 }, { k: "a13", v: 10 }, { k: "a14", v: 10 }, { k: "a15", v: 10 }, { k: "a16", v: 10 }] }
+        - { kind: cells, id: q, label: "jobs left in the queue after each tick", bars: true, slots: 16, width: 30, items: [{ k: "t1", v: 0 }, { k: "t2", v: 0 }, { k: "t3", v: 340 }, { k: "t4", v: 630 }, { k: "t5", v: 580 }, { k: "t6", v: 530 }, { k: "t7", v: 480 }, { k: "t8", v: 430 }, { k: "t9", v: 380 }, { k: "t10", v: 330 }, { k: "t11", v: 280 }, { k: "t12", v: 230 }, { k: "t13", v: 180 }, { k: "t14", v: 130 }, { k: "t15", v: 80 }, { k: "t16", v: 30 }] }
+    - title: "When the wait matters"
+      text: "That suits work nobody waits on, such as emails and reports. For interactive requests, the wait must stay within what users accept, for example by adding workers when the queue grows."
+      vars: {}

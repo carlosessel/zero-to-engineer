@@ -368,6 +368,8 @@ kitchen tickets: o-1, o-2
 
 The crash left `o-1`'s row unsent, so the restarted relay published it again: the broker holds a duplicate. The consumer's `INSERT ... ON CONFLICT DO NOTHING` into `processed_messages`, in the same transaction as the kitchen ticket, recognised the second copy and ignored it, so each order got exactly one ticket. The same design works in every stack; instead of a polling relay, many teams use **change data capture** (Debezium reading the database's log) to publish outbox rows (<Ref to="m-kafka" />). Delete or archive sent outbox rows regularly.
 
+<Walkthrough name="be-kafka-clients-duplicate-ignored" />
+
 ## Testing
 
 Test handlers as ordinary functions with fakes, without Kafka. Test the wiring (serialisation, topics, error handling) against a real broker: **Testcontainers** has Kafka modules for every stack (<Ref to="be-integration-tests" />), and Spring's `spring-kafka-test` adds an embedded broker for `@SpringBootTest`. Always test the duplicate path: deliver the same message twice and assert one effect.

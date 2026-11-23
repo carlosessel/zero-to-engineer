@@ -1,0 +1,135 @@
+- id: cs-collections-linq-group-by-city
+  title: Grouping orders by city
+  hint: Follow the five orders through Where, GroupBy, Select and OrderBy until two summary lines are printed.
+  language: C#
+  code: |
+    List<Order> orders =
+    [
+        new("o-1", "Ama", "Leeds", 1250, OrderStatus.Delivered),
+        new("o-2", "Kofi", "York", 450, OrderStatus.Paid),
+        new("o-3", "Ama", "Leeds", 3100, OrderStatus.Delivered),
+        new("o-4", "Esi", "Leeds", 980, OrderStatus.Cancelled),
+        new("o-5", "Kofi", "York", 2200, OrderStatus.Delivered),
+    ];
+
+    var byCity = orders
+        .Where(o => o.Status != OrderStatus.Cancelled)
+        .GroupBy(o => o.City)
+        .Select(g => new { City = g.Key, Orders = g.Count(), Revenue = g.Sum(o => o.TotalPence) })
+        .OrderBy(x => x.City);
+    foreach (var row in byCity) Console.WriteLine($"{row.City}: {row.Orders} orders, {row.Revenue}p");
+  steps:
+    - title: Five orders
+      text: The source is a list of five Order records. Each has an id, a customer, a city, a total in pence and a status.
+      lines: [1, 2, 3, 4, 5, 6, 7, 8]
+      parts:
+        - kind: tables
+          id: src
+          slots: 5
+          tables:
+            - id: o
+              title: orders
+              columns: [Id, City, TotalPence, Status]
+              rows:
+                - [o-1, Leeds, 1250, Delivered]
+                - [o-2, York, 450, Paid]
+                - [o-3, Leeds, 3100, Delivered]
+                - [o-4, Leeds, 980, Cancelled]
+                - [o-5, York, 2200, Delivered]
+        - { kind: note, id: n, text: "Nothing has been asked yet." }
+    - title: A recipe, not a result
+      text: These lines only describe the query. LINQ is deferred, so no order is read until something enumerates byCity.
+      lines: [10, 11, 12, 13, 14]
+      parts:
+        - { kind: note, id: n, text: "byCity is a recipe: no orders read yet", tone: compare }
+    - title: foreach starts the query
+      text: "The foreach asks for the first row, so the recipe runs. Where tests each order: o-4 is Cancelled, so it is left out and its 980p is never counted."
+      lines: [11, 15]
+      parts:
+        - kind: tables
+          id: src
+          slots: 5
+          tables:
+            - id: o
+              title: orders
+              columns: [Id, City, TotalPence, Status]
+              rows:
+                - { cells: [o-1, Leeds, 1250, Delivered], tone: found }
+                - { cells: [o-2, York, 450, Paid], tone: found }
+                - { cells: [o-3, Leeds, 3100, Delivered], tone: found }
+                - { cells: [o-4, Leeds, 980, Cancelled], tone: bad }
+                - { cells: [o-5, York, 2200, Delivered], tone: found }
+        - { kind: note, id: n, text: "Where kept o-1, o-2, o-3 and o-5", tone: active }
+    - title: GroupBy sorts them into piles
+      text: GroupBy puts the remaining orders into groups that share a City. Each group has a Key, the city, and holds its orders.
+      lines: [12]
+      parts:
+        - kind: tables
+          id: src
+          slots: 5
+          tables:
+            - id: o
+              title: orders
+              columns: [Id, City, TotalPence, Status]
+              rows:
+                - { cells: [o-1, Leeds, 1250, Delivered], tone: active }
+                - { cells: [o-2, York, 450, Paid], tone: compare }
+                - { cells: [o-3, Leeds, 3100, Delivered], tone: active }
+                - { cells: [o-4, Leeds, 980, Cancelled], tone: dim }
+                - { cells: [o-5, York, 2200, Delivered], tone: compare }
+        - { kind: note, id: n, remove: true }
+        - kind: tables
+          id: res
+          slots: 2
+          tables:
+            - id: g
+              title: groups
+              columns: [Key, orders in the group]
+              rows:
+                - { cells: [Leeds, "o-1 (1250), o-3 (3100)"], tone: active }
+                - { cells: [York, "o-2 (450), o-5 (2200)"], tone: compare }
+    - title: Select makes one row per group
+      text: "Select turns each group into an anonymous object. For Leeds, g.Count() is 2 and g.Sum adds 1250 + 3100 = 4350."
+      lines: [13]
+      vars: { "Leeds revenue": "1250 + 3100 = 4350", "York revenue": "450 + 2200 = 2650" }
+      parts:
+        - kind: tables
+          id: res
+          slots: 2
+          tables:
+            - id: r
+              title: one row per city
+              columns: [City, Orders, Revenue]
+              rows:
+                - { cells: [Leeds, 2, 4350], tone: found }
+                - { cells: [York, 2, 2650], tone: found }
+    - title: OrderBy sorts by city
+      text: OrderBy puts the rows in order of City, so Leeds comes before York. Here they were already in that order, but the query no longer depends on it.
+      lines: [14]
+      vars: {}
+      parts:
+        - kind: tables
+          id: res
+          slots: 2
+          tables:
+            - id: r
+              title: one row per city, sorted
+              columns: [City, Orders, Revenue]
+              rows:
+                - { cells: [Leeds, 2, 4350], tone: active }
+                - { cells: [York, 2, 2650], tone: active }
+    - title: The loop prints each row
+      text: The foreach receives the rows one at a time and prints them. Five orders became two summary lines, and the orders list itself was never changed.
+      lines: [15]
+      parts:
+        - kind: tables
+          id: res
+          slots: 2
+          tables:
+            - id: r
+              title: one row per city, sorted
+              columns: [City, Orders, Revenue]
+              rows:
+                - { cells: [Leeds, 2, 4350], tone: done }
+                - { cells: [York, 2, 2650], tone: done }
+        - { kind: terminal, id: out, slots: 2, lines: ["Leeds: 2 orders, 4350p", "York: 2 orders, 2650p"] }

@@ -1,0 +1,70 @@
+- id: cc-surfaces-train-to-desk
+  title: One task, three surfaces
+  hint: Follow one task from your phone, to Anthropic's cloud, to the terminal at your desk. The session moves; the engine stays the same.
+  steps:
+    - title: Start on the train
+      text: On the train you start a cloud session from the Claude app on your phone. It will run on Anthropic's machines, not on the phone.
+      vars: { you: on the train, session runs on: Anthropic's cloud }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Phone, Cloud session, GitHub repo, Terminal]
+          slots: 7
+          messages:
+            - { from: Phone, to: Cloud session, label: "start a task", tone: active }
+    - title: It works from the repository
+      text: The cloud session is connected to your GitHub repository. It has only what is in the repository; your laptop's files and secrets are not there.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Phone, Cloud session, GitHub repo, Terminal]
+          slots: 7
+          messages:
+            - { from: Phone, to: Cloud session, label: "start a task", tone: dim }
+            - { from: Cloud session, to: GitHub repo, label: "work from the repo", tone: active }
+            - { from: Cloud session, to: Cloud session, label: "work on the task", tone: active }
+    - title: It keeps going without you
+      text: You put the phone away. Cloud sessions carry on after you disconnect, so a long task does not wait for you.
+      vars: { you: walking to work, session runs on: Anthropic's cloud }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Phone, Cloud session, GitHub repo, Terminal]
+          slots: 7
+          messages:
+            - { from: Phone, to: Cloud session, label: "start a task", tone: dim }
+            - { from: Cloud session, to: GitHub repo, label: "work from the repo", tone: dim }
+            - { from: Cloud session, to: Cloud session, label: "still working", tone: active }
+    - title: Check on it
+      text: From the phone you can check how the session is going, without being at a computer.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Phone, Cloud session, GitHub repo, Terminal]
+          slots: 7
+          messages:
+            - { from: Phone, to: Cloud session, label: "start a task", tone: dim }
+            - { from: Cloud session, to: GitHub repo, label: "work from the repo", tone: dim }
+            - { from: Cloud session, to: Cloud session, label: "still working", tone: dim }
+            - { from: Phone, to: Cloud session, label: "how is it going?", tone: compare }
+            - { from: Cloud session, to: Phone, label: "progress so far", tone: found }
+    - title: Teleport to the terminal
+      text: At your desk, claude --teleport brings the cloud session down into your terminal to continue locally.
+      vars: { you: at your desk, session runs on: your computer }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Phone, Cloud session, GitHub repo, Terminal]
+          slots: 7
+          messages:
+            - { from: Phone, to: Cloud session, label: "start a task", tone: dim }
+            - { from: Cloud session, to: GitHub repo, label: "work from the repo", tone: dim }
+            - { from: Cloud session, to: Cloud session, label: "still working", tone: dim }
+            - { from: Phone, to: Cloud session, label: "how is it going?", tone: dim }
+            - { from: Cloud session, to: Phone, label: "progress so far", tone: dim }
+            - { from: Terminal, to: Cloud session, label: "claude --teleport", tone: active }
+            - { from: Cloud session, to: Terminal, label: "the session", tone: found }
+    - title: Same engine, same rules
+      text: The model and tools are the same on every surface. CLAUDE.md, skills and permissions live in the repository, so they apply wherever the session runs.
+      parts:
+        - { kind: note, id: n, text: "Phone, cloud, terminal: one task, one engine, the repository's settings", tone: found }

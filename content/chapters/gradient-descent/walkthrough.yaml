@@ -1,0 +1,119 @@
+- id: gradient-descent-one-update
+  title: Gradient descent, step by step
+  hint: Watch one weight, w, follow the slope downhill towards 3, where the loss is smallest.
+  language: Python
+  code: |
+    w = -4.0                       # start anywhere
+    lr = 0.1
+    for step in range(50):
+        loss = (w - 3) ** 2        # how wrong we are
+        grad = 2 * (w - 3)         # slope of the loss at w
+        w = w - lr * grad          # step downhill
+    print(w)                       # ~3.0
+  steps:
+    - title: Start anywhere
+      text: "The loss (w - 3)² is smallest, zero, when w is 3. The loop does not know that; it starts at w = -4 and must find its way."
+      lines: [1, 2]
+      vars: { w: -4.0, lr: 0.1 }
+      parts:
+        - kind: kv
+          id: k
+          label: "Values right now"
+          slots: 3
+          rows: [{ name: w, value: "-4.0", tone: active }]
+        - kind: cells
+          id: h
+          label: "loss at each step"
+          bars: true
+          width: 70
+          items: []
+          slots: 4
+          empty: "no steps yet"
+    - title: Measure the loss
+      text: "w - 3 is -7, and squaring gives 49. One number saying how wrong we are."
+      lines: [4]
+      vars: { step: 0, w: -4.0, loss: 49.0 }
+      parts:
+        - kind: kv
+          id: k
+          label: "Values right now"
+          slots: 3
+          rows: [{ name: w, value: "-4.0" }, { name: loss, value: "49.0", tone: active }]
+        - kind: cells
+          id: h
+          label: "loss at each step"
+          bars: true
+          width: 70
+          items: [{ k: l0, v: 49, tone: active }]
+          slots: 4
+    - title: Compute the gradient
+      text: "The slope of the loss at w is 2 × (-7) = -14. Negative means the loss goes down as w goes up, so uphill is to the left."
+      lines: [5]
+      vars: { step: 0, w: -4.0, loss: 49.0, grad: -14.0 }
+      parts:
+        - kind: kv
+          id: k
+          label: "Values right now"
+          slots: 3
+          rows: [{ name: w, value: "-4.0" }, { name: loss, value: "49.0" }, { name: grad, value: "-14.0", tone: active }]
+    - title: Step the opposite way
+      text: "w - lr × grad is -4 - 0.1 × (-14) = -4 + 1.4 = -2.6. Subtracting a negative gradient moves w right, downhill."
+      lines: [6]
+      vars: { step: 0, "lr * grad": -1.4, "new w": -2.6 }
+      parts:
+        - kind: kv
+          id: k
+          label: "Values right now"
+          slots: 3
+          rows: [{ name: w, value: "-2.6", tone: found }, { name: loss, value: "49.0", tone: dim }, { name: grad, value: "-14.0", tone: dim }]
+    - title: Round two
+      text: "From w = -2.6 the loss is 31.36 and the gradient -11.2, so w moves by 1.12 to -1.48. The loss already fell."
+      lines: [4, 5, 6]
+      vars: { step: 1, w: -1.48, loss: 31.36, grad: -11.2 }
+      parts:
+        - kind: kv
+          id: k
+          label: "Values right now"
+          slots: 3
+          rows: [{ name: w, value: "-1.48", tone: found }, { name: loss, value: "31.36" }, { name: grad, value: "-11.2" }]
+        - kind: cells
+          id: h
+          label: "loss at each step"
+          bars: true
+          width: 70
+          items: [{ k: l0, v: 49 }, { k: l1, v: 31.36, tone: active }]
+          slots: 4
+    - title: Smaller steps as the slope flattens
+      text: "Next the loss is 20.07 and the gradient -8.96, so w moves only 0.896, to -0.584. Nearer the bottom the slope is gentler, so the steps shrink."
+      lines: [4, 5, 6]
+      vars: { step: 2, w: -0.584, loss: 20.0704, grad: -8.96 }
+      parts:
+        - kind: kv
+          id: k
+          label: "Values right now"
+          slots: 3
+          rows: [{ name: w, value: "-0.584", tone: found }, { name: loss, value: "20.0704" }, { name: grad, value: "-8.96" }]
+        - kind: cells
+          id: h
+          label: "loss at each step"
+          bars: true
+          width: 70
+          items: [{ k: l0, v: 49 }, { k: l1, v: 31.36 }, { k: l2, v: 20.07, tone: active }]
+          slots: 4
+    - title: The pattern
+      text: "Each step closes 20% of the gap to 3: the distance went 7, 5.6, 4.48, 3.584. With lr = 0.1 that happens every time, so w creeps steadily in."
+      vars: { "gap to 3": "7 → 5.6 → 4.48 → 3.584" }
+    - title: After 50 steps
+      text: "The gap is now about 0.0001 and the loss is almost zero. print shows w is about 3, the bottom of the valley."
+      lines: [7]
+      vars: { step: 49, w: 2.9999 }
+      parts:
+        - kind: kv
+          id: k
+          label: "Values right now"
+          slots: 3
+          rows: [{ name: w, value: "2.9999000926615103", tone: found }, { name: loss, value: "about 0.00000001" }]
+        - kind: terminal
+          id: out
+          slots: 1
+          lines: ["2.9999000926615103"]

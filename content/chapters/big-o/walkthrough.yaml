@@ -1,0 +1,147 @@
+- id: big-o-duplicates
+  title: Every pair, or one pass
+  hint: Both functions check the same four numbers for a duplicate. Count the steps each one takes, then switch between them.
+  language: Python
+  examples:
+    - label: "O(n²): every pair"
+      code: |
+        def has_duplicate_slow(items):
+            for i in range(len(items)):
+                for j in range(i + 1, len(items)):
+                    if items[i] == items[j]:
+                        return True
+            return False
+      steps:
+        - title: Four items, no duplicate
+          text: The worst case is a list with no duplicate, because then every check has to be made. Here n is 4.
+          lines: [1]
+          vars: { n: 4, comparisons: 0 }
+          parts:
+            - { kind: cells, id: a, label: "items", items: [3, 8, 1, 5], indices: true, slots: 4 }
+        - title: Item 0 against item 1
+          text: The outer loop picks i, the inner loop picks every j after it. 3 and 8 differ.
+          lines: [2, 3, 4]
+          vars: { n: 4, comparisons: 1 }
+          parts:
+            - kind: cells
+              id: a
+              label: "items"
+              indices: true
+              slots: 4
+              items: [{ v: 3, tone: active }, { v: 8, tone: compare }, 1, 5]
+              pointers: [{ name: i, at: 0 }, { name: j, at: 1 }]
+        - title: Item 0 against the rest
+          text: The inner loop carries on, comparing 3 with 1 and then with 5. Three comparisons for the first item.
+          lines: [3, 4]
+          vars: { n: 4, comparisons: 3 }
+          parts:
+            - kind: cells
+              id: a
+              label: "items"
+              indices: true
+              slots: 4
+              items: [{ v: 3, tone: active }, 8, 1, { v: 5, tone: compare }]
+              pointers: [{ name: i, at: 0 }, { name: j, at: 3 }]
+        - title: Item 1 against the rest
+          text: Now i moves to 8, and j starts just after it. 8 is compared with 1 and with 5.
+          lines: [2, 3, 4]
+          vars: { n: 4, comparisons: 5 }
+          parts:
+            - kind: cells
+              id: a
+              label: "items"
+              indices: true
+              slots: 4
+              items: [{ v: 3, tone: done }, { v: 8, tone: active }, 1, { v: 5, tone: compare }]
+              pointers: [{ name: i, at: 1 }, { name: j, at: 3 }]
+        - title: Item 2 against item 3
+          text: The last pair, 1 and 5. Every pair has now been compared once.
+          lines: [2, 3, 4]
+          vars: { n: 4, comparisons: 6 }
+          parts:
+            - kind: cells
+              id: a
+              label: "items"
+              indices: true
+              slots: 4
+              items: [{ v: 3, tone: done }, { v: 8, tone: done }, { v: 1, tone: active }, { v: 5, tone: compare }]
+              pointers: [{ name: i, at: 2 }, { name: j, at: 3 }]
+        - title: No duplicate, after 6 comparisons
+          text: Every pair is about n × n ÷ 2 comparisons. Double the list and the work goes up four times; that is O(n²). With a million items it is around 500 billion.
+          lines: [6]
+          vars: { n: 4, comparisons: 6, result: "False" }
+          parts:
+            - kind: cells
+              id: a
+              label: "items"
+              indices: true
+              slots: 4
+              items: [{ v: 3, tone: done }, { v: 8, tone: done }, { v: 1, tone: done }, { v: 5, tone: done }]
+    - label: "O(n): one pass"
+      code: |
+        def has_duplicate_fast(items):
+            seen = set()
+            for item in items:
+                if item in seen:
+                    return True
+                seen.add(item)
+            return False
+      steps:
+        - title: The same four items
+          text: This version remembers what it has seen in a set. Asking a set whether it holds something takes about the same time however big it is.
+          lines: [1, 2]
+          vars: { n: 4, checks: 0 }
+          parts:
+            - { kind: cells, id: a, label: "items", items: [3, 8, 1, 5], indices: true, slots: 4 }
+            - { kind: cells, id: seen, label: "seen", items: [], slots: 4, empty: "empty set" }
+        - title: "Item 3: seen before?"
+          text: 3 is not in seen, so it is added. One check for the first item.
+          lines: [3, 4, 6]
+          vars: { n: 4, checks: 1 }
+          parts:
+            - kind: cells
+              id: a
+              label: "items"
+              indices: true
+              slots: 4
+              items: [{ v: 3, tone: active }, 8, 1, 5]
+              pointers: [{ name: item, at: 0 }]
+            - { kind: cells, id: seen, label: "seen", items: [{ v: 3, tone: active }], slots: 4, empty: "empty set" }
+        - title: "Item 8"
+          text: One check against the set, not against every earlier item. 8 is new, so it is added.
+          lines: [3, 4, 6]
+          vars: { n: 4, checks: 2 }
+          parts:
+            - kind: cells
+              id: a
+              label: "items"
+              indices: true
+              slots: 4
+              items: [{ v: 3, tone: done }, { v: 8, tone: active }, 1, 5]
+              pointers: [{ name: item, at: 1 }]
+            - { kind: cells, id: seen, label: "seen", items: [3, { v: 8, tone: active }], slots: 4, empty: "empty set" }
+        - title: "Items 1 and 5"
+          text: Each remaining item costs one more check and one add.
+          lines: [3, 4, 6]
+          vars: { n: 4, checks: 4 }
+          parts:
+            - kind: cells
+              id: a
+              label: "items"
+              indices: true
+              slots: 4
+              items: [{ v: 3, tone: done }, { v: 8, tone: done }, { v: 1, tone: done }, { v: 5, tone: active }]
+              pointers: [{ name: item, at: 3 }]
+            - { kind: cells, id: seen, label: "seen", items: [3, 8, 1, { v: 5, tone: active }], slots: 4, empty: "empty set" }
+        - title: No duplicate, after 4 checks
+          text: One check per item, so the work grows in step with n; that is O(n). With a million items it is a million checks, not 500 billion. The right data structure changed the growth rate.
+          lines: [7]
+          vars: { n: 4, checks: 4, result: "False" }
+          parts:
+            - kind: cells
+              id: a
+              label: "items"
+              indices: true
+              slots: 4
+              items: [{ v: 3, tone: done }, { v: 8, tone: done }, { v: 1, tone: done }, { v: 5, tone: done }]
+            - { kind: cells, id: seen, label: "seen", items: [3, 8, 1, 5], slots: 4, empty: "empty set" }

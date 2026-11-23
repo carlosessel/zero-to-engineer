@@ -1,0 +1,58 @@
+- id: m-data-representation-utf8
+  title: From characters to UTF-8 bytes
+  hint: Watch each character of "café 🎂" become one, two or four bytes, and see why the string has three different lengths.
+  language: TypeScript
+  code: |
+    const s = "café 🎂";
+    console.log(s.length);                          // UTF-16 code units
+    console.log([...s].length);                     // code points
+    console.log(new TextEncoder().encode(s).length); // UTF-8 bytes
+  steps:
+    - title: "Six characters on screen"
+      text: "A person sees six characters, counting the space. Unicode gives each one a number, its code point. UTF-8 then turns each code point into 1 to 4 bytes."
+      lines: [1]
+      vars: {  }
+      parts:
+        - { kind: cells, id: chars, label: "characters (code points)", slots: 6, width: 70, items: [{ k: "c0", v: "c" }, { k: "c1", v: "a" }, { k: "c2", v: "f" }, { k: "c3", v: "é" }, { k: "c4", v: "space" }, { k: "c5", v: "🎂" }] }
+        - { kind: cells, id: bytes, label: "UTF-8 bytes (hex)", slots: 10, width: 44, indices: true, empty: "no bytes yet", items: [] }
+    - title: "c, a, f: one byte each"
+      text: "Basic English letters are in the old ASCII set, so UTF-8 stores each as a single byte. c is U+0063, stored as the byte 63."
+      lines: [1, 4]
+      vars: { "code points": "U+0063 U+0061 U+0066" }
+      parts:
+        - { kind: cells, id: chars, label: "characters (code points)", slots: 6, width: 70, items: [{ k: "c0", v: "c", tone: active }, { k: "c1", v: "a", tone: active }, { k: "c2", v: "f", tone: active }, { k: "c3", v: "é" }, { k: "c4", v: "space" }, { k: "c5", v: "🎂" }] }
+        - { kind: cells, id: bytes, label: "UTF-8 bytes (hex)", slots: 10, width: 44, indices: true, empty: "no bytes yet", items: [{ k: "b0", v: "63", tone: active }, { k: "b1", v: "61", tone: active }, { k: "b2", v: "66", tone: active }] }
+    - title: "é takes two bytes"
+      text: "é is U+00E9, outside ASCII. Most European accented letters take 2 bytes in UTF-8: here c3 a9."
+      lines: [4]
+      vars: { "code point": "U+00E9" }
+      parts:
+        - { kind: cells, id: chars, label: "characters (code points)", slots: 6, width: 70, items: [{ k: "c0", v: "c", tone: done }, { k: "c1", v: "a", tone: done }, { k: "c2", v: "f", tone: done }, { k: "c3", v: "é", tone: active }, { k: "c4", v: "space" }, { k: "c5", v: "🎂" }] }
+        - { kind: cells, id: bytes, label: "UTF-8 bytes (hex)", slots: 10, width: 44, indices: true, empty: "no bytes yet", items: [{ k: "b0", v: "63", tone: done }, { k: "b1", v: "61", tone: done }, { k: "b2", v: "66", tone: done }, { k: "b3", v: "c3", tone: active }, { k: "b4", v: "a9", tone: active }] }
+    - title: "The space: one byte"
+      text: "A space is ASCII too: U+0020, stored as 20."
+      lines: [4]
+      vars: { "code point": "U+0020" }
+      parts:
+        - { kind: cells, id: chars, label: "characters (code points)", slots: 6, width: 70, items: [{ k: "c0", v: "c", tone: done }, { k: "c1", v: "a", tone: done }, { k: "c2", v: "f", tone: done }, { k: "c3", v: "é", tone: done }, { k: "c4", v: "space", tone: active }, { k: "c5", v: "🎂" }] }
+        - { kind: cells, id: bytes, label: "UTF-8 bytes (hex)", slots: 10, width: 44, indices: true, empty: "no bytes yet", items: [{ k: "b0", v: "63", tone: done }, { k: "b1", v: "61", tone: done }, { k: "b2", v: "66", tone: done }, { k: "b3", v: "c3", tone: done }, { k: "b4", v: "a9", tone: done }, { k: "b5", v: "20", tone: active }] }
+    - title: "The cake emoji takes four"
+      text: "🎂 is U+1F382. Emoji take 4 bytes in UTF-8: f0 9f 8e 82. That makes 10 bytes in all."
+      lines: [4]
+      vars: { "code point": "U+1F382" }
+      parts:
+        - { kind: cells, id: chars, label: "characters (code points)", slots: 6, width: 70, items: [{ k: "c0", v: "c", tone: done }, { k: "c1", v: "a", tone: done }, { k: "c2", v: "f", tone: done }, { k: "c3", v: "é", tone: done }, { k: "c4", v: "space", tone: done }, { k: "c5", v: "🎂", tone: active }] }
+        - { kind: cells, id: bytes, label: "UTF-8 bytes (hex)", slots: 10, width: 44, indices: true, empty: "no bytes yet", items: [{ k: "b0", v: "63", tone: done }, { k: "b1", v: "61", tone: done }, { k: "b2", v: "66", tone: done }, { k: "b3", v: "c3", tone: done }, { k: "b4", v: "a9", tone: done }, { k: "b5", v: "20", tone: done }, { k: "b6", v: "f0", tone: active }, { k: "b7", v: "9f", tone: active }, { k: "b8", v: "8e", tone: active }, { k: "b9", v: "82", tone: active }] }
+    - title: "Three different lengths"
+      text: "6 code points, 10 UTF-8 bytes, and 7 UTF-16 units: JavaScript, Java and C# store strings as UTF-16, where the emoji needs two units, a surrogate pair."
+      lines: [2, 3, 4]
+      vars: { "s.length": "7 UTF-16 units", "[...s].length": "6 code points", "UTF-8 bytes": "10" }
+      parts:
+        - { kind: cells, id: chars, label: "characters (code points)", slots: 6, width: 70, items: [{ k: "c0", v: "c", tone: done }, { k: "c1", v: "a", tone: done }, { k: "c2", v: "f", tone: done }, { k: "c3", v: "é", tone: done }, { k: "c4", v: "space", tone: done }, { k: "c5", v: "🎂", tone: done }] }
+        - { kind: cells, id: bytes, label: "UTF-8 bytes (hex)", slots: 10, width: 44, indices: true, empty: "no bytes yet", items: [{ k: "b0", v: "63", tone: done }, { k: "b1", v: "61", tone: done }, { k: "b2", v: "66", tone: done }, { k: "b3", v: "c3", tone: done }, { k: "b4", v: "a9", tone: done }, { k: "b5", v: "20", tone: done }, { k: "b6", v: "f0", tone: done }, { k: "b7", v: "9f", tone: done }, { k: "b8", v: "8e", tone: done }, { k: "b9", v: "82", tone: done }] }
+    - title: "Read with the wrong encoding"
+      text: "If those bytes are read as Latin-1, one character per byte, c3 a9 becomes Ã© and the word shows as cafÃ©. This garbage is mojibake: use UTF-8 everywhere, and say so explicitly."
+      vars: { "read as": "Latin-1 (wrong)" }
+      parts:
+        - { kind: cells, id: chars, label: "characters (code points)", slots: 6, width: 70, items: [{ k: "c0", v: "c", tone: done }, { k: "c1", v: "a", tone: done }, { k: "c2", v: "f", tone: done }, { k: "c3", v: "é", tone: done }, { k: "c4", v: "space", tone: done }, { k: "c5", v: "🎂", tone: done }] }
+        - { kind: cells, id: bytes, label: "the first five bytes read as Latin-1", slots: 10, width: 44, indices: true, empty: "no bytes yet", items: [{ k: "b0", v: "c", tone: done }, { k: "b1", v: "a", tone: done }, { k: "b2", v: "f", tone: done }, { k: "b3", v: "Ã", tone: bad }, { k: "b4", v: "©", tone: bad }] }

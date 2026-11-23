@@ -1,0 +1,102 @@
+- id: node-server-basics-event-loop
+  title: The event loop decides the order
+  hint: Watch callbacks wait in queues while the script runs to the end, then run in the order the event loop picks.
+  language: TypeScript
+  code: |
+    console.log("1: start");
+
+    setTimeout(() => console.log("5: timer callback"), 0);
+    Promise.resolve().then(() => console.log("3: promise callback"));
+    queueMicrotask(() => console.log("4: microtask"));
+
+    async function handle(): Promise<void> {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      console.log("6: request finished after waiting");
+    }
+    void handle();
+
+    console.log("2: end of script");
+  steps:
+    - title: The script starts
+      text: Node runs your JavaScript on one thread, from the top. The first line prints straight away.
+      lines: [1]
+      parts:
+        - { kind: cells, id: micro, label: "microtasks (promise callbacks)", items: [], slots: 3, width: 130, empty: "empty" }
+        - { kind: cells, id: timers, label: "timers waiting", items: [], slots: 3, width: 130, empty: "empty" }
+        - { kind: terminal, id: out, lines: ["1: start"], slots: 6 }
+    - title: A timer is set
+      text: setTimeout does not run its callback now, even with 0 ms. It hands the callback over to wait, and the script carries on.
+      lines: [3]
+      parts:
+        - kind: cells
+          id: timers
+          label: "timers waiting"
+          slots: 3
+          width: 130
+          items: [{ k: t5, v: "print 5 (0 ms)", tone: active }]
+    - title: Two microtasks are queued
+      text: The promise callback and queueMicrotask both join the microtask queue. They will also wait until the script has finished.
+      lines: [4, 5]
+      parts:
+        - kind: cells
+          id: micro
+          label: "microtasks (promise callbacks)"
+          slots: 3
+          width: 130
+          items: [{ k: m3, v: "print 3", tone: active }, { k: m4, v: "print 4", tone: active }]
+        - kind: cells
+          id: timers
+          label: "timers waiting"
+          slots: 3
+          width: 130
+          items: [{ k: t5, v: "print 5 (0 ms)" }]
+    - title: handle starts, then waits
+      text: Calling handle runs it until the await. It sets a 10 ms timer and pauses, so the thread is free. This is how a request waits without blocking others.
+      lines: [7, 8, 11]
+      parts:
+        - kind: cells
+          id: timers
+          label: "timers waiting"
+          slots: 3
+          width: 130
+          items: [{ k: t5, v: "print 5 (0 ms)" }, { k: t6, v: "resume (10 ms)", tone: active }]
+    - title: The script reaches the end
+      text: Nothing has run from the queues yet. The script always runs to the end first.
+      lines: [13]
+      parts:
+        - { kind: terminal, id: out, lines: ["1: start", "2: end of script"], slots: 6 }
+    - title: Microtasks run next
+      text: With the script done, the event loop runs the promise callbacks and microtasks, in the order they were queued.
+      lines: [4, 5]
+      parts:
+        - kind: cells
+          id: micro
+          label: "microtasks (promise callbacks)"
+          slots: 3
+          width: 130
+          items: []
+          empty: "empty"
+        - { kind: terminal, id: out, lines: ["1: start", "2: end of script", "3: promise callback", "4: microtask"], slots: 6 }
+    - title: Then the ready timer
+      text: The 0 ms timer is ready, so its callback runs. The 10 ms one is still waiting.
+      lines: [3]
+      parts:
+        - kind: cells
+          id: timers
+          label: "timers waiting"
+          slots: 3
+          width: 130
+          items: [{ k: t6, v: "resume (10 ms)", tone: compare }]
+        - { kind: terminal, id: out, lines: ["1: start", "2: end of script", "3: promise callback", "4: microtask", "5: timer callback"], slots: 6 }
+    - title: handle carries on
+      text: After 10 ms the timer fires, the awaited promise resolves, and handle continues from its await. Waiting happened outside JavaScript, so the thread was never stuck.
+      lines: [8, 9]
+      parts:
+        - kind: cells
+          id: timers
+          label: "timers waiting"
+          slots: 3
+          width: 130
+          items: []
+          empty: "empty"
+        - { kind: terminal, id: out, lines: ["1: start", "2: end of script", "3: promise callback", "4: microtask", "5: timer callback", "6: request finished after waiting"], slots: 6 }

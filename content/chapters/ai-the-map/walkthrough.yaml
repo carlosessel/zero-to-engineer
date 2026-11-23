@@ -1,0 +1,137 @@
+- id: ai-the-map-around-the-model
+  title: The model is one box of many
+  hint: Follow one request through an AI feature and notice how much of the work happens outside the model.
+  steps:
+    - title: A feature, not a model
+      text: An AI engineer takes an existing model, usually a large language model, and turns it into a working feature, such as an assistant or document processing.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: request, x: 0.0, y: 0.2, tone: active }
+            - { label: right data, x: 0.3, y: 0.2 }
+            - { label: model, x: 0.58, y: 0.2 }
+            - { label: check output, x: 0.9, y: 0.2 }
+            - { label: answer, x: 0.9, y: 0.9 }
+            - { label: handle failure, x: 0.45, y: 0.9 }
+          edges:
+            - { a: request, b: right data, directed: true }
+            - { a: right data, b: model, directed: true }
+            - { a: model, b: check output, directed: true }
+            - { a: check output, b: answer, directed: true }
+            - { a: check output, b: handle failure, directed: true }
+    - title: The model already exists
+      text: Researchers invent models and machine learning engineers train them. An AI engineer starts from an existing model and builds everything around it.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: request, x: 0.0, y: 0.2, tone: dim }
+            - { label: right data, x: 0.3, y: 0.2 }
+            - { label: model, x: 0.58, y: 0.2, tone: compare, note: "existing" }
+            - { label: check output, x: 0.9, y: 0.2 }
+            - { label: answer, x: 0.9, y: 0.9 }
+            - { label: handle failure, x: 0.45, y: 0.9 }
+          edges:
+            - { a: request, b: right data, directed: true }
+            - { a: right data, b: model, directed: true }
+            - { a: model, b: check output, directed: true }
+            - { a: check output, b: answer, directed: true }
+            - { a: check output, b: handle failure, directed: true }
+    - title: Getting the right data in
+      text: A model can only work with what it is given. Finding the right data and passing it to the model is one of the hard parts of the job.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: request, x: 0.0, y: 0.2, tone: done }
+            - { label: right data, x: 0.3, y: 0.2, tone: active, note: "hard part" }
+            - { label: model, x: 0.58, y: 0.2, note: "existing" }
+            - { label: check output, x: 0.9, y: 0.2 }
+            - { label: answer, x: 0.9, y: 0.9 }
+            - { label: handle failure, x: 0.45, y: 0.9 }
+          edges:
+            - { a: request, b: right data, directed: true, tone: active }
+            - { a: right data, b: model, directed: true, tone: active }
+            - { a: model, b: check output, directed: true }
+            - { a: check output, b: answer, directed: true }
+            - { a: check output, b: handle failure, directed: true }
+    - title: The model answers
+      text: The model is powerful but probabilistic, and sometimes wrong. Its output is a guess to be checked, not a fact.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: request, x: 0.0, y: 0.2, tone: done }
+            - { label: right data, x: 0.3, y: 0.2, tone: done, note: "hard part" }
+            - { label: model, x: 0.58, y: 0.2, tone: active, note: "sometimes wrong" }
+            - { label: check output, x: 0.9, y: 0.2 }
+            - { label: answer, x: 0.9, y: 0.9 }
+            - { label: handle failure, x: 0.45, y: 0.9 }
+          edges:
+            - { a: request, b: right data, directed: true, tone: done }
+            - { a: right data, b: model, directed: true, tone: done }
+            - { a: model, b: check output, directed: true, tone: active }
+            - { a: check output, b: answer, directed: true }
+            - { a: check output, b: handle failure, directed: true }
+    - title: Checking the output
+      text: Before anyone sees it, your code checks what came back. This is the second hard part.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: request, x: 0.0, y: 0.2, tone: done }
+            - { label: right data, x: 0.3, y: 0.2, tone: done, note: "hard part" }
+            - { label: model, x: 0.58, y: 0.2, tone: done, note: "sometimes wrong" }
+            - { label: check output, x: 0.9, y: 0.2, tone: compare, note: "hard part" }
+            - { label: answer, x: 0.9, y: 0.9 }
+            - { label: handle failure, x: 0.45, y: 0.9 }
+          edges:
+            - { a: request, b: right data, directed: true, tone: done }
+            - { a: right data, b: model, directed: true, tone: done }
+            - { a: model, b: check output, directed: true, tone: done }
+            - { a: check output, b: answer, directed: true }
+            - { a: check output, b: handle failure, directed: true }
+    - title: When it fails
+      text: Sometimes the output is not good enough. The feature still has to do something sensible, and handling those times is the third hard part.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: request, x: 0.0, y: 0.2, tone: done }
+            - { label: right data, x: 0.3, y: 0.2, tone: done, note: "hard part" }
+            - { label: model, x: 0.58, y: 0.2, tone: done, note: "sometimes wrong" }
+            - { label: check output, x: 0.9, y: 0.2, tone: bad, note: "hard part" }
+            - { label: answer, x: 0.9, y: 0.9, tone: dim }
+            - { label: handle failure, x: 0.45, y: 0.9, tone: active, note: "hard part" }
+          edges:
+            - { a: request, b: right data, directed: true, tone: done }
+            - { a: right data, b: model, directed: true, tone: done }
+            - { a: model, b: check output, directed: true, tone: done }
+            - { a: check output, b: answer, directed: true, tone: dim }
+            - { a: check output, b: handle failure, directed: true, tone: bad }
+    - title: When it passes
+      text: "When the check passes, the answer goes to the person. Count the boxes: only one is the model. The rest is software engineering, which is most of the job."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: request, x: 0.0, y: 0.2, tone: done }
+            - { label: right data, x: 0.3, y: 0.2, tone: done, note: "hard part" }
+            - { label: model, x: 0.58, y: 0.2, tone: done, note: "sometimes wrong" }
+            - { label: check output, x: 0.9, y: 0.2, tone: done, note: "hard part" }
+            - { label: answer, x: 0.9, y: 0.9, tone: found }
+            - { label: handle failure, x: 0.45, y: 0.9, tone: dim, note: "hard part" }
+          edges:
+            - { a: request, b: right data, directed: true, tone: done }
+            - { a: right data, b: model, directed: true, tone: done }
+            - { a: model, b: check output, directed: true, tone: done }
+            - { a: check output, b: answer, directed: true, tone: found }
+            - { a: check output, b: handle failure, directed: true, tone: dim }

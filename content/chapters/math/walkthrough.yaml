@@ -1,0 +1,109 @@
+- id: math-softmax-cross-entropy
+  title: From scores to a loss
+  hint: Follow three raw scores through softmax to probabilities, then to one loss number.
+  language: Python
+  code: |
+    import numpy as np
+    def softmax(z):
+        e = np.exp(z - z.max())
+        return e / e.sum()
+
+    scores = np.array([2.0, 1.0, 0.1])     # cat, dog, fox
+    probs = softmax(scores)                # about [0.66, 0.24, 0.10]
+    loss = -np.log(probs[0])               # correct answer is cat: about 0.42
+  steps:
+    - title: Raw scores
+      text: "The model gives one score per class: cat 2.0, dog 1.0, fox 0.1. They are not probabilities yet; they do not add up to 1."
+      lines: [6]
+      vars: { scores: "[2.0, 1.0, 0.1]" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: s
+              title: "softmax, column by column"
+              columns: [class, score, "minus max", "exp", "share"]
+              rows:
+                - { k: cat, cells: [cat, "2.0", "", "", ""] }
+                - { k: dog, cells: [dog, "1.0", "", "", ""] }
+                - { k: fox, cells: [fox, "0.1", "", "", ""] }
+    - title: Subtract the largest
+      text: "softmax first takes the largest score, 2.0, away from each one. This keeps the numbers small and does not change the final answer."
+      lines: [3]
+      vars: { "z.max()": 2.0 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: s
+              title: "softmax, column by column"
+              columns: [class, score, "minus max", "exp", "share"]
+              rows:
+                - { k: cat, cells: [cat, "2.0", "0.0", "", ""], tone: active }
+                - { k: dog, cells: [dog, "1.0", "-1.0", "", ""], tone: active }
+                - { k: fox, cells: [fox, "0.1", "-1.9", "", ""], tone: active }
+    - title: Make every number positive
+      text: "np.exp turns any number into a positive one, and bigger stays bigger: exp(0) = 1, exp(-1) ≈ 0.368, exp(-1.9) ≈ 0.150."
+      lines: [3]
+      vars: { "z.max()": 2.0, e: "[1.0, 0.368, 0.150]" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: s
+              title: "softmax, column by column"
+              columns: [class, score, "minus max", "exp", "share"]
+              rows:
+                - { k: cat, cells: [cat, "2.0", "0.0", "1.000", ""], tone: active }
+                - { k: dog, cells: [dog, "1.0", "-1.0", "0.368", ""], tone: active }
+                - { k: fox, cells: [fox, "0.1", "-1.9", "0.150", ""], tone: active }
+    - title: Divide by the total
+      text: "The three add up to about 1.517. Dividing each by that total makes them shares that add up to 1: probabilities."
+      lines: [4]
+      vars: { "e.sum()": 1.517 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: s
+              title: "softmax, column by column"
+              columns: [class, score, "minus max", "exp", "share"]
+              rows:
+                - { k: cat, cells: [cat, "2.0", "0.0", "1.000", "0.659"], tone: found }
+                - { k: dog, cells: [dog, "1.0", "-1.0", "0.368", "0.242"], tone: found }
+                - { k: fox, cells: [fox, "0.1", "-1.9", "0.150", "0.099"], tone: found }
+    - title: A distribution
+      text: "probs is about [0.66, 0.24, 0.10]: the model's belief spread over the three classes. The highest score still gets the biggest share."
+      lines: [7]
+      vars: { probs: "[0.659, 0.242, 0.099]" }
+      parts:
+        - kind: cells
+          id: p
+          label: "probs"
+          bars: true
+          width: 70
+          items: [{ k: cat, v: 0.659 }, { k: dog, v: 0.242 }, { k: fox, v: 0.099 }]
+          slots: 3
+    - title: Look up the right answer
+      text: "The correct answer is cat, at index 0. Cross-entropy only looks at the probability given to the right answer: 0.659."
+      lines: [8]
+      vars: { probs: "[0.659, 0.242, 0.099]", "probs[0]": 0.659 }
+      parts:
+        - kind: cells
+          id: p
+          label: "probs"
+          bars: true
+          width: 70
+          indices: true
+          items: [{ k: cat, v: 0.659, tone: active }, { k: dog, v: 0.242, tone: dim }, { k: fox, v: 0.099, tone: dim }]
+          slots: 3
+    - title: Minus the log
+      text: "-log(0.659) ≈ 0.42. A probability near 1 would give a loss near 0; a probability of 0.01 would give about 4.6. Training pushes this number down."
+      lines: [8]
+      vars: { "probs[0]": 0.659, loss: "-log(0.659) ≈ 0.417" }
+      parts:
+        - { kind: note, id: n, text: "loss = -log(0.659) ≈ 0.42: fairly confident and right", tone: found }

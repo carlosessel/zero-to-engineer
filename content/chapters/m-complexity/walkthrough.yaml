@@ -1,0 +1,70 @@
+- id: m-complexity-amortised-append
+  title: Why adding to a list is O(1) amortised
+  hint: Watch the list's block of memory fill up, then double and copy, and count how little copying there is overall.
+  language: C#
+  code: |
+    var list = new List<int>();
+    int last = -1;
+    for (int i = 0; i < 40; i++)
+    {
+        list.Add(i);
+        if (list.Capacity != last)
+        {
+            Console.Write(list.Capacity + " ");
+            last = list.Capacity;
+        }
+    }
+    Console.WriteLine();
+  steps:
+    - title: An empty list
+      text: A new List starts with no block of memory at all. Capacity is how many items its current block can hold; Count is how many it holds.
+      lines: [1, 2]
+      vars: { Count: 0, Capacity: 0, "items copied": 0 }
+      parts:
+        - { kind: cells, id: arr, label: "the list's block", items: [], slots: 16, width: 34, empty: "no block yet" }
+        - { kind: terminal, id: out, lines: [], slots: 1 }
+    - title: The first add makes room for 4
+      text: Adding 0 needs space, so the list allocates a block of 4 slots and writes 0 into the first. The capacity changed, so 4 is printed.
+      lines: [5, 6, 8, 9]
+      vars: { i: 0, Count: 1, Capacity: 4, "items copied": 0 }
+      parts:
+        - { kind: cells, id: arr, label: "block of 4", slots: 16, width: 34, items: [{ k: "v0", v: 0, tone: active }, { k: "f1", v: "·", tone: dim }, { k: "f2", v: "·", tone: dim }, { k: "f3", v: "·", tone: dim }] }
+        - { kind: terminal, id: out, lines: ["4"], slots: 1 }
+    - title: Cheap adds fill the free slots
+      text: Adding 1, 2 and 3 just writes each into the next free slot. Each add is one step, O(1), and nothing is copied.
+      lines: [5]
+      vars: { i: 3, Count: 4, Capacity: 4, "items copied": 0 }
+      parts:
+        - { kind: cells, id: arr, label: "block of 4 (full)", slots: 16, width: 34, items: [{ k: "v0", v: 0 }, { k: "v1", v: 1, tone: active }, { k: "v2", v: 2, tone: active }, { k: "v3", v: 3, tone: active }] }
+    - title: Full, so double and copy
+      text: There is no slot for 4. The list allocates a new block twice the size, copies all 4 items across, then writes 4. This one add costs O(n).
+      lines: [5, 6, 8, 9]
+      vars: { i: 4, Count: 5, Capacity: 8, "items copied": 4 }
+      parts:
+        - { kind: cells, id: arr, label: "new block of 8: 4 copied, 4 added", slots: 16, width: 34, items: [{ k: "v0", v: 0, tone: active }, { k: "v1", v: 1, tone: active }, { k: "v2", v: 2, tone: active }, { k: "v3", v: 3, tone: active }, { k: "v4", v: 4, tone: found }, { k: "f5", v: "·", tone: dim }, { k: "f6", v: "·", tone: dim }, { k: "f7", v: "·", tone: dim }] }
+        - { kind: terminal, id: out, lines: ["4 8"], slots: 1 }
+    - title: Cheap again
+      text: Adding 5, 6 and 7 fills the new free slots, one step each. The expensive copy bought room for several cheap adds.
+      lines: [5]
+      vars: { i: 7, Count: 8, Capacity: 8, "items copied": 4 }
+      parts:
+        - { kind: cells, id: arr, label: "block of 8 (full)", slots: 16, width: 34, items: [{ k: "v0", v: 0 }, { k: "v1", v: 1 }, { k: "v2", v: 2 }, { k: "v3", v: 3 }, { k: "v4", v: 4 }, { k: "v5", v: 5, tone: active }, { k: "v6", v: 6, tone: active }, { k: "v7", v: 7, tone: active }] }
+    - title: Full again, double again
+      text: Adding 8 finds the block full. A block of 16 is allocated and the 8 items are copied. Each copy is bigger, but each comes twice as rarely.
+      lines: [5, 6, 8, 9]
+      vars: { i: 8, Count: 9, Capacity: 16, "items copied": "4 + 8 = 12" }
+      parts:
+        - { kind: cells, id: arr, label: "new block of 16: 8 copied, 1 added", slots: 16, width: 34, items: [{ k: "v0", v: 0, tone: active }, { k: "v1", v: 1, tone: active }, { k: "v2", v: 2, tone: active }, { k: "v3", v: 3, tone: active }, { k: "v4", v: 4, tone: active }, { k: "v5", v: 5, tone: active }, { k: "v6", v: 6, tone: active }, { k: "v7", v: 7, tone: active }, { k: "v8", v: 8, tone: found }, { k: "f9", v: "·", tone: dim }, { k: "f10", v: "·", tone: dim }, { k: "f11", v: "·", tone: dim }, { k: "f12", v: "·", tone: dim }, { k: "f13", v: "·", tone: dim }, { k: "f14", v: "·", tone: dim }, { k: "f15", v: "·", tone: dim }] }
+        - { kind: terminal, id: out, lines: ["4 8 16"], slots: 1 }
+    - title: Add up the work
+      text: After 16 adds, only 12 items have ever been copied, fewer than one copy per add. That is why adding is O(1) amortised, even though a single add can cost O(n).
+      lines: [5]
+      vars: { i: 15, Count: 16, Capacity: 16, "items copied": 12 }
+      parts:
+        - { kind: cells, id: arr, label: "block of 16 (full)", slots: 16, width: 34, items: [{ k: "v0", v: 0 }, { k: "v1", v: 1 }, { k: "v2", v: 2 }, { k: "v3", v: 3 }, { k: "v4", v: 4 }, { k: "v5", v: 5 }, { k: "v6", v: 6 }, { k: "v7", v: 7 }, { k: "v8", v: 8 }, { k: "v9", v: 9, tone: active }, { k: "v10", v: 10, tone: active }, { k: "v11", v: 11, tone: active }, { k: "v12", v: 12, tone: active }, { k: "v13", v: 13, tone: active }, { k: "v14", v: 14, tone: active }, { k: "v15", v: 15, tone: active }] }
+    - title: The pattern continues
+      text: "The loop keeps going to 40 adds, doubling at 16 and 32. The final output is 4 8 16 32 64. If you know the final size, create the list with that capacity and skip the copying."
+      lines: [3, 12]
+      vars: { Count: 40, Capacity: 64 }
+      parts:
+        - { kind: terminal, id: out, lines: ["4 8 16 32 64"], slots: 1 }

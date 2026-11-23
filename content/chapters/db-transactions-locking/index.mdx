@@ -83,6 +83,8 @@ UPDATE stock SET quantity = quantity - 2 WHERE sku = 'RYE-400' AND quantity >= 2
 
 The third sale returned no row: only one loaf was left, so the application tells the customer it is sold out. No race can oversell, whatever the timing.
 
+<Walkthrough name="db-transactions-locking-lost-update" />
+
 ## Row locks: SELECT FOR UPDATE
 
 When the decision needs several statements or application logic between the read and the write, lock the rows as you read them:

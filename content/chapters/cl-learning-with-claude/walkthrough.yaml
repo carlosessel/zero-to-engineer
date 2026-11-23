@@ -1,0 +1,100 @@
+- id: cl-learning-with-claude-tutor
+  title: A tutor that gives hints, not answers
+  hint: Follow one exercise through the tutor's instructions. Notice who does the thinking at each step.
+  language: Text
+  code: |
+    You are my tutor for a software engineering course. I learn best by doing.
+
+    - When I ask about a concept: explain it in plain words with one concrete
+      example, then ask me one question to check I understood.
+    - When I paste my attempt at an exercise: never give the full solution.
+      Tell me what is right, then point to the first mistake with a hint or a
+      question. If I am stuck after three hints, show only the next step.
+    - When I type "quiz me on X": ask five questions, one at a time, mixing
+      easy and hard, and tell me after each whether I was right and why.
+    - If I state something false with confidence, correct it plainly.
+  steps:
+    - title: Attempt first
+      text: Before asking anything, you try the exercise yourself. Even a wrong attempt makes the explanation stick, because learning happens in the effort.
+      vars: { "hints so far": 0 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude]
+          slots: 7
+          messages:
+            - { from: You, to: You, label: "write my own attempt", tone: active }
+    - title: Paste the attempt
+      text: You paste your attempt. The instructions say never give the full solution, so Claude says what is right and points to the first mistake with a hint.
+      lines: [5, 6, 7]
+      vars: { "hints so far": 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude]
+          slots: 7
+          messages:
+            - { from: You, to: You, label: "write my own attempt", tone: dim }
+            - { from: You, to: Claude, label: "here is my attempt", tone: active }
+            - { from: Claude, to: You, label: "what is right, and hint 1 on the first mistake", tone: compare }
+    - title: Try again
+      text: You work on the mistake yourself and paste the new version. Still not right, so a second hint or question follows.
+      lines: [6, 7]
+      vars: { "hints so far": 2 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude]
+          slots: 7
+          messages:
+            - { from: You, to: You, label: "write my own attempt", tone: dim }
+            - { from: You, to: Claude, label: "here is my attempt", tone: dim }
+            - { from: Claude, to: You, label: "what is right, and hint 1 on the first mistake", tone: dim }
+            - { from: You, to: Claude, label: "second attempt", tone: active }
+            - { from: Claude, to: You, label: "hint 2", tone: compare }
+    - title: A third hint
+      text: Another attempt, another hint. Each one asks you to do a little more of the working out.
+      lines: [6, 7]
+      vars: { "hints so far": 3 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude]
+          slots: 7
+          messages:
+            - { from: You, to: You, label: "write my own attempt", tone: dim }
+            - { from: You, to: Claude, label: "here is my attempt", tone: dim }
+            - { from: Claude, to: You, label: "what is right, and hint 1 on the first mistake", tone: dim }
+            - { from: You, to: Claude, label: "second attempt", tone: dim }
+            - { from: Claude, to: You, label: "hint 2", tone: dim }
+            - { from: You, to: Claude, label: "third attempt, still stuck", tone: active }
+            - { from: Claude, to: You, label: "hint 3", tone: compare }
+    - title: Only the next step
+      text: Stuck after three hints, you get the next step and nothing more. The rest of the solution is still yours to work out.
+      lines: [7]
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude]
+          slots: 7
+          messages:
+            - { from: You, to: You, label: "write my own attempt", tone: dim }
+            - { from: You, to: Claude, label: "here is my attempt", tone: dim }
+            - { from: Claude, to: You, label: "what is right, and hint 1 on the first mistake", tone: dim }
+            - { from: You, to: Claude, label: "second attempt", tone: dim }
+            - { from: Claude, to: You, label: "hint 2", tone: dim }
+            - { from: You, to: Claude, label: "third attempt, still stuck", tone: dim }
+            - { from: Claude, to: You, label: "only the next step", tone: found }
+    - title: Explain it back
+      text: When you have finished, write your own explanation and ask Claude what is missing or wrong. Then check anything it tells you, for example by running the code.
+      vars: {}
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude]
+          slots: 7
+          messages:
+            - { from: You, to: You, label: "finish the exercise myself", tone: found }
+            - { from: You, to: Claude, label: "my explanation: what is missing or wrong?", tone: active }
+            - { from: Claude, to: You, label: "the gaps it finds", tone: compare }
+            - { from: You, to: You, label: "run the code to check", tone: active }

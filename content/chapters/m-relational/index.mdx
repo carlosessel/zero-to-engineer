@@ -261,6 +261,8 @@ main()
 
 It prints `reader sees: 10`, `writer committed 7; writer sees: 7`, `reader, same transaction, still sees: 10` and `reader, new transaction, sees: 7`. The writer was not blocked by the open read transaction, and the reader kept a consistent snapshot until it finished. The price of MVCC is cleaning up old versions no transaction can see any more: PostgreSQL's **VACUUM** (run automatically by autovacuum), InnoDB's purge. Long-running transactions prevent that clean-up, which is another reason to keep them short.
 
+<Walkthrough name="m-relational-mvcc-snapshot" />
+
 ## Connection pools
 
 Opening a database connection is expensive (a network handshake, authentication, server-side memory; PostgreSQL starts a whole process per connection). Applications keep a **connection pool**: a set of open connections that requests borrow and return. HikariCP (Java), the pool built into ADO.NET and Npgsql (.NET), and node-postgres's `Pool` all do this. Size it modestly: a database with 8 cores does not run 500 queries at once any faster than 30, and too many connections hurt. Little's law (<Ref to="m-performance" />) gives the number needed: queries per second times average query time. When many application instances share one PostgreSQL, a server-side pooler such as PgBouncer keeps the total down.

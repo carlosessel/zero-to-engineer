@@ -214,6 +214,8 @@ ORDER BY run_start;
 
 Each `island` value identifies one run; grouping by it gives each run's start, end and length (keeping runs longer than a day). The **gaps** are the spaces between: `lead(run_start) OVER (ORDER BY run_start)` against each run's end. The same idea, with `lag` to flag where a new run starts and a running `sum` of the flags as the island number, handles data where "consecutive" means "within 30 minutes", which is how web analytics splits clicks into sessions.
 
+<Walkthrough name="db-advanced-queries-gaps-islands" />
+
 ## Common mistakes
 
 - **`UNION` where `UNION ALL` would do**, paying for an unneeded sort or hash.

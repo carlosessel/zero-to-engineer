@@ -1,0 +1,97 @@
+- id: math-calculus-nudge
+  title: Finding a slope by nudging
+  hint: Watch the nudge h shrink. The rise divided by the run settles on the slope at x = 3.
+  language: Python
+  code: |
+    def f(x):
+        return x ** 2
+
+    h = 0.0001
+    slope_at_3 = (f(3 + h) - f(3)) / h
+    print(slope_at_3)        # about 6
+  steps:
+    - title: The curve and the point
+      text: "f squares its input. We want the slope of the curve exactly at x = 3, where f(3) = 9."
+      lines: [1, 2]
+      vars: { x: 3, "f(3)": 9 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: n
+              title: "nudge x from 3 by h"
+              columns: [h, "f(3 + h)", "rise", "rise / h"]
+              rows: []
+    - title: A big nudge, h = 1
+      text: "Move from 3 to 4. f(4) = 16, so the output rose by 7 over a run of 1: a slope of 7. That is the straight line between two points, not the slope at 3."
+      lines: [5]
+      vars: { x: 3, "f(3)": 9, h: 1 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: n
+              title: "nudge x from 3 by h"
+              columns: [h, "f(3 + h)", "rise", "rise / h"]
+              rows: [{ cells: ["1", "16", "7", "7"], tone: active }]
+    - title: A smaller nudge, h = 0.1
+      text: "f(3.1) = 9.61, a rise of 0.61. Divided by 0.1 that is 6.1. The two points are closer, so the answer is closer to the slope at 3."
+      lines: [5]
+      vars: { x: 3, "f(3)": 9, h: 0.1 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: n
+              title: "nudge x from 3 by h"
+              columns: [h, "f(3 + h)", "rise", "rise / h"]
+              rows: [{ cells: ["1", "16", "7", "7"], tone: dim }, { cells: ["0.1", "9.61", "0.61", "6.1"], tone: active }]
+    - title: Smaller again, h = 0.01
+      text: "f(3.01) = 9.0601, a rise of 0.0601, and 0.0601 / 0.01 = 6.01. The answer keeps closing in on 6."
+      lines: [5]
+      vars: { x: 3, "f(3)": 9, h: 0.01 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: n
+              title: "nudge x from 3 by h"
+              columns: [h, "f(3 + h)", "rise", "rise / h"]
+              rows:
+                - { cells: ["1", "16", "7", "7"], tone: dim }
+                - { cells: ["0.1", "9.61", "0.61", "6.1"], tone: dim }
+                - { cells: ["0.01", "9.0601", "0.0601", "6.01"], tone: active }
+    - title: The tiny nudge in the code
+      text: "With h = 0.0001 the rise is 0.00060001, and dividing by h gives 6.0001. The extra 0.0001 shrinks with h, so the true slope at 3 is 6."
+      lines: [4, 5]
+      vars: { x: 3, "f(3)": 9, h: 0.0001 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: n
+              title: "nudge x from 3 by h"
+              columns: [h, "f(3 + h)", "rise", "rise / h"]
+              rows:
+                - { cells: ["1", "16", "7", "7"], tone: dim }
+                - { cells: ["0.1", "9.61", "0.61", "6.1"], tone: dim }
+                - { cells: ["0.01", "9.0601", "0.0601", "6.01"], tone: dim }
+                - { cells: ["0.0001", "9.00060001", "0.00060001", "6.0001"], tone: found }
+    - title: What Python prints
+      text: "Computers store decimals slightly inexactly, so the printout has a little noise at the end. It is about 6, as the comment says."
+      lines: [6]
+      parts:
+        - kind: terminal
+          id: out
+          slots: 1
+          lines: ["6.000100000012054"]
+    - title: The rule agrees
+      text: "The rule for x² says its derivative is 2x. At x = 3 that is 2 × 3 = 6, the same answer the nudging found."
+      vars: { "derivative of x²": 2x, "at x = 3": 6 }
+      parts:
+        - { kind: note, id: rule, text: "x² → 2x, so at x = 3 the slope is 2 × 3 = 6", tone: found }

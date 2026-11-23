@@ -198,6 +198,8 @@ console.log([...orders.log, ...payments.log, ...email.log].sort((a, b) => parseI
 
 It prints the events in an order consistent with causality: `1 orders: order o-7 created`, then `1 payments: daily report generated` (concurrent with it, so it may sort either way), `2 orders: send OrderPlaced`, `3 payments: receive OrderPlaced`, `4 payments: send PaymentTaken`, `5 email: receive PaymentTaken` and `6 email: receipt sent`: the receipt always comes after the payment, whatever the machines' clocks said. **Vector clocks** extend the idea to detect when two events are concurrent (useful for spotting conflicting writes), and **hybrid logical clocks** combine a physical timestamp with a logical counter, as CockroachDB and others do. Google's Spanner goes the other way, using GPS and atomic clocks to bound clock uncertainty and waiting out that uncertainty before committing.
 
+<Walkthrough name="m-distributed-basics-lamport-clock" />
+
 In everyday systems, the practical lessons are: use a **single source of ordering** where order matters (one database sequence, one partition of a log, <Ref to="m-kafka" />), carry **version numbers** rather than timestamps for conflict detection (<Ref to="m-enterprise-patterns" />), and never assume two machines agree on the time.
 
 ## Other things that go wrong

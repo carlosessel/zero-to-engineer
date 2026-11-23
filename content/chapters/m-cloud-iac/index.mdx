@@ -205,6 +205,8 @@ console.log(plan(desired, desired));
 
 It prints `~ update aws_s3_bucket.invoices (owner: orders-team -> billing-team)`, `+ create aws_sqs_queue.order_events` and `- destroy aws_instance.old_worker`, then `no changes` when the code and reality agree. Applying the same code twice changes nothing: IaC is **declarative and idempotent**.
 
+<Walkthrough name="m-cloud-iac-plan" />
+
 Practices that keep IaC safe:
 
 - **Remote state with locking** (an S3 bucket, Azure storage or Terraform Cloud), never local files, so two people cannot apply at once. State can contain secrets, so restrict and encrypt it.

@@ -1,0 +1,138 @@
+- id: be-the-map-request-journey
+  title: The journey of one order
+  hint: Follow a customer's "Place order" through the back end. Each arrow is a topic with its own chapter later in the course.
+  steps:
+    - title: The app sends a request
+      text: Pressing "Place order" makes the app send an HTTP request over the internet to the bakery's address.
+      vars: { topic: HTTP }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Balancer, Orders, Database, Payments ]
+          slots: 10
+          messages:
+            - { from: App, to: Balancer, label: POST place order, tone: active }
+    - title: A load balancer passes it on
+      text: Several copies of the orders service run at once. The load balancer hands the request to one of them.
+      vars: { topic: load balancing }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Balancer, Orders, Database, Payments ]
+          slots: 10
+          messages:
+            - { from: App, to: Balancer, label: POST place order, tone: dim }
+            - { from: Balancer, to: Orders, label: to one copy, tone: active }
+    - title: Who is this, and may they?
+      text: The service checks who the customer is (authentication) and that they are allowed to do this (authorisation).
+      vars: { topic: security }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Balancer, Orders, Database, Payments ]
+          slots: 10
+          messages:
+            - { from: App, to: Balancer, label: POST place order, tone: dim }
+            - { from: Balancer, to: Orders, label: to one copy, tone: dim }
+            - { from: Orders, to: Orders, label: who? allowed?, tone: active }
+    - title: Is the request sensible?
+      text: "It validates the request: are the quantities sensible, do the products exist?"
+      vars: { topic: validation }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Balancer, Orders, Database, Payments ]
+          slots: 10
+          messages:
+            - { from: App, to: Balancer, label: POST place order, tone: dim }
+            - { from: Balancer, to: Orders, label: to one copy, tone: dim }
+            - { from: Orders, to: Orders, label: who? allowed?, tone: dim }
+            - { from: Orders, to: Orders, label: validate request, tone: active }
+    - title: Apply the rules and save
+      text: It works out prices, discounts and delivery, and saves the order in a database inside a transaction, so it is all-or-nothing.
+      vars: { topic: databases }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Balancer, Orders, Database, Payments ]
+          slots: 10
+          messages:
+            - { from: App, to: Balancer, label: POST place order, tone: dim }
+            - { from: Balancer, to: Orders, label: to one copy, tone: dim }
+            - { from: Orders, to: Orders, label: who? allowed?, tone: dim }
+            - { from: Orders, to: Orders, label: validate request, tone: dim }
+            - { from: Orders, to: Database, label: save order (tx), tone: active }
+            - { from: Database, to: Orders, label: saved, tone: found }
+    - title: Take the payment
+      text: It asks the payment provider to charge the card, carefully, so that a retry never charges twice.
+      vars: { topic: integrations }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Balancer, Orders, Database, Payments ]
+          slots: 10
+          messages:
+            - { from: App, to: Balancer, label: POST place order, tone: dim }
+            - { from: Balancer, to: Orders, label: to one copy, tone: dim }
+            - { from: Orders, to: Orders, label: who? allowed?, tone: dim }
+            - { from: Orders, to: Orders, label: validate request, tone: dim }
+            - { from: Orders, to: Database, label: save order (tx), tone: dim }
+            - { from: Database, to: Orders, label: saved, tone: dim }
+            - { from: Orders, to: Payments, label: charge card once, tone: active }
+            - { from: Payments, to: Orders, label: charged, tone: found }
+    - title: Tell everyone else
+      text: It publishes an "order placed" message to a queue. The kitchen, the email service and analytics react to it without slowing the customer down.
+      vars: { topic: messaging }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Balancer, Orders, Database, Payments ]
+          slots: 10
+          messages:
+            - { from: App, to: Balancer, label: POST place order, tone: dim }
+            - { from: Balancer, to: Orders, label: to one copy, tone: dim }
+            - { from: Orders, to: Orders, label: who? allowed?, tone: dim }
+            - { from: Orders, to: Orders, label: validate request, tone: dim }
+            - { from: Orders, to: Database, label: save order (tx), tone: dim }
+            - { from: Database, to: Orders, label: saved, tone: dim }
+            - { from: Orders, to: Payments, label: charge card once, tone: dim }
+            - { from: Payments, to: Orders, label: charged, tone: dim }
+            - { from: Orders, to: Orders, label: "publish: order placed", tone: active }
+    - title: Answer the app
+      text: It returns 201 Created with the order's details, usually within a few hundred milliseconds.
+      vars: { topic: APIs }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Balancer, Orders, Database, Payments ]
+          slots: 10
+          messages:
+            - { from: App, to: Balancer, label: POST place order, tone: dim }
+            - { from: Balancer, to: Orders, label: to one copy, tone: dim }
+            - { from: Orders, to: Orders, label: who? allowed?, tone: dim }
+            - { from: Orders, to: Orders, label: validate request, tone: dim }
+            - { from: Orders, to: Database, label: save order (tx), tone: dim }
+            - { from: Database, to: Orders, label: saved, tone: dim }
+            - { from: Orders, to: Payments, label: charge card once, tone: dim }
+            - { from: Payments, to: Orders, label: charged, tone: dim }
+            - { from: Orders, to: Orders, label: "publish: order placed", tone: dim }
+            - { from: Orders, to: App, label: 201 Created, tone: found }
+    - title: Leave a trail
+      text: Throughout, the service writes logs, metrics and traces, so engineers can see what happened if something goes wrong. Real systems vary, but almost every back end has these pieces.
+      vars: { topic: observability }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Balancer, Orders, Database, Payments ]
+          slots: 10
+          messages:
+            - { from: App, to: Balancer, label: POST place order, tone: dim }
+            - { from: Balancer, to: Orders, label: to one copy, tone: dim }
+            - { from: Orders, to: Orders, label: who? allowed?, tone: dim }
+            - { from: Orders, to: Orders, label: validate request, tone: dim }
+            - { from: Orders, to: Database, label: save order (tx), tone: dim }
+            - { from: Database, to: Orders, label: saved, tone: dim }
+            - { from: Orders, to: Payments, label: charge card once, tone: dim }
+            - { from: Payments, to: Orders, label: charged, tone: dim }
+            - { from: Orders, to: Orders, label: "publish: order placed", tone: dim }
+            - { from: Orders, to: App, label: 201 Created, tone: dim }

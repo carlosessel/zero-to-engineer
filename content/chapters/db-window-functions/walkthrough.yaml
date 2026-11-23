@@ -1,0 +1,165 @@
+- id: db-window-functions-running-total
+  title: A running total and a moving frame
+  hint: Watch each day's row get its running total from all earlier rows, and its moving average from a three-row frame that slides.
+  language: SQL
+  code: |
+    WITH daily AS (
+      SELECT o.placed_at::date AS day, sum(l.quantity * l.unit_price_pence) AS revenue
+      FROM orders AS o
+      JOIN order_lines AS l ON l.order_id = o.id
+      WHERE o.status <> 'cancelled'
+      GROUP BY day
+    )
+    SELECT day, revenue,
+           sum(revenue) OVER (ORDER BY day) AS running_total,
+           round(avg(revenue) OVER (ORDER BY day ROWS BETWEEN 2 PRECEDING AND CURRENT ROW)) AS moving_avg_3
+    FROM daily
+    WHERE day < '2026-10-20'
+    ORDER BY day;
+  steps:
+    - title: One row per day
+      text: The CTE daily adds up each day's revenue from orders that went ahead. Unlike GROUP BY, the window functions that follow keep all eight rows.
+      lines: [ 1, 2, 3, 4, 5, 6, 7 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 8
+          tables:
+            - id: d
+              title: daily, ordered by day
+              columns: [ day, revenue, running_total, moving_avg_3 ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, 2350, "", "" ], tone: base }
+                - { k: 2026-10-03, cells: [ 2026-10-03, 720, "", "" ], tone: base }
+                - { k: 2026-10-06, cells: [ 2026-10-06, 2850, "", "" ], tone: base }
+                - { k: 2026-10-08, cells: [ 2026-10-08, 1380, "", "" ], tone: base }
+                - { k: 2026-10-11, cells: [ 2026-10-11, 1040, "", "" ], tone: base }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 1780, "", "" ], tone: base }
+                - { k: 2026-10-15, cells: [ 2026-10-15, 930, "", "" ], tone: base }
+                - { k: 2026-10-18, cells: [ 2026-10-18, 3160, "", "" ], tone: base }
+    - title: The first row
+      text: "ORDER BY day inside OVER makes the sum cumulative: each row sees the rows from the start up to itself. For the first day that is just 2350, and the average of one row is 2350."
+      lines: [ 9, 10 ]
+      vars: { running_total: "2350", moving_avg_3: 2350 / 1 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 8
+          tables:
+            - id: d
+              title: daily, ordered by day
+              columns: [ day, revenue, running_total, moving_avg_3 ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, 2350, 2350, 2350 ], tone: active }
+                - { k: 2026-10-03, cells: [ 2026-10-03, 720, "", "" ], tone: dim }
+                - { k: 2026-10-06, cells: [ 2026-10-06, 2850, "", "" ], tone: dim }
+                - { k: 2026-10-08, cells: [ 2026-10-08, 1380, "", "" ], tone: dim }
+                - { k: 2026-10-11, cells: [ 2026-10-11, 1040, "", "" ], tone: dim }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 1780, "", "" ], tone: dim }
+                - { k: 2026-10-15, cells: [ 2026-10-15, 930, "", "" ], tone: dim }
+                - { k: 2026-10-18, cells: [ 2026-10-18, 3160, "", "" ], tone: dim }
+    - title: The second row
+      text: "The running total adds 720 to make 3070. The moving average has only two rows so far: (2350 + 720) / 2 = 1535."
+      lines: [ 9, 10 ]
+      vars: { running_total: 2350 + 720 = 3070, moving_avg_3: (2350 + 720) / 2 = 1535 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 8
+          tables:
+            - id: d
+              title: daily, ordered by day
+              columns: [ day, revenue, running_total, moving_avg_3 ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, 2350, 2350, 2350 ], tone: compare }
+                - { k: 2026-10-03, cells: [ 2026-10-03, 720, 3070, 1535 ], tone: active }
+                - { k: 2026-10-06, cells: [ 2026-10-06, 2850, "", "" ], tone: dim }
+                - { k: 2026-10-08, cells: [ 2026-10-08, 1380, "", "" ], tone: dim }
+                - { k: 2026-10-11, cells: [ 2026-10-11, 1040, "", "" ], tone: dim }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 1780, "", "" ], tone: dim }
+                - { k: 2026-10-15, cells: [ 2026-10-15, 930, "", "" ], tone: dim }
+                - { k: 2026-10-18, cells: [ 2026-10-18, 3160, "", "" ], tone: dim }
+    - title: A full frame
+      text: On 6 October the frame, ROWS BETWEEN 2 PRECEDING AND CURRENT ROW, holds three rows for the first time. Their average, 5920 / 3, rounds to 1973.
+      lines: [ 10 ]
+      vars: { running_total: 3070 + 2850 = 5920, moving_avg_3: 5920 / 3 ≈ 1973 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 8
+          tables:
+            - id: d
+              title: daily, ordered by day
+              columns: [ day, revenue, running_total, moving_avg_3 ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, 2350, 2350, 2350 ], tone: compare }
+                - { k: 2026-10-03, cells: [ 2026-10-03, 720, 3070, 1535 ], tone: compare }
+                - { k: 2026-10-06, cells: [ 2026-10-06, 2850, 5920, 1973 ], tone: active }
+                - { k: 2026-10-08, cells: [ 2026-10-08, 1380, "", "" ], tone: dim }
+                - { k: 2026-10-11, cells: [ 2026-10-11, 1040, "", "" ], tone: dim }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 1780, "", "" ], tone: dim }
+                - { k: 2026-10-15, cells: [ 2026-10-15, 930, "", "" ], tone: dim }
+                - { k: 2026-10-18, cells: [ 2026-10-18, 3160, "", "" ], tone: dim }
+    - title: The frame slides
+      text: "On 8 October the running total keeps every earlier row, but the frame moves on: 1 October drops out. (720 + 2850 + 1380) / 3 = 1650."
+      lines: [ 9, 10 ]
+      vars: { running_total: 5920 + 1380 = 7300, moving_avg_3: (720 + 2850 + 1380) / 3 = 1650 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 8
+          tables:
+            - id: d
+              title: daily, ordered by day
+              columns: [ day, revenue, running_total, moving_avg_3 ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, 2350, 2350, 2350 ], tone: base }
+                - { k: 2026-10-03, cells: [ 2026-10-03, 720, 3070, 1535 ], tone: compare }
+                - { k: 2026-10-06, cells: [ 2026-10-06, 2850, 5920, 1973 ], tone: compare }
+                - { k: 2026-10-08, cells: [ 2026-10-08, 1380, 7300, 1650 ], tone: active }
+                - { k: 2026-10-11, cells: [ 2026-10-11, 1040, "", "" ], tone: dim }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 1780, "", "" ], tone: dim }
+                - { k: 2026-10-15, cells: [ 2026-10-15, 930, "", "" ], tone: dim }
+                - { k: 2026-10-18, cells: [ 2026-10-18, 3160, "", "" ], tone: dim }
+    - title: Row by row to the end
+      text: "Each later row does the same. The running total only grows, while the moving average follows the last three days. The final row: (1780 + 930 + 3160) / 3 rounds to 1957."
+      lines: [ 9, 10 ]
+      vars: { running_total: "14210", moving_avg_3: (1780 + 930 + 3160) / 3 ≈ 1957 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 8
+          tables:
+            - id: d
+              title: daily, ordered by day
+              columns: [ day, revenue, running_total, moving_avg_3 ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, 2350, 2350, 2350 ], tone: base }
+                - { k: 2026-10-03, cells: [ 2026-10-03, 720, 3070, 1535 ], tone: base }
+                - { k: 2026-10-06, cells: [ 2026-10-06, 2850, 5920, 1973 ], tone: base }
+                - { k: 2026-10-08, cells: [ 2026-10-08, 1380, 7300, 1650 ], tone: base }
+                - { k: 2026-10-11, cells: [ 2026-10-11, 1040, 8340, 1757 ], tone: base }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 1780, 10120, 1400 ], tone: compare }
+                - { k: 2026-10-15, cells: [ 2026-10-15, 930, 11050, 1250 ], tone: compare }
+                - { k: 2026-10-18, cells: [ 2026-10-18, 3160, 14210, 1957 ], tone: active }
+    - title: Every row kept
+      text: All eight rows come back, each with two values computed across its window. That matches the chapter's output exactly.
+      lines: [ 8, 9, 10, 11, 12, 13 ]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 8
+          tables:
+            - id: d
+              title: daily, ordered by day
+              columns: [ day, revenue, running_total, moving_avg_3 ]
+              rows:
+                - { k: 2026-10-01, cells: [ 2026-10-01, 2350, 2350, 2350 ], tone: found }
+                - { k: 2026-10-03, cells: [ 2026-10-03, 720, 3070, 1535 ], tone: found }
+                - { k: 2026-10-06, cells: [ 2026-10-06, 2850, 5920, 1973 ], tone: found }
+                - { k: 2026-10-08, cells: [ 2026-10-08, 1380, 7300, 1650 ], tone: found }
+                - { k: 2026-10-11, cells: [ 2026-10-11, 1040, 8340, 1757 ], tone: found }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 1780, 10120, 1400 ], tone: found }
+                - { k: 2026-10-15, cells: [ 2026-10-15, 930, 11050, 1250 ], tone: found }
+                - { k: 2026-10-18, cells: [ 2026-10-18, 3160, 14210, 1957 ], tone: found }

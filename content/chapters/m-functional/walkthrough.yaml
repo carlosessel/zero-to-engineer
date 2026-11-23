@@ -1,0 +1,80 @@
+- id: m-functional-filter-map-reduce
+  title: Filter, map, reduce on the orders
+  hint: Watch the orders pass through each step, getting fewer, then simpler, then combined into one number.
+  language: TypeScript
+  code: |
+    const orders = [
+      { id: 1, paid: true, pence: 5400 },
+      { id: 2, paid: false, pence: 9000 },
+      { id: 3, paid: true, pence: 1200 },
+      { id: 4, paid: true, pence: 2500 },
+    ];
+
+    const total = orders
+      .filter((o) => o.paid && o.pence > 2000)
+      .map((o) => o.pence)
+      .reduce((sum, pence) => sum + pence, 0);
+
+    console.log(total);
+  steps:
+    - title: "Four orders"
+      text: "The question: the total value of paid orders over £20, which is 2000 pence. The answer is built in three steps, each a small function."
+      lines: [1, 2, 3, 4, 5, 6]
+      vars: {  }
+      parts:
+        - { kind: cells, id: orders, label: "orders", slots: 4, width: 130, items: [{ k: "o1", v: "#1 paid 5400" }, { k: "o2", v: "#2 unpaid 9000" }, { k: "o3", v: "#3 paid 1200" }, { k: "o4", v: "#4 paid 2500" }] }
+        - { kind: cells, id: kept, label: "after filter", slots: 4, width: 130, empty: "nothing yet", items: [] }
+        - { kind: cells, id: mapped, label: "after map", slots: 4, width: 130, empty: "nothing yet", items: [] }
+        - { kind: note, id: sum, text: "reduce: not started", tone: dim }
+    - title: "filter: order 1 passes"
+      text: "filter calls the test o.paid && o.pence > 2000 on each order. Order 1 is paid and 5400 is over 2000, so it is kept."
+      lines: [8, 9]
+      vars: { "o.paid": true, "o.pence": 5400 }
+      parts:
+        - { kind: cells, id: orders, label: "orders", slots: 4, width: 130, items: [{ k: "o1", v: "#1 paid 5400", tone: found }, { k: "o2", v: "#2 unpaid 9000" }, { k: "o3", v: "#3 paid 1200" }, { k: "o4", v: "#4 paid 2500" }] }
+        - { kind: cells, id: kept, label: "after filter", slots: 4, width: 130, empty: "empty", items: [{ k: "f1", v: "#1 paid 5400", tone: found }] }
+    - title: "filter: order 2 fails"
+      text: "Order 2 is for 9000 pence but is not paid, so the test is false and it is left out."
+      lines: [9]
+      vars: { "o.paid": false, "o.pence": 9000 }
+      parts:
+        - { kind: cells, id: orders, label: "orders", slots: 4, width: 130, items: [{ k: "o1", v: "#1 paid 5400", tone: done }, { k: "o2", v: "#2 unpaid 9000", tone: bad }, { k: "o3", v: "#3 paid 1200" }, { k: "o4", v: "#4 paid 2500" }] }
+        - { kind: cells, id: kept, label: "after filter", slots: 4, width: 130, empty: "empty", items: [{ k: "f1", v: "#1 paid 5400" }] }
+    - title: "filter: order 3 fails"
+      text: "Order 3 is paid, but 1200 is not over 2000. Left out."
+      lines: [9]
+      vars: { "o.paid": true, "o.pence": 1200 }
+      parts:
+        - { kind: cells, id: orders, label: "orders", slots: 4, width: 130, items: [{ k: "o1", v: "#1 paid 5400", tone: done }, { k: "o2", v: "#2 unpaid 9000", tone: dim }, { k: "o3", v: "#3 paid 1200", tone: bad }, { k: "o4", v: "#4 paid 2500" }] }
+    - title: "filter: order 4 passes"
+      text: "Order 4 is paid and 2500 is over 2000, so it is kept. filter returns a new list of 2 orders; the original list is unchanged."
+      lines: [9]
+      vars: { "o.paid": true, "o.pence": 2500 }
+      parts:
+        - { kind: cells, id: orders, label: "orders", slots: 4, width: 130, items: [{ k: "o1", v: "#1 paid 5400", tone: done }, { k: "o2", v: "#2 unpaid 9000", tone: dim }, { k: "o3", v: "#3 paid 1200", tone: dim }, { k: "o4", v: "#4 paid 2500", tone: found }] }
+        - { kind: cells, id: kept, label: "after filter", slots: 4, width: 130, empty: "empty", items: [{ k: "f1", v: "#1 paid 5400" }, { k: "f4", v: "#4 paid 2500", tone: found }] }
+    - title: "map: keep only the pence"
+      text: "map transforms every item it is given. Each kept order becomes just its value in pence."
+      lines: [10]
+      vars: {  }
+      parts:
+        - { kind: cells, id: kept, label: "after filter", slots: 4, width: 130, empty: "empty", items: [{ k: "f1", v: "#1 paid 5400", tone: done }, { k: "f4", v: "#4 paid 2500", tone: done }] }
+        - { kind: cells, id: mapped, label: "after map", slots: 4, width: 130, empty: "empty", items: [{ k: "m1", v: "5400", tone: active }, { k: "m4", v: "2500", tone: active }] }
+    - title: "reduce: add the first"
+      text: "reduce combines the list into one value. It starts from 0, the second argument, and adds 5400."
+      lines: [11]
+      vars: { "sum": 0, "pence": 5400 }
+      parts:
+        - { kind: cells, id: mapped, label: "after map", slots: 4, width: 130, empty: "empty", items: [{ k: "m1", v: "5400", tone: active }, { k: "m4", v: "2500" }] }
+        - { kind: note, id: sum, text: "sum = 0 + 5400 = 5400", tone: active }
+    - title: "reduce: add the second"
+      text: "Then it adds 2500 to the running sum. There are no more items, so 7900 is the result."
+      lines: [11, 13]
+      vars: { "sum": 5400, "pence": 2500 }
+      parts:
+        - { kind: cells, id: mapped, label: "after map", slots: 4, width: 130, empty: "empty", items: [{ k: "m1", v: "5400", tone: done }, { k: "m4", v: "2500", tone: active }] }
+        - { kind: note, id: sum, text: "sum = 5400 + 2500 = 7900", tone: found }
+    - title: "What, not how"
+      text: "total is 7900. The pipeline describes what is wanted: keep, transform, combine. Java streams and C# LINQ (Where, Select, Sum) give the same answer."
+      lines: [8, 9, 10, 11, 13]
+      vars: { "total": 7900 }

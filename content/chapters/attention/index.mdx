@@ -10,6 +10,8 @@ status: migrated
 
 To predict what follows “The trophy didn’t fit in the suitcase because it was too”, the model must work out what “it” refers to. **Self-attention** lets every token look at every other token and pull in information from the relevant ones. Mechanically, each token produces a query vector and a key vector; the dot product of one token’s query with another’s key says how much to attend to it. You met the dot product in <Ref to="math" />; this is where it earns its keep.
 
+<Walkthrough name="attention-scores" />
+
 ## The transformer block
 
 One block is attention, followed by a small MLP, with normalisation and shortcut connections around both. A model stacks dozens of these. Tokens also carry position information so the model knows word order. The final layer outputs one score per vocabulary token, and softmax turns those into probabilities.

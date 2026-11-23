@@ -1,0 +1,88 @@
+- id: oop-bank-account
+  title: An object is built, then used
+  hint: Watch self stand for the new object, its data being filled in, and a method changing that data by the rules.
+  language: Python
+  code: |
+    class BankAccount:
+        def __init__(self, owner, balance=0):    # runs when an account is created
+            self.owner = owner                   # data stored on this object
+            self.balance = balance
+
+        def deposit(self, amount):               # a method: a function that belongs to the object
+            if amount <= 0:
+                raise ValueError("Deposit must be positive")
+            self.balance += amount
+
+        def withdraw(self, amount):
+            if amount > self.balance:
+                raise ValueError("Not enough money")
+            self.balance -= amount
+
+    ama = BankAccount("Ama", 100)     # an object, also called an instance
+    ama.deposit(50)
+    print(ama.balance)                # 150
+  steps:
+    - title: The blueprint
+      text: The class statement describes what every account will hold and do. It makes no account yet; there is nothing to hold a balance.
+      lines: [1]
+      parts:
+        - { kind: kv, id: obj, label: "Objects", rows: [], slots: 2 }
+        - { kind: terminal, id: out, lines: [], slots: 1 }
+    - title: Build one account
+      text: Calling the class like a function makes a new, empty object and runs __init__ on it. Inside, self means this new object.
+      lines: [16, 2]
+      vars: { self: "the new object", owner: '"Ama"', balance: "100" }
+    - title: Fill in its data
+      text: self.owner = owner stores the data on the object itself, so it stays after __init__ has finished.
+      lines: [3, 4]
+      parts:
+        - kind: kv
+          id: obj
+          label: "The new object"
+          slots: 2
+          rows: [{ name: self.owner, value: '"Ama"', tone: active }, { name: self.balance, value: "100", tone: active }]
+    - title: The name ama
+      text: __init__ is done, and the name ama now points at the finished object. Outside the class, ama is what inside it was called self.
+      lines: [16]
+      vars: {}
+      parts:
+        - kind: kv
+          id: obj
+          label: "ama, a BankAccount"
+          slots: 2
+          rows: [{ name: ama.owner, value: '"Ama"' }, { name: ama.balance, value: "100" }]
+    - title: Call a method
+      text: ama.deposit(50) runs deposit with self set to ama. The method works on this particular object's data.
+      lines: [17, 6]
+      vars: { self: ama, amount: "50" }
+    - title: The rule is checked
+      text: 50 <= 0 is False, so no error is raised. Because everyone goes through deposit, nobody can add a negative amount.
+      lines: [7, 8]
+      vars: { self: ama, amount: "50", "amount <= 0": "False" }
+    - title: The balance changes
+      text: += adds to the value already there. ama's balance goes from 100 to 150.
+      lines: [9]
+      vars: { self: ama, amount: "50" }
+      parts:
+        - kind: kv
+          id: obj
+          label: "ama, a BankAccount"
+          slots: 2
+          rows: [{ name: ama.owner, value: '"Ama"' }, { name: ama.balance, value: "150", tone: active }]
+    - title: Read it back
+      text: print looks up balance on the object ama and shows 150.
+      lines: [18]
+      vars: {}
+      parts:
+        - kind: kv
+          id: obj
+          label: "ama, a BankAccount"
+          slots: 2
+          rows: [{ name: ama.owner, value: '"Ama"' }, { name: ama.balance, value: "150", tone: found }]
+        - { kind: terminal, id: out, lines: ["150"], slots: 1 }
+    - title: The rules protect the data
+      text: If someone called ama.withdraw(500), line 12 would find 500 > 150 and raise "Not enough money". The balance would stay 150.
+      lines: [12, 13]
+      vars: { amount: "500", "amount > self.balance": "True" }
+      parts:
+        - { kind: note, id: n, text: "ama.withdraw(500) → ValueError: Not enough money", tone: bad }

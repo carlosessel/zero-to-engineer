@@ -1,0 +1,161 @@
+- id: db-subqueries-ctes-recursive-chain
+  title: A recursive query, round by round
+  hint: Watch the management chain grow one level per round, until a round finds nobody new.
+  language: SQL
+  code: |
+    WITH RECURSIVE chain AS (
+      SELECT id, name, manager_id, name AS path
+      FROM staff
+      WHERE manager_id IS NULL
+      UNION ALL
+      SELECT s.id, s.name, s.manager_id, c.path || ' > ' || s.name
+      FROM staff AS s
+      JOIN chain AS c ON s.manager_id = c.id
+    )
+    SELECT path
+    FROM chain
+    ORDER BY path;
+  steps:
+    - title: The starting query
+      text: "The first part runs once. Only one person has no manager: Abena Owusu, the owner. Her row starts the chain, with her name as the path."
+      lines: [ 2, 3, 4 ]
+      vars: { round: start }
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: "1", label: Abena, x: 0.5, y: 0.1, tone: active }
+          edges: []
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: chain, rows so far
+              columns: [ path ]
+              rows:
+                - { k: "1", cells: [ Abena Owusu ], tone: active }
+    - title: First recursive round
+      text: "The second part joins staff to the rows just found: whoever has Abena as manager. That adds Kojo Asante, Efua Darko and Ama Serwaa, each path extended with ' > ' and their name."
+      lines: [ 5, 6, 7, 8 ]
+      vars: { round: 1 }
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: "1", label: Abena, x: 0.5, y: 0.1, tone: done }
+            - { k: "2", label: Kojo, x: 0.15, y: 0.5, tone: active }
+            - { k: "3", label: Efua, x: 0.6, y: 0.5, tone: active }
+            - { k: "9", label: Ama, x: 0.92, y: 0.5, tone: active }
+          edges:
+            - { a: "1", b: "2", directed: true, tone: active }
+            - { a: "1", b: "3", directed: true, tone: active }
+            - { a: "1", b: "9", directed: true, tone: active }
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: chain, rows so far
+              columns: [ path ]
+              rows:
+                - { k: "1", cells: [ Abena Owusu ], tone: base }
+                - { k: "2", cells: [ Abena Owusu > Kojo Asante ], tone: active }
+                - { k: "3", cells: [ Abena Owusu > Efua Darko ], tone: active }
+                - { k: "9", cells: [ Abena Owusu > Ama Serwaa ], tone: active }
+    - title: Second recursive round
+      text: Now the join uses the three new rows. Kojo manages three people and Efua two; nobody reports to Ama Serwaa. Five more rows, each path one name longer.
+      lines: [ 6, 7, 8 ]
+      vars: { round: 2 }
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: "1", label: Abena, x: 0.5, y: 0.1, tone: done }
+            - { k: "2", label: Kojo, x: 0.15, y: 0.5, tone: done }
+            - { k: "3", label: Efua, x: 0.6, y: 0.5, tone: done }
+            - { k: "9", label: Ama, x: 0.92, y: 0.5, tone: done }
+            - { k: "4", label: Yaw, x: 0, y: 0.9, tone: active }
+            - { k: "5", label: Adwoa, x: 0.2, y: 0.9, tone: active }
+            - { k: "6", label: Kwesi, x: 0.4, y: 0.9, tone: active }
+            - { k: "7", label: Akua, x: 0.62, y: 0.9, tone: active }
+            - { k: "8", label: Fiifi, x: 0.84, y: 0.9, tone: active }
+          edges:
+            - { a: "1", b: "2", directed: true, tone: done }
+            - { a: "1", b: "3", directed: true, tone: done }
+            - { a: "2", b: "4", directed: true, tone: active }
+            - { a: "2", b: "5", directed: true, tone: active }
+            - { a: "2", b: "6", directed: true, tone: active }
+            - { a: "3", b: "7", directed: true, tone: active }
+            - { a: "3", b: "8", directed: true, tone: active }
+            - { a: "1", b: "9", directed: true, tone: done }
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: chain, rows so far
+              columns: [ path ]
+              rows:
+                - { k: "1", cells: [ Abena Owusu ], tone: base }
+                - { k: "2", cells: [ Abena Owusu > Kojo Asante ], tone: base }
+                - { k: "3", cells: [ Abena Owusu > Efua Darko ], tone: base }
+                - { k: "9", cells: [ Abena Owusu > Ama Serwaa ], tone: base }
+                - { k: "4", cells: [ Abena Owusu > Kojo Asante > Yaw Boateng ], tone: active }
+                - { k: "5", cells: [ Abena Owusu > Kojo Asante > Adwoa Ofori ], tone: active }
+                - { k: "6", cells: [ Abena Owusu > Kojo Asante > Kwesi Appiah ], tone: active }
+                - { k: "7", cells: [ Abena Owusu > Efua Darko > Akua Frimpong ], tone: active }
+                - { k: "8", cells: [ Abena Owusu > Efua Darko > Fiifi Mensah ], tone: active }
+    - title: Nothing new, so it stops
+      text: The next round looks for anyone managed by those five people. There is nobody, so the round adds no rows and the recursion ends. Data with a cycle would never reach this point.
+      lines: [ 8 ]
+      vars: { round: "3: no rows" }
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: "1", label: Abena, x: 0.5, y: 0.1, tone: done }
+            - { k: "2", label: Kojo, x: 0.15, y: 0.5, tone: done }
+            - { k: "3", label: Efua, x: 0.6, y: 0.5, tone: done }
+            - { k: "9", label: Ama, x: 0.92, y: 0.5, tone: done }
+            - { k: "4", label: Yaw, x: 0, y: 0.9, tone: done }
+            - { k: "5", label: Adwoa, x: 0.2, y: 0.9, tone: done }
+            - { k: "6", label: Kwesi, x: 0.4, y: 0.9, tone: done }
+            - { k: "7", label: Akua, x: 0.62, y: 0.9, tone: done }
+            - { k: "8", label: Fiifi, x: 0.84, y: 0.9, tone: done }
+          edges:
+            - { a: "1", b: "2", directed: true, tone: done }
+            - { a: "1", b: "3", directed: true, tone: done }
+            - { a: "2", b: "4", directed: true, tone: done }
+            - { a: "2", b: "5", directed: true, tone: done }
+            - { a: "2", b: "6", directed: true, tone: done }
+            - { a: "3", b: "7", directed: true, tone: done }
+            - { a: "3", b: "8", directed: true, tone: done }
+            - { a: "1", b: "9", directed: true, tone: done }
+        - { kind: note, id: n, text: "Round 3 adds no rows: the recursion stops with 9 rows", tone: found }
+    - title: ORDER BY path
+      text: The main query reads the finished chain and sorts by path. Sorting text puts each manager straight before the people under them, giving the chapter's nine-row result.
+      lines: [ 10, 11, 12 ]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 9
+          tables:
+            - id: c
+              title: result, sorted by path
+              columns: [ path ]
+              rows:
+                - { k: "1", cells: [ Abena Owusu ], tone: found }
+                - { k: "9", cells: [ Abena Owusu > Ama Serwaa ], tone: found }
+                - { k: "3", cells: [ Abena Owusu > Efua Darko ], tone: found }
+                - { k: "7", cells: [ Abena Owusu > Efua Darko > Akua Frimpong ], tone: found }
+                - { k: "8", cells: [ Abena Owusu > Efua Darko > Fiifi Mensah ], tone: found }
+                - { k: "2", cells: [ Abena Owusu > Kojo Asante ], tone: found }
+                - { k: "5", cells: [ Abena Owusu > Kojo Asante > Adwoa Ofori ], tone: found }
+                - { k: "6", cells: [ Abena Owusu > Kojo Asante > Kwesi Appiah ], tone: found }
+                - { k: "4", cells: [ Abena Owusu > Kojo Asante > Yaw Boateng ], tone: found }

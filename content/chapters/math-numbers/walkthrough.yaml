@@ -1,0 +1,59 @@
+- id: math-numbers-sigma
+  title: Σ is a loop that adds
+  hint: Watch Σ xᵢ visit each number in x in turn and add it to a running total.
+  language: Python
+  code: |
+    x = [2, 5, 3]
+    sum(x)    # Σ xᵢ = 10
+  steps:
+    - title: The numbers
+      text: Σ (sigma) means "add them all up". Here x is the list 2, 5, 3, and xᵢ means each item of x in turn. The total starts at 0.
+      lines: [1]
+      vars: { total: 0 }
+      parts:
+        - { kind: cells, id: x, label: "x", items: [2, 5, 3], indices: true, slots: 3 }
+    - title: First item
+      text: "The first item is 2. Add it to the total: 0 + 2 = 2."
+      vars: { total: "0 + 2 = 2" }
+      parts:
+        - kind: cells
+          id: x
+          label: "x"
+          indices: true
+          slots: 3
+          items: [{ k: a, v: 2, tone: active }, { k: b, v: 5 }, { k: c, v: 3 }]
+          pointers: [{ name: xᵢ, at: 0 }]
+    - title: Second item
+      text: Move on to the next item, 5. The total becomes 2 + 5 = 7.
+      vars: { total: "2 + 5 = 7" }
+      parts:
+        - kind: cells
+          id: x
+          label: "x"
+          indices: true
+          slots: 3
+          items: [{ k: a, v: 2, tone: done }, { k: b, v: 5, tone: active }, { k: c, v: 3 }]
+          pointers: [{ name: xᵢ, at: 1 }]
+    - title: Third item
+      text: The last item is 3. The total becomes 7 + 3 = 10.
+      vars: { total: "7 + 3 = 10" }
+      parts:
+        - kind: cells
+          id: x
+          label: "x"
+          indices: true
+          slots: 3
+          items: [{ k: a, v: 2, tone: done }, { k: b, v: 5, tone: done }, { k: c, v: 3, tone: active }]
+          pointers: [{ name: xᵢ, at: 2 }]
+    - title: Σ xᵢ = 10
+      text: There are no items left, so Σ xᵢ is 10. In Python, sum(x) does the same loop for you.
+      lines: [2]
+      vars: { total: 10 }
+      parts:
+        - kind: cells
+          id: x
+          label: "x"
+          indices: true
+          slots: 3
+          items: [{ k: a, v: 2, tone: done }, { k: b, v: 5, tone: done }, { k: c, v: 3, tone: done }]
+        - { kind: note, id: n, text: "Σ xᵢ = 2 + 5 + 3 = 10", tone: found }

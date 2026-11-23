@@ -202,6 +202,8 @@ main()
 
 It prints `saved with its event`, then `crashed before commit: nothing saved, nothing published`, `broker down; will retry`, `saved with its event`, `published 2` and finally `broker received: [('order-placed', 'o-7'), ('order-placed', 'o-9')]` and `orders saved: ['o-7', 'o-9']`. Every saved order produced exactly its event, even with a crash and a broker outage in between; the failed order produced neither. The relay can publish an event twice (if it crashes between publishing and marking the row sent), so consumers must still be idempotent. Relays either poll the table or, better at scale, read the database's change log (**change data capture**, with tools such as Debezium). On the consuming side, the mirror pattern is the **inbox**: record received message ids with the work, as the idempotent consumer above does.
 
+<Walkthrough name="m-messaging-outbox" />
+
 ## Choosing a broker
 
 - **RabbitMQ**: flexible routing, task queues, request-reply, moderate throughput; easy to run.

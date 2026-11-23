@@ -1,0 +1,116 @@
+- id: html-forms-tables-submit
+  title: What a form sends
+  hint: Submit the order form twice and watch the browser check it, then gather each control's name and value.
+  language: HTML
+  code: |
+    <form action="/order" method="post">
+      <label for="name">Your name</label>
+      <input type="text" id="name" name="name" autocomplete="name" required>
+      <label for="email">Email</label>
+      <input type="email" id="email" name="email" autocomplete="email" required>
+      <label for="loaves">Number of loaves</label>
+      <input type="number" id="loaves" name="loaves" min="1" max="20" value="1">
+      <label for="bread">Bread</label>
+      <select id="bread" name="bread">
+        <option value="sugar">Sugar bread</option>
+        <option value="tea">Tea bread</option>
+        <option value="brown">Brown bread</option>
+      </select>
+      <label for="notes">Anything else?</label>
+      <textarea id="notes" name="notes" rows="3"></textarea>
+      <button type="submit">Place order</button>
+    </form>
+  steps:
+    - title: An empty form
+      text: Five controls, each with a label, inside one form. Nothing has been typed, and nothing will be sent until someone submits.
+      parts:
+        - kind: kv
+          id: on
+          label: "On the page"
+          slots: 5
+          rows:
+            - { name: Your name, value: "(empty)" }
+            - { name: Email, value: "(empty)" }
+            - { name: Number of loaves, value: "1" }
+            - { name: Bread, value: "Sugar bread" }
+            - { name: Anything else?, value: "(empty)" }
+        - { kind: kv, id: sent, label: "Pairs to send (name = value)", slots: 5, rows: [] }
+    - title: Submit it empty
+      text: Pressing Place order first makes the browser check the input. Your name is required and empty, so the browser stops and points at it. Nothing is sent.
+      lines: [3, 16]
+      parts:
+        - kind: kv
+          id: on
+          label: "On the page"
+          slots: 5
+          rows:
+            - { name: Your name, value: "(empty): required", tone: bad }
+            - { name: Email, value: "(empty)" }
+            - { name: Number of loaves, value: "1" }
+            - { name: Bread, value: "Sugar bread" }
+            - { name: Anything else?, value: "(empty)" }
+    - title: Fill in the required fields
+      text: Ama types her name and an email address. Because type is email, the browser also checks it has an @ with something on each side.
+      lines: [3, 5]
+      parts:
+        - kind: kv
+          id: on
+          label: "On the page"
+          slots: 5
+          rows:
+            - { name: Your name, value: "Ama", tone: active }
+            - { name: Email, value: "ama@example.com", tone: active }
+            - { name: Number of loaves, value: "1" }
+            - { name: Bread, value: "Sugar bread" }
+            - { name: Anything else?, value: "(empty)" }
+    - title: Submit again; the checks pass
+      text: This time every check passes, so the browser gathers each control's value. Each is sent as a pair, under the control's name attribute.
+      lines: [3, 5, 16]
+      parts:
+        - kind: kv
+          id: sent
+          label: "Pairs to send (name = value)"
+          slots: 5
+          rows: [{ name: name, value: '"Ama"', tone: active }, { name: email, value: '"ama@example.com"', tone: active }]
+    - title: The starting value is sent too
+      text: Nobody changed the number of loaves, so its starting value="1" is sent.
+      lines: [7]
+      parts:
+        - kind: kv
+          id: sent
+          label: "Pairs to send (name = value)"
+          slots: 5
+          rows: [{ name: name, value: '"Ama"' }, { name: email, value: '"ama@example.com"' }, { name: loaves, value: '"1"', tone: active }]
+    - title: An option sends its value, not its text
+      text: People see "Sugar bread", but the option's value is sugar, and the value is what gets sent.
+      lines: [9, 10]
+      parts:
+        - kind: kv
+          id: sent
+          label: "Pairs to send (name = value)"
+          slots: 5
+          rows: [{ name: name, value: '"Ama"' }, { name: email, value: '"ama@example.com"' }, { name: loaves, value: '"1"' }, { name: bread, value: '"sugar"', tone: active }]
+    - title: An empty textarea still sends
+      text: The notes box is empty, so it sends an empty value. A control with no name would send nothing at all.
+      lines: [15]
+      parts:
+        - kind: kv
+          id: sent
+          label: "Pairs to send (name = value)"
+          slots: 5
+          rows: [{ name: name, value: '"Ama"' }, { name: email, value: '"ama@example.com"' }, { name: loaves, value: '"1"' }, { name: bread, value: '"sugar"' }, { name: notes, value: '""', tone: active }]
+    - title: Off to the server
+      text: method="post" sends the pairs hidden in the request to the action address, /order. The browser's checks were a convenience; the server must check everything again.
+      lines: [1]
+      parts:
+        - kind: kv
+          id: sent
+          label: "Pairs to send (name = value)"
+          slots: 5
+          rows: [{ name: name, value: '"Ama"', tone: done }, { name: email, value: '"ama@example.com"', tone: done }, { name: loaves, value: '"1"', tone: done }, { name: bread, value: '"sugar"', tone: done }, { name: notes, value: '""', tone: done }]
+        - kind: seq
+          id: s
+          actors: [Browser, Server]
+          slots: 1
+          messages:
+            - { from: Browser, to: Server, label: "POST /order with the five pairs", tone: found }

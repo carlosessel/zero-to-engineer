@@ -1,0 +1,136 @@
+- id: cl-api-deep-prompt-caching
+  title: Prompt caching, request by request
+  hint: Send two questions with the same handbook and watch the beginning be written to the cache once, then read back.
+  language: Python
+  code: |
+    manual = "Ama's Bakery staff handbook. " + "Section text that rarely changes. " * 300
+
+    system = [
+        {"type": "text", "text": "You answer staff questions using only the handbook."},
+        {"type": "text", "text": manual, "cache_control": {"type": "ephemeral"}},
+    ]
+
+    for question in ["What time do bakers start?", "How do I log a waste item?"]:
+        msg = client.messages.create(
+            model="claude-opus-5-5",
+            max_tokens=500,
+            system=system,
+            messages=[{"role": "user", "content": question}],
+        )
+        u = msg.usage
+        print(f"written to cache: {u.cache_creation_input_tokens}, read from cache: {u.cache_read_input_tokens}, uncached: {u.input_tokens}")
+  steps:
+    - title: A long, stable beginning
+      text: Every request starts with the same instructions and the same long handbook. Only the question at the end changes. The cache_control marker goes on the handbook, the last block that is identical every time.
+      lines: [ 3, 4, 5, 6 ]
+      parts:
+        - kind: cells
+          id: req
+          label: The request, in the order it is matched
+          width: 150
+          slots: 4
+          items:
+            - { k: i, v: instructions, tone: base }
+            - { k: h, v: handbook, tone: base }
+            - { k: q, v: bakers start?, tone: base }
+          pointers:
+            - { name: cache_control, at: 1 }
+        - kind: kv
+          id: u
+          label: msg.usage for this request
+          slots: 3
+          rows:
+            - { name: written to cache, value: "", tone: base }
+            - { name: read from cache, value: "", tone: base }
+            - { name: uncached, value: "", tone: base }
+    - title: "First request: write"
+      text: Nothing is cached yet, so the API processes everything and stores the beginning, up to the marker. Writing costs 1.25 times the normal input price.
+      lines: [ 8, 9, 10, 11, 12, 13, 14 ]
+      vars: { question: What time do bakers start? }
+      parts:
+        - kind: cells
+          id: req
+          label: The request, in the order it is matched
+          width: 150
+          slots: 4
+          items:
+            - { k: i, v: instructions, tone: active }
+            - { k: h, v: handbook, tone: active }
+            - { k: q, v: bakers start?, tone: compare }
+          pointers:
+            - { name: cache_control, at: 1 }
+        - kind: kv
+          id: u
+          label: msg.usage for this request
+          slots: 3
+          rows:
+            - { name: written to cache, value: instructions + handbook, tone: active }
+            - { name: read from cache, value: "0", tone: base }
+            - { name: uncached, value: the question, tone: compare }
+    - title: The cache is kept for a while
+      text: The stored beginning lasts 5 minutes by default, and each use refreshes it free of charge.
+      lines: [ 15, 16 ]
+      parts:
+        - { kind: note, id: n, text: "Cache: instructions + handbook, kept 5 minutes", tone: found }
+    - title: "Second request: read"
+      text: Within five minutes, the second question arrives with an identical beginning. It is read from the cache at a twentieth of the input price on Opus 5.5. Only the new question is processed as normal.
+      lines: [ 8, 9, 10, 11, 12, 13, 14 ]
+      vars: { question: How do I log a waste item? }
+      parts:
+        - kind: cells
+          id: req
+          label: The request, in the order it is matched
+          width: 150
+          slots: 4
+          items:
+            - { k: i, v: instructions, tone: found }
+            - { k: h, v: handbook, tone: found }
+            - { k: q, v: log a waste item?, tone: compare }
+          pointers:
+            - { name: cache_control, at: 1 }
+        - kind: kv
+          id: u
+          label: msg.usage for this request
+          slots: 3
+          rows:
+            - { name: written to cache, value: "0", tone: base }
+            - { name: read from cache, value: instructions + handbook, tone: found }
+            - { name: uncached, value: the question, tone: compare }
+    - title: What breaks the cache
+      text: The prefix is matched in order from the start. Put a timestamp at the top and every request begins differently, so nothing is ever read from the cache.
+      vars: {}
+      parts:
+        - kind: cells
+          id: req
+          label: The request, in the order it is matched
+          width: 150
+          slots: 4
+          items:
+            - { k: ts, v: timestamp, tone: bad }
+            - { k: i, v: instructions, tone: dim }
+            - { k: h, v: handbook, tone: dim }
+            - { k: q, v: log a waste item?, tone: base }
+          pointers:
+            - { name: cache_control, at: 2 }
+        - kind: kv
+          id: u
+          label: msg.usage for this request
+          slots: 3
+          rows:
+            - { name: written to cache, value: instructions + handbook, tone: bad }
+            - { name: read from cache, value: "0", tone: bad }
+            - { name: uncached, value: the question, tone: base }
+        - { kind: note, id: n, text: "Stable material first, then the marker, then anything that changes", tone: compare }
+    - title: What it saves
+      text: A 20,000-token handbook with 1,000 questions in an hour on Opus 5.5 costs $80 for the handbook without caching. With a 1-hour cache, one write and 999 reads cost about $4.16.
+      parts:
+        - kind: cells
+          id: cost
+          label: dollars for the handbook part, 1,000 questions
+          bars: true
+          width: 110
+          slots: 2
+          items:
+            - { k: no cache, v: 80, tone: bad }
+            - { k: 1-hour cache, v: 4.16, tone: found }
+        - { kind: note, id: n, text: "$80 without caching, about $4.16 with it", tone: found }

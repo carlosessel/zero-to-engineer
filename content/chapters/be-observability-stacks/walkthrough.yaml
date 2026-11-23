@@ -1,0 +1,137 @@
+- id: be-observability-stacks-pino-context
+  title: How a log line collects its context
+  hint: Follow two requests through the middleware and the handler, and watch the fields each log line will carry.
+  language: TypeScript
+  code: |
+    app.use((req: Request, res: Response, next: NextFunction) => {
+      const requestId = req.header("x-request-id") ?? randomUUID();
+      (req as LoggedRequest).log = logger.child({ requestId });
+      const stop = requestDuration.startTimer({ method: req.method });
+      res.on("finish", () => stop({ route: req.route?.path ?? "unmatched", status: String(res.statusCode) }));
+      next();
+    });
+
+    app.post("/orders", (req: Request, res: Response) => {
+      const log = (req as LoggedRequest).log.child({ orderId: String(req.query.orderId) });
+      const totalPence = Number(req.query.totalPence);
+      if (!(totalPence > 0)) {
+        log.warn({ totalPence }, "Rejected order: total is not positive");
+        res.status(400).end();
+        return;
+      }
+      ordersPlaced.inc({ channel: "web" });
+      log.info({ totalPence }, "Placed order");
+      res.status(201).end();
+    });
+  steps:
+    - title: The first request arrives
+      text: "A POST for order o-1042 worth 1250p arrives with the header x-request-id: req-1. The base logger already adds service: bakery-api to every line."
+      lines: [1, 2]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, "bakery-api"]
+          slots: 4
+          messages:
+            - { from: Client, to: "bakery-api", label: "POST /orders o-1042, req-1", tone: active }
+        - kind: kv
+          id: f
+          label: "Fields on this request's log lines"
+          slots: 5
+          rows:
+            - { name: service, value: bakery-api }
+        - { kind: note, id: m, text: 'bakery_orders_placed_total{channel="web"} 0' }
+    - title: A child logger with the request id
+      text: The middleware makes a child logger that adds requestId, and stores it on the request. Every line it writes will carry req-1.
+      lines: [3]
+      parts:
+        - kind: kv
+          id: f
+          label: "Fields on this request's log lines"
+          slots: 5
+          rows:
+            - { name: service, value: bakery-api }
+            - { name: requestId, value: req-1, tone: active }
+    - title: The handler adds the order id
+      text: The handler makes a child of that child, adding orderId. Context builds up layer by layer without being passed by hand.
+      lines: [9, 10]
+      parts:
+        - kind: kv
+          id: f
+          label: "Fields on this request's log lines"
+          slots: 5
+          rows:
+            - { name: service, value: bakery-api }
+            - { name: requestId, value: req-1 }
+            - { name: orderId, value: o-1042, tone: active }
+    - title: Placed, counted, logged
+      text: The total is positive, so the counter goes up by one and an info line (level 30) is written with totalPence and every field above.
+      lines: [17, 18, 19]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, "bakery-api"]
+          slots: 4
+          messages:
+            - { from: Client, to: "bakery-api", label: "POST /orders o-1042, req-1", tone: dim }
+            - { from: "bakery-api", to: Client, label: "201", tone: found }
+        - kind: kv
+          id: f
+          label: "Fields on this request's log lines"
+          slots: 5
+          rows:
+            - { name: service, value: bakery-api }
+            - { name: requestId, value: req-1 }
+            - { name: orderId, value: o-1042 }
+            - { name: totalPence, value: "1250", tone: active }
+            - { name: msg, value: Placed order, tone: found }
+        - { kind: note, id: m, text: 'bakery_orders_placed_total{channel="web"} 1', tone: found }
+    - title: A second request, its own logger
+      text: The next request, req-2, gets a fresh child logger. None of the first request's fields carry over, so the two stories never mix.
+      lines: [2, 3, 10]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, "bakery-api"]
+          slots: 4
+          messages:
+            - { from: Client, to: "bakery-api", label: "POST /orders o-1042, req-1", tone: dim }
+            - { from: "bakery-api", to: Client, label: "201", tone: dim }
+            - { from: Client, to: "bakery-api", label: "POST /orders o-1043, req-2", tone: active }
+        - kind: kv
+          id: f
+          label: "Fields on this request's log lines"
+          slots: 5
+          rows:
+            - { name: service, value: bakery-api }
+            - { name: requestId, value: req-2, tone: active }
+            - { name: orderId, value: o-1043, tone: active }
+        - { kind: note, id: m, text: 'bakery_orders_placed_total{channel="web"} 1' }
+    - title: Rejected, not counted
+      text: A total of -5 is not positive, so a warning (level 40) is logged and the answer is 400. The handler returns before the counter, so it stays at 1.
+      lines: [12, 13, 14, 15]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, "bakery-api"]
+          slots: 4
+          messages:
+            - { from: Client, to: "bakery-api", label: "POST /orders o-1042, req-1", tone: dim }
+            - { from: "bakery-api", to: Client, label: "201", tone: dim }
+            - { from: Client, to: "bakery-api", label: "POST /orders o-1043, req-2", tone: dim }
+            - { from: "bakery-api", to: Client, label: "400", tone: bad }
+        - kind: kv
+          id: f
+          label: "Fields on this request's log lines"
+          slots: 5
+          rows:
+            - { name: service, value: bakery-api }
+            - { name: requestId, value: req-2 }
+            - { name: orderId, value: o-1043 }
+            - { name: totalPence, value: "-5", tone: bad }
+            - { name: msg, value: "Rejected order: total is not positive", tone: bad }
+    - title: Durations by route and status
+      text: When each response finishes, the timer started in the middleware records its duration with the route and status as labels. The histogram now has one 201 and one 400.
+      lines: [4, 5]
+      parts:
+        - { kind: note, id: m, text: 'duration count: route /orders, status 201 = 1, status 400 = 1', tone: found }

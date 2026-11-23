@@ -1,0 +1,196 @@
+- id: pytorch-training-step
+  title: One batch through the training loop
+  hint: Follow 64 images forward through the model, then through the four numbered lines that make it learn.
+  language: Python
+  code: |
+    train = DataLoader(datasets.MNIST("data", train=True, download=True, transform=tfm),
+                       batch_size=64, shuffle=True)
+    model = nn.Sequential(
+        nn.Flatten(),                 # 28x28 image -> 784 numbers
+        nn.Linear(784, 128), nn.ReLU(),
+        nn.Linear(128, 10),           # 10 digit classes
+    ).to(device)
+
+    loss_fn = nn.CrossEntropyLoss()
+    opt = torch.optim.Adam(model.parameters(), lr=1e-3)
+
+    for epoch in range(3):
+        model.train()
+        for X, y in train:
+            X, y = X.to(device), y.to(device)
+            loss = loss_fn(model(X), y)   # 1. predict and measure
+            opt.zero_grad()               # 2. clear old gradients
+            loss.backward()               # 3. backpropagate
+            opt.step()                    # 4. update weights
+  steps:
+    - title: "One batch of 64 images"
+      text: "The DataLoader serves the 60,000 training images in shuffled batches of 64. Each image is 1 channel of 28 × 28 pixels, and y holds the 64 correct digits."
+      lines: [1, 2, 14, 15]
+      vars: { "X.shape": "(64, 1, 28, 28)", "y.shape": "(64,)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 250
+          nodes:
+            - { k: batch, label: "batch", x: 0, y: 0, tone: active, note: "(64, 1, 28, 28)" }
+          edges: []
+    - title: "Flatten"
+      text: "The model first lays each 28 × 28 image out as one row of 784 numbers. The batch is now a table of 64 rows."
+      lines: [4]
+      vars: { "shape now": "(64, 784)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 250
+          nodes:
+            - { k: batch, label: "batch", x: 0, y: 0, tone: done, note: "(64, 1, 28, 28)" }
+            - { k: flat, label: "Flatten", x: 0.33, y: 0, tone: active, note: "(64, 784)" }
+          edges:
+            - { a: batch, b: flat, directed: true, tone: active }
+    - title: "A hidden layer"
+      text: "Linear(784, 128) multiplies by a weight matrix, giving 128 numbers per image, and ReLU zeroes the negatives."
+      lines: [5]
+      vars: { "shape now": "(64, 128)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 250
+          nodes:
+            - { k: batch, label: "batch", x: 0, y: 0, tone: done, note: "(64, 1, 28, 28)" }
+            - { k: flat, label: "Flatten", x: 0.33, y: 0, tone: done, note: "(64, 784)" }
+            - { k: l1, label: "Linear + ReLU", x: 0.66, y: 0, tone: active, note: "(64, 128)" }
+          edges:
+            - { a: batch, b: flat, directed: true, tone: dim }
+            - { a: flat, b: l1, directed: true, tone: active }
+    - title: "Ten scores per image"
+      text: "Linear(128, 10) gives one score per digit, 0 to 9, for each of the 64 images. With untrained weights these guesses are poor."
+      lines: [6]
+      vars: { "model(X).shape": "(64, 10)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 250
+          nodes:
+            - { k: batch, label: "batch", x: 0, y: 0, tone: done, note: "(64, 1, 28, 28)" }
+            - { k: flat, label: "Flatten", x: 0.33, y: 0, tone: done, note: "(64, 784)" }
+            - { k: l1, label: "Linear + ReLU", x: 0.66, y: 0, tone: done, note: "(64, 128)" }
+            - { k: l2, label: "Linear", x: 1, y: 0, tone: active, note: "(64, 10)" }
+          edges:
+            - { a: batch, b: flat, directed: true, tone: dim }
+            - { a: flat, b: l1, directed: true, tone: dim }
+            - { a: l1, b: l2, directed: true, tone: active }
+    - title: "1. Predict and measure"
+      text: "loss_fn compares the 64 rows of scores with the 64 correct digits and returns a single number: how wrong this batch was."
+      lines: [9, 16]
+      vars: { "model(X).shape": "(64, 10)", loss: "one number" }
+      parts:
+        - kind: graph
+          id: g
+          height: 250
+          nodes:
+            - { k: batch, label: "batch", x: 0, y: 0, tone: done, note: "(64, 1, 28, 28)" }
+            - { k: flat, label: "Flatten", x: 0.33, y: 0, tone: done, note: "(64, 784)" }
+            - { k: l1, label: "Linear + ReLU", x: 0.66, y: 0, tone: done, note: "(64, 128)" }
+            - { k: l2, label: "Linear", x: 1, y: 0, tone: done, note: "(64, 10)" }
+            - { k: loss, label: "1. loss", x: 1, y: 1, tone: active }
+          edges:
+            - { a: batch, b: flat, directed: true, tone: dim }
+            - { a: flat, b: l1, directed: true, tone: dim }
+            - { a: l1, b: l2, directed: true, tone: dim }
+            - { a: l2, b: loss, directed: true, tone: active }
+    - title: "2. Clear old gradients"
+      text: "PyTorch adds each new gradient to whatever is already stored, so the gradients left over from the previous batch are wiped first."
+      lines: [17]
+      vars: { loss: "one number", "p.grad": "cleared" }
+      parts:
+        - kind: graph
+          id: g
+          height: 250
+          nodes:
+            - { k: batch, label: "batch", x: 0, y: 0, tone: done, note: "(64, 1, 28, 28)" }
+            - { k: flat, label: "Flatten", x: 0.33, y: 0, tone: done, note: "(64, 784)" }
+            - { k: l1, label: "Linear + ReLU", x: 0.66, y: 0, tone: done, note: "(64, 128)" }
+            - { k: l2, label: "Linear", x: 1, y: 0, tone: done, note: "(64, 10)" }
+            - { k: loss, label: "1. loss", x: 1, y: 1, tone: done }
+            - { k: zero, label: "2. zero_grad", x: 0.66, y: 1, tone: active }
+          edges:
+            - { a: batch, b: flat, directed: true, tone: dim }
+            - { a: flat, b: l1, directed: true, tone: dim }
+            - { a: l1, b: l2, directed: true, tone: dim }
+            - { a: l2, b: loss, directed: true, tone: dim }
+            - { a: loss, b: zero, directed: true, tone: active }
+    - title: "3. Backpropagate"
+      text: "loss.backward() works out, for every weight, which way it should move to lower this loss. That is 101,770 gradients, one per weight and bias."
+      lines: [18]
+      vars: { loss: "one number", "p.grad": "101,770 numbers" }
+      parts:
+        - kind: graph
+          id: g
+          height: 250
+          nodes:
+            - { k: batch, label: "batch", x: 0, y: 0, tone: done, note: "(64, 1, 28, 28)" }
+            - { k: flat, label: "Flatten", x: 0.33, y: 0, tone: done, note: "(64, 784)" }
+            - { k: l1, label: "Linear + ReLU", x: 0.66, y: 0, tone: done, note: "(64, 128)" }
+            - { k: l2, label: "Linear", x: 1, y: 0, tone: done, note: "(64, 10)" }
+            - { k: loss, label: "1. loss", x: 1, y: 1, tone: done }
+            - { k: zero, label: "2. zero_grad", x: 0.66, y: 1, tone: done }
+            - { k: back, label: "3. backward", x: 0.33, y: 1, tone: active }
+          edges:
+            - { a: batch, b: flat, directed: true, tone: dim }
+            - { a: flat, b: l1, directed: true, tone: dim }
+            - { a: l1, b: l2, directed: true, tone: dim }
+            - { a: l2, b: loss, directed: true, tone: dim }
+            - { a: loss, b: zero, directed: true, tone: dim }
+            - { a: zero, b: back, directed: true, tone: active }
+    - title: "4. Update the weights"
+      text: "opt.step() lets Adam move every weight a small step against its gradient, with learning rate 0.001. The model is now slightly better than it was."
+      lines: [10, 19]
+      vars: { lr: "1e-3", "weights changed": "101,770" }
+      parts:
+        - kind: graph
+          id: g
+          height: 250
+          nodes:
+            - { k: batch, label: "batch", x: 0, y: 0, tone: done, note: "(64, 1, 28, 28)" }
+            - { k: flat, label: "Flatten", x: 0.33, y: 0, tone: done, note: "(64, 784)" }
+            - { k: l1, label: "Linear + ReLU", x: 0.66, y: 0, tone: done, note: "(64, 128)" }
+            - { k: l2, label: "Linear", x: 1, y: 0, tone: done, note: "(64, 10)" }
+            - { k: loss, label: "1. loss", x: 1, y: 1, tone: done }
+            - { k: zero, label: "2. zero_grad", x: 0.66, y: 1, tone: done }
+            - { k: back, label: "3. backward", x: 0.33, y: 1, tone: done }
+            - { k: step, label: "4. step", x: 0, y: 1, tone: active }
+          edges:
+            - { a: batch, b: flat, directed: true, tone: dim }
+            - { a: flat, b: l1, directed: true, tone: dim }
+            - { a: l1, b: l2, directed: true, tone: dim }
+            - { a: l2, b: loss, directed: true, tone: dim }
+            - { a: loss, b: zero, directed: true, tone: dim }
+            - { a: zero, b: back, directed: true, tone: dim }
+            - { a: back, b: step, directed: true, tone: active }
+            - { a: step, b: batch, directed: true, tone: dim }
+    - title: "Round and round"
+      text: "The next batch comes in and the same four lines run again: 938 batches make one epoch, and 3 epochs make 2,814 updates. That is gradient descent, ending near 97% accuracy."
+      lines: [12, 14, 16, 17, 18, 19]
+      vars: { "batches per epoch": 938, "updates in 3 epochs": "2,814" }
+      parts:
+        - kind: graph
+          id: g
+          height: 250
+          nodes:
+            - { k: batch, label: "batch", x: 0, y: 0, tone: active, note: "(64, 1, 28, 28)" }
+            - { k: flat, label: "Flatten", x: 0.33, y: 0, tone: done, note: "(64, 784)" }
+            - { k: l1, label: "Linear + ReLU", x: 0.66, y: 0, tone: done, note: "(64, 128)" }
+            - { k: l2, label: "Linear", x: 1, y: 0, tone: done, note: "(64, 10)" }
+            - { k: loss, label: "1. loss", x: 1, y: 1, tone: done }
+            - { k: zero, label: "2. zero_grad", x: 0.66, y: 1, tone: done }
+            - { k: back, label: "3. backward", x: 0.33, y: 1, tone: done }
+            - { k: step, label: "4. step", x: 0, y: 1, tone: done }
+          edges:
+            - { a: batch, b: flat, directed: true, tone: dim }
+            - { a: flat, b: l1, directed: true, tone: dim }
+            - { a: l1, b: l2, directed: true, tone: dim }
+            - { a: l2, b: loss, directed: true, tone: dim }
+            - { a: loss, b: zero, directed: true, tone: dim }
+            - { a: zero, b: back, directed: true, tone: dim }
+            - { a: back, b: step, directed: true, tone: dim }
+            - { a: step, b: batch, directed: true, tone: active, label: "next batch" }

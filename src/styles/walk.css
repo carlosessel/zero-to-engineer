@@ -7,7 +7,7 @@
 
 .wk-svg{width:100%;height:auto;display:block;background:var(--sunk);border-radius:12px}
 .wk-side{margin-top:12px}
-.wk-count{font:600 13px/1.3 "JetBrains Mono",monospace;color:var(--accent);margin:0 0 4px;text-transform:uppercase;letter-spacing:.04em}
+.wk-count{font:600 14px/1.3 "IBM Plex Sans",sans-serif;color:var(--muted);margin:0 0 4px}
 .wk-step-title{font:700 18px/1.3 "Bricolage Grotesque","IBM Plex Sans",sans-serif;margin:0 0 4px}
 .wk-text{margin:0 0 12px;min-height:3.3em}
 .wk-controls{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
@@ -18,8 +18,11 @@
 
 .wk-detail{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:12px;margin-top:14px}
 @media (max-width:640px){.wk-detail{grid-template-columns:1fr}}
+.wk-detail.wk-nocode{grid-template-columns:1fr}
+.wk-vars:empty{display:none}
+.wk-varsbox:has(.wk-vars:empty){display:none}
 .wk-codebox{margin:0;min-width:0}
-.wk-codebox figcaption,.wk-varshead{font:600 12px/1.3 "IBM Plex Sans",sans-serif;color:var(--muted);margin:0 0 6px;text-transform:uppercase;letter-spacing:.05em}
+.wk-codebox figcaption,.wk-varshead{font:600 14px/1.3 "IBM Plex Sans",sans-serif;color:var(--muted);margin:0 0 6px}
 .walk pre.wk-code{padding:10px 4px;font-size:13px;line-height:1.55}
 .wk-line{display:block;padding:0 10px;border-radius:4px;transition:background .25s}
 .wk-line.on{background:#3B2F86;box-shadow:inset 3px 0 #A796FF;color:#fff}
@@ -58,10 +61,31 @@
 .t-found .wk-val,.t-found .wk-td{fill:var(--surface)}
 .t-bad .wk-box{fill:var(--bad-bg);stroke:var(--bad)}
 .wk-i.t-dim{opacity:.35}
+.wk-i.t-dim:has(.wk-msg){opacity:.55}
 .t-done .wk-ptr,.t-done .wk-ptr-name{fill:var(--good)}
 .wk-i.t-found .wk-note-text{fill:var(--good)}
 .wk-i.t-bad .wk-note-text{fill:var(--bad)}
 .wk-i.t-active .wk-note-text{fill:var(--accent)}
 .wk-bucket.t-active .wk-box{fill:var(--accent);stroke:var(--accent)}
+
+/* Arrows, messages, terminals */
+.wk-ahead{fill:var(--muted);transition:fill .3s}
+.wk-ahead.t-active{fill:var(--accent)}
+.wk-ahead.t-found,.wk-edge.t-found{fill:var(--good);stroke:var(--good);stroke-opacity:1}
+.wk-ahead.t-bad,.wk-edge.t-bad{fill:var(--bad);stroke:var(--bad);stroke-opacity:1}
+.wk-edge.t-dim,.wk-ahead.t-dim{opacity:.3}
+.wk-elabel{font:400 11.5px "JetBrains Mono",monospace;fill:var(--ink);paint-order:stroke;stroke:var(--sunk);stroke-width:5px;stroke-linejoin:round}
+.wk-life{stroke:var(--muted);stroke-opacity:.5;stroke-width:1.5;stroke-dasharray:4 5;fill:none}
+.wk-msg{stroke:var(--muted);stroke-width:2;fill:none}
+.wk-mhead{fill:var(--muted)}
+.wk-mlabel{font:400 12px "JetBrains Mono",monospace;fill:var(--ink);paint-order:stroke;stroke:var(--sunk);stroke-width:5px;stroke-linejoin:round}
+.t-active .wk-msg{stroke:var(--accent);stroke-width:3}.t-active .wk-mhead{fill:var(--accent)}.t-active .wk-mlabel{fill:var(--accent);font-weight:600}
+.t-found .wk-msg{stroke:var(--good)}.t-found .wk-mhead{fill:var(--good)}.t-found .wk-mlabel{fill:var(--good)}
+.t-bad .wk-msg{stroke:var(--bad)}.t-bad .wk-mhead{fill:var(--bad)}.t-bad .wk-mlabel{fill:var(--bad)}
+.wk-i.t-dim .wk-mlabel{opacity:.8}
+.wk-term{fill:var(--code-bg)}
+.wk-tline{font:400 13px "JetBrains Mono",monospace;fill:var(--code-ink);white-space:pre}
+.wk-tcmd{fill:#A796FF;font-weight:600}
+.t-active .wk-link,.t-found .wk-link{stroke:var(--ink)}
 
 @media (prefers-reduced-motion:reduce){.wk-i,.wk-box,.wk-edge,.wk-line{transition:none}}

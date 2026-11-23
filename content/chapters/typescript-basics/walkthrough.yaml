@@ -1,0 +1,119 @@
+- id: typescript-basics-narrowing
+  title: Narrowing, line by line
+  hint: Watch what the type checker knows about value change as it reads each line.
+  language: TypeScript
+  code: |-
+    function show(value: string | number): string {
+      if (typeof value === "number") {
+        return value.toFixed(2);
+      }
+      return value.toUpperCase();
+    }
+
+    console.log(show(3.5));
+    console.log(show("rye"));
+  steps:
+    - title: Two types possible
+      text: The type checker reads the code without running it. At the start of show, value could be a string or a number.
+      lines:
+        - 1
+      parts:
+        - kind: kv
+          id: k
+          label: What the type checker knows
+          slots: 2
+          rows:
+            - name: value is
+              value: string | number
+              tone: active
+            - name: allowed here
+              value: only what both have
+              tone: compare
+        - kind: terminal
+          id: t
+          slots: 2
+          lines: []
+    - title: Why not toFixed straight away?
+      text: value might be a string, and text has no toFixed. So calling value.toFixed(2) here, before any check, would be reported as an error.
+      lines:
+        - 1
+      parts:
+        - kind: kv
+          id: k
+          label: What the type checker knows
+          slots: 2
+          rows:
+            - name: value is
+              value: string | number
+              tone: compare
+            - name: allowed here
+              value: "value.toFixed: error"
+              tone: bad
+    - title: The check
+      text: typeof value === "number" asks which one we have. TypeScript follows the check.
+      lines:
+        - 2
+      parts:
+        - kind: kv
+          id: k
+          label: What the type checker knows
+          slots: 2
+          rows:
+            - name: value is
+              value: string | number
+              tone: compare
+            - name: allowed here
+              value: checking…
+              tone: compare
+    - title: "Inside the if: a number"
+      text: Inside the if, value must be a number, so toFixed is fine. This is narrowing.
+      lines:
+        - 3
+      parts:
+        - kind: kv
+          id: k
+          label: What the type checker knows
+          slots: 2
+          rows:
+            - name: value is
+              value: number
+              tone: found
+            - name: allowed here
+              value: toFixed
+              tone: found
+    - title: "After the if: a string"
+      text: The if returns, so any number has already left. The only possibility left is string, so toUpperCase is fine.
+      lines:
+        - 5
+      parts:
+        - kind: kv
+          id: k
+          label: What the type checker knows
+          slots: 2
+          rows:
+            - name: value is
+              value: string
+              tone: found
+            - name: allowed here
+              value: toUpperCase
+              tone: found
+    - title: Running it
+      text: When the code runs, the types have been removed. show(3.5) takes the number branch and returns 3.50; show("rye") takes the other and returns RYE.
+      lines:
+        - 8
+        - 9
+      parts:
+        - kind: kv
+          id: k
+          label: What the type checker knows
+          slots: 2
+          rows:
+            - name: value is
+              value: (types removed)
+              tone: dim
+        - kind: terminal
+          id: t
+          slots: 2
+          lines:
+            - "3.50"
+            - RYE

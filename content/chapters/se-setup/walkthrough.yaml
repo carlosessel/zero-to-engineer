@@ -1,0 +1,86 @@
+- id: se-setup-first-commit
+  title: Your first save point
+  hint: Follow the folder from empty to its first commit, and see what each Git command changes.
+  language: Shell
+  code: |
+    mkdir se-course
+    cd se-course
+    git init                          # start tracking this folder
+    # ... create a file hello.py in VS Code ...
+    git add .                         # choose what goes in the snapshot
+    git commit -m "Add hello script"  # take the snapshot, with a message
+    git status                        # what has changed since?
+    git log --oneline                 # history of snapshots
+  steps:
+    - title: An empty folder
+      text: mkdir makes the project folder and cd moves into it. It is an ordinary, empty folder; Git knows nothing about it yet.
+      lines: [1, 2]
+      parts:
+        - { kind: kv, id: files, label: "Files in se-course", rows: [], slots: 1 }
+        - { kind: cells, id: commits, label: "Snapshots (commits)", items: [], slots: 3, width: 200, empty: "none yet" }
+        - { kind: terminal, id: t, lines: ["$ mkdir se-course", "$ cd se-course"], slots: 6 }
+    - title: git init
+      text: git init starts tracking this folder. Git can now record snapshots of it, but there are none yet.
+      lines: [3]
+      parts:
+        - { kind: terminal, id: t, lines: ["$ mkdir se-course", "$ cd se-course", "$ git init", "Initialized empty Git repository in .../se-course/.git/"], slots: 6 }
+    - title: Create hello.py
+      text: You write a file in VS Code and save it. It is in the folder, but it is not in any snapshot.
+      lines: [4]
+      parts:
+        - kind: kv
+          id: files
+          label: "Files in se-course"
+          slots: 1
+          rows: [{ name: hello.py, value: "new, in no snapshot", tone: active }]
+    - title: git add .
+      text: git add chooses what goes in the next snapshot. The dot means everything in this folder. Nothing is saved in the history yet.
+      lines: [5]
+      parts:
+        - kind: kv
+          id: files
+          label: "Files in se-course"
+          slots: 1
+          rows: [{ name: hello.py, value: "chosen for the next snapshot", tone: compare }]
+        - { kind: terminal, id: t, lines: ["$ mkdir se-course", "$ cd se-course", "$ git init", "Initialized empty Git repository in .../se-course/.git/", "$ git add ."], slots: 6 }
+    - title: git commit
+      text: git commit takes the snapshot, with a message saying what changed. Git gives each commit a short code, its id.
+      lines: [6]
+      parts:
+        - kind: kv
+          id: files
+          label: "Files in se-course"
+          slots: 1
+          rows: [{ name: hello.py, value: "saved in a snapshot", tone: done }]
+        - kind: cells
+          id: commits
+          label: "Snapshots (commits)"
+          slots: 3
+          width: 200
+          empty: "none yet"
+          items: [{ k: c1, v: "3f9a2c1 Add hello script", tone: found }]
+        - { kind: terminal, id: t, lines: ["$ git add .", "$ git commit -m \"Add hello script\"", " 1 file changed, 1 insertion(+)", " create mode 100644 hello.py"], slots: 6 }
+    - title: git status
+      text: git status says what has changed since the last snapshot. Nothing has, so there is nothing to commit.
+      lines: [7]
+      parts:
+        - kind: cells
+          id: commits
+          label: "Snapshots (commits)"
+          slots: 3
+          width: 200
+          empty: "none yet"
+          items: [{ k: c1, v: "3f9a2c1 Add hello script" }]
+        - { kind: terminal, id: t, lines: ["$ git add .", "$ git commit -m \"Add hello script\"", " 1 file changed, 1 insertion(+)", " create mode 100644 hello.py", "$ git status", "nothing to commit, working tree clean"], slots: 6 }
+    - title: git log --oneline
+      text: The history, one snapshot per line. Each new commit adds a save point you can look back at or return to; commit small and often.
+      lines: [8]
+      parts:
+        - kind: cells
+          id: commits
+          label: "Snapshots (commits)"
+          slots: 3
+          width: 200
+          empty: "none yet"
+          items: [{ k: c1, v: "3f9a2c1 Add hello script", tone: found }]
+        - { kind: terminal, id: t, lines: [" create mode 100644 hello.py", "$ git status", "nothing to commit, working tree clean", "$ git log --oneline", "3f9a2c1 Add hello script"], slots: 6 }

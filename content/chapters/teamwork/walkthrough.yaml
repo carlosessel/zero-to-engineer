@@ -1,0 +1,166 @@
+- id: teamwork-ticket-to-done
+  title: One ticket, from idea to done
+  hint: Follow one small piece of work through questions, an estimate, a pull request and a review, and watch it move across the board.
+  steps:
+    - title: "A ticket arrives"
+      text: "Work usually arrives as a ticket describing a problem. It goes on the board under to do."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Requester", "You", "Reviewer"]
+          slots: 9
+          messages:
+            - { from: "Requester", to: "You", label: "ticket: empty cart problem", tone: active }
+        - kind: kv
+          id: board
+          label: "The board"
+          slots: 1
+          rows: [{ name: "ticket 42", value: "to do", tone: base }]
+    - title: "Questions before code"
+      text: "The most expensive bugs are building the wrong thing. Ask who it is for and how you will know it is done."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Requester", "You", "Reviewer"]
+          slots: 9
+          messages:
+            - { from: "Requester", to: "You", label: "ticket: empty cart problem", tone: dim }
+            - { from: "You", to: "Requester", label: "who for? when is it done?", tone: active }
+        - kind: kv
+          id: board
+          label: "The board"
+          slots: 1
+          rows: [{ name: "ticket 42", value: "to do", tone: base }]
+    - title: "Agree on an example"
+      text: "An example both sides agree on turns a vague request into something you can test."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Requester", "You", "Reviewer"]
+          slots: 9
+          messages:
+            - { from: "Requester", to: "You", label: "ticket: empty cart problem", tone: dim }
+            - { from: "You", to: "Requester", label: "who for? when is it done?", tone: dim }
+            - { from: "Requester", to: "You", label: "empty cart: button disabled", tone: found }
+        - kind: kv
+          id: board
+          label: "The board"
+          slots: 1
+          rows: [{ name: "ticket 42", value: "to do", tone: base }]
+    - title: "Give a range"
+      text: "Estimates are guesses. Break the work into small pieces and give a range; if it turns out wrong, say so straight away."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Requester", "You", "Reviewer"]
+          slots: 9
+          messages:
+            - { from: "Requester", to: "You", label: "ticket: empty cart problem", tone: dim }
+            - { from: "You", to: "Requester", label: "who for? when is it done?", tone: dim }
+            - { from: "Requester", to: "You", label: "empty cart: button disabled", tone: dim }
+            - { from: "You", to: "Requester", label: "estimate: 1 to 2 days", tone: compare }
+        - kind: kv
+          id: board
+          label: "The board"
+          slots: 1
+          rows: [{ name: "ticket 42", value: "in progress", tone: active }]
+    - title: "Keep the change small"
+      text: "As the author, keep the change small and review your own diff before anyone else does."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Requester", "You", "Reviewer"]
+          slots: 9
+          messages:
+            - { from: "Requester", to: "You", label: "ticket: empty cart problem", tone: dim }
+            - { from: "You", to: "Requester", label: "who for? when is it done?", tone: dim }
+            - { from: "Requester", to: "You", label: "empty cart: button disabled", tone: dim }
+            - { from: "You", to: "Requester", label: "estimate: 1 to 2 days", tone: dim }
+            - { from: "You", to: "You", label: "small change, own diff read", tone: active }
+        - kind: kv
+          id: board
+          label: "The board"
+          slots: 1
+          rows: [{ name: "ticket 42", value: "in progress", tone: active }]
+    - title: "Open it for review"
+      text: "The description says what changed and why, so the reviewer does not have to guess."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Requester", "You", "Reviewer"]
+          slots: 9
+          messages:
+            - { from: "Requester", to: "You", label: "ticket: empty cart problem", tone: dim }
+            - { from: "You", to: "Requester", label: "who for? when is it done?", tone: dim }
+            - { from: "Requester", to: "You", label: "empty cart: button disabled", tone: dim }
+            - { from: "You", to: "Requester", label: "estimate: 1 to 2 days", tone: dim }
+            - { from: "You", to: "You", label: "small change, own diff read", tone: dim }
+            - { from: "You", to: "Reviewer", label: "pull request: what and why", tone: active }
+        - kind: kv
+          id: board
+          label: "The board"
+          slots: 1
+          rows: [{ name: "ticket 42", value: "in review", tone: compare }]
+    - title: "A specific, kind question"
+      text: "The reviewer looks for correctness, clarity, tests and security, and asks a question rather than issuing a verdict."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Requester", "You", "Reviewer"]
+          slots: 9
+          messages:
+            - { from: "Requester", to: "You", label: "ticket: empty cart problem", tone: dim }
+            - { from: "You", to: "Requester", label: "who for? when is it done?", tone: dim }
+            - { from: "Requester", to: "You", label: "empty cart: button disabled", tone: dim }
+            - { from: "You", to: "Requester", label: "estimate: 1 to 2 days", tone: dim }
+            - { from: "You", to: "You", label: "small change, own diff read", tone: dim }
+            - { from: "You", to: "Reviewer", label: "pull request: what and why", tone: dim }
+            - { from: "Reviewer", to: "You", label: "what if this list is empty?", tone: compare }
+        - kind: kv
+          id: board
+          label: "The board"
+          slots: 1
+          rows: [{ name: "ticket 42", value: "in review", tone: compare }]
+    - title: "Comments help the code"
+      text: "The author takes the comment as help with the code, not judgement, and adds a test for the empty list."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Requester", "You", "Reviewer"]
+          slots: 9
+          messages:
+            - { from: "Requester", to: "You", label: "ticket: empty cart problem", tone: dim }
+            - { from: "You", to: "Requester", label: "who for? when is it done?", tone: dim }
+            - { from: "Requester", to: "You", label: "empty cart: button disabled", tone: dim }
+            - { from: "You", to: "Requester", label: "estimate: 1 to 2 days", tone: dim }
+            - { from: "You", to: "You", label: "small change, own diff read", tone: dim }
+            - { from: "You", to: "Reviewer", label: "pull request: what and why", tone: dim }
+            - { from: "Reviewer", to: "You", label: "what if this list is empty?", tone: dim }
+            - { from: "You", to: "Reviewer", label: "good catch: test added", tone: active }
+        - kind: kv
+          id: board
+          label: "The board"
+          slots: 1
+          rows: [{ name: "ticket 42", value: "in review", tone: compare }]
+    - title: "Approved and done"
+      text: "The reviewer says what is good too. Small steps with frequent feedback got the ticket from to do to done."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Requester", "You", "Reviewer"]
+          slots: 9
+          messages:
+            - { from: "Requester", to: "You", label: "ticket: empty cart problem", tone: dim }
+            - { from: "You", to: "Requester", label: "who for? when is it done?", tone: dim }
+            - { from: "Requester", to: "You", label: "empty cart: button disabled", tone: dim }
+            - { from: "You", to: "Requester", label: "estimate: 1 to 2 days", tone: dim }
+            - { from: "You", to: "You", label: "small change, own diff read", tone: dim }
+            - { from: "You", to: "Reviewer", label: "pull request: what and why", tone: dim }
+            - { from: "Reviewer", to: "You", label: "what if this list is empty?", tone: dim }
+            - { from: "You", to: "Reviewer", label: "good catch: test added", tone: dim }
+            - { from: "Reviewer", to: "You", label: "approved, clear tests", tone: found }
+        - kind: kv
+          id: board
+          label: "The board"
+          slots: 1
+          rows: [{ name: "ticket 42", value: "done", tone: found }]

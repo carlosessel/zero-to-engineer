@@ -47,6 +47,8 @@ public class Main {
 
 On the machine this chapter was checked on it printed `unsafe: 1977694`, `synchronized: 2000000` and `atomic: 2000000`. Two threads each added one a million times; the unprotected counter lost over twenty thousand increments, and will lose a different number on every run (occasionally none, which is what makes races so dangerous: the test passes). The other two are always exactly two million.
 
+<Walkthrough name="m-threads-locks-lost-update" />
+
 The other common race is **check-then-act**: `if (!map.containsKey(key)) map.put(key, value)`, or `if (balance >= amount) balance -= amount`. Between the check and the act, another thread can change what you checked. Two withdrawals of £80 from a £100 balance can both pass the check.
 
 Races are not only about threads. In JavaScript, a single-threaded program can race across `await`, because other code runs while one function waits:

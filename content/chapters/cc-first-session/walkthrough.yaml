@@ -1,0 +1,129 @@
+- id: cc-first-session-footer-task
+  title: One small task, step by step
+  hint: Follow the footer task through the agent loop. Notice which steps need your permission and what each result adds to the context.
+  steps:
+    - title: The request
+      text: You give Claude Code a small task with a check built in. Your request is the first thing in its context.
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude Code, Project]
+          slots: 8
+          messages:
+            - { from: You, to: Claude Code, label: "footer says 2025: fix, run tests", tone: active }
+        - kind: kv
+          id: ctx
+          label: "In the context so far"
+          slots: 4
+          rows:
+            - { name: request, value: "current year in footer, then run tests", tone: active }
+    - title: Find the footer
+      text: First it has to see the code. It searches and reads files with tools such as Grep and Read, which do not ask permission. Each use appears in the transcript.
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude Code, Project]
+          slots: 8
+          messages:
+            - { from: You, to: Claude Code, label: "footer says 2025: fix, run tests", tone: dim }
+            - { from: Claude Code, to: Project, label: "Grep, Read: find the footer", tone: active }
+            - { from: Project, to: Claude Code, label: "the footer file", tone: found }
+        - kind: kv
+          id: ctx
+          label: "In the context so far"
+          slots: 4
+          rows:
+            - { name: request, value: "current year in footer, then run tests" }
+            - { name: footer file, value: "contents, with the year 2025", tone: active }
+    - title: Ask before editing
+      text: Changing a file needs permission, so it proposes the edit and asks. You read it and say yes.
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude Code, Project]
+          slots: 8
+          messages:
+            - { from: You, to: Claude Code, label: "footer says 2025: fix, run tests", tone: dim }
+            - { from: Claude Code, to: Project, label: "Grep, Read: find the footer", tone: dim }
+            - { from: Project, to: Claude Code, label: "the footer file", tone: dim }
+            - { from: Claude Code, to: You, label: "Edit the footer? (permission)", tone: compare }
+            - { from: You, to: Claude Code, label: "Yes", tone: active }
+    - title: Make the edit
+      text: The Edit tool changes the file so the footer shows the current year automatically.
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude Code, Project]
+          slots: 8
+          messages:
+            - { from: You, to: Claude Code, label: "footer says 2025: fix, run tests", tone: dim }
+            - { from: Claude Code, to: Project, label: "Grep, Read: find the footer", tone: dim }
+            - { from: Project, to: Claude Code, label: "the footer file", tone: dim }
+            - { from: Claude Code, to: You, label: "Edit the footer? (permission)", tone: dim }
+            - { from: You, to: Claude Code, label: "Yes", tone: dim }
+            - { from: Claude Code, to: Project, label: "Edit: show the current year", tone: active }
+        - kind: kv
+          id: ctx
+          label: "In the context so far"
+          slots: 4
+          rows:
+            - { name: request, value: "current year in footer, then run tests" }
+            - { name: footer file, value: "contents, with the year 2025" }
+            - { name: edit, value: "footer now shows the current year", tone: active }
+    - title: Ask before running a command
+      text: Running the tests is a Bash command, so it asks again. Read every command before you approve it; if you are unsure, ask what it does.
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude Code, Project]
+          slots: 8
+          messages:
+            - { from: You, to: Claude Code, label: "footer says 2025: fix, run tests", tone: dim }
+            - { from: Claude Code, to: Project, label: "Grep, Read: find the footer", tone: dim }
+            - { from: Project, to: Claude Code, label: "the footer file", tone: dim }
+            - { from: Claude Code, to: You, label: "Edit the footer? (permission)", tone: dim }
+            - { from: You, to: Claude Code, label: "Yes", tone: dim }
+            - { from: Claude Code, to: Project, label: "Edit: show the current year", tone: dim }
+            - { from: Claude Code, to: You, label: "Bash: run the tests? (permission)", tone: compare }
+            - { from: You, to: Claude Code, label: "Yes", tone: active }
+    - title: Read the result
+      text: The test output is added to the context. Because it could run the tests, Claude Code can find out whether its change worked instead of guessing.
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude Code, Project]
+          slots: 8
+          messages:
+            - { from: Claude Code, to: Project, label: "Grep, Read: find the footer", tone: dim }
+            - { from: Project, to: Claude Code, label: "the footer file", tone: dim }
+            - { from: Claude Code, to: You, label: "Edit the footer? (permission)", tone: dim }
+            - { from: You, to: Claude Code, label: "Yes", tone: dim }
+            - { from: Claude Code, to: Project, label: "Edit: show the current year", tone: dim }
+            - { from: Claude Code, to: You, label: "Bash: run the tests? (permission)", tone: dim }
+            - { from: You, to: Claude Code, label: "Yes", tone: dim }
+            - { from: Project, to: Claude Code, label: "test output", tone: found }
+        - kind: kv
+          id: ctx
+          label: "In the context so far"
+          slots: 4
+          rows:
+            - { name: request, value: "current year in footer, then run tests" }
+            - { name: footer file, value: "contents, with the year 2025" }
+            - { name: edit, value: "footer now shows the current year" }
+            - { name: test output, value: "the result of the test run", tone: active }
+    - title: Report back
+      text: With the task done, it tells you what it did. The transcript is a record you can audit; read the diff before you commit it.
+      parts:
+        - kind: seq
+          id: s
+          actors: [You, Claude Code, Project]
+          slots: 8
+          messages:
+            - { from: Project, to: Claude Code, label: "the footer file", tone: dim }
+            - { from: Claude Code, to: You, label: "Edit the footer? (permission)", tone: dim }
+            - { from: You, to: Claude Code, label: "Yes", tone: dim }
+            - { from: Claude Code, to: Project, label: "Edit: show the current year", tone: dim }
+            - { from: Claude Code, to: You, label: "Bash: run the tests? (permission)", tone: dim }
+            - { from: You, to: Claude Code, label: "Yes", tone: dim }
+            - { from: Project, to: Claude Code, label: "test output", tone: dim }
+            - { from: Claude Code, to: You, label: "what I did, and the test result", tone: found }

@@ -46,6 +46,8 @@ recovery_target_time = '2026-11-14 10:41:00+00'
 
 In practice, use a dedicated tool such as **pgBackRest** or **Barman**, which handles base backups, WAL archiving, retention, compression, encryption and verification. Managed services do all of this automatically and let you restore to any second within the retention period with one command.
 
+<Walkthrough name="db-operations-point-in-time" />
+
 ## Testing restores
 
 **A backup that has never been restored is a hope, not a backup.** Restore regularly, automatically, to a separate server, and check the data: row counts, the newest rows, that the application can run against it. Measure how long the restore takes, which is your real RTO. Keep backups in a different account or region from the database (so one mistake or one compromised credential cannot delete both), encrypted, and with retention long enough to notice problems (corruption found three weeks later needs a backup older than three weeks).

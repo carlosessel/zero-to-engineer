@@ -531,6 +531,8 @@ Install the test tools with `npm install --save-dev vitest supertest @types/supe
 - `.send()` sends JSON; `response.body` is the parsed JSON; `.expect(404)` asserts inline.
 - The last test uses a **mock**: `vi.fn().mockRejectedValue(...)` makes the store fail, and the test checks both the 500 and that `add` was called once with the expected arguments. This is the kind of failure that is hard to cause with a real database.
 
+<Walkthrough name="be-integration-tests-supertest-flow" />
+
 ## Testing with a real database
 
 In-memory fakes cannot catch wrong SQL, missing migrations, constraint violations or transaction bugs. For those, test against the **same database engine as production**. **Testcontainers** starts a real database in a Docker container for the test run, gives you its connection string, and removes it afterwards. It needs Docker on the machine and in CI.

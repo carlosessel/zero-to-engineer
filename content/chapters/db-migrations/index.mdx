@@ -68,6 +68,8 @@ SELECT column_name FROM information_schema.columns WHERE table_name = 'orders_de
 
 Here nothing else holds a lock, so it succeeds at once. On a busy server, if the lock is not granted within two seconds, the statement fails with `canceling statement due to lock timeout`, nothing has changed, and the migration tool can wait and try again. Many teams set this in every migration by default.
 
+<Walkthrough name="db-migrations-lock-queue" />
+
 ## Indexes without blocking writes
 
 `CREATE INDEX` blocks writes for as long as the build takes, which on a large table can be many minutes. **`CREATE INDEX CONCURRENTLY`** builds the index while writes continue:

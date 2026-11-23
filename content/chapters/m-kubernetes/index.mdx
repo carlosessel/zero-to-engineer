@@ -142,6 +142,8 @@ console.log(rollingUpdate(4, 2, 1));
 
 It prints `start: 3 old, 0 new` and then three steps of `+1 new, -1 old` ending at `0 old, 3 new` for the first deployment (never fewer than three running, one extra at a time), and a faster two-step update for the second, which allows two extra pods and one missing. In the real controller, each step waits until the new pods pass their readiness probes.
 
+<Walkthrough name="m-kubernetes-rolling-update" />
+
 Other workload kinds: **StatefulSets** for pods that need stable names and their own persistent storage (databases, Kafka brokers; though managed cloud databases are usually a better choice than running your own); **DaemonSets** for one pod per node (log collectors, monitoring agents); **Jobs** and **CronJobs** for run-to-completion and scheduled work.
 
 ## Services and ingress

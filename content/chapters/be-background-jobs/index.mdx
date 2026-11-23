@@ -336,6 +336,8 @@ Notes:
 - On `SIGTERM`, `shutdown` stops the timer, closes the queue so the loop ends after the current job, and waits for it.
 - For real work, use a library: **node-cron** for schedules, and a durable queue such as **BullMQ** (Redis) or **pg-boss** (PostgreSQL) for jobs, described next.
 
+<Walkthrough name="be-background-jobs-retry-worker" />
+
 ## When an in-process queue is not enough
 
 The queues above live in the application's memory. That is fine for work you can afford to lose, but:

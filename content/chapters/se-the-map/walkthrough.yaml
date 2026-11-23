@@ -1,0 +1,254 @@
+- id: se-the-map-route
+  title: The route, part by part
+  hint: Watch the course light up one part at a time, each building on the parts before it.
+  steps:
+    - title: Nine parts, from nothing
+      text: The course is a route through nine parts. You start at the top left and need nothing before you begin.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0 }
+            - { label: Programming, x: 0.5, y: 0 }
+            - { label: Computer science, x: 0.9, y: 0 }
+            - { label: Tools of the trade, x: 0.85, y: 0.5 }
+            - { label: The web, x: 0.5, y: 0.5 }
+            - { label: Data, x: 0.1, y: 0.5 }
+            - { label: Systems, x: 0.1, y: 1 }
+            - { label: Shipping, x: 0.5, y: 1 }
+            - { label: The job, x: 0.9, y: 1 }
+          edges:
+            - { a: Start here, b: Programming, directed: true }
+            - { a: Programming, b: Computer science, directed: true }
+            - { a: Computer science, b: Tools of the trade, directed: true }
+            - { a: Tools of the trade, b: The web, directed: true }
+            - { a: The web, b: Data, directed: true }
+            - { a: Data, b: Systems, directed: true }
+            - { a: Systems, b: Shipping, directed: true }
+            - { a: Shipping, b: The job, directed: true }
+    - title: Start here
+      text: What the job is, how a computer works, and the tools you will use every day. This is the ground everything else stands on.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0, tone: active, note: "the job, your tools" }
+            - { label: Programming, x: 0.5, y: 0 }
+            - { label: Computer science, x: 0.9, y: 0 }
+            - { label: Tools of the trade, x: 0.85, y: 0.5 }
+            - { label: The web, x: 0.5, y: 0.5 }
+            - { label: Data, x: 0.1, y: 0.5 }
+            - { label: Systems, x: 0.1, y: 1 }
+            - { label: Shipping, x: 0.5, y: 1 }
+            - { label: The job, x: 0.9, y: 1 }
+          edges:
+            - { a: Start here, b: Programming, directed: true }
+            - { a: Programming, b: Computer science, directed: true }
+            - { a: Computer science, b: Tools of the trade, directed: true }
+            - { a: Tools of the trade, b: The web, directed: true }
+            - { a: The web, b: Data, directed: true }
+            - { a: Data, b: Systems, directed: true }
+            - { a: Systems, b: Shipping, directed: true }
+            - { a: Shipping, b: The job, directed: true }
+    - title: Programming in Python
+      text: You learn Python first, because it is the gentlest serious language. The ideas carry over to every other language.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0, tone: done }
+            - { label: Programming, x: 0.5, y: 0, tone: active, note: "Python" }
+            - { label: Computer science, x: 0.9, y: 0 }
+            - { label: Tools of the trade, x: 0.85, y: 0.5 }
+            - { label: The web, x: 0.5, y: 0.5 }
+            - { label: Data, x: 0.1, y: 0.5 }
+            - { label: Systems, x: 0.1, y: 1 }
+            - { label: Shipping, x: 0.5, y: 1 }
+            - { label: The job, x: 0.9, y: 1 }
+          edges:
+            - { a: Start here, b: Programming, directed: true, tone: done }
+            - { a: Programming, b: Computer science, directed: true }
+            - { a: Computer science, b: Tools of the trade, directed: true }
+            - { a: Tools of the trade, b: The web, directed: true }
+            - { a: The web, b: Data, directed: true }
+            - { a: Data, b: Systems, directed: true }
+            - { a: Systems, b: Shipping, directed: true }
+            - { a: Shipping, b: The job, directed: true }
+    - title: Computer science
+      text: How fast code runs as the data grows, and the standard ways to store and search data.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0, tone: done }
+            - { label: Programming, x: 0.5, y: 0, tone: done }
+            - { label: Computer science, x: 0.9, y: 0, tone: active, note: "speed, algorithms" }
+            - { label: Tools of the trade, x: 0.85, y: 0.5 }
+            - { label: The web, x: 0.5, y: 0.5 }
+            - { label: Data, x: 0.1, y: 0.5 }
+            - { label: Systems, x: 0.1, y: 1 }
+            - { label: Shipping, x: 0.5, y: 1 }
+            - { label: The job, x: 0.9, y: 1 }
+          edges:
+            - { a: Start here, b: Programming, directed: true, tone: done }
+            - { a: Programming, b: Computer science, directed: true, tone: done }
+            - { a: Computer science, b: Tools of the trade, directed: true }
+            - { a: Tools of the trade, b: The web, directed: true }
+            - { a: The web, b: Data, directed: true }
+            - { a: Data, b: Systems, directed: true }
+            - { a: Systems, b: Shipping, directed: true }
+            - { a: Shipping, b: The job, directed: true }
+    - title: Tools of the trade
+      text: Git, for working with others on the same code, and testing, for knowing it works. Both are part of what makes code dependable.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0, tone: done }
+            - { label: Programming, x: 0.5, y: 0, tone: done }
+            - { label: Computer science, x: 0.9, y: 0, tone: done }
+            - { label: Tools of the trade, x: 0.85, y: 0.5, tone: active, note: "Git, testing" }
+            - { label: The web, x: 0.5, y: 0.5 }
+            - { label: Data, x: 0.1, y: 0.5 }
+            - { label: Systems, x: 0.1, y: 1 }
+            - { label: Shipping, x: 0.5, y: 1 }
+            - { label: The job, x: 0.9, y: 1 }
+          edges:
+            - { a: Start here, b: Programming, directed: true, tone: done }
+            - { a: Programming, b: Computer science, directed: true, tone: done }
+            - { a: Computer science, b: Tools of the trade, directed: true, tone: done }
+            - { a: Tools of the trade, b: The web, directed: true }
+            - { a: The web, b: Data, directed: true }
+            - { a: Data, b: Systems, directed: true }
+            - { a: Systems, b: Shipping, directed: true }
+            - { a: Shipping, b: The job, directed: true }
+    - title: The web
+      text: HTML, CSS and JavaScript, then the front end, the back end and logging in. The web is where most software lives.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0, tone: done }
+            - { label: Programming, x: 0.5, y: 0, tone: done }
+            - { label: Computer science, x: 0.9, y: 0, tone: done }
+            - { label: Tools of the trade, x: 0.85, y: 0.5, tone: done }
+            - { label: The web, x: 0.5, y: 0.5, tone: active, note: "HTML, CSS, JavaScript" }
+            - { label: Data, x: 0.1, y: 0.5 }
+            - { label: Systems, x: 0.1, y: 1 }
+            - { label: Shipping, x: 0.5, y: 1 }
+            - { label: The job, x: 0.9, y: 1 }
+          edges:
+            - { a: Start here, b: Programming, directed: true, tone: done }
+            - { a: Programming, b: Computer science, directed: true, tone: done }
+            - { a: Computer science, b: Tools of the trade, directed: true, tone: done }
+            - { a: Tools of the trade, b: The web, directed: true, tone: done }
+            - { a: The web, b: Data, directed: true }
+            - { a: Data, b: Systems, directed: true }
+            - { a: Systems, b: Shipping, directed: true }
+            - { a: Shipping, b: The job, directed: true }
+    - title: Data
+      text: SQL and how to design the data you keep. Databases are the other place most software lives.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0, tone: done }
+            - { label: Programming, x: 0.5, y: 0, tone: done }
+            - { label: Computer science, x: 0.9, y: 0, tone: done }
+            - { label: Tools of the trade, x: 0.85, y: 0.5, tone: done }
+            - { label: The web, x: 0.5, y: 0.5, tone: done }
+            - { label: Data, x: 0.1, y: 0.5, tone: active, note: "SQL" }
+            - { label: Systems, x: 0.1, y: 1 }
+            - { label: Shipping, x: 0.5, y: 1 }
+            - { label: The job, x: 0.9, y: 1 }
+          edges:
+            - { a: Start here, b: Programming, directed: true, tone: done }
+            - { a: Programming, b: Computer science, directed: true, tone: done }
+            - { a: Computer science, b: Tools of the trade, directed: true, tone: done }
+            - { a: Tools of the trade, b: The web, directed: true, tone: done }
+            - { a: The web, b: Data, directed: true, tone: done }
+            - { a: Data, b: Systems, directed: true }
+            - { a: Systems, b: Shipping, directed: true }
+            - { a: Shipping, b: The job, directed: true }
+    - title: Systems
+      text: How the pieces of a larger program fit together, how it copes with many users at once, and how to keep it secure. This is where you learn to choose a simple design.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0, tone: done }
+            - { label: Programming, x: 0.5, y: 0, tone: done }
+            - { label: Computer science, x: 0.9, y: 0, tone: done }
+            - { label: Tools of the trade, x: 0.85, y: 0.5, tone: done }
+            - { label: The web, x: 0.5, y: 0.5, tone: done }
+            - { label: Data, x: 0.1, y: 0.5, tone: done }
+            - { label: Systems, x: 0.1, y: 1, tone: active, note: "design, security" }
+            - { label: Shipping, x: 0.5, y: 1 }
+            - { label: The job, x: 0.9, y: 1 }
+          edges:
+            - { a: Start here, b: Programming, directed: true, tone: done }
+            - { a: Programming, b: Computer science, directed: true, tone: done }
+            - { a: Computer science, b: Tools of the trade, directed: true, tone: done }
+            - { a: Tools of the trade, b: The web, directed: true, tone: done }
+            - { a: The web, b: Data, directed: true, tone: done }
+            - { a: Data, b: Systems, directed: true, tone: done }
+            - { a: Systems, b: Shipping, directed: true }
+            - { a: Shipping, b: The job, directed: true }
+    - title: Shipping
+      text: Putting software on servers, releasing it safely, and watching it run so you can fix it when it breaks at night.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0, tone: done }
+            - { label: Programming, x: 0.5, y: 0, tone: done }
+            - { label: Computer science, x: 0.9, y: 0, tone: done }
+            - { label: Tools of the trade, x: 0.85, y: 0.5, tone: done }
+            - { label: The web, x: 0.5, y: 0.5, tone: done }
+            - { label: Data, x: 0.1, y: 0.5, tone: done }
+            - { label: Systems, x: 0.1, y: 1, tone: done }
+            - { label: Shipping, x: 0.5, y: 1, tone: active, note: "release, monitor" }
+            - { label: The job, x: 0.9, y: 1 }
+          edges:
+            - { a: Start here, b: Programming, directed: true, tone: done }
+            - { a: Programming, b: Computer science, directed: true, tone: done }
+            - { a: Computer science, b: Tools of the trade, directed: true, tone: done }
+            - { a: Tools of the trade, b: The web, directed: true, tone: done }
+            - { a: The web, b: Data, directed: true, tone: done }
+            - { a: Data, b: Systems, directed: true, tone: done }
+            - { a: Systems, b: Shipping, directed: true, tone: done }
+            - { a: Shipping, b: The job, directed: true }
+    - title: The job, and the projects
+      text: Teamwork, AI tools, projects and getting hired. The projects are the course; reading without building does not make an engineer.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: Start here, x: 0.1, y: 0, tone: done }
+            - { label: Programming, x: 0.5, y: 0, tone: done }
+            - { label: Computer science, x: 0.9, y: 0, tone: done }
+            - { label: Tools of the trade, x: 0.85, y: 0.5, tone: done }
+            - { label: The web, x: 0.5, y: 0.5, tone: done }
+            - { label: Data, x: 0.1, y: 0.5, tone: done }
+            - { label: Systems, x: 0.1, y: 1, tone: done }
+            - { label: Shipping, x: 0.5, y: 1, tone: done }
+            - { label: The job, x: 0.9, y: 1, tone: found, note: "projects" }
+          edges:
+            - { a: Start here, b: Programming, directed: true, tone: done }
+            - { a: Programming, b: Computer science, directed: true, tone: done }
+            - { a: Computer science, b: Tools of the trade, directed: true, tone: done }
+            - { a: Tools of the trade, b: The web, directed: true, tone: done }
+            - { a: The web, b: Data, directed: true, tone: done }
+            - { a: Data, b: Systems, directed: true, tone: done }
+            - { a: Systems, b: Shipping, directed: true, tone: done }
+            - { a: Shipping, b: The job, directed: true, tone: done }

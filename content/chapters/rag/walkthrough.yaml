@@ -1,0 +1,139 @@
+- id: rag-answer
+  title: One question through the RAG pipeline
+  hint: Follow “Can I get my money back?” from embedding to retrieved chunks to a cited answer.
+  language: Python
+  code: |
+    chunks = [
+        "Refunds are available within 30 days of purchase if you have your receipt.",
+        "Standard delivery takes three to five working days.",
+        "Our shop is open Monday to Saturday from 9am to 6pm.",
+    ]
+    index = embedder.encode(chunks, normalize_embeddings=True)
+
+    def answer(question: str, k: int = 4) -> str:
+        q = embedder.encode([question], normalize_embeddings=True)[0]
+        top = np.argsort(index @ q)[::-1][:k]
+        context = "\n\n".join(f"<doc id='{i}'>{chunks[i]}</doc>" for i in top)
+        msg = client.messages.create(
+            model=MODEL, max_tokens=2000,
+            system="Answer using only the documents provided. Cite doc ids. "
+                   "If the answer is not in them, say you do not know.",
+            messages=[{"role": "user", "content": f"{context}\n\nQuestion: {question}"}])
+        return reply_text(msg)
+  steps:
+    - title: "Index the passages"
+      text: "Before any question, each chunk is embedded once and the vectors are stored. With this model each is 384 numbers long, so index has shape (3, 384)."
+      lines: [1, 2, 3, 4, 5, 6]
+      vars: { "index.shape": "(3, 384)" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: c
+              title: "chunks in the index"
+              columns: [id, passage, "score with q"]
+              rows:
+                - { k: c0, cells: ["0", "Refunds within 30 days…", ""], tone: active }
+                - { k: c1, cells: ["1", "Delivery: 3 to 5 days…", ""], tone: active }
+                - { k: c2, cells: ["2", "Open Mon to Sat, 9 to 6…", ""], tone: active }
+        - kind: cells
+          id: top
+          label: "top: ids in order, best first"
+          width: 70
+          indices: true
+          slots: 4
+          empty: "not chosen yet"
+          items: []
+    - title: "Embed the question"
+      text: "The question “Can I get my money back?” goes through the same embedder, giving one vector q in the same space as the chunks."
+      lines: [8, 9]
+      vars: { question: "Can I get my money back?", "q.shape": "(384,)" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: c
+              title: "chunks in the index"
+              columns: [id, passage, "score with q"]
+              rows:
+                - { k: c0, cells: ["0", "Refunds within 30 days…", ""] }
+                - { k: c1, cells: ["1", "Delivery: 3 to 5 days…", ""] }
+                - { k: c2, cells: ["2", "Open Mon to Sat, 9 to 6…", ""] }
+    - title: "Score every chunk at once"
+      text: "index @ q is a dot product of q with each chunk's vector: one similarity score per chunk. The refund passage scores highest, though it never says “money back”."
+      lines: [10]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: c
+              title: "chunks in the index"
+              columns: [id, passage, "score with q"]
+              rows:
+                - { k: c0, cells: ["0", "Refunds within 30 days…", "highest"], tone: found }
+                - { k: c1, cells: ["1", "Delivery: 3 to 5 days…", "lower"], tone: compare }
+                - { k: c2, cells: ["2", "Open Mon to Sat, 9 to 6…", "lower"], tone: compare }
+    - title: "Sort, best first"
+      text: "argsort puts the ids in order of score, lowest first, and [::-1] flips that so the best is first. Refund is id 0."
+      lines: [10]
+      parts:
+        - kind: cells
+          id: top
+          label: "top: ids in order, best first"
+          width: 70
+          indices: true
+          slots: 4
+          empty: "not chosen yet"
+          items: [{ k: t0, v: "0", tone: found }, { k: tmore, v: "…" }]
+    - title: "Keep the top k"
+      text: "[:k] keeps up to k = 4 ids. There are only three chunks here, so all three are kept: the refund passage first, then the other two in score order. With a real document set, k would leave most chunks out."
+      lines: [10]
+      vars: { question: "Can I get my money back?", k: 4, "len(top)": 3 }
+      parts:
+        - kind: cells
+          id: top
+          label: "top: ids in order, best first"
+          width: 70
+          indices: true
+          slots: 4
+          empty: "not chosen yet"
+          items: [{ k: t0, v: "0", tone: found }, { k: tmore, v: "…" }, { k: tmore2, v: "…" }]
+    - title: "Build the context"
+      text: "Each chosen chunk is wrapped in a <doc id='…'> tag, best first, so the model can tell the passages apart and cite them by id."
+      lines: [11]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: c
+              title: "chunks in the context"
+              columns: [id, passage, "score with q"]
+              rows:
+                - { k: c0, cells: ["0", "Refunds within 30 days…", "highest"], tone: active }
+                - { k: c1, cells: ["1", "Delivery: 3 to 5 days…", "lower"], tone: active }
+                - { k: c2, cells: ["2", "Open Mon to Sat, 9 to 6…", "lower"], tone: active }
+    - title: "Ask, with rules"
+      text: "The system prompt says: answer only from the documents, cite doc ids, and say you do not know if the answer is not there. The context and the question go in one message."
+      lines: [12, 13, 14, 15, 16]
+      parts:
+        - kind: seq
+          id: s
+          actors: [answer, Model]
+          slots: 2
+          messages:
+            - { from: answer, to: Model, label: "system rules + 3 docs + question", tone: active }
+    - title: "A grounded answer"
+      text: "An illustrative reply: yes, within 30 days with your receipt, citing doc 0. If the answer were bad, the first thing to check is whether the right chunks were retrieved."
+      lines: [17]
+      parts:
+        - kind: seq
+          id: s
+          actors: [answer, Model]
+          slots: 2
+          messages:
+            - { from: answer, to: Model, label: "system rules + 3 docs + question", tone: dim }
+            - { from: Model, to: answer, label: "Yes, within 30 days with a receipt [0]", tone: found }

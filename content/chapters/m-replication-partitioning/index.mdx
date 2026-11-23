@@ -78,6 +78,8 @@ store.replicate(900);
 console.log("follower at 900 ms:", store.readFromFollower("profile:ama"));
 ```
 
+<Walkthrough name="m-replication-partitioning-read-your-writes" />
+
 It prints `follower at 100 ms: (not found)`, `read-your-writes at 100 ms: address: 4 Park Row` and `follower at 900 ms: address: 4 Park Row`. Ama saves her address, the page reloads from a follower that has not caught up, and her change seems to have vanished. The guarantees you may need, and common ways to get them:
 
 - **Read-your-writes** (read-after-write consistency): a user always sees their own changes. Read from the leader for a short time after a user writes (as above), or for data the user can edit, or track the log position of their last write and read only from followers that have reached it.

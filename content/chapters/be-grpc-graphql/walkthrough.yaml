@@ -1,0 +1,132 @@
+- id: be-grpc-graphql-dataloader
+  title: One GraphQL query, resolved field by field
+  hint: "Watch the query { orders { id totalPence customer { name } } } call resolvers, and DataLoader gather the customer look-ups into one."
+  language: TypeScript
+  code: |
+    let customerQueries = 0;
+    async function findCustomers(ids: readonly string[]) {
+      customerQueries++; // one "database query" per call, whatever the number of ids
+      return ids.map((id) => customers.find((c) => c.id === id) ?? null);
+    }
+
+    Query: {
+      orders: () => orders,
+    },
+    Order: {
+      customer: (order, _args, context) => context.customerLoader.load(order.customerId),
+    },
+
+    const yoga = createYoga({ schema, context: () => ({ customerLoader: new DataLoader(findCustomers) }) });
+
+    console.log(await ask(`{ orders { id totalPence customer { name } } }`));
+  steps:
+    - title: The client sends one query
+      text: The client POSTs one query naming exactly the fields it wants, including each order's customer name. Yoga creates a fresh DataLoader for this request.
+      lines: [14, 16]
+      vars: { customerQueries: 0 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Resolvers, DataLoader, findCustomers]
+          slots: 7
+          messages:
+            - { from: Client, to: Resolvers, label: "POST /graphql (orders)", tone: active }
+        - { kind: cells, id: waiting, label: "load calls waiting in DataLoader", items: [], slots: 3, width: 90, empty: "none yet" }
+    - title: Query.orders runs first
+      text: The top-level field is resolved first. Query.orders returns all three orders; id and totalPence are already on each one.
+      lines: [7, 8]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Resolvers, DataLoader, findCustomers]
+          slots: 7
+          messages:
+            - { from: Client, to: Resolvers, label: "POST /graphql (orders)", tone: dim }
+            - { from: Resolvers, to: Resolvers, label: "orders: o-1, o-2, o-3", tone: active }
+    - title: Order.customer, once per order
+      text: The customer field is resolved separately for each order. Without help, that would be three look-ups for three orders, the N+1 problem.
+      lines: [10, 11]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Resolvers, DataLoader, findCustomers]
+          slots: 7
+          messages:
+            - { from: Client, to: Resolvers, label: "POST /graphql (orders)", tone: dim }
+            - { from: Resolvers, to: Resolvers, label: "orders: o-1, o-2, o-3", tone: dim }
+            - { from: Resolvers, to: DataLoader, label: "load for o-1", tone: active }
+        - kind: cells
+          id: waiting
+          label: "load calls waiting in DataLoader"
+          slots: 3
+          width: 90
+          items: [{ k: a, v: "o-1 → 1", tone: active }]
+    - title: The loads are collected, not run
+      text: "DataLoader does not query straight away. It notes each load call made during this request: customer 1 for o-1, 2 for o-2, 1 for o-3."
+      lines: [11]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Resolvers, DataLoader, findCustomers]
+          slots: 7
+          messages:
+            - { from: Client, to: Resolvers, label: "POST /graphql (orders)", tone: dim }
+            - { from: Resolvers, to: Resolvers, label: "orders: o-1, o-2, o-3", tone: dim }
+            - { from: Resolvers, to: DataLoader, label: "load for o-1, o-2, o-3", tone: active }
+        - kind: cells
+          id: waiting
+          label: "load calls waiting in DataLoader"
+          slots: 3
+          width: 90
+          items: [{ k: a, v: "o-1 → 1", tone: compare }, { k: b, v: "o-2 → 2", tone: active }, { k: c, v: "o-3 → 1", tone: active }]
+    - title: One batched call
+      text: Then DataLoader calls findCustomers once for all the waiting loads. The counter goes up by one, not three.
+      lines: [2, 3, 4]
+      vars: { customerQueries: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Resolvers, DataLoader, findCustomers]
+          slots: 7
+          messages:
+            - { from: Client, to: Resolvers, label: "POST /graphql (orders)", tone: dim }
+            - { from: Resolvers, to: Resolvers, label: "orders: o-1, o-2, o-3", tone: dim }
+            - { from: Resolvers, to: DataLoader, label: "load for o-1, o-2, o-3", tone: dim }
+            - { from: DataLoader, to: findCustomers, label: "one call, ids", tone: active }
+            - { from: findCustomers, to: DataLoader, label: "the customers", tone: found }
+        - kind: cells
+          id: waiting
+          label: "load calls waiting in DataLoader"
+          slots: 3
+          width: 90
+          items: [{ k: a, v: "o-1 → Ama", tone: found }, { k: b, v: "o-2 → Kofi", tone: found }, { k: c, v: "o-3 → Ama", tone: found }]
+    - title: Each order gets its customer
+      text: DataLoader hands each waiting load its own result, so every order now has a customer with a name.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Resolvers, DataLoader, findCustomers]
+          slots: 7
+          messages:
+            - { from: Client, to: Resolvers, label: "POST /graphql (orders)", tone: dim }
+            - { from: Resolvers, to: Resolvers, label: "orders: o-1, o-2, o-3", tone: dim }
+            - { from: Resolvers, to: DataLoader, label: "load for o-1, o-2, o-3", tone: dim }
+            - { from: DataLoader, to: findCustomers, label: "one call, ids", tone: dim }
+            - { from: findCustomers, to: DataLoader, label: "the customers", tone: dim }
+            - { from: DataLoader, to: Resolvers, label: "a customer per order", tone: found }
+    - title: JSON in exactly the shape asked for
+      text: The response holds only the fields the query named. Three orders needed one customer query, which is why every relationship in a GraphQL server needs a DataLoader or something like it.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Resolvers, DataLoader, findCustomers]
+          slots: 7
+          messages:
+            - { from: Client, to: Resolvers, label: "POST /graphql (orders)", tone: dim }
+            - { from: Resolvers, to: Resolvers, label: "orders: o-1, o-2, o-3", tone: dim }
+            - { from: Resolvers, to: DataLoader, label: "load for o-1, o-2, o-3", tone: dim }
+            - { from: DataLoader, to: findCustomers, label: "one call, ids", tone: dim }
+            - { from: findCustomers, to: DataLoader, label: "the customers", tone: dim }
+            - { from: DataLoader, to: Resolvers, label: "a customer per order", tone: dim }
+            - { from: Resolvers, to: Client, label: "{ data: { orders: [...] } }", tone: found }
+        - { kind: terminal, id: out, slots: 1, lines: ["customer queries for 3 orders: 1"] }

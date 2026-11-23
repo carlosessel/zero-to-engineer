@@ -82,6 +82,8 @@ main();
 
 It prints six results, all the popular-items fallback: three while `closed` (each a real failed attempt), then three while `open` (no attempts at all), with `real attempts: 3`. After the cool-down, the next call goes through in the half-open state, succeeds, and prints `["rye loaf", "jam"] closed`. Six requests were served quickly, and the failing service received three calls instead of six.
 
+<Walkthrough name="m-resilience-circuit-breaker" />
+
 In practice you use a library: **Resilience4j** (Java), **Polly** (.NET; also behind `Microsoft.Extensions.Http.Resilience`), opossum or cockatiel (Node.js), or a service mesh (<Ref to="m-cloud-patterns" />). Libraries combine strategies into a pipeline. Here is Polly with a retry inside a circuit breaker:
 
 ```csharp

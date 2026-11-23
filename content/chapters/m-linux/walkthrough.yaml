@@ -1,0 +1,100 @@
+- id: m-linux-permissions
+  title: Setting permissions with chmod
+  hint: Watch the permission letters of three items change as each command runs.
+  language: Shell
+  code: |
+    umask 022
+    echo "DATABASE_URL=postgres://orders-db/orders" > app.env
+    echo 'echo "deploying"' > deploy.sh
+    mkdir releases
+    ls -ld app.env deploy.sh releases | cut -c1-10
+
+    chmod 600 app.env
+    chmod u+x deploy.sh
+    chmod 750 releases
+    ls -ld app.env deploy.sh releases | cut -c1-10
+    ./deploy.sh
+  steps:
+    - title: Set the default
+      text: The umask says which permissions new files and directories should not get. 022 removes write permission from the group and others.
+      lines: [1]
+      parts:
+        - { kind: kv, id: perm, label: "Permissions (owner, group, others)", slots: 3, rows: [] }
+        - { kind: terminal, id: t, slots: 4, lines: ["$ umask 022"] }
+    - title: Create three things
+      text: Two files and a directory. New files start as rw-r--r-- (644) and directories as rwxr-xr-x (755).
+      lines: [2, 3, 4]
+      parts:
+        - kind: kv
+          id: perm
+          label: "Permissions (owner, group, others)"
+          slots: 3
+          rows:
+            - { name: app.env, value: "-rw-r--r--   644", tone: active }
+            - { name: deploy.sh, value: "-rw-r--r--   644", tone: active }
+            - { name: releases, value: "drwxr-xr-x   755", tone: active }
+    - title: Read the letters
+      text: The first character is - for a file or d for a directory. Then come three groups of r, w and x for owner, group and others. r = 4, w = 2, x = 1, added up per group.
+      lines: [5]
+      parts:
+        - kind: kv
+          id: perm
+          label: "Permissions (owner, group, others)"
+          slots: 3
+          rows:
+            - { name: app.env, value: "-rw-r--r--   644" }
+            - { name: deploy.sh, value: "-rw-r--r--   644" }
+            - { name: releases, value: "drwxr-xr-x   755" }
+        - { kind: terminal, id: t, slots: 4, lines: ["$ ls -ld app.env deploy.sh releases | cut -c1-10", "-rw-r--r--", "-rw-r--r--", "drwxr-xr-x"] }
+    - title: Lock up the secrets
+      text: app.env holds a database address. chmod 600 leaves rw- for the owner and nothing for anyone else.
+      lines: [7]
+      parts:
+        - kind: kv
+          id: perm
+          label: "Permissions (owner, group, others)"
+          slots: 3
+          rows:
+            - { name: app.env, value: "-rw-------   600", tone: found }
+            - { name: deploy.sh, value: "-rw-r--r--   644" }
+            - { name: releases, value: "drwxr-xr-x   755" }
+        - { kind: terminal, id: t, slots: 4, lines: ["$ chmod 600 app.env"] }
+    - title: Let the owner run the script
+      text: Letters work too. u+x adds execute for the user who owns the file, and changes nothing else.
+      lines: [8]
+      parts:
+        - kind: kv
+          id: perm
+          label: "Permissions (owner, group, others)"
+          slots: 3
+          rows:
+            - { name: app.env, value: "-rw-------   600" }
+            - { name: deploy.sh, value: "-rwxr--r--   744", tone: found }
+            - { name: releases, value: "drwxr-xr-x   755" }
+        - { kind: terminal, id: t, slots: 4, lines: ["$ chmod 600 app.env", "$ chmod u+x deploy.sh"] }
+    - title: Close the directory to others
+      text: For a directory, x means "may enter". 750 gives the owner everything, lets the group in to read, and shuts everyone else out.
+      lines: [9]
+      parts:
+        - kind: kv
+          id: perm
+          label: "Permissions (owner, group, others)"
+          slots: 3
+          rows:
+            - { name: app.env, value: "-rw-------   600" }
+            - { name: deploy.sh, value: "-rwxr--r--   744" }
+            - { name: releases, value: "drwxr-x---   750", tone: found }
+        - { kind: terminal, id: t, slots: 4, lines: ["$ chmod 600 app.env", "$ chmod u+x deploy.sh", "$ chmod 750 releases"] }
+    - title: Check and run
+      text: ls confirms the new permissions, and because the owner now has x on deploy.sh, ./deploy.sh runs and prints deploying.
+      lines: [10, 11]
+      parts:
+        - kind: kv
+          id: perm
+          label: "Permissions (owner, group, others)"
+          slots: 3
+          rows:
+            - { name: app.env, value: "-rw-------   600", tone: done }
+            - { name: deploy.sh, value: "-rwxr--r--   744", tone: done }
+            - { name: releases, value: "drwxr-x---   750", tone: done }
+        - { kind: terminal, id: t, slots: 4, lines: ["-rwxr--r--", "drwxr-x---", "$ ./deploy.sh", "deploying"] }

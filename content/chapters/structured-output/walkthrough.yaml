@@ -1,0 +1,115 @@
+- id: structured-output-retry
+  title: Validate, then retry with the error
+  hint: "Follow one made-up invoice through extract: a first reply that fails validation, the error fed back, and a corrected reply."
+  language: Python
+  code: |
+    class Invoice(BaseModel):
+        vendor: str
+        total: float
+        currency: str
+        due_date: str | None
+
+    def extract(text: str, tries: int = 3) -> Invoice:
+        messages = [{"role": "user", "content": PROMPT.format(text=text)}]
+        for _ in range(tries):
+            msg = client.messages.create(model=MODEL, max_tokens=1000, messages=messages)
+            raw = reply_text(msg).strip().removeprefix("```json").removesuffix("```")
+            try:
+                return Invoice(**json.loads(raw))
+            except (json.JSONDecodeError, ValidationError) as e:
+                messages += [{"role": "assistant", "content": reply_text(msg)},
+                             {"role": "user", "content": f"That was invalid: {e}. Reply with corrected JSON only."}]
+        raise ValueError("could not extract invoice")
+  steps:
+    - title: The contract
+      text: "Invoice is the schema: four fields and their types. total must be a number, and due_date may be missing (None). Anything else will be rejected."
+      lines: [1, 2, 3, 4, 5]
+      parts:
+        - kind: kv
+          id: schema
+          label: "Invoice: the contract"
+          slots: 4
+          rows:
+            - { name: vendor, value: "text" }
+            - { name: total, value: "a number" }
+            - { name: currency, value: "text" }
+            - { name: due_date, value: "text, or None" }
+    - title: Ask with the invoice text
+      text: "messages starts with one user message: the prompt, with the invoice text from a made-up plumber's bill filled in. Attempt 1 of 3 begins."
+      lines: [8, 9, 10]
+      vars: { attempt: "1 of 3", "len(messages)": 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [extract, Model]
+          slots: 6
+          messages:
+            - { from: extract, to: Model, label: "prompt with invoice text", tone: active }
+    - title: A reply that looks right
+      text: "The model replies with JSON. It parses fine, but look at total: it is the text \"£120.50\", not a number."
+      lines: [10, 11]
+      parts:
+        - kind: seq
+          id: s
+          actors: [extract, Model]
+          slots: 6
+          messages:
+            - { from: extract, to: Model, label: "prompt with invoice text", tone: dim }
+            - { from: Model, to: extract, label: '{"vendor": "Ace Plumbing", "total": "£120.50", …}', tone: compare }
+    - title: Validation catches it
+      text: "Invoice(**...) checks every field against the schema. A pound sign is not part of a number, so a ValidationError is raised instead of a bad invoice reaching the rest of your system."
+      lines: [13, 14]
+      parts:
+        - kind: kv
+          id: schema
+          label: "Invoice: the contract"
+          slots: 4
+          rows:
+            - { name: vendor, value: "Ace Plumbing", tone: found }
+            - { name: total, value: "£120.50: not a valid number", tone: bad }
+            - { name: currency, value: "GBP", tone: found }
+            - { name: due_date, value: "2026-12-01", tone: found }
+    - title: Feed the error back
+      text: "Two messages are added: the model's own reply, then a user message quoting the error. Now the model can see exactly what was wrong."
+      lines: [15, 16]
+      vars: { attempt: "1 of 3", "len(messages)": 3 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [extract, Model]
+          slots: 6
+          messages:
+            - { from: extract, to: Model, label: "prompt with invoice text", tone: dim }
+            - { from: Model, to: extract, label: '{"vendor": "Ace Plumbing", "total": "£120.50", …}', tone: dim }
+            - { from: extract, to: extract, label: "ValidationError on total", tone: bad }
+    - title: Try again
+      text: "The loop goes round. Attempt 2 sends all three messages, and this time total comes back as the number 120.5."
+      lines: [9, 10]
+      vars: { attempt: "2 of 3", "len(messages)": 3 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [extract, Model]
+          slots: 6
+          messages:
+            - { from: extract, to: Model, label: "prompt with invoice text", tone: dim }
+            - { from: Model, to: extract, label: '{"vendor": "Ace Plumbing", "total": "£120.50", …}', tone: dim }
+            - { from: extract, to: extract, label: "ValidationError on total", tone: dim }
+            - { from: extract, to: Model, label: "all 3 messages: \"That was invalid: …\"", tone: active }
+            - { from: Model, to: extract, label: '{"vendor": "Ace Plumbing", "total": 120.5, …}', tone: found }
+    - title: A validated object
+      text: "This time every field passes, so extract returns an Invoice. The code after it can trust that total is a number. It still cannot know the number is correct; well-formed data can hold wrong values."
+      lines: [13]
+      parts:
+        - kind: kv
+          id: schema
+          label: "Invoice: the contract"
+          slots: 4
+          rows:
+            - { name: vendor, value: "Ace Plumbing", tone: found }
+            - { name: total, value: "120.5", tone: found }
+            - { name: currency, value: "GBP", tone: found }
+            - { name: due_date, value: "2026-12-01", tone: found }
+    - title: If it never works
+      text: "Had all three attempts failed, the loop would end and raise ValueError. Failing loudly is better than passing on data that does not fit the contract."
+      lines: [17]

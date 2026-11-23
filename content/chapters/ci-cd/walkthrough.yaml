@@ -1,0 +1,63 @@
+- id: ci-cd-pipeline
+  title: A push goes through the pipeline
+  hint: Watch each check run in turn, a failure block the merge, and a passing change travel on to production.
+  language: YAML
+  code: |
+    # .github/workflows/ci.yml
+    name: CI
+    on: [push, pull_request]
+    jobs:
+      test:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - uses: actions/setup-python@v5
+            with:
+              python-version: "3.12"
+          - run: pip install -r requirements.txt
+          - run: ruff check .
+          - run: pytest
+  steps:
+    - title: "A push starts the pipeline"
+      text: "Someone pushes code, or opens a pull request. on says which events start the workflow, and runs-on picks the machine, here Ubuntu Linux."
+      lines: [3, 4, 5, 6]
+      parts:
+        - { kind: cells, id: ci, label: "CI checks", width: 110, slots: 5, items: ["checkout", "setup Python", "install", "ruff check", "pytest"] }
+        - { kind: cells, id: cd, label: "Delivery, after merging to main", width: 150, slots: 3, items: ["build container", "staging", "production"] }
+        - { kind: note, id: n, text: "Merge: waiting for checks", tone: compare }
+    - title: "Get the code and Python"
+      text: "A server checks out the pushed code and sets up Python 3.12. Nobody has to remember to run anything."
+      lines: [8, 9, 10, 11]
+      parts:
+        - { kind: cells, id: ci, label: "CI checks", width: 110, slots: 5, items: [{ v: "checkout", tone: found }, { v: "setup Python", tone: found }, "install", "ruff check", "pytest"] }
+    - title: "Install the project"
+      text: "pip installs the libraries listed in requirements.txt, exactly as a new teammate would."
+      lines: [12]
+      parts:
+        - { kind: cells, id: ci, label: "CI checks", width: 110, slots: 5, items: [{ v: "checkout", tone: done }, { v: "setup Python", tone: done }, { v: "install", tone: found }, "ruff check", "pytest"] }
+    - title: "The linter"
+      text: "ruff check looks for mistakes and style problems without running the code. It passes."
+      lines: [13]
+      parts:
+        - { kind: cells, id: ci, label: "CI checks", width: 110, slots: 5, items: [{ v: "checkout", tone: done }, { v: "setup Python", tone: done }, { v: "install", tone: done }, { v: "ruff check", tone: found }, "pytest"] }
+    - title: "The tests fail"
+      text: "One test fails. The result is red and the merge is blocked; the problem was found in minutes, by a machine, before any user saw it."
+      lines: [14]
+      parts:
+        - { kind: cells, id: ci, label: "CI checks", width: 110, slots: 5, items: [{ v: "checkout", tone: done }, { v: "setup Python", tone: done }, { v: "install", tone: done }, { v: "ruff check", tone: done }, { v: "pytest", tone: bad }] }
+        - { kind: note, id: n, text: "Merge: blocked, a check failed", tone: bad }
+    - title: "Fix, push, run again"
+      text: "The author fixes the code and pushes again. The whole workflow runs from the start, and this time every check is green."
+      lines: [8, 9, 10, 11, 12, 13, 14]
+      parts:
+        - { kind: cells, id: ci, label: "CI checks", width: 110, slots: 5, items: [{ v: "checkout", tone: found }, { v: "setup Python", tone: found }, { v: "install", tone: found }, { v: "ruff check", tone: found }, { v: "pytest", tone: found }] }
+        - { kind: note, id: n, text: "Merge: allowed, all checks passed", tone: found }
+    - title: "Build and deploy to staging"
+      text: "After merging, the checks pass on main and the same pipeline builds the container and deploys it to staging, for testing."
+      parts:
+        - { kind: cells, id: cd, label: "Delivery, after merging to main", width: 150, slots: 3, items: [{ v: "build container", tone: found }, { v: "staging", tone: active }, "production"] }
+        - { kind: note, id: n, text: "Merged to main", tone: done }
+    - title: "Then production"
+      text: "Only then does it go to production, for real users. Nobody copied files by hand at any point."
+      parts:
+        - { kind: cells, id: cd, label: "Delivery, after merging to main", width: 150, slots: 3, items: [{ v: "build container", tone: done }, { v: "staging", tone: done }, { v: "production", tone: found }] }

@@ -1,0 +1,103 @@
+- id: cl-context-engineering-long-task
+  title: Keeping a long task's context small
+  hint: Watch an agent's context fill with tool results during an audit, then get trimmed, compacted and backed by notes.
+  steps:
+    - title: A long task begins
+      text: "The agent is asked to audit the checkout code for bugs. At the start its context is small: the instructions and the task."
+      parts:
+        - kind: cells
+          id: ctx
+          label: In the context
+          orient: column
+          slots: 7
+          items:
+            - { k: sys, v: instructions, tone: base }
+            - { k: task, v: audit checkout, tone: active }
+        - { kind: kv, id: notes, label: Notes kept outside the context, slots: 2, rows: [] }
+    - title: A tool result arrives
+      text: It reads the first file. The file's whole contents land in the context. Tool results are often the largest part of an agent's context.
+      parts:
+        - kind: cells
+          id: ctx
+          label: In the context
+          orient: column
+          slots: 7
+          items:
+            - { k: sys, v: instructions, tone: base }
+            - { k: task, v: audit checkout, tone: base }
+            - { k: f1, v: file 1 (raw), tone: active }
+    - title: Something worth keeping
+      text: It finds an off-by-one error in the discount loop. That finding matters for the rest of the task; the raw file mostly does not any more.
+      parts:
+        - kind: cells
+          id: ctx
+          label: In the context
+          orient: column
+          slots: 7
+          items:
+            - { k: sys, v: instructions, tone: base }
+            - { k: task, v: audit checkout, tone: base }
+            - { k: f1, v: file 1 (raw), tone: dim }
+            - { k: bug, v: off-by-one bug, tone: found }
+    - title: The context keeps growing
+      text: "It moves on to the payment module, and more raw output piles up. As the context grows, the model's attention to any one piece degrades: context rot."
+      parts:
+        - kind: cells
+          id: ctx
+          label: In the context
+          orient: column
+          slots: 7
+          items:
+            - { k: sys, v: instructions, tone: base }
+            - { k: task, v: audit checkout, tone: base }
+            - { k: f1, v: file 1 (raw), tone: dim }
+            - { k: bug, v: off-by-one bug, tone: base }
+            - { k: f2, v: payment (raw), tone: active }
+            - { k: s, v: search (raw), tone: active }
+    - title: Clear old tool results
+      text: The lightest fix is clearing tool results that have already been used. The raw first file goes; the finding stays.
+      parts:
+        - kind: cells
+          id: ctx
+          label: In the context
+          orient: column
+          slots: 7
+          items:
+            - { k: sys, v: instructions, tone: base }
+            - { k: task, v: audit checkout, tone: base }
+            - { k: bug, v: off-by-one bug, tone: base }
+            - { k: f2, v: payment (raw), tone: base }
+            - { k: s, v: search (raw), tone: base }
+    - title: Compaction
+      text: When the history is still too long, compaction replaces it with a summary that keeps decisions, open problems and important details, and drops redundant tool output.
+      parts:
+        - kind: cells
+          id: ctx
+          label: In the context
+          orient: column
+          slots: 7
+          items:
+            - { k: sys, v: instructions, tone: base }
+            - { k: sum, v: summary, tone: found }
+    - title: Notes outside the context
+      text: For work that spans several contexts or sessions, the agent keeps a progress record outside the context. A fresh start rereads it and picks up where the last left off.
+      parts:
+        - kind: kv
+          id: notes
+          label: Notes kept outside the context
+          slots: 2
+          rows:
+            - { name: NOTES.md, value: "done: discount loop; next: payment", tone: active }
+            - { name: open problems, value: listed for the next context, tone: active }
+    - title: Small and high-signal
+      text: "At every step the aim is the same: the smallest set of high-signal tokens that makes the right outcome likely."
+      parts:
+        - kind: cells
+          id: ctx
+          label: In the context
+          orient: column
+          slots: 7
+          items:
+            - { k: sys, v: instructions, tone: base }
+            - { k: sum, v: summary, tone: found }
+            - { k: n, v: NOTES.md (read), tone: found }

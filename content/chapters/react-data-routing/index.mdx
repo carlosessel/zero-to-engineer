@@ -213,6 +213,8 @@ Choose **Number 2** and the effect runs again with `id` 2: it clears the old per
 
 Here the `ignore` flag earns its keep. Suppose someone picks 2 and then quickly 3, and the reply for 2 is slow. Without the flag, the reply for 3 might arrive first and then be overwritten by the late reply for 2: the page would show person 2 while the menu says 3. That bug is called a **race condition**: the result depends on which of two things finishes first. With the flag, choosing 3 runs the cleanup for the effect that fetched 2, so its late reply is ignored.
 
+<Walkthrough name="react-data-routing-race" />
+
 This hand-written pattern is worth understanding, but in larger apps teams usually use a data-fetching library (TanStack Query and SWR are common), or a framework, which handle caching, retries and races for you. Learn the pattern first; then those tools make sense.
 
 ## You might not need an effect

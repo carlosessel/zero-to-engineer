@@ -203,6 +203,8 @@ SELECT * FROM stock ORDER BY sku;
 
 Bagels went to zero and were removed, croissants were topped up, and jam was added. Use `ON CONFLICT` for simple upserts on a unique key; use `MERGE` for richer synchronisation logic.
 
+<Walkthrough name="db-modifying-data-upsert-merge" />
+
 ## Doing it safely: transactions
 
 A **transaction** groups statements so they all happen or none do (<Ref to="m-relational" />). It is also your safety net when changing data by hand: start one, make the change, check it, and then `COMMIT` to keep it or `ROLLBACK` to undo it:

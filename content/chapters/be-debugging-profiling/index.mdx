@@ -210,6 +210,8 @@ Java stack information for the threads listed above:
 
 `jcmd` asks the running JVM for its threads, and the JVM detects the cycle itself: `place-order` holds `orders` and waits for `stock`; `restock` holds `stock` and waits for `orders`. The fix is to always take locks in the same order (<Ref to="m-threads-locks" />), or to avoid holding one lock while taking another. Most hangs are less dramatic: every request thread waiting on a slow database or an exhausted connection pool, which a thread dump also shows at once.
 
+<Walkthrough name="be-debugging-profiling-deadlock" />
+
 - **.NET**: `dotnet-stack report --process-id PID` prints managed stacks; `dotnet-dump analyze` with `clrstack -all` and `syncblk` shows threads and the locks they hold. Thread-pool starvation (blocking calls such as `.Result` inside async code) shows as a growing queue in `dotnet-counters`.
 - **Node** runs your code on one thread, so a hang is usually a long synchronous loop blocking the **event loop**: a CPU profile shows it, and `perf_hooks.monitorEventLoopDelay` measures it.
 

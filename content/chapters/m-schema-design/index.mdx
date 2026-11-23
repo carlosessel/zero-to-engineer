@@ -229,6 +229,8 @@ main()
 
 It prints each step: the column is added (`['id', 'name', 'full_name']`) and the old code keeps working; new code writes both; the 8 rows still missing `full_name` are filled in 3 batches; the newest code reads `full_name` (`['Ama Mensah', 'Kofi Boateng']`); finally the old column is dropped (`['id', 'full_name']`). Each step is a separate deployment, and at every moment the running code and the schema agree. Rolling back any single step is safe.
 
+<Walkthrough name="m-schema-design-expand-contract" />
+
 The same pattern handles other risky changes:
 
 - **Adding a required column**: add it as nullable (or with a default), backfill, then add `NOT NULL` once every row has a value.

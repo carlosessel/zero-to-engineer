@@ -1,0 +1,126 @@
+- id: be-cloud-deploy-keyless-pipeline
+  title: A deployment with no stored keys
+  hint: Follow one merge to main from GitHub Actions to a running Cloud Run revision, and see where each credential comes from.
+  language: YAML
+  code: |
+    name: deploy
+    on:
+      push:
+        branches: [main]
+
+    permissions:
+      contents: read
+      id-token: write
+
+    env:
+      IMAGE: europe-west1-docker.pkg.dev/bakery-prod-123/bakery/orders:${{ github.sha }}
+
+    jobs:
+      deploy:
+        runs-on: ubuntu-latest
+        environment: production
+        steps:
+          - uses: actions/checkout@v7
+          - id: auth
+            uses: google-github-actions/auth@v3
+            with:
+              workload_identity_provider: projects/123456789/locations/global/workloadIdentityPools/github/providers/bakery
+              service_account: deployer@bakery-prod-123.iam.gserviceaccount.com
+              token_format: access_token
+          - uses: docker/login-action@v4
+            with:
+              registry: europe-west1-docker.pkg.dev
+              username: oauth2accesstoken
+              password: ${{ steps.auth.outputs.access_token }}
+          - run: docker build -t "$IMAGE" . && docker push "$IMAGE"
+          - uses: google-github-actions/setup-gcloud@v3
+          - run: gcloud run jobs update migrate --image="$IMAGE" --region=europe-west1 && gcloud run jobs execute migrate --region=europe-west1 --wait
+          - uses: google-github-actions/deploy-cloudrun@v3
+            with:
+              service: orders
+              region: europe-west1
+              image: ${{ env.IMAGE }}
+  steps:
+    - title: A merge to main
+      text: A push to main starts the workflow. The repository holds no cloud key at all; the job has to earn its access.
+      lines: [2, 3, 4]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Workflow, GitHub, "Google Cloud", Registry, "Cloud Run"]
+          slots: 7
+          messages: []
+    - title: Ask GitHub who we are
+      text: "id-token: write lets the job request GitHub's identity token. The short-lived token says which repository and branch the job is running for."
+      lines: [8, 20]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Workflow, GitHub, "Google Cloud", Registry, "Cloud Run"]
+          slots: 7
+          messages:
+            - { from: Workflow, to: GitHub, label: "identity token?", tone: active }
+            - { from: GitHub, to: Workflow, label: "token: repo, branch", tone: found }
+    - title: Swap it for cloud credentials
+      text: Workload Identity Federation checks the token against the provider set up once for this repository, then hands back temporary credentials for the deployer service account.
+      lines: [19, 20, 21, 22, 23, 24]
+      vars: { credentials: "temporary access token" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Workflow, GitHub, "Google Cloud", Registry, "Cloud Run"]
+          slots: 7
+          messages:
+            - { from: Workflow, to: GitHub, label: "identity token?", tone: dim }
+            - { from: GitHub, to: Workflow, label: "token: repo, branch", tone: dim }
+            - { from: Workflow, to: "Google Cloud", label: "exchange token", tone: active }
+            - { from: "Google Cloud", to: Workflow, label: "temporary token", tone: found }
+    - title: Build and push the image
+      text: The temporary token logs in to the registry. The image is tagged with the commit hash, so the running version always maps to exact code.
+      lines: [11, 25, 29, 30]
+      vars: { credentials: "temporary access token", tag: "orders:<commit sha>" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Workflow, GitHub, "Google Cloud", Registry, "Cloud Run"]
+          slots: 7
+          messages:
+            - { from: Workflow, to: GitHub, label: "identity token?", tone: dim }
+            - { from: GitHub, to: Workflow, label: "token: repo, branch", tone: dim }
+            - { from: Workflow, to: "Google Cloud", label: "exchange token", tone: dim }
+            - { from: "Google Cloud", to: Workflow, label: "temporary token", tone: dim }
+            - { from: Workflow, to: Registry, label: "push orders:<sha>", tone: active }
+    - title: Migrate before the rollout
+      text: The migrate job runs the new image with the migration command, once, and the workflow waits for it to finish. Migrations must still work with the version that is running.
+      lines: [32]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Workflow, GitHub, "Google Cloud", Registry, "Cloud Run"]
+          slots: 7
+          messages:
+            - { from: Workflow, to: GitHub, label: "identity token?", tone: dim }
+            - { from: GitHub, to: Workflow, label: "token: repo, branch", tone: dim }
+            - { from: Workflow, to: "Google Cloud", label: "exchange token", tone: dim }
+            - { from: "Google Cloud", to: Workflow, label: "temporary token", tone: dim }
+            - { from: Workflow, to: Registry, label: "push orders:<sha>", tone: dim }
+            - { from: Workflow, to: "Cloud Run", label: "execute job migrate", tone: active }
+    - title: Deploy the same image
+      text: Finally the orders service is updated to the new image, which becomes a new revision. The production environment can require a reviewer's approval before this job runs.
+      lines: [16, 33, 34, 35, 36, 37]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Workflow, GitHub, "Google Cloud", Registry, "Cloud Run"]
+          slots: 7
+          messages:
+            - { from: Workflow, to: GitHub, label: "identity token?", tone: dim }
+            - { from: GitHub, to: Workflow, label: "token: repo, branch", tone: dim }
+            - { from: Workflow, to: "Google Cloud", label: "exchange token", tone: dim }
+            - { from: "Google Cloud", to: Workflow, label: "temporary token", tone: dim }
+            - { from: Workflow, to: Registry, label: "push orders:<sha>", tone: dim }
+            - { from: Workflow, to: "Cloud Run", label: "execute job migrate", tone: dim }
+            - { from: Workflow, to: "Cloud Run", label: "deploy orders:<sha>", tone: found }
+    - title: Nothing left to leak
+      text: The only credential was short-lived and tied to this repository. To roll back, deploy an earlier commit's tag or send traffic back to an earlier revision.
+      vars: {}

@@ -152,6 +152,8 @@ public class Main {
 
 It prints `GET PT10S retries=0`, then `POST {Idempotency-Key=order-7} PT5S`, then `Refused: Retried POSTs need an Idempotency-Key header`. Each setting is named, defaults live in one place, `build()` checks rules that involve several fields together, and the result is an immutable record.
 
+<Walkthrough name="m-patterns-creational-builder" />
+
 C# and TypeScript need builders less, because the language already gives named, optional settings: C#'s **object initializers** with `init` properties (`new HttpRequest { Url = "...", Retries = 3 }`) and records with `with`; TypeScript's **options objects** (`request({ url, method: "POST", retries: 3 })`). Builders still help there when construction has steps or cross-field rules, and **fluent** builders (each method returns the builder, so calls chain) are common in libraries: ASP.NET Core's `WebApplication.CreateBuilder()`, Java's `HttpRequest.newBuilder()`, and test-data builders such as `anOrder().withLines(3).paid().build()`.
 
 ## Singleton, and why to avoid it

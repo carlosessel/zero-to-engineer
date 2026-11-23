@@ -1,0 +1,136 @@
+- id: be-data-efcore-linq-to-sql
+  title: How a LINQ query becomes SQL
+  hint: Each LINQ method maps to part of one SQL statement. Watch the statement take shape, then run once in the database.
+  language: C#
+  code: |
+    var query = db.Orders
+        .AsNoTracking()
+        .Where(o => o.TotalPence > 1000 && o.Status != OrderStatus.Cancelled)
+        .OrderByDescending(o => o.TotalPence)
+        .Select(o => new { o.Id, Customer = o.Customer.Name, o.TotalPence });
+
+    Console.WriteLine(query.ToQueryString());
+    foreach (var row in query.ToList()) Console.WriteLine(row);
+  steps:
+    - title: Three orders, two customers
+      text: SaveChanges stored Ama with two orders and Kofi with one. EF Core stores the Status enum as text.
+      parts:
+        - kind: tables
+          id: o
+          slots: 3
+          tables:
+            - id: ot
+              title: Orders
+              columns: [ Id, CustomerId, TotalPence, Status ]
+              rows:
+                - { k: o1, cells: [ 1, 1, 1250, Placed ] }
+                - { k: o2, cells: [ 2, 1, 3100, Delivered ] }
+                - { k: o3, cells: [ 3, 2, 450, Placed ] }
+        - kind: tables
+          id: c
+          slots: 2
+          tables:
+            - id: ct
+              title: Customers
+              columns: [ Id, Name ]
+              rows:
+                - { k: c1, cells: [ 1, Ama ] }
+                - { k: c2, cells: [ 2, Kofi ] }
+        - { kind: terminal, id: sql, slots: 7, lines: [] }
+    - title: Start from a table
+      text: "db.Orders stands for the Orders table. Nothing has run yet: the query is only being described."
+      lines: [ 1 ]
+      parts:
+        - kind: tables
+          id: o
+          slots: 3
+          tables:
+            - id: ot
+              title: Orders
+              columns: [ Id, CustomerId, TotalPence, Status ]
+              rows:
+                - { k: o1, cells: [ 1, 1, 1250, Placed ], tone: compare }
+                - { k: o2, cells: [ 2, 1, 3100, Delivered ], tone: compare }
+                - { k: o3, cells: [ 3, 2, 450, Placed ], tone: compare }
+        - { kind: terminal, id: sql, slots: 7, lines: [ FROM "Orders" AS "o" ] }
+    - title: AsNoTracking changes no SQL
+      text: It tells EF Core not to watch the results for changes, which is faster and right for read-only queries. The SQL stays the same.
+      lines: [ 2 ]
+    - title: Where becomes WHERE
+      text: The C# condition is translated to a SQL condition, so the filtering happens in the database. Kofi's 450 pence order will never be sent back.
+      lines: [ 3 ]
+      parts:
+        - kind: tables
+          id: o
+          slots: 3
+          tables:
+            - id: ot
+              title: Orders
+              columns: [ Id, CustomerId, TotalPence, Status ]
+              rows:
+                - { k: o1, cells: [ 1, 1, 1250, Placed ], tone: active }
+                - { k: o2, cells: [ 2, 1, 3100, Delivered ], tone: active }
+                - { k: o3, cells: [ 3, 2, 450, Placed ], tone: dim }
+        - { kind: terminal, id: sql, slots: 7, lines: [ FROM "Orders" AS "o", WHERE "o"."TotalPence" > 1000 AND "o"."Status" <> 'Cancelled' ] }
+    - title: OrderByDescending becomes ORDER BY
+      text: Sorting runs in the database too, largest total first.
+      lines: [ 4 ]
+      parts:
+        - kind: tables
+          id: o
+          slots: 3
+          tables:
+            - id: ot
+              title: Orders
+              columns: [ Id, CustomerId, TotalPence, Status ]
+              rows:
+                - { k: o2, cells: [ 2, 1, 3100, Delivered ], tone: active }
+                - { k: o1, cells: [ 1, 1, 1250, Placed ], tone: active }
+                - { k: o3, cells: [ 3, 2, 450, Placed ], tone: dim }
+        - { kind: terminal, id: sql, slots: 7, lines: [ FROM "Orders" AS "o", WHERE "o"."TotalPence" > 1000 AND "o"."Status" <> 'Cancelled', ORDER BY "o"."TotalPence" DESC ] }
+    - title: Select picks columns, and adds a JOIN
+      text: The projection asks for three values only. Because it uses o.Customer.Name, EF Core joins Customers to fetch the name.
+      lines: [ 5 ]
+      parts:
+        - kind: tables
+          id: c
+          slots: 2
+          tables:
+            - id: ct
+              title: Customers
+              columns: [ Id, Name ]
+              rows:
+                - { k: c1, cells: [ 1, Ama ], tone: active }
+                - { k: c2, cells: [ 2, Kofi ], tone: dim }
+        - { kind: terminal, id: sql, slots: 7, lines: [ 'SELECT "o"."Id", "c"."Name" AS "Customer", "o"."TotalPence"', FROM "Orders" AS "o", INNER JOIN "Customers" AS "c" ON "o"."CustomerId" = "c"."Id", WHERE "o"."TotalPence" > 1000 AND "o"."Status" <> 'Cancelled', ORDER BY "o"."TotalPence" DESC ] }
+    - title: ToQueryString shows the SQL
+      text: "This prints the SQL without running it: one statement, built from every method in the chain."
+      lines: [ 7 ]
+      parts:
+        - { kind: terminal, id: sql, slots: 7, lines: [ 'SELECT "o"."Id", "c"."Name" AS "Customer", "o"."TotalPence"', FROM "Orders" AS "o", INNER JOIN "Customers" AS "c" ON "o"."CustomerId" = "c"."Id", WHERE "o"."TotalPence" > 1000 AND "o"."Status" <> 'Cancelled', ORDER BY "o"."TotalPence" DESC ] }
+    - title: ToList runs it once
+      text: ToList sends the statement to the database and turns each row that comes back into an object. Two rows, already filtered and sorted.
+      lines: [ 8 ]
+      parts:
+        - kind: tables
+          id: o
+          slots: 3
+          tables:
+            - id: ot
+              title: Orders
+              columns: [ Id, CustomerId, TotalPence, Status ]
+              rows:
+                - { k: o2, cells: [ 2, 1, 3100, Delivered ], tone: found }
+                - { k: o1, cells: [ 1, 1, 1250, Placed ], tone: found }
+                - { k: o3, cells: [ 3, 2, 450, Placed ], tone: dim }
+        - kind: tables
+          id: c
+          slots: 2
+          tables:
+            - id: ct
+              title: Customers
+              columns: [ Id, Name ]
+              rows:
+                - { k: c1, cells: [ 1, Ama ], tone: found }
+                - { k: c2, cells: [ 2, Kofi ], tone: dim }
+        - { kind: terminal, id: sql, slots: 7, lines: [ 'SELECT "o"."Id", "c"."Name" AS "Customer", "o"."TotalPence"', FROM "Orders" AS "o", INNER JOIN "Customers" AS "c" ON "o"."CustomerId" = "c"."Id", WHERE "o"."TotalPence" > 1000 AND "o"."Status" <> 'Cancelled', ORDER BY "o"."TotalPence" DESC, "{ Id = 2, Customer = Ama, TotalPence = 3100 }", "{ Id = 1, Customer = Ama, TotalPence = 1250 }" ] }

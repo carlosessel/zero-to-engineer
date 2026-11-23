@@ -1,0 +1,118 @@
+- id: m-trees-heaps-sift-up
+  title: Pushing into a min-heap
+  hint: Watch each new number join at the end of the array and swap upwards until its parent is smaller.
+  language: TypeScript
+  code: |
+    push(value: number) {
+      const a = this.items;
+      a.push(value);
+      let i = a.length - 1;
+      while (i > 0) {
+        const parent = (i - 1) >> 1;
+        if (a[parent] <= a[i]) break;
+        [a[parent], a[i]] = [a[i], a[parent]];
+        i = parent;
+      }
+    }
+
+    for (const v of [42, 7, 19, 3, 25, 11]) heap.push(v);
+  steps:
+    - title: "Push 42 into an empty heap"
+      text: "A min-heap keeps every parent smaller than or equal to its children. The tree is stored in an array: index 0 is the root. 42 is alone, so it is the root."
+      lines: [1, 2, 3, 4]
+      vars: { value: 42, i: 0 }
+      parts:
+        - kind: graph
+          id: tree
+          height: 220
+          nodes: [{ k: "n42", label: "42", x: 0.5, y: 0.0, note: "[0]", tone: active }]
+          edges: []
+        - { kind: cells, id: arr, label: "the array", indices: true, slots: 6, items: [{ k: "c42", v: 42, tone: active }] }
+    - title: "Push 7: add it at the end"
+      text: "A new item always goes at the end of the array, the next free place in the tree. Its parent is at (1 − 1) ÷ 2, rounded down, which is index 0."
+      lines: [3, 4, 5, 6, 7]
+      vars: { value: 7, i: 1, parent: 0 }
+      parts:
+        - kind: graph
+          id: tree
+          height: 220
+          nodes: [{ k: "n42", label: "42", x: 0.5, y: 0.0, note: "[0]", tone: compare }, { k: "n7", label: "7", x: 0.25, y: 0.5, note: "[1]", tone: active }]
+          edges: [{ a: "n42", b: "n7" }]
+        - { kind: cells, id: arr, label: "the array", indices: true, slots: 6, items: [{ k: "c42", v: 42, tone: compare }, { k: "c7", v: 7, tone: active }] }
+    - title: "7 is smaller, so swap"
+      text: "Parent 42 is bigger than 7, which breaks the rule. They swap places and i moves up to 0, the root, so the loop ends."
+      lines: [8, 9]
+      vars: { value: 7, i: 0 }
+      parts:
+        - kind: graph
+          id: tree
+          height: 220
+          nodes: [{ k: "n7", label: "7", x: 0.5, y: 0.0, note: "[0]", tone: active }, { k: "n42", label: "42", x: 0.25, y: 0.5, note: "[1]" }]
+          edges: [{ a: "n7", b: "n42" }]
+        - { kind: cells, id: arr, label: "the array", indices: true, slots: 6, items: [{ k: "c7", v: 7, tone: active }, { k: "c42", v: 42 }] }
+    - title: "Push 19: already in place"
+      text: "19 goes at index 2. Its parent is 7, and 7 is not bigger than 19, so the loop breaks at once: no swaps needed."
+      lines: [3, 4, 5, 6, 7]
+      vars: { value: 19, i: 2, parent: 0 }
+      parts:
+        - kind: graph
+          id: tree
+          height: 220
+          nodes: [{ k: "n7", label: "7", x: 0.5, y: 0.0, note: "[0]", tone: compare }, { k: "n42", label: "42", x: 0.25, y: 0.5, note: "[1]" }, { k: "n19", label: "19", x: 0.75, y: 0.5, note: "[2]", tone: found }]
+          edges: [{ a: "n7", b: "n42" }, { a: "n7", b: "n19" }]
+        - { kind: cells, id: arr, label: "the array", indices: true, slots: 6, items: [{ k: "c7", v: 7, tone: compare }, { k: "c42", v: 42 }, { k: "c19", v: 19, tone: found }] }
+    - title: "Push 3: first swap"
+      text: "3 goes at index 3, under 42. 42 is bigger, so they swap and 3 moves up to index 1."
+      lines: [3, 4, 5, 6, 7, 8, 9]
+      vars: { value: 3, i: 1, parent: 1 → 0 }
+      parts:
+        - kind: graph
+          id: tree
+          height: 220
+          nodes: [{ k: "n7", label: "7", x: 0.5, y: 0.0, note: "[0]" }, { k: "n3", label: "3", x: 0.25, y: 0.5, note: "[1]", tone: active }, { k: "n19", label: "19", x: 0.75, y: 0.5, note: "[2]" }, { k: "n42", label: "42", x: 0.1, y: 1.0, note: "[3]", tone: compare }]
+          edges: [{ a: "n7", b: "n3" }, { a: "n7", b: "n19" }, { a: "n3", b: "n42" }]
+        - { kind: cells, id: arr, label: "the array", indices: true, slots: 6, items: [{ k: "c7", v: 7 }, { k: "c3", v: 3, tone: active }, { k: "c19", v: 19 }, { k: "c42", v: 42, tone: compare }] }
+    - title: "3 keeps sifting up"
+      text: "At index 1, the parent is 7, still bigger than 3. Another swap takes 3 to the root. That is sift up: at most one swap per level."
+      lines: [5, 6, 7, 8, 9]
+      vars: { value: 3, i: 0 }
+      parts:
+        - kind: graph
+          id: tree
+          height: 220
+          nodes: [{ k: "n3", label: "3", x: 0.5, y: 0.0, note: "[0]", tone: active }, { k: "n7", label: "7", x: 0.25, y: 0.5, note: "[1]", tone: compare }, { k: "n19", label: "19", x: 0.75, y: 0.5, note: "[2]" }, { k: "n42", label: "42", x: 0.1, y: 1.0, note: "[3]" }]
+          edges: [{ a: "n3", b: "n7" }, { a: "n3", b: "n19" }, { a: "n7", b: "n42" }]
+        - { kind: cells, id: arr, label: "the array", indices: true, slots: 6, items: [{ k: "c3", v: 3, tone: active }, { k: "c7", v: 7, tone: compare }, { k: "c19", v: 19 }, { k: "c42", v: 42 }] }
+    - title: "Push 25: stays at the bottom"
+      text: "25 goes at index 4. Its parent at index 1 is 7, which is smaller, so 25 stays where it is."
+      lines: [3, 4, 5, 6, 7]
+      vars: { value: 25, i: 4, parent: 1 }
+      parts:
+        - kind: graph
+          id: tree
+          height: 220
+          nodes: [{ k: "n3", label: "3", x: 0.5, y: 0.0, note: "[0]" }, { k: "n7", label: "7", x: 0.25, y: 0.5, note: "[1]", tone: compare }, { k: "n19", label: "19", x: 0.75, y: 0.5, note: "[2]" }, { k: "n42", label: "42", x: 0.1, y: 1.0, note: "[3]" }, { k: "n25", label: "25", x: 0.4, y: 1.0, note: "[4]", tone: found }]
+          edges: [{ a: "n3", b: "n7" }, { a: "n3", b: "n19" }, { a: "n7", b: "n42" }, { a: "n7", b: "n25" }]
+        - { kind: cells, id: arr, label: "the array", indices: true, slots: 6, items: [{ k: "c3", v: 3 }, { k: "c7", v: 7, tone: compare }, { k: "c19", v: 19 }, { k: "c42", v: 42 }, { k: "c25", v: 25, tone: found }] }
+    - title: "Push 11: one swap"
+      text: "11 goes at index 5, under 19. It swaps with 19, then meets parent 3, which is smaller, and stops at index 2."
+      lines: [3, 4, 5, 6, 7, 8, 9]
+      vars: { value: 11, i: 2, parent: 0 }
+      parts:
+        - kind: graph
+          id: tree
+          height: 220
+          nodes: [{ k: "n3", label: "3", x: 0.5, y: 0.0, note: "[0]", tone: compare }, { k: "n7", label: "7", x: 0.25, y: 0.5, note: "[1]" }, { k: "n11", label: "11", x: 0.75, y: 0.5, note: "[2]", tone: active }, { k: "n42", label: "42", x: 0.1, y: 1.0, note: "[3]" }, { k: "n25", label: "25", x: 0.4, y: 1.0, note: "[4]" }, { k: "n19", label: "19", x: 0.6, y: 1.0, note: "[5]", tone: compare }]
+          edges: [{ a: "n3", b: "n7" }, { a: "n3", b: "n11" }, { a: "n7", b: "n42" }, { a: "n7", b: "n25" }, { a: "n11", b: "n19" }]
+        - { kind: cells, id: arr, label: "the array", indices: true, slots: 6, items: [{ k: "c3", v: 3, tone: compare }, { k: "c7", v: 7 }, { k: "c11", v: 11, tone: active }, { k: "c42", v: 42 }, { k: "c25", v: 25 }, { k: "c19", v: 19, tone: compare }] }
+    - title: "The smallest is at the root"
+      text: "The array is [3, 7, 11, 42, 25, 19]. It is not sorted, but every parent is smaller than its children, so the smallest item is always at index 0. Each push took O(log n) swaps at most."
+      lines: [13]
+      vars: { heap: "[3, 7, 11, 42, 25, 19]" }
+      parts:
+        - kind: graph
+          id: tree
+          height: 220
+          nodes: [{ k: "n3", label: "3", x: 0.5, y: 0.0, note: "[0]", tone: found }, { k: "n7", label: "7", x: 0.25, y: 0.5, note: "[1]" }, { k: "n11", label: "11", x: 0.75, y: 0.5, note: "[2]" }, { k: "n42", label: "42", x: 0.1, y: 1.0, note: "[3]" }, { k: "n25", label: "25", x: 0.4, y: 1.0, note: "[4]" }, { k: "n19", label: "19", x: 0.6, y: 1.0, note: "[5]" }]
+          edges: [{ a: "n3", b: "n7" }, { a: "n3", b: "n11" }, { a: "n7", b: "n42" }, { a: "n7", b: "n25" }, { a: "n11", b: "n19" }]
+        - { kind: cells, id: arr, label: "the array", indices: true, slots: 6, items: [{ k: "c3", v: 3, tone: found }, { k: "c7", v: 7 }, { k: "c11", v: 11 }, { k: "c42", v: 42 }, { k: "c25", v: 25 }, { k: "c19", v: 19 }] }

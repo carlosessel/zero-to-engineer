@@ -1,0 +1,56 @@
+- id: how-code-works-three-lines
+  title: A program runs one line at a time
+  hint: Watch Python read the program from top to bottom, storing, calculating and then showing a result.
+  language: Python
+  code: |
+    name = "Ama"
+    age = 20
+    print(name, "will be", age + 1, "next year")
+  steps:
+    - title: Just text in a file
+      text: A program is a text file of steps. Python will follow them from the top, one at a time. Before the first line runs, nothing is stored.
+      parts:
+        - { kind: kv, id: mem, label: "Stored so far", rows: [], slots: 2 }
+        - { kind: terminal, id: out, lines: [], slots: 1 }
+    - title: Store the text Ama
+      text: Line one stores the text Ama under the label name. From now on, name means Ama.
+      lines: [1]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Stored so far"
+          slots: 2
+          rows: [{ name: name, value: '"Ama"', tone: active }]
+    - title: Store the number 20
+      text: Line two stores the number 20 under the label age.
+      lines: [2]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Stored so far"
+          slots: 2
+          rows: [{ name: name, value: '"Ama"' }, { name: age, value: "20", tone: active }]
+    - title: Work it out on the way
+      text: Line three looks up name and age, then calculates age + 1, which is 20 + 1, or 21.
+      lines: [3]
+      vars: { "age + 1": "20 + 1 = 21" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Stored so far"
+          slots: 2
+          rows: [{ name: name, value: '"Ama"', tone: compare }, { name: age, value: "20", tone: compare }]
+    - title: Show the message
+      text: print puts the pieces together and shows them on screen. The output is Ama will be 21 next year.
+      lines: [3]
+      parts:
+        - { kind: terminal, id: out, lines: ["Ama will be 21 next year"], slots: 1 }
+    - title: Store, calculate, show
+      text: "age still holds 20: the 21 was only worked out for the message. That is programming: storing things, calculating, and showing or saving results."
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Stored so far"
+          slots: 2
+          rows: [{ name: name, value: '"Ama"', tone: done }, { name: age, value: "20", tone: done }]

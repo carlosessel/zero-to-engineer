@@ -1,0 +1,100 @@
+- id: auth-session-login
+  title: Logging in with a session
+  hint: Follow one login, then a later request. Watch how the server knows who is asking, and then whether they are allowed.
+  steps:
+    - title: Ama logs in
+      text: The browser sends the email and password typed into the login form. This is the only time the password travels.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database]
+          slots: 8
+          messages:
+            - { from: Browser, to: Server, label: "POST /login, email + password", tone: active }
+        - { kind: kv, id: sess, label: "Sessions the server remembers", rows: [], slots: 1 }
+    - title: Compare hashes, not passwords
+      text: The database holds only a salted hash. The server hashes what was typed in the same way and compares. They match, so this is Ama.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database]
+          slots: 8
+          messages:
+            - { from: Browser, to: Server, label: "POST /login, email + password", tone: dim }
+            - { from: Server, to: Database, label: "stored hash for ama?", tone: active }
+            - { from: Database, to: Server, label: "$argon2id$...", tone: active }
+            - { from: Server, to: Server, label: "hash typed password, compare: match", tone: found }
+    - title: A session id
+      text: The server makes a random session id and remembers which user it belongs to. The id is meaningless on its own, and hard to guess.
+      parts:
+        - kind: kv
+          id: sess
+          label: "Sessions the server remembers"
+          slots: 1
+          rows: [{ name: "k7Qx92fLp3", value: "user ama", tone: active }]
+    - title: Sent in a cookie
+      text: The response carries the session id in a cookie. The browser keeps it and sends it back with every request to this site.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database]
+          slots: 8
+          messages:
+            - { from: Browser, to: Server, label: "POST /login, email + password", tone: dim }
+            - { from: Server, to: Database, label: "stored hash for ama?", tone: dim }
+            - { from: Database, to: Server, label: "$argon2id$...", tone: dim }
+            - { from: Server, to: Server, label: "hash typed password, compare: match", tone: dim }
+            - { from: Server, to: Browser, label: "OK, cookie session=k7Qx92fLp3", tone: found }
+        - kind: kv
+          id: sess
+          label: "Sessions the server remembers"
+          slots: 1
+          rows: [{ name: "k7Qx92fLp3", value: "user ama" }]
+    - title: A later request
+      text: HTTP has no memory, so this request arrives as a stranger. The cookie comes with it.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database]
+          slots: 8
+          messages:
+            - { from: Browser, to: Server, label: "POST /login, email + password", tone: dim }
+            - { from: Server, to: Browser, label: "OK, cookie session=k7Qx92fLp3", tone: dim }
+            - { from: Browser, to: Server, label: "GET /orders/123 + cookie", tone: active }
+    - title: Who is asking?
+      text: The server looks the session id up and finds Ama. That is authentication, knowing who the user is.
+      vars: { user: ama }
+      parts:
+        - kind: kv
+          id: sess
+          label: "Sessions the server remembers"
+          slots: 1
+          rows: [{ name: "k7Qx92fLp3", value: "user ama", tone: found }]
+    - title: Are they allowed?
+      text: Authorisation is a separate check, on the server, for every request. The server asks who owns order 123. It is Kofi's.
+      vars: { user: ama, "owner of order 123": kofi }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database]
+          slots: 8
+          messages:
+            - { from: Browser, to: Server, label: "POST /login, email + password", tone: dim }
+            - { from: Server, to: Browser, label: "OK, cookie session=k7Qx92fLp3", tone: dim }
+            - { from: Browser, to: Server, label: "GET /orders/123 + cookie", tone: dim }
+            - { from: Server, to: Database, label: "order 123, owner?", tone: active }
+            - { from: Database, to: Server, label: "owner: kofi", tone: compare }
+    - title: Refused
+      text: Ama is logged in but this order is not hers, so the server refuses. Skipping this check is the classic bug that leaks other people's orders.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server, Database]
+          slots: 8
+          messages:
+            - { from: Browser, to: Server, label: "POST /login, email + password", tone: dim }
+            - { from: Server, to: Browser, label: "OK, cookie session=k7Qx92fLp3", tone: dim }
+            - { from: Browser, to: Server, label: "GET /orders/123 + cookie", tone: dim }
+            - { from: Server, to: Database, label: "order 123, owner?", tone: dim }
+            - { from: Database, to: Server, label: "owner: kofi", tone: dim }
+            - { from: Server, to: Browser, label: "403 not allowed", tone: bad }

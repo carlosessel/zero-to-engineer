@@ -1,0 +1,104 @@
+- id: attention-scores
+  title: Attention scores for one word
+  hint: Follow the token "it" as its query is compared with every key, and the scores become shares of attention.
+  steps:
+    - title: Which word is it?
+      text: 'To predict what follows "The trophy didn''t fit in the suitcase because it was too", the model must work out what it refers to. Self-attention lets it look at every other token.'
+      parts:
+        - kind: cells
+          id: s
+          label: "tokens (a few of them)"
+          width: 90
+          items: [{ k: the, v: The }, { k: trophy, v: trophy }, { k: suitcase, v: suitcase }, { k: it, v: it, tone: active }]
+          slots: 4
+    - title: Every token makes a key
+      text: "Each token produces a key vector: what it offers to others. Real keys have hundreds of learned numbers; these have two made-up ones so the arithmetic is visible."
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: k
+              title: "keys, scored against the query of it"
+              columns: [token, key, "query · key", share]
+              rows:
+                - { k: the, cells: ["The", "[0, 0.5]", "", ""] }
+                - { k: trophy, cells: ["trophy", "[1, 1]", "", ""] }
+                - { k: suitcase, cells: ["suitcase", "[1, 0.5]", "", ""] }
+                - { k: it, cells: ["it", "[0.5, 0.5]", "", ""] }
+    - title: it makes a query
+      text: "The token it also produces a query vector, [1, 2]: what it is looking for. Its query is compared with every key using a dot product."
+      vars: { "query of it": "[1, 2]" }
+    - title: Score against The
+      text: "Multiply matching entries and add: 1 × 0 + 2 × 0.5 = 1. A small score, so little attention."
+      vars: { "query of it": "[1, 2]", "score(The)": 1 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: k
+              title: "keys, scored against the query of it"
+              columns: [token, key, "query · key", share]
+              rows:
+                - { k: the, cells: ["The", "[0, 0.5]", "1×0 + 2×0.5 = 1", ""], tone: active }
+                - { k: trophy, cells: ["trophy", "[1, 1]", "", ""] }
+                - { k: suitcase, cells: ["suitcase", "[1, 0.5]", "", ""] }
+                - { k: it, cells: ["it", "[0.5, 0.5]", "", ""] }
+    - title: Score against trophy
+      text: "1 × 1 + 2 × 1 = 3, the biggest so far. The query and this key point in similar directions."
+      vars: { "query of it": "[1, 2]", "score(trophy)": 3 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: k
+              title: "keys, scored against the query of it"
+              columns: [token, key, "query · key", share]
+              rows:
+                - { k: the, cells: ["The", "[0, 0.5]", "1×0 + 2×0.5 = 1", ""] }
+                - { k: trophy, cells: ["trophy", "[1, 1]", "1×1 + 2×1 = 3", ""], tone: active }
+                - { k: suitcase, cells: ["suitcase", "[1, 0.5]", "", ""] }
+                - { k: it, cells: ["it", "[0.5, 0.5]", "", ""] }
+    - title: The rest
+      text: "suitcase scores 1 × 1 + 2 × 0.5 = 2, and it scored against its own key gives 1.5. Every token is scored, including itself."
+      vars: { "query of it": "[1, 2]", "score(suitcase)": 2, "score(it)": 1.5 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: k
+              title: "keys, scored against the query of it"
+              columns: [token, key, "query · key", share]
+              rows:
+                - { k: the, cells: ["The", "[0, 0.5]", "1×0 + 2×0.5 = 1", ""] }
+                - { k: trophy, cells: ["trophy", "[1, 1]", "1×1 + 2×1 = 3", ""] }
+                - { k: suitcase, cells: ["suitcase", "[1, 0.5]", "1×1 + 2×0.5 = 2", ""], tone: active }
+                - { k: it, cells: ["it", "[0.5, 0.5]", "1×.5 + 2×.5 = 1.5", ""], tone: active }
+    - title: Scores become shares
+      text: "softmax, from the maths chapter, turns the four scores into shares that add up to 1. trophy gets 0.58 of the attention."
+      vars: { scores: "[1, 3, 2, 1.5]", shares: "[0.08, 0.58, 0.21, 0.13]" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: k
+              title: "keys, scored against the query of it"
+              columns: [token, key, "query · key", share]
+              rows:
+                - { k: the, cells: ["The", "[0, 0.5]", "1×0 + 2×0.5 = 1", "0.08"] }
+                - { k: trophy, cells: ["trophy", "[1, 1]", "1×1 + 2×1 = 3", "0.58"], tone: found }
+                - { k: suitcase, cells: ["suitcase", "[1, 0.5]", "1×1 + 2×0.5 = 2", "0.21"] }
+                - { k: it, cells: ["it", "[0.5, 0.5]", "1×.5 + 2×.5 = 1.5", "0.13"] }
+        - kind: cells
+          id: w
+          label: "how much it attends to each token"
+          bars: true
+          width: 80
+          items: [{ k: the, v: 0.08 }, { k: trophy, v: 0.58, tone: found }, { k: suitcase, v: 0.21 }, { k: it, v: 0.13 }]
+          slots: 4
+    - title: it pulls in what it needs
+      text: "it now takes most of its new information from trophy, some from suitcase and little from the rest. Every token does this at once, with learned numbers, in every attention layer."

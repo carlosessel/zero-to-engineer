@@ -1,0 +1,220 @@
+- id: be-kafka-clients-duplicate-ignored
+  title: A duplicate the consumer shrugs off
+  hint: Watch a relay crash publish o-1 twice, and the processed_messages table stop the second copy making a second ticket.
+  language: TypeScript
+  code: |
+    async function placeOrder(id: string, customer: string, totalPence: number): Promise<void> {
+      await db.transaction(async (tx) => {
+        await tx.query("INSERT INTO orders (id, customer, total_pence) VALUES ($1, $2, $3)", [id, customer, totalPence]);
+        await tx.query("INSERT INTO outbox (id, topic, message_key, payload) VALUES ($1, $2, $3, $4)", [...]);
+      });
+    }
+
+    async function relayOnce(): Promise<number> {
+      const { rows } = await db.query("SELECT id, topic, message_key, payload FROM outbox WHERE sent_at IS NULL ...");
+      for (const row of rows) {
+        broker.push({ id: row.id, topic: row.topic, key: row.message_key, payload: row.payload });
+        if (crashAfterPublish) {
+          crashAfterPublish = false;
+          throw new Error("relay crashed after publishing, before marking the row sent");
+        }
+        await db.query("UPDATE outbox SET sent_at = now() WHERE id = $1", [row.id]);
+      }
+      return rows.length;
+    }
+
+    async function handle(message: Message): Promise<"handled" | "duplicate ignored"> {
+      return db.transaction(async (tx) => {
+        const first = await tx.query("INSERT INTO processed_messages (message_id) VALUES ($1) ON CONFLICT DO NOTHING", [message.id]);
+        if (first.affectedRows === 0) return "duplicate ignored";
+        await tx.query("INSERT INTO kitchen_tickets (order_id, created_by_message) VALUES ($1, $2)", [message.payload.orderId, message.id]);
+        return "handled";
+      });
+    }
+
+    await placeOrder("o-1", "Ama", 1250);
+    await placeOrder("o-2", "Kofi", 450);
+
+    crashAfterPublish = true;
+    try { await relayOnce(); } catch (error) { console.log((error as Error).message); }
+    console.log(`relay restarted, published ${await relayOnce()}`);
+    for (const message of broker) console.log(`${message.key}: ${await handle(message)}`);
+  steps:
+    - title: Each order writes an outbox row
+      text: placeOrder saves the order and its event in one transaction, so both exist or neither does. The outbox rows are not sent yet. Their ids are random UUIDs, shown here as m1 and m2.
+      lines: [1, 2, 3, 4, 5, 6, 30, 31]
+      parts:
+        - kind: tables
+          id: db
+          slots: 3
+          tables:
+            - id: ob
+              title: outbox
+              columns: [id, key, sent_at]
+              rows:
+                - { cells: [m1, o-1, null], tone: active }
+                - { cells: [m2, o-2, null], tone: active }
+            - { id: pm, title: processed_messages, columns: [message_id], rows: [] }
+            - { id: kt, title: kitchen_tickets, columns: [order_id], rows: [] }
+        - { kind: cells, id: broker, label: "on the broker (an array here)", items: [], slots: 3, width: 90, empty: "nothing published" }
+        - { kind: terminal, id: out, slots: 6, lines: [] }
+    - title: The relay crashes halfway
+      text: The relay publishes m1, then crashes before the UPDATE that would mark it sent. The broker has the message, but the outbox still says it is unsent.
+      lines: [9, 10, 11, 12, 13, 14, 33, 34]
+      parts:
+        - kind: tables
+          id: db
+          slots: 3
+          tables:
+            - id: ob
+              title: outbox
+              columns: [id, key, sent_at]
+              rows:
+                - { cells: [m1, o-1, null], tone: bad }
+                - { cells: [m2, o-2, null] }
+            - { id: pm, title: processed_messages, columns: [message_id], rows: [] }
+            - { id: kt, title: kitchen_tickets, columns: [order_id], rows: [] }
+        - kind: cells
+          id: broker
+          label: "on the broker (an array here)"
+          slots: 3
+          width: 90
+          items: [{ k: b1, v: "o-1 (m1)", tone: active }]
+        - { kind: terminal, id: out, slots: 6, lines: ["relay crashed after publishing, before marking the row sent"] }
+    - title: The restarted relay publishes again
+      text: The relay only knows what the outbox says. m1 still looks unsent, so it is published a second time, followed by m2. This time both rows are marked sent.
+      lines: [9, 10, 11, 16, 18, 35]
+      parts:
+        - kind: tables
+          id: db
+          slots: 3
+          tables:
+            - id: ob
+              title: outbox
+              columns: [id, key, sent_at]
+              rows:
+                - { cells: [m1, o-1, now], tone: done }
+                - { cells: [m2, o-2, now], tone: done }
+            - { id: pm, title: processed_messages, columns: [message_id], rows: [] }
+            - { id: kt, title: kitchen_tickets, columns: [order_id], rows: [] }
+        - kind: cells
+          id: broker
+          label: "on the broker (an array here)"
+          slots: 3
+          width: 90
+          items: [{ k: b1, v: "o-1 (m1)" }, { k: b2, v: "o-1 (m1)", tone: bad }, { k: b3, v: "o-2 (m2)", tone: active }]
+        - { kind: terminal, id: out, slots: 6, lines: ["relay crashed after publishing, before marking the row sent", "relay restarted, published 2"] }
+    - title: The first o-1 is handled
+      text: The consumer records m1 in processed_messages and creates the kitchen ticket, both in one transaction. The insert added a row, so this is the first time m1 has been seen.
+      lines: [21, 22, 23, 25, 26, 36]
+      parts:
+        - kind: tables
+          id: db
+          slots: 3
+          tables:
+            - id: ob
+              title: outbox
+              columns: [id, key, sent_at]
+              rows:
+                - { cells: [m1, o-1, now], tone: dim }
+                - { cells: [m2, o-2, now], tone: dim }
+            - id: pm
+              title: processed_messages
+              columns: [message_id]
+              rows: [{ cells: [m1], tone: active }]
+            - id: kt
+              title: kitchen_tickets
+              columns: [order_id]
+              rows: [{ cells: [o-1], tone: found }]
+        - kind: cells
+          id: broker
+          label: "on the broker (an array here)"
+          slots: 3
+          width: 90
+          items: [{ k: b1, v: "o-1 (m1)", tone: active }, { k: b2, v: "o-1 (m1)" }, { k: b3, v: "o-2 (m2)" }]
+        - { kind: terminal, id: out, slots: 6, lines: ["relay crashed after publishing, before marking the row sent", "relay restarted, published 2", "o-1: handled"] }
+    - title: The second o-1 is ignored
+      text: m1 is already in processed_messages, so ON CONFLICT DO NOTHING adds no row and affectedRows is 0. The handler returns before making a second ticket.
+      lines: [23, 24, 36]
+      parts:
+        - kind: tables
+          id: db
+          slots: 3
+          tables:
+            - id: ob
+              title: outbox
+              columns: [id, key, sent_at]
+              rows:
+                - { cells: [m1, o-1, now], tone: dim }
+                - { cells: [m2, o-2, now], tone: dim }
+            - id: pm
+              title: processed_messages
+              columns: [message_id]
+              rows: [{ cells: [m1], tone: compare }]
+            - id: kt
+              title: kitchen_tickets
+              columns: [order_id]
+              rows: [{ cells: [o-1] }]
+        - kind: cells
+          id: broker
+          label: "on the broker (an array here)"
+          slots: 3
+          width: 90
+          items: [{ k: b1, v: "o-1 (m1)", tone: done }, { k: b2, v: "o-1 (m1)", tone: bad }, { k: b3, v: "o-2 (m2)" }]
+        - { kind: terminal, id: out, slots: 6, lines: ["relay crashed after publishing, before marking the row sent", "relay restarted, published 2", "o-1: handled", "o-1: duplicate ignored"] }
+    - title: o-2 is handled
+      text: m2 is new, so it is recorded and o-2 gets its ticket.
+      lines: [23, 25, 26, 36]
+      parts:
+        - kind: tables
+          id: db
+          slots: 3
+          tables:
+            - id: ob
+              title: outbox
+              columns: [id, key, sent_at]
+              rows:
+                - { cells: [m1, o-1, now], tone: dim }
+                - { cells: [m2, o-2, now], tone: dim }
+            - id: pm
+              title: processed_messages
+              columns: [message_id]
+              rows: [{ cells: [m1] }, { cells: [m2], tone: active }]
+            - id: kt
+              title: kitchen_tickets
+              columns: [order_id]
+              rows: [{ cells: [o-1] }, { cells: [o-2], tone: found }]
+        - kind: cells
+          id: broker
+          label: "on the broker (an array here)"
+          slots: 3
+          width: 90
+          items: [{ k: b1, v: "o-1 (m1)", tone: done }, { k: b2, v: "o-1 (m1)", tone: dim }, { k: b3, v: "o-2 (m2)", tone: active }]
+        - { kind: terminal, id: out, slots: 6, lines: ["relay crashed after publishing, before marking the row sent", "relay restarted, published 2", "o-1: handled", "o-1: duplicate ignored", "o-2: handled"] }
+    - title: Three messages, two tickets
+      text: The outbox can publish twice, so duplicates are expected. Because the id and the ticket are saved in one transaction, each order got exactly one ticket.
+      parts:
+        - kind: tables
+          id: db
+          slots: 3
+          tables:
+            - id: ob
+              title: outbox
+              columns: [id, key, sent_at]
+              rows:
+                - { cells: [m1, o-1, now], tone: dim }
+                - { cells: [m2, o-2, now], tone: dim }
+            - id: pm
+              title: processed_messages
+              columns: [message_id]
+              rows: [{ cells: [m1], tone: done }, { cells: [m2], tone: done }]
+            - id: kt
+              title: kitchen_tickets
+              columns: [order_id]
+              rows: [{ cells: [o-1], tone: found }, { cells: [o-2], tone: found }]
+        - kind: cells
+          id: broker
+          label: "on the broker (an array here)"
+          slots: 3
+          width: 90
+          items: [{ k: b1, v: "o-1 (m1)", tone: done }, { k: b2, v: "o-1 (m1)", tone: dim }, { k: b3, v: "o-2 (m2)", tone: done }]

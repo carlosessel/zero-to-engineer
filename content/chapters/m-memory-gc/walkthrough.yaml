@@ -1,0 +1,175 @@
+- id: m-memory-gc-cycle
+  title: A cycle, counted and traced
+  hint: Watch the reference counts of two objects that refer to each other, then see how a tracing collector handles the same pair.
+  language: Python
+  code: |
+    import gc
+
+    class Node:
+        def __init__(self, name):
+            self.name = name
+            self.other = None
+
+    a, b = Node("a"), Node("b")
+    a.other, b.other = b, a        # a cycle: each refers to the other
+    del a, b                       # no names refer to them any more
+    print("objects freed by the cycle collector:", gc.collect() > 0)
+  examples:
+    - label: Reference counting
+      steps:
+        - title: Two new objects
+          text: Two Node objects are made on the heap. The name a refers to one and the name b to the other, so each has a count of 1.
+          lines: [8]
+          vars: { "count of Node a": 1, "count of Node b": 1 }
+          parts:
+            - kind: graph
+              id: g
+              height: 220
+              nodes:
+                - { k: na, label: "name a", x: 0, y: 0.1, tone: active }
+                - { k: nb, label: "name b", x: 0, y: 0.9, tone: active }
+                - { k: oa, label: "Node a", x: 0.6, y: 0.1, note: "count 1", tone: active }
+                - { k: ob, label: "Node b", x: 0.6, y: 0.9, note: "count 1", tone: active }
+              edges:
+                - { a: na, b: oa, directed: true }
+                - { a: nb, b: ob, directed: true }
+        - title: Each refers to the other
+          text: Setting a.other to b and b.other to a adds one reference to each object. Both counts go up to 2.
+          lines: [9]
+          vars: { "count of Node a": 2, "count of Node b": 2 }
+          parts:
+            - kind: graph
+              id: g
+              height: 220
+              nodes:
+                - { k: na, label: "name a", x: 0, y: 0.1 }
+                - { k: nb, label: "name b", x: 0, y: 0.9 }
+                - { k: oa, label: "Node a", x: 0.6, y: 0.1, note: "count 2", tone: active }
+                - { k: ob, label: "Node b", x: 0.6, y: 0.9, note: "count 2", tone: active }
+              edges:
+                - { a: na, b: oa, directed: true }
+                - { a: nb, b: ob, directed: true }
+                - { a: oa, b: ob, label: "other, both ways", tone: active }
+        - title: The names are deleted
+          text: del removes the names a and b, so each count drops by one. Nothing in the program can reach the objects any more.
+          lines: [10]
+          vars: { "count of Node a": 1, "count of Node b": 1 }
+          parts:
+            - kind: graph
+              id: g
+              height: 220
+              nodes:
+                - { k: na, label: "name a", x: 0, y: 0.1, tone: dim }
+                - { k: nb, label: "name b", x: 0, y: 0.9, tone: dim }
+                - { k: oa, label: "Node a", x: 0.6, y: 0.1, note: "count 1", tone: compare }
+                - { k: ob, label: "Node b", x: 0.6, y: 0.9, note: "count 1", tone: compare }
+              edges:
+                - { a: oa, b: ob, label: "other, both ways" }
+        - title: Stuck at 1
+          text: Reference counting frees an object only when its count reaches zero. Each object keeps the other's count at 1, so neither is ever freed this way. This is the famous weakness of reference counting.
+          lines: [10]
+          parts:
+            - kind: graph
+              id: g
+              height: 220
+              nodes:
+                - { k: oa, label: "Node a", x: 0.6, y: 0.1, note: "count 1", tone: bad }
+                - { k: ob, label: "Node b", x: 0.6, y: 0.9, note: "count 1", tone: bad }
+              edges:
+                - { a: oa, b: ob, label: "other, both ways", tone: bad }
+        - title: The cycle collector
+          text: CPython adds a separate cycle collector. gc.collect() runs it now; it finds a group of objects that only refer to each other, frees them, and the program prints True.
+          lines: [11]
+          vars: {}
+          parts:
+            - kind: graph
+              id: g
+              height: 220
+              nodes:
+                - { k: oa, label: "Node a", x: 0.6, y: 0.1, note: "freed", tone: dim }
+                - { k: ob, label: "Node b", x: 0.6, y: 0.9, note: "freed", tone: dim }
+              edges:
+                - { a: oa, b: ob, label: "other, both ways", tone: dim }
+            - { kind: terminal, id: out, slots: 1, lines: ["objects freed by the cycle collector: True"] }
+    - label: Tracing collector
+      steps:
+        - title: Start from the roots
+          text: A tracing collector, as in Java, C# or JavaScript, does not count references. It starts from the roots, such as local variables on each thread's stack and static fields.
+          parts:
+            - kind: graph
+              id: t
+              height: 240
+              nodes:
+                - { label: roots, x: 0, y: 0.5, tone: active }
+                - { label: config, x: 0.4, y: 0.15 }
+                - { label: settings, x: 0.9, y: 0.15 }
+                - { k: oa, label: "Node a", x: 0.4, y: 0.85 }
+                - { k: ob, label: "Node b", x: 0.9, y: 0.85 }
+              edges:
+                - { a: roots, b: config, directed: true }
+                - { a: config, b: settings, directed: true }
+                - { a: oa, b: ob, label: "each other" }
+        - title: Mark what the roots refer to
+          text: Every object a root refers to is reachable, so it is marked. Here that is a long-lived configuration object.
+          parts:
+            - kind: graph
+              id: t
+              height: 240
+              nodes:
+                - { label: roots, x: 0, y: 0.5, tone: compare }
+                - { label: config, x: 0.4, y: 0.15, tone: found, note: marked }
+                - { label: settings, x: 0.9, y: 0.15 }
+                - { k: oa, label: "Node a", x: 0.4, y: 0.85 }
+                - { k: ob, label: "Node b", x: 0.9, y: 0.85 }
+              edges:
+                - { a: roots, b: config, directed: true, tone: active }
+                - { a: config, b: settings, directed: true }
+                - { a: oa, b: ob, label: "each other" }
+        - title: Follow every reference
+          text: The collector follows references from marked objects, and from the objects they refer to, and so on, marking everything it reaches.
+          parts:
+            - kind: graph
+              id: t
+              height: 240
+              nodes:
+                - { label: roots, x: 0, y: 0.5 }
+                - { label: config, x: 0.4, y: 0.15, tone: found, note: marked }
+                - { label: settings, x: 0.9, y: 0.15, tone: found, note: marked }
+                - { k: oa, label: "Node a", x: 0.4, y: 0.85 }
+                - { k: ob, label: "Node b", x: 0.9, y: 0.85 }
+              edges:
+                - { a: roots, b: config, directed: true }
+                - { a: config, b: settings, directed: true, tone: active }
+                - { a: oa, b: ob, label: "each other" }
+        - title: The cycle is never reached
+          text: No path from the roots leads to Node a or Node b. They refer to each other, but that does not matter; they are not marked, so they are garbage.
+          parts:
+            - kind: graph
+              id: t
+              height: 240
+              nodes:
+                - { label: roots, x: 0, y: 0.5 }
+                - { label: config, x: 0.4, y: 0.15, tone: found, note: marked }
+                - { label: settings, x: 0.9, y: 0.15, tone: found, note: marked }
+                - { k: oa, label: "Node a", x: 0.4, y: 0.85, tone: bad, note: garbage }
+                - { k: ob, label: "Node b", x: 0.9, y: 0.85, tone: bad, note: garbage }
+              edges:
+                - { a: roots, b: config, directed: true }
+                - { a: config, b: settings, directed: true }
+                - { a: oa, b: ob, label: "each other", tone: bad }
+        - title: Unmarked memory is reused
+          text: Everything not marked can never be reached again, so its memory is reused. Cycles are no problem for a tracing collector.
+          parts:
+            - kind: graph
+              id: t
+              height: 240
+              nodes:
+                - { label: roots, x: 0, y: 0.5 }
+                - { label: config, x: 0.4, y: 0.15, tone: done }
+                - { label: settings, x: 0.9, y: 0.15, tone: done }
+                - { k: oa, label: "Node a", x: 0.4, y: 0.85, tone: dim, note: freed }
+                - { k: ob, label: "Node b", x: 0.9, y: 0.85, tone: dim, note: freed }
+              edges:
+                - { a: roots, b: config, directed: true }
+                - { a: config, b: settings, directed: true }
+                - { a: oa, b: ob, label: "each other", tone: dim }

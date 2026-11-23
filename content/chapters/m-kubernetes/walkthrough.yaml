@@ -1,0 +1,124 @@
+- id: m-kubernetes-rolling-update
+  title: A rolling update, pod by pod
+  hint: With three replicas, maxSurge 1 and maxUnavailable 0, watch old pods give way to new ones without ever dropping below three.
+  language: TypeScript
+  code: |
+    function rollingUpdate(replicas: number, maxSurge: number, maxUnavailable: number): string[] {
+      let oldPods = replicas;
+      let newPods = 0;
+      const steps: string[] = [`start: ${oldPods} old, ${newPods} new`];
+      while (oldPods > 0) {
+        const canCreate = Math.min(replicas + maxSurge - (oldPods + newPods), replicas - newPods);
+        newPods += canCreate;
+        const minAvailable = replicas - maxUnavailable;
+        const canRemove = Math.min(oldPods, oldPods + newPods - minAvailable);
+        oldPods -= canRemove;
+        steps.push(`+${canCreate} new, -${canRemove} old: ${oldPods} old, ${newPods} new`);
+      }
+      return steps;
+    }
+
+    console.log(rollingUpdate(3, 1, 0));
+  steps:
+    - title: Three old pods
+      text: The deployment runs three replicas of the current version. You change the image tag and apply, and the rollout begins.
+      lines: [2, 3, 4, 16]
+      vars: { old: 3, new: 0, "pods allowed": "3 + 1 = 4" }
+      parts:
+        - kind: cells
+          id: p
+          label: "orders-api pods"
+          slots: 4
+          width: 64
+          items:
+            - { k: o1, v: old }
+            - { k: o2, v: old }
+            - { k: o3, v: old }
+    - title: One extra pod
+      text: maxSurge 1 allows one pod more than three, so one new pod is created. It is not yet ready, so it gets no traffic.
+      lines: [6, 7]
+      vars: { old: 3, new: 1 }
+      parts:
+        - kind: cells
+          id: p
+          label: "orders-api pods"
+          slots: 4
+          width: 64
+          items:
+            - { k: o1, v: old }
+            - { k: o2, v: old }
+            - { k: o3, v: old }
+            - { k: n1, v: new, tone: compare }
+    - title: Ready, so one old pod goes
+      text: Once the new pod passes its readiness probe, four are running. maxUnavailable 0 means at least three must stay, so exactly one old pod can be removed.
+      lines: [8, 9, 10, 11]
+      vars: { old: 2, new: 1 }
+      parts:
+        - kind: cells
+          id: p
+          label: "orders-api pods"
+          slots: 4
+          width: 64
+          items:
+            - { k: o1, v: old, tone: bad }
+            - { k: o2, v: old }
+            - { k: o3, v: old }
+            - { k: n1, v: new, tone: found }
+    - title: Second round
+      text: The old pod is gone. The loop repeats; there is room for one more pod, so a second new one starts.
+      lines: [5, 6, 7]
+      vars: { old: 2, new: 2 }
+      parts:
+        - kind: cells
+          id: p
+          label: "orders-api pods"
+          slots: 4
+          width: 64
+          items:
+            - { k: o2, v: old }
+            - { k: o3, v: old }
+            - { k: n1, v: new, tone: done }
+            - { k: n2, v: new, tone: compare }
+    - title: Another old pod goes
+      text: When the second new pod is ready, a second old pod is removed. Three pods are always running.
+      lines: [9, 10, 11]
+      vars: { old: 1, new: 2 }
+      parts:
+        - kind: cells
+          id: p
+          label: "orders-api pods"
+          slots: 4
+          width: 64
+          items:
+            - { k: o2, v: old, tone: bad }
+            - { k: o3, v: old }
+            - { k: n1, v: new, tone: done }
+            - { k: n2, v: new, tone: found }
+    - title: The last swap
+      text: A third new pod starts, becomes ready, and the last old pod is removed.
+      lines: [6, 7, 9, 10, 11]
+      vars: { old: 0, new: 3 }
+      parts:
+        - kind: cells
+          id: p
+          label: "orders-api pods"
+          slots: 4
+          width: 64
+          items:
+            - { k: o3, v: old, tone: bad }
+            - { k: n1, v: new, tone: done }
+            - { k: n2, v: new, tone: done }
+            - { k: n3, v: new, tone: found }
+    - title: Done, with no gap
+      text: The loop ends at 0 old and 3 new, after three steps of one in, one out. If a new pod had failed its readiness probe, the rollout would have stalled instead of removing healthy old pods.
+      lines: [5, 13]
+      parts:
+        - kind: cells
+          id: p
+          label: "orders-api pods"
+          slots: 4
+          width: 64
+          items:
+            - { k: n1, v: new, tone: done }
+            - { k: n2, v: new, tone: done }
+            - { k: n3, v: new, tone: done }

@@ -1,0 +1,164 @@
+- id: db-other-engines-sqlite-monthly
+  title: The same ideas in SQLite
+  hint: Follow four orders through SQLite's own date function, a GROUP BY and a window function. Only the date function differs from PostgreSQL.
+  language: SQL
+  code: |
+    -- SQLite
+    CREATE TABLE orders (id INTEGER PRIMARY KEY, customer TEXT NOT NULL, placed_at TEXT NOT NULL, total_pence INTEGER NOT NULL);
+    INSERT INTO orders (customer, placed_at, total_pence) VALUES
+      ('Ama', '2026-10-01 08:12:00', 1450), ('Kofi', '2026-10-01 09:40:00', 900),
+      ('Ama', '2026-11-01 08:20:00', 1240), ('Esi', '2026-11-03 17:25:00', 360);
+
+    CREATE TABLE monthly AS
+    SELECT strftime('%Y-%m', placed_at) AS month, count(*) AS orders, sum(total_pence) AS revenue,
+           sum(sum(total_pence)) OVER (ORDER BY strftime('%Y-%m', placed_at)) AS running
+    FROM orders
+    GROUP BY month;
+  steps:
+    - title: Dates are text
+      text: SQLite has no separate date type, so placed_at is ISO 8601 text. Text in this form sorts in date order, which is why it works.
+      lines: [ 2, 3, 4, 5 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: o
+              title: orders
+              columns: [ customer, placed_at, total_pence ]
+              rows:
+                - { k: o0, cells: [ Ama, 2026-10-01 08:12:00, 1450 ] }
+                - { k: o1, cells: [ Kofi, 2026-10-01 09:40:00, 900 ] }
+                - { k: o2, cells: [ Ama, 2026-11-01 08:20:00, 1240 ] }
+                - { k: o3, cells: [ Esi, 2026-11-03 17:25:00, 360 ] }
+    - title: strftime picks out the month
+      text: strftime('%Y-%m', placed_at) turns each date into its year and month. It does the job of PostgreSQL's to_char and date_trunc.
+      lines: [ 8 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: o
+              title: orders
+              columns: [ customer, month, total_pence ]
+              rows:
+                - { k: o0, cells: [ Ama, 2026-10, 1450 ], tone: active }
+                - { k: o1, cells: [ Kofi, 2026-10, 900 ], tone: active }
+                - { k: o2, cells: [ Ama, 2026-11, 1240 ], tone: active }
+                - { k: o3, cells: [ Esi, 2026-11, 360 ], tone: active }
+            - { id: m, title: monthly, columns: [ month, orders, revenue, running ], rows: [] }
+    - title: Group October
+      text: "GROUP BY month puts the two October orders together: 2 orders, 1,450 + 900 = 2,350 pence."
+      lines: [ 8, 11 ]
+      vars: { revenue: 1450 + 900 = 2350 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: o
+              title: orders
+              columns: [ customer, month, total_pence ]
+              rows:
+                - { k: o0, cells: [ Ama, 2026-10, 1450 ], tone: active }
+                - { k: o1, cells: [ Kofi, 2026-10, 900 ], tone: active }
+                - { k: o2, cells: [ Ama, 2026-11, 1240 ], tone: dim }
+                - { k: o3, cells: [ Esi, 2026-11, 360 ], tone: dim }
+            - id: m
+              title: monthly
+              columns: [ month, orders, revenue, running ]
+              rows:
+                - { k: oct, cells: [ 2026-10, 2, 2350, "" ], tone: active }
+    - title: Group November
+      text: "The two November orders make the second group: 2 orders, 1,240 + 360 = 1,600 pence."
+      lines: [ 8, 11 ]
+      vars: { revenue: 1240 + 360 = 1600 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: o
+              title: orders
+              columns: [ customer, month, total_pence ]
+              rows:
+                - { k: o0, cells: [ Ama, 2026-10, 1450 ], tone: dim }
+                - { k: o1, cells: [ Kofi, 2026-10, 900 ], tone: dim }
+                - { k: o2, cells: [ Ama, 2026-11, 1240 ], tone: active }
+                - { k: o3, cells: [ Esi, 2026-11, 360 ], tone: active }
+            - id: m
+              title: monthly
+              columns: [ month, orders, revenue, running ]
+              rows:
+                - { k: oct, cells: [ 2026-10, 2, 2350, "" ] }
+                - { k: nov, cells: [ 2026-11, 2, 1600, "" ], tone: active }
+    - title: A running total over the groups
+      text: The window function runs after grouping. sum(sum(total_pence)) adds up each month's revenue in month order, so October's running total is just its own 2,350.
+      lines: [ 9 ]
+      vars: { running: "2350" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: o
+              title: orders
+              columns: [ customer, month, total_pence ]
+              rows:
+                - { k: o0, cells: [ Ama, 2026-10, 1450 ], tone: dim }
+                - { k: o1, cells: [ Kofi, 2026-10, 900 ], tone: dim }
+                - { k: o2, cells: [ Ama, 2026-11, 1240 ], tone: dim }
+                - { k: o3, cells: [ Esi, 2026-11, 360 ], tone: dim }
+            - id: m
+              title: monthly
+              columns: [ month, orders, revenue, running ]
+              rows:
+                - { k: oct, cells: [ 2026-10, 2, 2350, 2350 ], tone: found }
+                - { k: nov, cells: [ 2026-11, 2, 1600, "" ] }
+    - title: November adds on
+      text: November's running total is 2,350 + 1,600 = 3,950. The window function works exactly as it does in PostgreSQL.
+      lines: [ 9 ]
+      vars: { running: 2350 + 1600 = 3950 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: o
+              title: orders
+              columns: [ customer, month, total_pence ]
+              rows:
+                - { k: o0, cells: [ Ama, 2026-10, 1450 ], tone: dim }
+                - { k: o1, cells: [ Kofi, 2026-10, 900 ], tone: dim }
+                - { k: o2, cells: [ Ama, 2026-11, 1240 ], tone: dim }
+                - { k: o3, cells: [ Esi, 2026-11, 360 ], tone: dim }
+            - id: m
+              title: monthly
+              columns: [ month, orders, revenue, running ]
+              rows:
+                - { k: oct, cells: [ 2026-10, 2, 2350, 2350 ], tone: done }
+                - { k: nov, cells: [ 2026-11, 2, 1600, 3950 ], tone: found }
+    - title: Stored as a table
+      text: CREATE TABLE ... AS saves the result as the new table monthly. Learning a new engine is mostly spotting differences like strftime; the ideas carry over.
+      lines: [ 7 ]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: o
+              title: orders
+              columns: [ customer, month, total_pence ]
+              rows:
+                - { k: o0, cells: [ Ama, 2026-10, 1450 ] }
+                - { k: o1, cells: [ Kofi, 2026-10, 900 ] }
+                - { k: o2, cells: [ Ama, 2026-11, 1240 ] }
+                - { k: o3, cells: [ Esi, 2026-11, 360 ] }
+            - id: m
+              title: monthly
+              columns: [ month, orders, revenue, running ]
+              rows:
+                - { k: oct, cells: [ 2026-10, 2, 2350, 2350 ], tone: done }
+                - { k: nov, cells: [ 2026-11, 2, 1600, 3950 ], tone: done }

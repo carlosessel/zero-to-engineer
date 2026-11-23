@@ -1,0 +1,133 @@
+- id: cl-the-map-agent-loop
+  title: The agent loop
+  hint: Watch an agent go round the same loop, deciding, acting and looking at the result, until the task is done.
+  steps:
+    - title: A task arrives
+      text: An agent is given a task. Unlike a single answer, it will work through it in several rounds, one action at a time.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: task, x: 0, y: 0.5, tone: active }
+            - { k: decide, label: decide an action, x: 0.38, y: 0.1 }
+            - { k: act, label: act, x: 0.9, y: 0.1 }
+            - { k: see, label: see the result, x: 0.9, y: 0.9 }
+            - { k: done, label: done, x: 0.38, y: 0.9 }
+          edges:
+            - { a: task, b: decide, directed: true, tone: active }
+            - { a: decide, b: act, directed: true }
+            - { a: act, b: see, directed: true }
+            - { a: see, b: decide, directed: true }
+            - { a: decide, b: done, directed: true }
+        - { kind: note, id: n, text: "Actions taken so far: none" }
+    - title: Decide an action
+      text: The model looks at the task and decides what to do first. Here it decides it needs to read a file before it can change anything.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: task, x: 0, y: 0.5, tone: dim }
+            - { k: decide, label: decide an action, x: 0.38, y: 0.1, tone: active, note: "read this file" }
+            - { k: act, label: act, x: 0.9, y: 0.1 }
+            - { k: see, label: see the result, x: 0.9, y: 0.9 }
+            - { k: done, label: done, x: 0.38, y: 0.9 }
+          edges:
+            - { a: task, b: decide, directed: true, tone: dim }
+            - { a: decide, b: act, directed: true }
+            - { a: act, b: see, directed: true }
+            - { a: see, b: decide, directed: true }
+            - { a: decide, b: done, directed: true }
+    - title: Act
+      text: The agent carries out the action. Claude Code, for example, can read files, run commands and edit code.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: task, x: 0, y: 0.5, tone: dim }
+            - { k: decide, label: decide an action, x: 0.38, y: 0.1, tone: done }
+            - { k: act, label: act, x: 0.9, y: 0.1, tone: active, note: "reading the file" }
+            - { k: see, label: see the result, x: 0.9, y: 0.9 }
+            - { k: done, label: done, x: 0.38, y: 0.9 }
+          edges:
+            - { a: task, b: decide, directed: true, tone: dim }
+            - { a: decide, b: act, directed: true, tone: active }
+            - { a: act, b: see, directed: true }
+            - { a: see, b: decide, directed: true }
+            - { a: decide, b: done, directed: true }
+        - { kind: note, id: n, text: "Actions taken so far: read this file" }
+    - title: See the result
+      text: "The agent looks at what the action produced, here the contents of the file. This is what makes it an agent: it reacts to what actually happened."
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: task, x: 0, y: 0.5, tone: dim }
+            - { k: decide, label: decide an action, x: 0.38, y: 0.1, tone: done }
+            - { k: act, label: act, x: 0.9, y: 0.1, tone: done }
+            - { k: see, label: see the result, x: 0.9, y: 0.9, tone: active, note: "the file's contents" }
+            - { k: done, label: done, x: 0.38, y: 0.9 }
+          edges:
+            - { a: task, b: decide, directed: true, tone: dim }
+            - { a: decide, b: act, directed: true, tone: dim }
+            - { a: act, b: see, directed: true, tone: active }
+            - { a: see, b: decide, directed: true }
+            - { a: decide, b: done, directed: true }
+    - title: Round again
+      text: With what it has learnt, the model decides the next action. This time it decides to run the tests.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: task, x: 0, y: 0.5, tone: dim }
+            - { k: decide, label: decide an action, x: 0.38, y: 0.1, tone: active, note: "run the tests" }
+            - { k: act, label: act, x: 0.9, y: 0.1 }
+            - { k: see, label: see the result, x: 0.9, y: 0.9, tone: done }
+            - { k: done, label: done, x: 0.38, y: 0.9 }
+          edges:
+            - { a: task, b: decide, directed: true, tone: dim }
+            - { a: decide, b: act, directed: true }
+            - { a: act, b: see, directed: true, tone: dim }
+            - { a: see, b: decide, directed: true, tone: active }
+            - { a: decide, b: done, directed: true }
+    - title: Act and look again
+      text: It runs the tests and reads their output. Each round adds to what the agent knows about the task.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: task, x: 0, y: 0.5, tone: dim }
+            - { k: decide, label: decide an action, x: 0.38, y: 0.1, tone: done }
+            - { k: act, label: act, x: 0.9, y: 0.1, tone: done, note: "running the tests" }
+            - { k: see, label: see the result, x: 0.9, y: 0.9, tone: active, note: "the test output" }
+            - { k: done, label: done, x: 0.38, y: 0.9 }
+          edges:
+            - { a: task, b: decide, directed: true, tone: dim }
+            - { a: decide, b: act, directed: true, tone: active }
+            - { a: act, b: see, directed: true, tone: active }
+            - { a: see, b: decide, directed: true }
+            - { a: decide, b: done, directed: true }
+        - { kind: note, id: n, text: "Actions taken so far: read this file, run the tests" }
+    - title: Until the task is done
+      text: The loop goes on until the model decides the task is done. Claude Code is built around this loop; the apps can do some of it too.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: task, x: 0, y: 0.5, tone: dim }
+            - { k: decide, label: decide an action, x: 0.38, y: 0.1, tone: done }
+            - { k: act, label: act, x: 0.9, y: 0.1, tone: dim }
+            - { k: see, label: see the result, x: 0.9, y: 0.9, tone: dim }
+            - { k: done, label: done, x: 0.38, y: 0.9, tone: found }
+          edges:
+            - { a: task, b: decide, directed: true, tone: dim }
+            - { a: decide, b: act, directed: true, tone: dim }
+            - { a: act, b: see, directed: true, tone: dim }
+            - { a: see, b: decide, directed: true, tone: dim }
+            - { a: decide, b: done, directed: true, tone: found }

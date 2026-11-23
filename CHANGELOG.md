@@ -4,6 +4,25 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-23: A walkthrough in every chapter
+
+Added
+- Every chapter of every course now has at least one step-by-step walkthrough (245 chapters, 251 walkthroughs, about 2,000 steps). Only the library and glossary pages have none. A test fails if a chapter is added without one.
+- Walkthroughs can now be written as data, in a `walkthrough.yaml` next to the chapter, as well as coded lessons that run an algorithm. Each is built from the chapter's own example, names and code.
+- Four new kinds of picture: messages passed between actors (requests, logins, queues), boxes and arrows (architecture, Git, trees, pipelines), names pointing at values (variables, memory, settings) and a terminal.
+- docs/walkthroughs.md: how to write one, the picture types and how much text fits.
+
+Changed
+- Walkthroughs are marked as generated, so the migration check no longer counts their code panels as chapter code blocks. This also fixes the check for the seven chapters that got walkthroughs earlier today.
+
+Checked
+- tests/walkthrough.test.ts checks every walkthrough parses, its text fits its boxes, graph nodes do not overlap, messages name real actors, highlighted lines exist, ids are unique and each is used once in its own chapter.
+- Every walkthrough was clicked through, every step and every example, in the built site: no script errors.
+- Spot checks of the helpers' flagged points against the chapters (figures, SQL results, worked numbers). Where a walkthrough uses an invented example value it says so in its text ("suppose…").
+
+Not checked
+- No subject expert has reviewed the walkthroughs, as with the chapters. Numbers were computed and SQL results matched to the chapters, but the ML library steps (PyTorch, NumPy) were not run, because those libraries are not installed where they were written.
+
 ### 2026-11-23: Step-by-step visual walkthroughs
 
 Added

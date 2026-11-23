@@ -200,6 +200,8 @@ GET /checkout 1720 ms
 
 The 1.7-second checkout is almost entirely the external card provider: no amount of database tuning would have helped. Traces also show calls made in sequence that could run in parallel, unexpected repeated calls (the N+1 problem across services), and retries.
 
+<Walkthrough name="m-observability-trace-spans" />
+
 Tracing every request is expensive at high volume, so traces are **sampled**: head sampling decides at the start (keep 5%), tail sampling decides after the request finishes (keep all errors and slow requests, plus a sample of the rest). **Exemplars** link a point on a latency metric to a trace that produced it.
 
 ## OpenTelemetry

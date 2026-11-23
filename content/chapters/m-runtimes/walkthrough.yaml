@@ -1,0 +1,80 @@
+- id: m-runtimes-bytecode-stack
+  title: Bytecode on a stack machine
+  hint: Watch the four bytecode instructions for lineTotal run one at a time, pushing and popping values on the stack.
+  language: Java and bytecode
+  code: |
+    static int lineTotal(int pence, int quantity) {
+        return pence * quantity;
+    }
+
+    static int lineTotal(int, int);
+      Code:
+         0: iload_0
+         1: iload_1
+         2: imul
+         3: ireturn
+  steps:
+    - title: The source
+      text: lineTotal multiplies a price in pence by a quantity. The CPU cannot run this Java; something must turn it into machine code.
+      lines: [1, 2, 3]
+      parts:
+        - { kind: note, id: n, text: "Price.java  →  javac  →  Price.class (bytecode)" }
+    - title: javac makes bytecode
+      text: javac does not make machine code. It makes bytecode, instructions for an imaginary computer, which javap -c can show. This is the same on every platform.
+      lines: [5, 6, 7, 8, 9, 10]
+      parts:
+        - { kind: note, id: n, text: "Price.java  →  javac  →  Price.class (bytecode)", tone: found }
+    - title: A call arrives
+      text: Say the program calls lineTotal(250, 3). The JVM puts the two arguments in numbered slots, 0 and 1, and starts with an empty stack.
+      lines: [5]
+      vars: { pence: 250, quantity: 3 }
+      parts:
+        - { kind: note, id: n, text: "lineTotal(250, 3)", tone: active }
+        - kind: kv
+          id: locals
+          label: "Arguments"
+          slots: 2
+          rows: [{ name: "0: pence", value: "250" }, { name: "1: quantity", value: "3" }]
+        - { kind: cells, id: stack, label: "Stack", items: [], slots: 2, orient: column, empty: "empty" }
+    - title: iload_0
+      text: Push the first int argument onto the stack.
+      lines: [7]
+      parts:
+        - kind: kv
+          id: locals
+          label: "Arguments"
+          slots: 2
+          rows: [{ name: "0: pence", value: "250", tone: active }, { name: "1: quantity", value: "3" }]
+        - { kind: cells, id: stack, label: "Stack", items: [{ v: 250, tone: active }], slots: 2, orient: column, empty: "empty" }
+    - title: iload_1
+      text: Push the second int argument. It goes on top.
+      lines: [8]
+      parts:
+        - kind: kv
+          id: locals
+          label: "Arguments"
+          slots: 2
+          rows: [{ name: "0: pence", value: "250" }, { name: "1: quantity", value: "3", tone: active }]
+        - { kind: cells, id: stack, label: "Stack", items: [{ v: 3, tone: active }, { v: 250 }], slots: 2, orient: column, empty: "empty" }
+    - title: imul
+      text: Take the top two values off the stack, multiply them, and push the result. 250 × 3 is 750.
+      lines: [9]
+      parts:
+        - kind: kv
+          id: locals
+          label: "Arguments"
+          slots: 2
+          rows: [{ name: "0: pence", value: "250" }, { name: "1: quantity", value: "3" }]
+        - { kind: cells, id: stack, label: "Stack", items: [{ v: 750, tone: found }], slots: 2, orient: column, empty: "empty" }
+    - title: ireturn
+      text: Return the value on top of the stack to the caller. Four simple instructions did the work of return pence * quantity.
+      lines: [10]
+      vars: { pence: 250, quantity: 3, returned: 750 }
+      parts:
+        - { kind: note, id: n, text: "lineTotal(250, 3) returns 750", tone: found }
+        - { kind: cells, id: stack, label: "Stack", items: [], slots: 2, orient: column, empty: "empty" }
+    - title: Hot code gets compiled
+      text: Interpreting these steps every call would be slow. If lineTotal runs often, the JIT compiler turns it into machine code for the real CPU, which is why a JVM speeds up after warm-up.
+      lines: [7, 8, 9, 10]
+      parts:
+        - { kind: note, id: n, text: "hot bytecode  →  JIT  →  machine code for this CPU", tone: found }

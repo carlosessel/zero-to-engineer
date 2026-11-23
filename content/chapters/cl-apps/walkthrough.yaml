@@ -1,0 +1,80 @@
+- id: cl-apps-project-context
+  title: What a project puts into the context
+  hint: Start a new chat in a study project and watch what the app adds to the context before Claude replies.
+  steps:
+    - title: A new chat in a project
+      text: You open a new chat in the project you set up for studying this course. The model itself remembers nothing, so whatever it should know has to be put into the context.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Context for this reply"
+          slots: 4
+          rows: []
+        - { kind: note, id: n, text: "Project: studying the course" }
+    - title: The project's instructions
+      text: The project's instructions go in first. They work like a system prompt for every chat in the project, so you never have to repeat them.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Context for this reply"
+          slots: 4
+          rows:
+            - { name: instructions, value: "I am working through a course to...", tone: active }
+    - title: The project's knowledge
+      text: The project's files are available too. When the knowledge grows large, paid plans find and read only the relevant parts instead of loading every file.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Context for this reply"
+          slots: 4
+          rows:
+            - { name: instructions, value: "I am working through a course to..." }
+            - { name: knowledge, value: "the syllabus, your notes", tone: active }
+    - title: Saved memory
+      text: The app adds relevant topics from memory. This is not the model remembering; it is the app putting saved notes into the context. Each project has its own memory.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Context for this reply"
+          slots: 4
+          rows:
+            - { name: instructions, value: "I am working through a course to..." }
+            - { name: knowledge, value: "the syllabus, your notes" }
+            - { name: memory, value: "relevant topics from this project", tone: active }
+    - title: Your message
+      text: Last comes what you typed. Here you paste your answer to an exercise.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Context for this reply"
+          slots: 4
+          rows:
+            - { name: instructions, value: "I am working through a course to..." }
+            - { name: knowledge, value: "the syllabus, your notes" }
+            - { name: memory, value: "relevant topics from this project" }
+            - { name: your message, value: "my answer to an exercise", tone: active }
+    - title: The instructions shape the reply
+      text: The instructions said not to give the solution, but to point out the first mistake and ask a leading question. So that is what the reply does, without you asking again.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Context for this reply"
+          slots: 4
+          rows:
+            - { name: instructions, value: "...point out the first mistake...", tone: found }
+            - { name: knowledge, value: "the syllabus, your notes" }
+            - { name: memory, value: "relevant topics from this project" }
+            - { name: your message, value: "my answer to an exercise" }
+        - { kind: note, id: n, text: "Reply: the first mistake, and a question that leads you to it", tone: found }
+    - title: Check what is saved
+      text: Instructions, knowledge and memory shape every chat in the project. A wrong remembered fact quietly affects later conversations too, so look at your memory now and then.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Context for this reply"
+          slots: 4
+          rows:
+            - { name: instructions, value: "I am working through a course to..." }
+            - { name: knowledge, value: "the syllabus, your notes" }
+            - { name: memory, value: "relevant topics from this project", tone: compare }
+            - { name: your message, value: "my answer to an exercise", tone: dim }

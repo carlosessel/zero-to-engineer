@@ -1,0 +1,185 @@
+- id: system-design-growing
+  title: A design grows, one bottleneck at a time
+  hint: Start from the simplest design and add one building block at a time, each for a reason you could measure.
+  steps:
+    - title: "Start simple"
+      text: "Client, server, database. One server and one database handle far more than beginners expect, so this is where every design starts."
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: client, label: "Client", x: 0.02, y: 0.5 }
+            - { k: s1, label: "Server", x: 0.52, y: 0.5 }
+            - { k: db, label: "Database", x: 0.8, y: 0.36 }
+          edges:
+            - { a: client, b: s1, directed: true }
+            - { a: s1, b: db, directed: true }
+    - title: "Measure, find the bottleneck"
+      text: "Suppose measurements show the one server is overloaded. A bigger machine, vertical scaling, is simple but has a ceiling."
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: client, label: "Client", x: 0.02, y: 0.5 }
+            - { k: s1, label: "Server", x: 0.52, y: 0.5, tone: bad, note: "overloaded" }
+            - { k: db, label: "Database", x: 0.8, y: 0.36 }
+          edges:
+            - { a: client, b: s1, directed: true }
+            - { a: s1, b: db, directed: true }
+    - title: "More servers, one entrance"
+      text: "Horizontal scaling: several servers behind a load balancer that spreads the requests. The servers must be stateless, so any of them can answer any request."
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: client, label: "Client", x: 0.02, y: 0.5 }
+            - { k: lb, label: "Load balancer", x: 0.27, y: 0.5, tone: active }
+            - { k: s2, label: "Server 2", x: 0.52, y: 0.22, tone: found }
+            - { k: s1, label: "Server 1", x: 0.52, y: 0.5, tone: found }
+            - { k: s3, label: "Server 3", x: 0.52, y: 0.78, tone: found }
+            - { k: db, label: "Database", x: 0.8, y: 0.36 }
+          edges:
+            - { a: client, b: lb, directed: true, tone: active }
+            - { a: lb, b: s2, directed: true, tone: active }
+            - { a: lb, b: s1, directed: true, tone: active }
+            - { a: lb, b: s3, directed: true, tone: active }
+            - { a: s2, b: db, directed: true }
+            - { a: s1, b: db, directed: true }
+            - { a: s3, b: db, directed: true }
+    - title: "Keep expensive results"
+      text: "A cache keeps the result of expensive work somewhere fast and reuses it. The hard part is knowing when the cached copy is out of date."
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: client, label: "Client", x: 0.02, y: 0.5 }
+            - { k: lb, label: "Load balancer", x: 0.27, y: 0.5 }
+            - { k: s2, label: "Server 2", x: 0.52, y: 0.22 }
+            - { k: s1, label: "Server 1", x: 0.52, y: 0.5 }
+            - { k: s3, label: "Server 3", x: 0.52, y: 0.78 }
+            - { k: cache, label: "Cache (Redis)", x: 0.8, y: 0, tone: active }
+            - { k: db, label: "Database", x: 0.8, y: 0.36 }
+          edges:
+            - { a: client, b: lb, directed: true }
+            - { a: lb, b: s2, directed: true }
+            - { a: lb, b: s1, directed: true }
+            - { a: lb, b: s3, directed: true }
+            - { a: s2, b: cache, directed: true, tone: active }
+            - { a: s1, b: db, directed: true }
+            - { a: s3, b: db, directed: true }
+    - title: "Copies for reading"
+      text: "Database replicas serve reads while one primary takes the writes."
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: client, label: "Client", x: 0.02, y: 0.5 }
+            - { k: lb, label: "Load balancer", x: 0.27, y: 0.5 }
+            - { k: s2, label: "Server 2", x: 0.52, y: 0.22 }
+            - { k: s1, label: "Server 1", x: 0.52, y: 0.5 }
+            - { k: s3, label: "Server 3", x: 0.52, y: 0.78 }
+            - { k: cache, label: "Cache (Redis)", x: 0.8, y: 0 }
+            - { k: db, label: "Primary DB", x: 0.8, y: 0.36, tone: compare, note: "writes" }
+            - { k: rep, label: "Read replica", x: 0.8, y: 0.68, tone: active, note: "reads" }
+          edges:
+            - { a: client, b: lb, directed: true }
+            - { a: lb, b: s2, directed: true }
+            - { a: lb, b: s1, directed: true }
+            - { a: lb, b: s3, directed: true }
+            - { a: s2, b: cache, directed: true }
+            - { a: s1, b: db, directed: true }
+            - { a: s3, b: rep, directed: true, tone: active }
+            - { a: db, b: rep, directed: true }
+    - title: "Slow work goes on a queue"
+      text: "Sending email is slow. The server puts the job on a queue and replies straight away; a worker sends it later."
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: client, label: "Client", x: 0.02, y: 0.5 }
+            - { k: lb, label: "Load balancer", x: 0.27, y: 0.5 }
+            - { k: s2, label: "Server 2", x: 0.52, y: 0.22 }
+            - { k: s1, label: "Server 1", x: 0.52, y: 0.5 }
+            - { k: s3, label: "Server 3", x: 0.52, y: 0.78 }
+            - { k: cache, label: "Cache (Redis)", x: 0.8, y: 0 }
+            - { k: db, label: "Primary DB", x: 0.8, y: 0.36, note: "writes" }
+            - { k: rep, label: "Read replica", x: 0.8, y: 0.68, note: "reads" }
+            - { k: q, label: "Queue", x: 0.52, y: 1, tone: active }
+            - { k: w, label: "Email worker", x: 0.8, y: 1, tone: active }
+          edges:
+            - { a: client, b: lb, directed: true }
+            - { a: lb, b: s2, directed: true }
+            - { a: lb, b: s1, directed: true }
+            - { a: lb, b: s3, directed: true }
+            - { a: s2, b: cache, directed: true }
+            - { a: s1, b: db, directed: true }
+            - { a: s3, b: rep, directed: true }
+            - { a: db, b: rep, directed: true }
+            - { a: s3, b: q, directed: true, tone: active }
+            - { a: q, b: w, directed: true, tone: active }
+    - title: "Files near the user"
+      text: "A CDN keeps copies of images, scripts and pages on servers near users worldwide."
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: cdn, label: "CDN", x: 0.02, y: 0.1, tone: active }
+            - { k: client, label: "Client", x: 0.02, y: 0.5 }
+            - { k: lb, label: "Load balancer", x: 0.27, y: 0.5 }
+            - { k: s2, label: "Server 2", x: 0.52, y: 0.22 }
+            - { k: s1, label: "Server 1", x: 0.52, y: 0.5 }
+            - { k: s3, label: "Server 3", x: 0.52, y: 0.78 }
+            - { k: cache, label: "Cache (Redis)", x: 0.8, y: 0 }
+            - { k: db, label: "Primary DB", x: 0.8, y: 0.36, note: "writes" }
+            - { k: rep, label: "Read replica", x: 0.8, y: 0.68, note: "reads" }
+            - { k: q, label: "Queue", x: 0.52, y: 1 }
+            - { k: w, label: "Email worker", x: 0.8, y: 1 }
+          edges:
+            - { a: client, b: cdn, directed: true, tone: active }
+            - { a: client, b: lb, directed: true }
+            - { a: lb, b: s2, directed: true }
+            - { a: lb, b: s1, directed: true }
+            - { a: lb, b: s3, directed: true }
+            - { a: s2, b: cache, directed: true }
+            - { a: s1, b: db, directed: true }
+            - { a: s3, b: rep, directed: true }
+            - { a: db, b: rep, directed: true }
+            - { a: s3, b: q, directed: true }
+            - { a: q, b: w, directed: true }
+    - title: "Every box is a trade-off"
+      text: "Each block fixed a measured problem and added a part that can fail. A good design states what happens when each part dies; there is no best design, only a best fit."
+      parts:
+        - kind: graph
+          id: g
+          height: 320
+          nodes:
+            - { k: cdn, label: "CDN", x: 0.02, y: 0.1, tone: done }
+            - { k: client, label: "Client", x: 0.02, y: 0.5, tone: done }
+            - { k: lb, label: "Load balancer", x: 0.27, y: 0.5, tone: done }
+            - { k: s2, label: "Server 2", x: 0.52, y: 0.22, tone: done }
+            - { k: s1, label: "Server 1", x: 0.52, y: 0.5, tone: done }
+            - { k: s3, label: "Server 3", x: 0.52, y: 0.78, tone: done }
+            - { k: cache, label: "Cache (Redis)", x: 0.8, y: 0, tone: done }
+            - { k: db, label: "Primary DB", x: 0.8, y: 0.36, tone: done, note: "writes" }
+            - { k: rep, label: "Read replica", x: 0.8, y: 0.68, tone: done, note: "reads" }
+            - { k: q, label: "Queue", x: 0.52, y: 1, tone: done }
+            - { k: w, label: "Email worker", x: 0.8, y: 1, tone: done }
+          edges:
+            - { a: client, b: cdn, directed: true }
+            - { a: client, b: lb, directed: true }
+            - { a: lb, b: s2, directed: true }
+            - { a: lb, b: s1, directed: true }
+            - { a: lb, b: s3, directed: true }
+            - { a: s2, b: cache, directed: true }
+            - { a: s1, b: db, directed: true }
+            - { a: s3, b: rep, directed: true }
+            - { a: db, b: rep, directed: true }
+            - { a: s3, b: q, directed: true }
+            - { a: q, b: w, directed: true }

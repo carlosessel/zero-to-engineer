@@ -1,0 +1,92 @@
+- id: cc-context-claude-md-loading
+  title: What a session loads before you type
+  hint: Start Claude Code in a project and watch which instruction files join the context, and when.
+  language: Markdown
+  code: |
+    # Commands
+    - Install: npm install
+    - Run all tests: npm test
+    - Run one test file: npx vitest run path/to/file.test.ts
+    - Type-check: npx tsc --noEmit
+
+    # Conventions
+    - Use the error helpers in src/lib/errors.ts; never throw plain strings
+    - src/legacy/ is still in use, but do not copy its patterns into new code
+
+    # Gotchas
+    - Integration tests need DATABASE_URL set; see .env.example
+  steps:
+    - title: A new session
+      text: You start claude in the project folder. The model knows nothing about this project yet; only what is loaded into the context will count.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Loaded into this session"
+          slots: 5
+          rows: []
+    - title: The project's CLAUDE.md
+      text: The project's CLAUDE.md, committed for the whole team, is loaded. The commands that check work are usually its most valuable lines.
+      lines: [1, 2, 3, 4, 5]
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Loaded into this session"
+          slots: 5
+          rows:
+            - { name: ./CLAUDE.md, value: "commands, conventions, gotchas", tone: active }
+    - title: Rules it could not find itself
+      text: The conventions and gotchas are things Claude could not work out by reading the code, such as a team decision or an environment variable the tests need.
+      lines: [7, 8, 9, 11, 12]
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Loaded into this session"
+          slots: 5
+          rows:
+            - { name: ./CLAUDE.md, value: "commands, conventions, gotchas", tone: compare }
+    - title: Your own files too
+      text: Your local notes for this project and your user file, with preferences for every project, are loaded as well. They are combined with the project file, not replaced by it.
+      lines: []
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Loaded into this session"
+          slots: 5
+          rows:
+            - { name: ./CLAUDE.md, value: "commands, conventions, gotchas" }
+            - { name: ./CLAUDE.local.md, value: "your notes, ignored by Git", tone: active }
+            - { name: ~/.claude/CLAUDE.md, value: "your preferences, every project", tone: active }
+    - title: Auto memory
+      text: An index of the notes Claude Code has saved for itself about this project is loaded at the start too. You can review it with /memory.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Loaded into this session"
+          slots: 5
+          rows:
+            - { name: ./CLAUDE.md, value: "commands, conventions, gotchas" }
+            - { name: ./CLAUDE.local.md, value: "your notes, ignored by Git" }
+            - { name: ~/.claude/CLAUDE.md, value: "your preferences, every project" }
+            - { name: auto memory index, value: "Claude's own saved notes", tone: active }
+    - title: A subfolder's file waits
+      text: Suppose src/legacy/ had its own CLAUDE.md. It is not loaded yet, because nothing in this task has touched that folder. Rules about one part stay out of the way elsewhere.
+      parts:
+        - { kind: note, id: n, text: "src/legacy/CLAUDE.md: not loaded (no work there yet)", tone: dim }
+    - title: Loaded when needed
+      text: When Claude starts working on files in src/legacy/, that folder's CLAUDE.md is loaded and joins the others.
+      parts:
+        - kind: kv
+          id: ctx
+          label: "Loaded into this session"
+          slots: 5
+          rows:
+            - { name: ./CLAUDE.md, value: "commands, conventions, gotchas" }
+            - { name: ./CLAUDE.local.md, value: "your notes, ignored by Git" }
+            - { name: ~/.claude/CLAUDE.md, value: "your preferences, every project" }
+            - { name: auto memory index, value: "Claude's own saved notes" }
+            - { name: src/legacy/CLAUDE.md, value: "rules for this folder only", tone: active }
+        - { kind: note, id: n, text: "src/legacy/CLAUDE.md: loaded, because Claude is working there", tone: found }
+    - title: Every line costs attention
+      text: All of this is read on every task. That is why each file should be short and hold only what Claude cannot work out for itself.
+      parts:
+        - { kind: note, id: n, text: "Short files, only what Claude cannot see in the code", tone: found }

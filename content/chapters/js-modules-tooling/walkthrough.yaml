@@ -1,0 +1,102 @@
+- id: js-modules-tooling-npm-install
+  title: What npm install does
+  hint: Watch the three things npm install dayjs changes, then how app.js finds the package by its name.
+  language: JavaScript
+  code: |
+    import dayjs from "dayjs";
+
+    const order = dayjs("2026-11-12");
+    console.log(order.add(7, "day").format("D MMMM YYYY"));
+  steps:
+    - title: Before installing
+      text: The project has a package.json, made by npm init -y, and an app.js. There is no node_modules folder yet.
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: reg, label: "npm registry", x: 0.1, y: 0 }
+            - { k: nm, label: "node_modules/", x: 0.1, y: 1, tone: dim, note: "not there yet" }
+            - { k: pkg, label: "package.json", x: 0.5, y: 0 }
+            - { k: lock, label: "package-lock.json", x: 0.5, y: 1, tone: dim, note: "not there yet" }
+            - { k: app, label: "app.js", x: 0.92, y: 0.5 }
+          edges: []
+        - { kind: terminal, id: t, slots: 3, lines: ["$ npm install dayjs"] }
+    - title: "1: download into node_modules"
+      text: npm downloads dayjs, and anything it needs, from the npm registry into a folder called node_modules.
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: reg, label: "npm registry", x: 0.1, y: 0, tone: compare }
+            - { k: nm, label: "node_modules/", x: 0.1, y: 1, tone: active, note: dayjs }
+            - { k: pkg, label: "package.json", x: 0.5, y: 0 }
+            - { k: lock, label: "package-lock.json", x: 0.5, y: 1, tone: dim, note: "not there yet" }
+            - { k: app, label: "app.js", x: 0.92, y: 0.5 }
+          edges:
+            - { a: reg, b: nm, directed: true, label: download, tone: active }
+    - title: "2: record it in package.json"
+      text: npm adds dayjs to dependencies, with a version range. Anyone reading package.json now knows the project needs it.
+      vars: { "dependencies.dayjs": "^1.11.13" }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: reg, label: "npm registry", x: 0.1, y: 0 }
+            - { k: nm, label: "node_modules/", x: 0.1, y: 1, note: dayjs }
+            - { k: pkg, label: "package.json", x: 0.5, y: 0, tone: active, note: "dependencies" }
+            - { k: lock, label: "package-lock.json", x: 0.5, y: 1, tone: dim, note: "not there yet" }
+            - { k: app, label: "app.js", x: 0.92, y: 0.5 }
+          edges:
+            - { a: reg, b: nm, directed: true, label: download, tone: dim }
+    - title: "3: write package-lock.json"
+      text: The lock file records the exact version of every package installed, so the next person who runs npm install gets identical versions.
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: reg, label: "npm registry", x: 0.1, y: 0 }
+            - { k: nm, label: "node_modules/", x: 0.1, y: 1, note: dayjs }
+            - { k: pkg, label: "package.json", x: 0.5, y: 0, note: "dependencies" }
+            - { k: lock, label: "package-lock.json", x: 0.5, y: 1, tone: active, note: "exact versions" }
+            - { k: app, label: "app.js", x: 0.92, y: 0.5 }
+          edges:
+            - { a: reg, b: nm, directed: true, label: download, tone: dim }
+    - title: Import by name, no ./
+      text: Your own files are imported with ./ and the file name. An installed package is imported by its name alone.
+      lines: [1]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: reg, label: "npm registry", x: 0.1, y: 0 }
+            - { k: nm, label: "node_modules/", x: 0.1, y: 1, tone: found, note: dayjs }
+            - { k: pkg, label: "package.json", x: 0.5, y: 0, note: "dependencies" }
+            - { k: lock, label: "package-lock.json", x: 0.5, y: 1, note: "exact versions" }
+            - { k: app, label: "app.js", x: 0.92, y: 0.5, tone: active }
+          edges:
+            - { a: app, b: nm, directed: true, label: "import dayjs", tone: active }
+    - title: Use it like any module
+      text: dayjs reads the order date, adds seven days and formats the result for people.
+      lines: [3, 4]
+      vars: { order: "12 November 2026", "order.add(7, \"day\")": "19 November 2026" }
+      parts:
+        - { kind: terminal, id: t, slots: 3, lines: ["$ npm install dayjs", "$ node app.js", "19 November 2026"] }
+    - title: What goes in Git
+      text: Commit package.json and package-lock.json. Never commit node_modules; anyone can rebuild it from those two files with npm install.
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: reg, label: "npm registry", x: 0.1, y: 0 }
+            - { k: nm, label: "node_modules/", x: 0.1, y: 1, tone: bad, note: "never commit" }
+            - { k: pkg, label: "package.json", x: 0.5, y: 0, tone: found, note: commit }
+            - { k: lock, label: "package-lock.json", x: 0.5, y: 1, tone: found, note: commit }
+            - { k: app, label: "app.js", x: 0.92, y: 0.5, tone: found, note: commit }
+          edges: []

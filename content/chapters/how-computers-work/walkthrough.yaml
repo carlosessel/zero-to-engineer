@@ -1,0 +1,119 @@
+- id: how-computers-work-run
+  title: A program runs, line by line
+  hint: Follow the three-line program from a file on disk into memory, through the processor, to the screen.
+  language: Python
+  code: |
+    name = "Ama"
+    age = 20
+    print(name, "will be", age + 1, "next year")
+  steps:
+    - title: A text file on storage
+      text: The program is a plain text file kept on the disk. Storage is slow but permanent, so the file is still there after the computer is switched off.
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: disk, label: Storage (disk), x: 0.1, y: 0.5, tone: active, note: "the .py file" }
+            - { k: ram, label: Memory (RAM), x: 0.5, y: 0.5 }
+            - { k: cpu, label: Processor (CPU), x: 0.9, y: 0.5 }
+          edges:
+            - { a: disk, b: ram, directed: true }
+            - { a: ram, b: cpu }
+        - { kind: kv, id: mem, label: "Names in memory", rows: [], slots: 2 }
+        - { kind: terminal, id: out, lines: [], slots: 1 }
+    - title: Into memory
+      text: When you run it, the Python interpreter loads the file into memory, the fast working space. A running program lives there.
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: disk, label: Storage (disk), x: 0.1, y: 0.5, tone: dim, note: "the .py file" }
+            - { k: ram, label: Memory (RAM), x: 0.5, y: 0.5, tone: active, note: "running program" }
+            - { k: cpu, label: Processor (CPU), x: 0.9, y: 0.5 }
+          edges:
+            - { a: disk, b: ram, directed: true, tone: active, label: "load" }
+            - { a: ram, b: cpu }
+    - title: Store a text
+      text: The interpreter reads the first line and runs it. The text "Ama" is kept in memory as numbers; in UTF-8 the letter A is 65.
+      lines: [1]
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: disk, label: Storage (disk), x: 0.1, y: 0.5, tone: dim, note: "the .py file" }
+            - { k: ram, label: Memory (RAM), x: 0.5, y: 0.5, tone: active, note: "running program" }
+            - { k: cpu, label: Processor (CPU), x: 0.9, y: 0.5 }
+          edges:
+            - { a: disk, b: ram, directed: true, tone: dim }
+            - { a: ram, b: cpu }
+        - kind: kv
+          id: mem
+          label: "Names in memory"
+          slots: 2
+          rows: [{ name: name, value: '"Ama"', tone: active }]
+    - title: Store a number
+      text: Line two runs only after line one has finished. Now memory holds a second value.
+      lines: [2]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names in memory"
+          slots: 2
+          rows: [{ name: name, value: '"Ama"' }, { name: age, value: "20", tone: active }]
+    - title: Calculate
+      text: To work out age + 1, the processor copies 20 out of memory and carries out one of its simple instructions, add. The answer is 21.
+      lines: [3]
+      vars: { "age + 1": "20 + 1 = 21" }
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: disk, label: Storage (disk), x: 0.1, y: 0.5, tone: dim, note: "the .py file" }
+            - { k: ram, label: Memory (RAM), x: 0.5, y: 0.5, tone: compare, note: "running program" }
+            - { k: cpu, label: Processor (CPU), x: 0.9, y: 0.5, tone: active, note: "add" }
+          edges:
+            - { a: disk, b: ram, directed: true, tone: dim }
+            - { a: ram, b: cpu, tone: active, label: "20" }
+        - kind: kv
+          id: mem
+          label: "Names in memory"
+          slots: 2
+          rows: [{ name: name, value: '"Ama"' }, { name: age, value: "20", tone: compare }]
+    - title: Show the result
+      text: print puts the pieces together, with spaces between them, and shows them on the screen.
+      lines: [3]
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: disk, label: Storage (disk), x: 0.1, y: 0.5, tone: dim, note: "the .py file" }
+            - { k: ram, label: Memory (RAM), x: 0.5, y: 0.5, tone: active, note: "running program" }
+            - { k: cpu, label: Processor (CPU), x: 0.9, y: 0.5 }
+          edges:
+            - { a: disk, b: ram, directed: true, tone: dim }
+            - { a: ram, b: cpu }
+        - kind: kv
+          id: mem
+          label: "Names in memory"
+          slots: 2
+          rows: [{ name: name, value: '"Ama"' }, { name: age, value: "20" }]
+        - { kind: terminal, id: out, lines: ["Ama will be 21 next year"], slots: 1 }
+    - title: Small steps, however large
+      text: Store a text, store a number, calculate, show the result. Memory is wiped when the power goes off; only the file on storage stays. Every program is built from steps this small.
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 160
+          nodes:
+            - { k: disk, label: Storage (disk), x: 0.1, y: 0.5, tone: found, note: "the .py file" }
+            - { k: ram, label: Memory (RAM), x: 0.5, y: 0.5, tone: done }
+            - { k: cpu, label: Processor (CPU), x: 0.9, y: 0.5, tone: done }
+          edges:
+            - { a: disk, b: ram, directed: true, tone: dim }
+            - { a: ram, b: cpu, tone: dim }

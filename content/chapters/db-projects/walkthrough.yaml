@@ -1,0 +1,129 @@
+- id: db-projects-route
+  title: Five projects that build on each other
+  hint: Each project reuses the work of an earlier one. Watch the portfolio grow, and see which chapters each step draws on.
+  steps:
+    - title: Five projects
+      text: Each project has a specification, a checklist of what done means, and chapters to revisit. Later projects start from the data or schema of earlier ones.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: p1, label: 1 Real data, x: 0.05, y: 0.15 }
+            - { k: p2, label: 2 Schema, x: 0.05, y: 0.85 }
+            - { k: p3, label: 3 Performance, x: 0.5, y: 0.5 }
+            - { k: p4, label: 4 Production, x: 0.5, y: 1 }
+            - { k: p5, label: 5 Analytics, x: 0.95, y: 0.15 }
+          edges:
+            - { a: p2, b: p3, directed: true }
+            - { a: p2, b: p4, directed: true }
+            - { a: p1, b: p5, directed: true }
+            - { a: p2, b: p5, directed: true }
+    - title: 1. Questions about real data
+      text: Load a public dataset with COPY and answer ten questions in SQL, at least three with window functions. Document the data problems you find.
+      vars: { revisit: "aggregates, window functions, advanced queries" }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: p1, label: 1 Real data, x: 0.05, y: 0.15, tone: active, note: ten questions }
+            - { k: p2, label: 2 Schema, x: 0.05, y: 0.85 }
+            - { k: p3, label: 3 Performance, x: 0.5, y: 0.5 }
+            - { k: p4, label: 4 Production, x: 0.5, y: 1 }
+            - { k: p5, label: 5 Analytics, x: 0.95, y: 0.15 }
+          edges:
+            - { a: p2, b: p3, directed: true }
+            - { a: p2, b: p4, directed: true }
+            - { a: p1, b: p5, directed: true }
+            - { a: p2, b: p5, directed: true }
+    - title: 2. Design a schema
+      text: Write the requirements first, then the tables, keys and constraints, created by numbered migrations. This schema is the base for two later projects.
+      vars: { revisit: "constraints, schema design, modelling" }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: p1, label: 1 Real data, x: 0.05, y: 0.15, tone: done, note: ten questions }
+            - { k: p2, label: 2 Schema, x: 0.05, y: 0.85, tone: active, note: migrations }
+            - { k: p3, label: 3 Performance, x: 0.5, y: 0.5 }
+            - { k: p4, label: 4 Production, x: 0.5, y: 1 }
+            - { k: p5, label: 5 Analytics, x: 0.95, y: 0.15 }
+          edges:
+            - { a: p2, b: p3, directed: true }
+            - { a: p2, b: p4, directed: true }
+            - { a: p1, b: p5, directed: true }
+            - { a: p2, b: p5, directed: true }
+    - title: 3. A performance investigation
+      text: Fill project 2's schema with millions of rows and make the five slowest queries at least ten times faster, with plans before and after.
+      vars: { revisit: "indexes, query plans, performance" }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: p1, label: 1 Real data, x: 0.05, y: 0.15, tone: done, note: ten questions }
+            - { k: p2, label: 2 Schema, x: 0.05, y: 0.85, tone: done, note: migrations }
+            - { k: p3, label: 3 Performance, x: 0.5, y: 0.5, tone: active, note: 10× faster }
+            - { k: p4, label: 4 Production, x: 0.5, y: 1 }
+            - { k: p5, label: 5 Analytics, x: 0.95, y: 0.15 }
+          edges:
+            - { a: p2, b: p3, directed: true, tone: active }
+            - { a: p2, b: p4, directed: true }
+            - { a: p1, b: p5, directed: true }
+            - { a: p2, b: p5, directed: true }
+    - title: 4. Production-ready
+      text: "Run project 2's database as if it were live: least-privilege roles, row-level security, a tested point-in-time restore, a replica, monitoring and a runbook."
+      vars: { revisit: "security, operations, migrations" }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: p1, label: 1 Real data, x: 0.05, y: 0.15, tone: done, note: ten questions }
+            - { k: p2, label: 2 Schema, x: 0.05, y: 0.85, tone: done, note: migrations }
+            - { k: p3, label: 3 Performance, x: 0.5, y: 0.5, tone: done, note: 10× faster }
+            - { k: p4, label: 4 Production, x: 0.5, y: 1, tone: active, note: tested restore }
+            - { k: p5, label: 5 Analytics, x: 0.95, y: 0.15 }
+          edges:
+            - { a: p2, b: p3, directed: true, tone: done }
+            - { a: p2, b: p4, directed: true, tone: active }
+            - { a: p1, b: p5, directed: true }
+            - { a: p2, b: p5, directed: true }
+    - title: 5. A small analytics stack
+      text: Build a star schema from project 1 or 2, transform it with tested SQL, and put five charts on a dashboard, one of them a cohort or retention chart.
+      vars: { revisit: analytics }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: p1, label: 1 Real data, x: 0.05, y: 0.15, tone: done, note: ten questions }
+            - { k: p2, label: 2 Schema, x: 0.05, y: 0.85, tone: done, note: migrations }
+            - { k: p3, label: 3 Performance, x: 0.5, y: 0.5, tone: done, note: 10× faster }
+            - { k: p4, label: 4 Production, x: 0.5, y: 1, tone: done, note: tested restore }
+            - { k: p5, label: 5 Analytics, x: 0.95, y: 0.15, tone: active, note: dashboard }
+          edges:
+            - { a: p2, b: p3, directed: true, tone: done }
+            - { a: p2, b: p4, directed: true, tone: done }
+            - { a: p1, b: p5, directed: true, tone: active }
+            - { a: p2, b: p5, directed: true, tone: active }
+    - title: A portfolio with evidence
+      text: Publish each in a Git repository with a README that explains your decisions and shows results, plans, timings and restores. Interviewers ask about decisions far more than syntax.
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: p1, label: 1 Real data, x: 0.05, y: 0.15, tone: done, note: ten questions }
+            - { k: p2, label: 2 Schema, x: 0.05, y: 0.85, tone: done, note: migrations }
+            - { k: p3, label: 3 Performance, x: 0.5, y: 0.5, tone: done, note: 10× faster }
+            - { k: p4, label: 4 Production, x: 0.5, y: 1, tone: done, note: tested restore }
+            - { k: p5, label: 5 Analytics, x: 0.95, y: 0.15, tone: done, note: dashboard }
+          edges:
+            - { a: p2, b: p3, directed: true, tone: done }
+            - { a: p2, b: p4, directed: true, tone: done }
+            - { a: p1, b: p5, directed: true, tone: done }
+            - { a: p2, b: p5, directed: true, tone: done }

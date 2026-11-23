@@ -1,0 +1,101 @@
+- id: cc-extending-stop-hook
+  title: A Stop hook sends Claude back to work
+  hint: Watch what happens each time Claude tries to finish. The hook runs every time, and its exit code decides.
+  language: JSON
+  code: |
+    {
+      "hooks": {
+        "Stop": [
+          {
+            "hooks": [
+              { "type": "command", "command": "npx tsc --noEmit 1>&2 || exit 2" }
+            ]
+          }
+        ]
+      }
+    }
+  steps:
+    - title: Claude tries to finish
+      text: Claude has made its edits and tries to end its turn. That is the Stop event, and this settings file has a hook registered for it.
+      lines: [3]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Claude, Claude Code, Stop hook]
+          slots: 8
+          messages:
+            - { from: Claude, to: Claude Code, label: "I'm done", tone: active }
+    - title: Claude Code runs the hook
+      text: Claude Code itself runs the command, not the model. It does not depend on Claude choosing to follow an instruction; it always runs.
+      lines: [6]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Claude, Claude Code, Stop hook]
+          slots: 8
+          messages:
+            - { from: Claude, to: Claude Code, label: "I'm done", tone: dim }
+            - { from: Claude Code, to: Stop hook, label: "npx tsc --noEmit", tone: active }
+    - title: The type-check fails
+      text: tsc finds type errors and fails, so the part after || runs and the hook exits with 2. Its errors go to the error output.
+      lines: [6]
+      vars: { exit code: 2 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Claude, Claude Code, Stop hook]
+          slots: 8
+          messages:
+            - { from: Claude, to: Claude Code, label: "I'm done", tone: dim }
+            - { from: Claude Code, to: Stop hook, label: "npx tsc --noEmit", tone: dim }
+            - { from: Stop hook, to: Claude Code, label: "exit 2, with the type errors", tone: bad }
+    - title: Exit code 2 blocks
+      text: For a Stop hook, exit code 2 sends Claude back to work. What the command printed to its error output is given to Claude as the reason.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Claude, Claude Code, Stop hook]
+          slots: 8
+          messages:
+            - { from: Claude, to: Claude Code, label: "I'm done", tone: dim }
+            - { from: Claude Code, to: Stop hook, label: "npx tsc --noEmit", tone: dim }
+            - { from: Stop hook, to: Claude Code, label: "exit 2, with the type errors", tone: dim }
+            - { from: Claude Code, to: Claude, label: "not yet: here are the errors", tone: bad }
+    - title: Claude fixes and tries again
+      text: Claude reads the errors, fixes the code, and tries to finish again. The Stop event fires again, so the hook runs again.
+      vars: {}
+      parts:
+        - kind: seq
+          id: s
+          actors: [Claude, Claude Code, Stop hook]
+          slots: 8
+          messages:
+            - { from: Claude, to: Claude Code, label: "I'm done", tone: dim }
+            - { from: Claude Code, to: Stop hook, label: "npx tsc --noEmit", tone: dim }
+            - { from: Stop hook, to: Claude Code, label: "exit 2, with the type errors", tone: dim }
+            - { from: Claude Code, to: Claude, label: "not yet: here are the errors", tone: dim }
+            - { from: Claude, to: Claude, label: "fix the type errors", tone: active }
+            - { from: Claude, to: Claude Code, label: "I'm done", tone: active }
+            - { from: Claude Code, to: Stop hook, label: "npx tsc --noEmit", tone: active }
+    - title: The check passes
+      text: This time tsc passes, so the || exit 2 part never runs and the hook exits with 0, which means carry on. The turn ends.
+      vars: { exit code: 0 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Claude, Claude Code, Stop hook]
+          slots: 8
+          messages:
+            - { from: Claude, to: Claude Code, label: "I'm done", tone: dim }
+            - { from: Claude Code, to: Stop hook, label: "npx tsc --noEmit", tone: dim }
+            - { from: Stop hook, to: Claude Code, label: "exit 2, with the type errors", tone: dim }
+            - { from: Claude Code, to: Claude, label: "not yet: here are the errors", tone: dim }
+            - { from: Claude, to: Claude, label: "fix the type errors", tone: dim }
+            - { from: Claude, to: Claude Code, label: "I'm done", tone: dim }
+            - { from: Claude Code, to: Stop hook, label: "npx tsc --noEmit", tone: dim }
+            - { from: Stop hook, to: Claude Code, label: "exit 0", tone: found }
+    - title: No exceptions, but no trap
+      text: The rule held with no exceptions, because Claude Code enforced it. And if several blocks in a row make no progress, Claude Code stops blocking, so a broken check cannot trap it for ever.
+      vars: {}
+      parts:
+        - { kind: note, id: n, text: "exit 0: carry on · exit 2: block, with the reason · other: error shown", tone: found }

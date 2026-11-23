@@ -168,6 +168,8 @@ console.log(chat.since("family", 0));
 
 It prints `["2 Kofi: Yes, I'll bring flour", "3 Esi: Rye or white?"]` and `["1 Ama: Home late tonight"]`. Kofi's retried message (same client id) was stored once, each conversation has its own gap-free sequence, and a client that had seen message 1 fetches exactly what it missed.
 
+<Walkthrough name="m-system-design-chat-sequence" />
+
 **Storage.** Message history is append-heavy and read by conversation and time, so it suits a wide-column store or a partitioned relational table keyed by conversation id and sequence (<Ref to="m-nosql" />). Receipts are small updates per user per conversation ("read up to sequence 41"), not per message. End-to-end encryption (as in Signal's protocol) changes the design further: the server stores and forwards only ciphertext.
 
 ## Design 4: payments

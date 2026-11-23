@@ -142,6 +142,8 @@ ORDER BY day;
 
 The rows a window function sees are its **frame**. **`ROWS BETWEEN 2 PRECEDING AND CURRENT ROW`** makes a moving window of the current row and the two before it: a three-row moving average. Frames can be `ROWS` (counting rows), `RANGE` (by value, such as `RANGE BETWEEN interval '6 days' PRECEDING AND CURRENT ROW` for a true seven-day window when some days have no rows) or `GROUPS`.
 
+<Walkthrough name="db-window-functions-running-total" />
+
 One subtlety catches everyone: with `ORDER BY` and no frame clause, the default frame is `RANGE ... CURRENT ROW`, which includes all rows **tied** with the current one. A running total over a column with duplicate values jumps by the whole tie at once. Write `ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW` when you want a strict row-by-row total.
 
 ## Comparing rows: LAG and LEAD

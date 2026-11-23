@@ -1,0 +1,129 @@
+- id: be-dependency-injection-lifetimes
+  title: The container builds objects for two requests
+  hint: Watch which objects the container creates new for each request and which one it shares across the whole app.
+  language: C#
+  code: |
+    var services = new ServiceCollection();
+    services.AddSingleton<IClock, SystemClock>();
+    services.AddScoped<IOrderRepository, InMemoryOrderRepository>();
+    services.AddScoped<OrderService>();
+
+    using var provider = services.BuildServiceProvider(new ServiceProviderOptions { ValidateScopes = true, ValidateOnBuild = true });
+
+    for (var request = 1; request <= 2; request++)
+    {
+        using var scope = provider.CreateScope();
+        var first = scope.ServiceProvider.GetRequiredService<OrderService>();
+        var second = scope.ServiceProvider.GetRequiredService<OrderService>();
+        Console.WriteLine($"request {request}: same service in one scope: {ReferenceEquals(first, second)}, repository #{first.RepositoryNumber}");
+    }
+
+    class OrderService(IOrderRepository repository, IClock clock) { ... }
+  steps:
+    - title: Registrations are only a list
+      text: Each Add line records a type and a lifetime. Nothing is created yet; the container just learns what to build when asked.
+      lines: [1, 2, 3, 4]
+      parts:
+        - kind: kv
+          id: reg
+          label: "Registrations"
+          slots: 3
+          rows:
+            - { name: IClock, value: "SystemClock, singleton", tone: active }
+            - { name: IOrderRepository, value: "InMemoryOrderRepository, scoped", tone: active }
+            - { name: OrderService, value: "OrderService, scoped", tone: active }
+        - { kind: graph, id: g, height: 260, nodes: [], edges: [] }
+    - title: Build the provider
+      text: BuildServiceProvider turns the list into a container. With ValidateOnBuild it also checks now that every constructor's needs can be met.
+      lines: [6]
+      parts:
+        - kind: kv
+          id: reg
+          label: "Registrations"
+          slots: 3
+          rows:
+            - { name: IClock, value: "SystemClock, singleton" }
+            - { name: IOrderRepository, value: "InMemoryOrderRepository, scoped" }
+            - { name: OrderService, value: "OrderService, scoped" }
+    - title: Request 1 asks for an OrderService
+      text: A scope stands for one request. OrderService's constructor needs a repository and a clock, so the container builds those first, then passes them in.
+      lines: [10, 11, 16]
+      vars: { request: 1 }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: s1, label: OrderService, x: 0.1, y: 0.1, tone: active, note: "request 1" }
+            - { k: r1, label: "Repository #1", x: 0.1, y: 0.9, tone: active, note: "request 1" }
+            - { k: clock, label: SystemClock, x: 0.5, y: 0.5, tone: active, note: "whole app" }
+          edges:
+            - { a: s1, b: r1, directed: true, tone: active }
+            - { a: s1, b: clock, directed: true, tone: active }
+    - title: Asking again in the same scope
+      text: Scoped means one instance per scope, so the second request for OrderService gets the very same object.
+      lines: [12, 13]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: s1, label: OrderService, x: 0.1, y: 0.1, tone: found, note: "request 1, asked twice" }
+            - { k: r1, label: "Repository #1", x: 0.1, y: 0.9, note: "request 1" }
+            - { k: clock, label: SystemClock, x: 0.5, y: 0.5, note: "whole app" }
+          edges:
+            - { a: s1, b: r1, directed: true }
+            - { a: s1, b: clock, directed: true }
+        - { kind: terminal, id: out, slots: 2, lines: ["request 1: same service in one scope: True, repository #1"] }
+    - title: The scope ends
+      text: At the end of the loop the scope is disposed. Its scoped objects belong to that request only and are finished with.
+      lines: [14]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: s1, label: OrderService, x: 0.1, y: 0.1, tone: dim, note: "request 1" }
+            - { k: r1, label: "Repository #1", x: 0.1, y: 0.9, tone: dim, note: "request 1" }
+            - { k: clock, label: SystemClock, x: 0.5, y: 0.5, note: "whole app" }
+          edges:
+            - { a: s1, b: r1, directed: true, tone: dim }
+            - { a: s1, b: clock, directed: true, tone: dim }
+    - title: Request 2 gets new scoped objects
+      text: A new scope means a new OrderService and a new repository, number 2. The clock is a singleton, so the same one is passed in again.
+      lines: [10, 11]
+      vars: { request: 2 }
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: s1, label: OrderService, x: 0.1, y: 0.1, tone: dim, note: "request 1" }
+            - { k: r1, label: "Repository #1", x: 0.1, y: 0.9, tone: dim, note: "request 1" }
+            - { k: clock, label: SystemClock, x: 0.5, y: 0.5, tone: compare, note: "whole app, reused" }
+            - { k: s2, label: OrderService, x: 0.9, y: 0.1, tone: active, note: "request 2" }
+            - { k: r2, label: "Repository #2", x: 0.9, y: 0.9, tone: active, note: "request 2" }
+          edges:
+            - { a: s1, b: r1, directed: true, tone: dim }
+            - { a: s1, b: clock, directed: true, tone: dim }
+            - { a: s2, b: r2, directed: true, tone: active }
+            - { a: s2, b: clock, directed: true, tone: active }
+    - title: What the lifetimes mean
+      text: Scoped objects live for one request; the singleton clock is shared by all of them. This is why a singleton must be thread-safe and must never hold a scoped object.
+      lines: [2, 3]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: s1, label: OrderService, x: 0.1, y: 0.1, tone: dim, note: "request 1" }
+            - { k: r1, label: "Repository #1", x: 0.1, y: 0.9, tone: dim, note: "request 1" }
+            - { k: clock, label: SystemClock, x: 0.5, y: 0.5, tone: found, note: "whole app" }
+            - { k: s2, label: OrderService, x: 0.9, y: 0.1, tone: found, note: "request 2" }
+            - { k: r2, label: "Repository #2", x: 0.9, y: 0.9, tone: found, note: "request 2" }
+          edges:
+            - { a: s1, b: r1, directed: true, tone: dim }
+            - { a: s1, b: clock, directed: true, tone: dim }
+            - { a: s2, b: r2, directed: true }
+            - { a: s2, b: clock, directed: true }
+        - { kind: terminal, id: out, slots: 2, lines: ["request 1: same service in one scope: True, repository #1", "request 2: same service in one scope: True, repository #2"] }

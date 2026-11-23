@@ -168,6 +168,8 @@ SELECT pg_size_pretty(pg_relation_size('import_test')) AS after_vacuum_and_updat
 
 Two updates of every row nearly tripled the table's size with dead versions. After `VACUUM`, the next update reused the freed space instead of growing the table. Space that stays allocated but mostly empty is **bloat**: it makes scans read more pages and indexes bigger.
 
+<Walkthrough name="db-performance-vacuum-bloat" />
+
 **Autovacuum** runs `VACUUM` (and `ANALYZE`) automatically when enough rows have changed. Keep it on, and on busy tables tune it to run more often rather than less. Things that stop VACUUM cleaning up, and so cause bloat, are long-running transactions and abandoned sessions left "idle in transaction": the database must keep every row version they might still see. Monitor for them (<Ref to="db-operations" />). `VACUUM FULL` rewrites a table compactly but locks it completely; tools such as `pg_repack` do it online.
 
 ## Connections and pooling

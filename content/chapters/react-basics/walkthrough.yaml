@@ -1,0 +1,470 @@
+- id: react-basics-menu-tree
+  title: The bakery menu, rendered from the top
+  hint: Watch the component tree grow from App downwards, with each component getting its own props.
+  language: JSX
+  code: |
+    function ProductCard({ product }) {
+      const soldOut = product.stock === 0;
+      return (
+        <li className={soldOut ? "card sold-out" : "card"}>
+          <h3>
+            {product.name} {product.isNew && <span className="badge">New</span>}
+          </h3>
+          <p>£{product.price.toFixed(2)}</p>
+          <p>{soldOut ? "Sold out today" : `${product.stock} left`}</p>
+        </li>
+      );
+    }
+
+    function MenuSection({ title, items }) {
+      return (
+        <section>
+          <h2>{title}</h2>
+          {items.length === 0 ? (
+            <p>Nothing in this section today.</p>
+          ) : (
+            <ul className="menu">
+              {items.map((product) => (
+                <ProductCard key={product.id} product={product} />
+              ))}
+            </ul>
+          )}
+        </section>
+      );
+    }
+
+    export default function App() {
+      const bread = products.filter((p) => p.category === "Bread");
+      const cakes = products.filter((p) => p.category === "Cakes");
+      const drinks = products.filter((p) => p.category === "Drinks");
+      return (
+        <main>
+          <h1>Today's menu</h1>
+          <MenuSection title="Bread" items={bread} />
+          <MenuSection title="Cakes" items={cakes} />
+          <MenuSection title="Drinks" items={drinks} />
+        </main>
+      );
+    }
+  steps:
+    - title: App runs first
+      text: "React starts at the top of the tree. App sorts the products into three arrays with filter: two breads, two cakes and no drinks."
+      lines:
+        - 31
+        - 32
+        - 33
+        - 34
+      vars:
+        bread: 2 products
+        cakes: 2 products
+        drinks: 0 products
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - label: App
+              x: 0.5
+              y: 0
+              tone: active
+          edges: []
+    - title: Three sections, three sets of props
+      text: App returns three MenuSection elements. Each gets a title and its own array as props. App does not know how a section looks.
+      lines:
+        - 38
+        - 39
+        - 40
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - label: App
+              x: 0.5
+              y: 0
+              tone: done
+            - label: Bread
+              x: 0.1
+              y: 0.45
+              tone: active
+              note: 2 items
+            - label: Cakes
+              x: 0.55
+              y: 0.45
+              tone: active
+              note: 2 items
+            - label: Drinks
+              x: 0.9
+              y: 0.45
+              tone: active
+              note: 0 items
+          edges:
+            - a: App
+              b: Bread
+              directed: true
+              tone: active
+            - a: App
+              b: Cakes
+              directed: true
+              tone: active
+            - a: App
+              b: Drinks
+              directed: true
+              tone: active
+    - title: "Bread: one card per product"
+      text: The Bread section's array is not empty, so map makes one ProductCard for each product. The key goes on ProductCard, the element directly inside the map.
+      lines:
+        - 18
+        - 21
+        - 22
+        - 23
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - label: App
+              x: 0.5
+              y: 0
+              tone: done
+            - label: Bread
+              x: 0.1
+              y: 0.45
+              tone: active
+              note: 2 items
+            - label: Cakes
+              x: 0.55
+              y: 0.45
+              note: 2 items
+            - label: Drinks
+              x: 0.9
+              y: 0.45
+              note: 0 items
+            - label: Sourdough
+              x: 0
+              y: 1
+              tone: active
+              note: £4.50
+            - label: Rye
+              x: 0.2
+              y: 1
+              tone: active
+              note: £3.80
+          edges:
+            - a: App
+              b: Bread
+              directed: true
+              tone: active
+            - a: App
+              b: Cakes
+              directed: true
+            - a: App
+              b: Drinks
+              directed: true
+            - a: Bread
+              b: Sourdough
+              directed: true
+              tone: active
+            - a: Bread
+              b: Rye
+              directed: true
+              tone: active
+    - title: The rye loaf is sold out
+      text: Each ProductCard works out soldOut from the stock. The rye loaf has stock 0, so it gets the sold-out class and the text Sold out today. The sourdough shows 6 left.
+      lines:
+        - 2
+        - 4
+        - 9
+      vars:
+        soldOut (rye): "true"
+        soldOut (sourdough): "false"
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - label: App
+              x: 0.5
+              y: 0
+              tone: done
+            - label: Bread
+              x: 0.1
+              y: 0.45
+              tone: done
+              note: 2 items
+            - label: Cakes
+              x: 0.55
+              y: 0.45
+              note: 2 items
+            - label: Drinks
+              x: 0.9
+              y: 0.45
+              note: 0 items
+            - label: Sourdough
+              x: 0
+              y: 1
+              tone: done
+              note: 6 left
+            - label: Rye
+              x: 0.2
+              y: 1
+              tone: compare
+              note: sold out
+          edges:
+            - a: App
+              b: Bread
+              directed: true
+            - a: App
+              b: Cakes
+              directed: true
+            - a: App
+              b: Drinks
+              directed: true
+            - a: Bread
+              b: Sourdough
+              directed: true
+            - a: Bread
+              b: Rye
+              directed: true
+              tone: active
+    - title: Cakes, and a New badge
+      text: The same component runs for the cakes with different props. The pistachio croissant has isNew true, so product.isNew && … adds the New badge.
+      lines:
+        - 6
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - label: App
+              x: 0.5
+              y: 0
+              tone: done
+            - label: Bread
+              x: 0.1
+              y: 0.45
+              tone: done
+              note: 2 items
+            - label: Cakes
+              x: 0.55
+              y: 0.45
+              tone: active
+              note: 2 items
+            - label: Drinks
+              x: 0.9
+              y: 0.45
+              note: 0 items
+            - label: Sourdough
+              x: 0
+              y: 1
+              tone: done
+              note: 6 left
+            - label: Rye
+              x: 0.2
+              y: 1
+              tone: done
+              note: sold out
+            - label: Cinnamon bun
+              x: 0.42
+              y: 1
+              tone: active
+              note: 12 left
+            - label: Pistachio
+              x: 0.68
+              y: 1
+              tone: active
+              note: New
+          edges:
+            - a: App
+              b: Bread
+              directed: true
+            - a: App
+              b: Cakes
+              directed: true
+              tone: active
+            - a: App
+              b: Drinks
+              directed: true
+            - a: Bread
+              b: Sourdough
+              directed: true
+            - a: Bread
+              b: Rye
+              directed: true
+            - a: Cakes
+              b: Cinnamon bun
+              directed: true
+              tone: active
+            - a: Cakes
+              b: Pistachio
+              directed: true
+              tone: active
+    - title: "Drinks: a message instead"
+      text: The Drinks array is empty, so items.length === 0 is true and the section shows Nothing in this section today, not an empty list.
+      lines:
+        - 18
+        - 19
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - label: App
+              x: 0.5
+              y: 0
+              tone: done
+            - label: Bread
+              x: 0.1
+              y: 0.45
+              tone: done
+              note: 2 items
+            - label: Cakes
+              x: 0.55
+              y: 0.45
+              tone: done
+              note: 2 items
+            - label: Drinks
+              x: 0.9
+              y: 0.45
+              tone: active
+              note: 0 items
+            - label: Sourdough
+              x: 0
+              y: 1
+              tone: done
+              note: 6 left
+            - label: Rye
+              x: 0.2
+              y: 1
+              tone: done
+              note: sold out
+            - label: Cinnamon bun
+              x: 0.42
+              y: 1
+              tone: done
+              note: 12 left
+            - label: Pistachio
+              x: 0.68
+              y: 1
+              tone: done
+              note: New
+            - k: message
+              label: nothing today
+              x: 0.97
+              y: 1
+              tone: active
+              note: no list
+          edges:
+            - a: App
+              b: Bread
+              directed: true
+            - a: App
+              b: Cakes
+              directed: true
+            - a: App
+              b: Drinks
+              directed: true
+              tone: active
+            - a: Bread
+              b: Sourdough
+              directed: true
+            - a: Bread
+              b: Rye
+              directed: true
+            - a: Cakes
+              b: Cinnamon bun
+              directed: true
+            - a: Cakes
+              b: Pistachio
+              directed: true
+            - a: Drinks
+              b: message
+              directed: true
+              tone: active
+    - title: The whole tree
+      text: Rendering produced a description of the whole page, from App down. React then updates the real page to match, in the commit. Change the data and the page follows.
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - label: App
+              x: 0.5
+              y: 0
+              tone: found
+            - label: Bread
+              x: 0.1
+              y: 0.45
+              tone: found
+              note: 2 items
+            - label: Cakes
+              x: 0.55
+              y: 0.45
+              tone: found
+              note: 2 items
+            - label: Drinks
+              x: 0.9
+              y: 0.45
+              tone: found
+              note: 0 items
+            - label: Sourdough
+              x: 0
+              y: 1
+              tone: found
+              note: 6 left
+            - label: Rye
+              x: 0.2
+              y: 1
+              tone: found
+              note: sold out
+            - label: Cinnamon bun
+              x: 0.42
+              y: 1
+              tone: found
+              note: 12 left
+            - label: Pistachio
+              x: 0.68
+              y: 1
+              tone: found
+              note: New
+            - k: message
+              label: nothing today
+              x: 0.97
+              y: 1
+              tone: found
+              note: no list
+          edges:
+            - a: App
+              b: Bread
+              directed: true
+              tone: active
+            - a: App
+              b: Cakes
+              directed: true
+              tone: active
+            - a: App
+              b: Drinks
+              directed: true
+              tone: active
+            - a: Bread
+              b: Sourdough
+              directed: true
+              tone: active
+            - a: Bread
+              b: Rye
+              directed: true
+              tone: active
+            - a: Cakes
+              b: Cinnamon bun
+              directed: true
+              tone: active
+            - a: Cakes
+              b: Pistachio
+              directed: true
+              tone: active
+            - a: Drinks
+              b: message
+              directed: true
+              tone: active

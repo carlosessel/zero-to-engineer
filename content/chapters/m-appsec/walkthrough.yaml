@@ -1,0 +1,92 @@
+- id: m-appsec-sql-injection
+  title: How input becomes SQL
+  hint: Watch the same attack string go into a query built by pasting text, then into a parameterised one.
+  language: Python
+  code: |
+    def find_vulnerable(email):
+        return db.execute(f"SELECT id, email FROM customers WHERE email = '{email}'").fetchall()
+
+
+    def find(email):
+        return db.execute("SELECT id, email FROM customers WHERE email = ?", (email,)).fetchall()
+
+
+    attack = "x' OR '1'='1"
+    print("vulnerable, normal input:", find_vulnerable("ama@example.com"))
+    print("vulnerable, attack:", find_vulnerable(attack))
+    print("parameterised, attack:", find(attack))
+  steps:
+    - title: Two customers
+      text: The table holds two customers. Each lookup should return at most the one row whose email matches.
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: c, title: customers, columns: [id, email], rows: [[c-17, ama@example.com], [c-4, kofi@example.com]] }
+        - { kind: note, id: sql, text: "no query yet", tone: dim }
+    - title: Normal input, pasted in
+      text: The f-string pastes the email between the quotes. With an ordinary email the query is what the programmer meant, and Ama's row comes back.
+      lines: [1, 2, 10]
+      vars: { email: ama@example.com }
+      parts:
+        - kind: note
+          id: sql
+          text: "... WHERE email = 'ama@example.com'"
+          tone: active
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: c, title: customers, columns: [id, email], rows: [{ cells: [c-17, ama@example.com], tone: found }, [c-4, kofi@example.com]] }
+    - title: The attacker's input
+      text: "The attack string starts with x and a quote, then adds OR '1'='1. It is written to close the quoted string early."
+      lines: [9]
+      vars: { email: "x' OR '1'='1" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: c, title: customers, columns: [id, email], rows: [[c-17, ama@example.com], [c-4, kofi@example.com]] }
+        - { kind: note, id: sql, text: "input: x' OR '1'='1", tone: compare }
+    - title: The input becomes code
+      text: "Pasted in, the quote ends the string and OR '1'='1' becomes part of the condition. The database cannot tell which words came from the user."
+      lines: [2, 11]
+      parts:
+        - kind: note
+          id: sql
+          text: "... WHERE email = 'x' OR '1'='1'"
+          tone: bad
+    - title: Every row matches
+      text: "'1'='1' is always true, so the condition holds for every row and every customer is returned. The attacker's data has become your instructions."
+      lines: [11]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: c, title: customers, columns: [id, email], rows: [{ cells: [c-17, ama@example.com], tone: bad }, { cells: [c-4, kofi@example.com], tone: bad }] }
+    - title: The parameterised query
+      text: Here the query text is fixed and has a ? placeholder. The input is sent separately as one value, so it can never change the query's shape.
+      lines: [5, 6, 12]
+      parts:
+        - kind: note
+          id: sql
+          text: "... WHERE email = ?   with ? = the whole string x' OR '1'='1"
+          tone: active
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: c, title: customers, columns: [id, email], rows: [{ cells: [c-17, ama@example.com], tone: compare }, { cells: [c-4, kofi@example.com], tone: compare }] }
+    - title: No row has that email
+      text: "The database compares each email with the whole string, and none matches, so the result is []. Never build queries by pasting input; use parameters."
+      lines: [12]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: c, title: customers, columns: [id, email], rows: [{ cells: [c-17, ama@example.com], tone: dim }, { cells: [c-4, kofi@example.com], tone: dim }] }
+        - { kind: note, id: sql, text: "parameterised, attack: []", tone: found }

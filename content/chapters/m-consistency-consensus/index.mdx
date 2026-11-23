@@ -158,6 +158,8 @@ n1's log now: ["price = 450", "price = 500", "price = 520"]
 
 When the network splits two against three, the old leader n1 can still accept a write, but it reaches only 2 of 5 nodes and is never committed (its client must not be told it succeeded). The majority side elects n3 in a new term and keeps working. When the partition heals, n1 cannot win an election (its log is behind), and the leader overwrites n1's uncommitted entry: `price = 480` disappears, which is correct, because nobody was ever told it succeeded. Real Raft adds heartbeats, log matching checks, careful membership changes and snapshots, but these are its core guarantees. (The simulation simplifies: real nodes vote once per term and track exactly which log positions match.)
 
+<Walkthrough name="m-consistency-consensus-raft" />
+
 ### What consensus costs
 
 Every committed write needs a round trip to a majority, so consensus systems are slower than single nodes, and spreading the nodes across distant regions makes every write pay cross-region latency. They are also limited in throughput (everything goes through one leader). So consensus is used for **small, critical data**: configuration, membership, leader election, locks, metadata, and as the replication engine underneath databases that shard their data into many independent consensus groups (CockroachDB, TiKV, Spanner).

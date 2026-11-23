@@ -1,0 +1,67 @@
+- id: m-async-event-loop
+  title: The event loop's two queues
+  hint: Watch which queue each callback joins, and why the zero-delay timer still prints last.
+  language: TypeScript
+  code: |
+    console.log("1: start");
+
+    setTimeout(() => console.log("5: timeout (a task)"), 0);
+
+    Promise.resolve().then(() => console.log("3: promise reaction (a microtask)"));
+
+    queueMicrotask(() => console.log("4: queued microtask"));
+
+    console.log("2: end of the script");
+  steps:
+    - title: The script is the first task
+      text: JavaScript runs on one thread. The whole script is one task, and it runs to the end before anything else can run.
+      lines: [1]
+      parts:
+        - { kind: cells, id: run, label: "running now", items: [{ k: main, v: "the script", tone: active }], slots: 1, width: 130, empty: "nothing" }
+        - { kind: cells, id: tasks, label: "task queue", items: [], slots: 2, width: 130, empty: "empty" }
+        - { kind: cells, id: micro, label: "microtask queue", items: [], slots: 2, width: 130, empty: "empty" }
+        - { kind: terminal, id: out, lines: ["1: start"], slots: 5 }
+    - title: setTimeout hands over a timer
+      text: The timer goes to the runtime, not the thread. Once its zero delay has passed, its callback waits in the task queue. It does not run yet, because the script is still running.
+      lines: [3]
+      parts:
+        - { kind: cells, id: tasks, label: "task queue", items: [{ k: t, v: "timeout → 5", tone: active }], slots: 2, width: 130, empty: "empty" }
+    - title: A promise reaction is a microtask
+      text: The promise is already fulfilled, so its then callback is queued straight away, in the microtask queue.
+      lines: [5]
+      parts:
+        - { kind: cells, id: tasks, label: "task queue", items: [{ k: t, v: "timeout → 5" }], slots: 2, width: 130, empty: "empty" }
+        - { kind: cells, id: micro, label: "microtask queue", items: [{ k: p, v: "then → 3", tone: active }], slots: 2, width: 130, empty: "empty" }
+    - title: queueMicrotask joins the same queue
+      text: queueMicrotask adds a second microtask, behind the first.
+      lines: [7]
+      parts:
+        - { kind: cells, id: micro, label: "microtask queue", items: [{ k: p, v: "then → 3" }, { k: q, v: "queued → 4", tone: active }], slots: 2, width: 130, empty: "empty" }
+    - title: The script finishes
+      text: The last line prints 2, and the script, the first task, is done. Three callbacks are waiting, but none of them has run.
+      lines: [9]
+      parts:
+        - { kind: cells, id: run, label: "running now", items: [{ k: main, v: "the script", tone: done }], slots: 1, width: 130, empty: "nothing" }
+        - { kind: cells, id: micro, label: "microtask queue", items: [{ k: p, v: "then → 3", tone: compare }, { k: q, v: "queued → 4", tone: compare }], slots: 2, width: 130, empty: "empty" }
+        - { kind: terminal, id: out, lines: ["1: start", "2: end of the script"], slots: 5 }
+    - title: Drain every microtask first
+      text: After each task, the loop runs all the microtasks before the next task. The promise reaction goes first.
+      lines: [5]
+      parts:
+        - { kind: cells, id: run, label: "running now", items: [{ k: p, v: "then → 3", tone: active }], slots: 1, width: 130, empty: "nothing" }
+        - { kind: cells, id: micro, label: "microtask queue", items: [{ k: q, v: "queued → 4", tone: compare }], slots: 2, width: 130, empty: "empty" }
+        - { kind: terminal, id: out, lines: ["1: start", "2: end of the script", "3: promise reaction (a microtask)"], slots: 5 }
+    - title: Then the next microtask
+      text: The queued microtask runs and prints 4. The microtask queue is now empty.
+      lines: [7]
+      parts:
+        - { kind: cells, id: run, label: "running now", items: [{ k: q, v: "queued → 4", tone: active }], slots: 1, width: 130, empty: "nothing" }
+        - { kind: cells, id: micro, label: "microtask queue", items: [], slots: 2, width: 130, empty: "empty" }
+        - { kind: terminal, id: out, lines: ["1: start", "2: end of the script", "3: promise reaction (a microtask)", "4: queued microtask"], slots: 5 }
+    - title: Only now, the timer
+      text: With no microtasks left, the loop takes the next task, the timer callback, even though its delay was zero. While any code runs, nothing else can, so never block the event loop.
+      lines: [3]
+      parts:
+        - { kind: cells, id: run, label: "running now", items: [{ k: t, v: "timeout → 5", tone: active }], slots: 1, width: 130, empty: "nothing" }
+        - { kind: cells, id: tasks, label: "task queue", items: [], slots: 2, width: 130, empty: "empty" }
+        - { kind: terminal, id: out, lines: ["1: start", "2: end of the script", "3: promise reaction (a microtask)", "4: queued microtask", "5: timeout (a task)"], slots: 5 }

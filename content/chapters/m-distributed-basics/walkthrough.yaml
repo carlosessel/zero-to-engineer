@@ -1,0 +1,194 @@
+- id: m-distributed-basics-lamport-clock
+  title: Lamport clocks order events by cause
+  hint: Each service keeps a counter. Watch it tick for local events and jump forward when a message arrives.
+  language: TypeScript
+  code: |
+    class ClockNode {
+      clock = 0;
+      log: string[] = [];
+      constructor(readonly name: string) {}
+
+      event(what: string) {
+        this.clock++;
+        this.log.push(`${this.clock} ${this.name}: ${what}`);
+      }
+
+      send(what: string): number {
+        this.event(`send ${what}`);
+        return this.clock;
+      }
+
+      receive(what: string, messageClock: number) {
+        this.clock = Math.max(this.clock, messageClock);
+        this.event(`receive ${what}`);
+      }
+    }
+
+    const orders = new ClockNode("orders");
+    const payments = new ClockNode("payments");
+    const email = new ClockNode("email");
+
+    orders.event("order o-7 created");
+    const placed = orders.send("OrderPlaced");
+    payments.event("daily report generated");
+    payments.receive("OrderPlaced", placed);
+    const paid = payments.send("PaymentTaken");
+    email.receive("PaymentTaken", paid);
+    email.event("receipt sent");
+  steps:
+    - title: Three services, three counters
+      text: Each service has its own counter starting at 0. These are not times of day; they only count events.
+      lines: [22, 23, 24]
+      parts:
+        - kind: seq
+          id: s
+          actors: [orders, payments, email]
+          slots: 7
+          messages: []
+        - kind: kv
+          id: c
+          label: Counters
+          slots: 3
+          rows:
+            - { name: orders, value: "0" }
+            - { name: payments, value: "0" }
+            - { name: email, value: "0" }
+    - title: A local event
+      text: The orders service creates order o-7. A local event adds one to its own counter, so it is numbered 1.
+      lines: [26, 7]
+      parts:
+        - kind: seq
+          id: s
+          actors: [orders, payments, email]
+          slots: 7
+          messages:
+            - { from: orders, to: orders, label: "1 o-7 created", tone: active }
+        - kind: kv
+          id: c
+          label: Counters
+          slots: 3
+          rows:
+            - { name: orders, value: "1", tone: active }
+            - { name: payments, value: "0" }
+            - { name: email, value: "0" }
+    - title: Sending carries the counter
+      text: Sending is also an event, so the counter goes to 2. The number 2 travels with the OrderPlaced message.
+      lines: [27, 12, 13]
+      parts:
+        - kind: seq
+          id: s
+          actors: [orders, payments, email]
+          slots: 7
+          messages:
+            - { from: orders, to: orders, label: "1 o-7 created", tone: dim }
+            - { from: orders, to: payments, label: "OrderPlaced (2)", tone: active }
+        - kind: kv
+          id: c
+          label: Counters
+          slots: 3
+          rows:
+            - { name: orders, value: "2", tone: active }
+            - { name: payments, value: "0" }
+            - { name: email, value: "0" }
+    - title: An unrelated event
+      text: Before the message arrives, payments generates its daily report, numbered 1. It has no causal link to the order, so the two events are concurrent.
+      lines: [28]
+      parts:
+        - kind: seq
+          id: s
+          actors: [orders, payments, email]
+          slots: 7
+          messages:
+            - { from: orders, to: orders, label: "1 o-7 created", tone: dim }
+            - { from: orders, to: payments, label: "OrderPlaced (2)", tone: compare }
+            - { from: payments, to: payments, label: "1 daily report", tone: active }
+        - kind: kv
+          id: c
+          label: Counters
+          slots: 3
+          rows:
+            - { name: orders, value: "2" }
+            - { name: payments, value: "1", tone: active }
+            - { name: email, value: "0" }
+    - title: Receiving jumps ahead
+      text: "Payments receives OrderPlaced. It takes the larger of its counter and the message's, max(1, 2) = 2, then adds one: the receive is numbered 3, after the send."
+      lines: [29, 17, 18]
+      vars: { "Math.max(1, 2) + 1": 3 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [orders, payments, email]
+          slots: 7
+          messages:
+            - { from: orders, to: orders, label: "1 o-7 created", tone: dim }
+            - { from: orders, to: payments, label: "OrderPlaced (2)", tone: dim }
+            - { from: payments, to: payments, label: "1 daily report", tone: dim }
+            - { from: payments, to: payments, label: "3 receive", tone: active }
+        - kind: kv
+          id: c
+          label: Counters
+          slots: 3
+          rows:
+            - { name: orders, value: "2" }
+            - { name: payments, value: "3", tone: active }
+            - { name: email, value: "0" }
+    - title: Payment taken
+      text: Payments sends PaymentTaken, numbered 4, and the 4 goes with the message.
+      lines: [30]
+      vars: {}
+      parts:
+        - kind: seq
+          id: s
+          actors: [orders, payments, email]
+          slots: 7
+          messages:
+            - { from: orders, to: orders, label: "1 o-7 created", tone: dim }
+            - { from: orders, to: payments, label: "OrderPlaced (2)", tone: dim }
+            - { from: payments, to: payments, label: "1 daily report", tone: dim }
+            - { from: payments, to: payments, label: "3 receive", tone: dim }
+            - { from: payments, to: email, label: "PaymentTaken (4)", tone: active }
+        - kind: kv
+          id: c
+          label: Counters
+          slots: 3
+          rows:
+            - { name: orders, value: "2" }
+            - { name: payments, value: "4", tone: active }
+            - { name: email, value: "0" }
+    - title: Email catches up
+      text: "Email's counter was 0. On receiving it becomes max(0, 4) = 4, plus one: 5. Sending the receipt is then event 6."
+      lines: [31, 32]
+      vars: { "Math.max(0, 4) + 1": 5 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [orders, payments, email]
+          slots: 7
+          messages:
+            - { from: orders, to: orders, label: "1 o-7 created", tone: dim }
+            - { from: orders, to: payments, label: "OrderPlaced (2)", tone: dim }
+            - { from: payments, to: payments, label: "1 daily report", tone: dim }
+            - { from: payments, to: payments, label: "3 receive", tone: dim }
+            - { from: payments, to: email, label: "PaymentTaken (4)", tone: dim }
+            - { from: email, to: email, label: "5 receive", tone: active }
+            - { from: email, to: email, label: "6 receipt", tone: found }
+        - kind: kv
+          id: c
+          label: Counters
+          slots: 3
+          rows:
+            - { name: orders, value: "2" }
+            - { name: payments, value: "4" }
+            - { name: email, value: "6", tone: active }
+    - title: Order follows cause
+      text: Sorted by number, the receipt (6) always comes after the payment (4), which comes after the order (1 and 2), whatever the machines' clocks said. The two events numbered 1 are concurrent, so either may sort first.
+      vars: {}
+      parts:
+        - kind: kv
+          id: c
+          label: Counters
+          slots: 3
+          rows:
+            - { name: orders, value: "2", tone: done }
+            - { name: payments, value: "4", tone: done }
+            - { name: email, value: "6", tone: done }

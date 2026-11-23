@@ -221,6 +221,8 @@ customer queries for 3 orders: 1
 {"errors":[{"message":"Cannot query field \"price\" on type \"Order\".","locations":[{"line":1,"column":15}],"extensions":{"code":"GRAPHQL_VALIDATION_FAILED"}}]}
 ```
 
+<Walkthrough name="be-grpc-graphql-dataloader" />
+
 - The **schema** declares types and their fields; `Query` lists the entry points for reading, `Mutation` for changing data.
 - **Resolvers** are functions that produce each field's value. A query is resolved field by field, so `orders { customer { name } }` calls the `customer` resolver once per order.
 - That is a built-in **N+1 problem**: three orders, three customer look-ups. **DataLoader** collects the `load` calls made during one request and runs **one** batched query for them, as the count shows. Every GraphQL server needs it (or an equivalent) for every relationship.

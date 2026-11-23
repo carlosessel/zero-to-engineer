@@ -102,6 +102,8 @@ for label, data, associated in [("tampered ciphertext", tampered, b"customer:c-1
 
 It prints `ciphertext bytes: 47`, the decrypted text, then `tampered ciphertext -> rejected` (one flipped bit is detected) and `wrong customer -> rejected`. The **associated data** (`customer:c-17`) is not encrypted but is authenticated, binding the ciphertext to its context so it cannot be copied into another customer's record. The critical rule for GCM: **never reuse a nonce with the same key**; doing so lets attackers recover data and forge messages. Random 12-byte nonces are safe for up to billions of messages per key; libraries such as Google's Tink manage this for you.
 
+<Walkthrough name="m-crypto-aes-gcm" />
+
 **Asymmetric (public-key) cryptography** uses a key pair: a **public key** anyone may have and a **private key** only the owner holds. It enables two things:
 
 - **Key exchange** (Diffie–Hellman, today usually X25519): two parties agree a shared secret over an open network, which then keys fast symmetric encryption. This is how TLS works.

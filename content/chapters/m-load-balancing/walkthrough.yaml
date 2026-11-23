@@ -1,0 +1,82 @@
+- id: m-load-balancing-least-connections
+  title: Round robin against least connections
+  hint: Server 0 is stuck with two slow requests. Watch where each picker sends the next ones.
+  language: TypeScript
+  examples:
+    - label: Round robin
+      code: |
+        let next = 0;
+        const roundRobin: Picker = (active) => next++ % active.length;
+        const leastConnections: Picker = (active) => active.indexOf(Math.min(...active));
+      steps:
+        - title: A made-up moment
+          text: Three servers. active holds the requests in progress on each. Server 0 is busy with two slow requests; servers 1 and 2 each have one fast one.
+          vars: { active: "[2, 1, 1]" }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 2, tone: compare }, { k: s1, v: 1 }, { k: s2, v: 1 }], slots: 3, width: 90, indices: true, bars: true }
+        - title: Next request goes to server 0
+          text: Round robin ignores active and just takes each server in turn. It is server 0's turn, so the stuck server gets a third request.
+          lines: [2]
+          vars: { active: "[3, 1, 1]", next: 1 }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 3, tone: bad }, { k: s1, v: 1 }, { k: s2, v: 1 }], slots: 3, width: 90, indices: true, bars: true, pointers: [{ name: picked, at: 0 }] }
+        - title: Then servers 1 and 2
+          text: The next two requests go to server 1 and server 2, whatever their load.
+          lines: [2]
+          vars: { active: "[3, 2, 2]", next: 3 }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 3, tone: compare }, { k: s1, v: 2, tone: active }, { k: s2, v: 2, tone: active }], slots: 3, width: 90, indices: true, bars: true, pointers: [{ name: picked, at: 2 }] }
+        - title: Fast requests finish
+          text: The fast requests on servers 1 and 2 finish quickly. Server 0's slow ones are still running.
+          vars: { active: "[3, 1, 1]", next: 3 }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 3, tone: compare }, { k: s1, v: 1, tone: done }, { k: s2, v: 1, tone: done }], slots: 3, width: 90, indices: true, bars: true }
+        - title: Server 0's turn again
+          text: Round robin comes back to server 0 and piles on a fourth request while the others sit nearly idle. Its queue, and its users' waiting time, keep growing.
+          lines: [2]
+          vars: { active: "[4, 1, 1]", next: 4 }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 4, tone: bad }, { k: s1, v: 1 }, { k: s2, v: 1 }], slots: 3, width: 90, indices: true, bars: true, pointers: [{ name: picked, at: 0 }] }
+        - title: What the simulation found
+          text: In the chapter's simulation of 10 servers, round robin's busiest server peaked at 9 requests in progress. Try the other example.
+          parts:
+            - { kind: note, id: n, text: "round robin: busiest server peaked at 9 requests in progress", tone: bad }
+    - label: Least connections
+      code: |
+        let next = 0;
+        const roundRobin: Picker = (active) => next++ % active.length;
+        const leastConnections: Picker = (active) => active.indexOf(Math.min(...active));
+      steps:
+        - title: The same made-up moment
+          text: Server 0 is busy with two slow requests; servers 1 and 2 each have one fast one.
+          vars: { active: "[2, 1, 1]" }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 2, tone: compare }, { k: s1, v: 1 }, { k: s2, v: 1 }], slots: 3, width: 90, indices: true, bars: true }
+        - title: Pick the least busy
+          text: Least connections looks at active and picks the smallest count. Servers 1 and 2 tie at 1; indexOf returns the first, server 1.
+          lines: [3]
+          vars: { active: "[2, 2, 1]", "Math.min": 1 }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 2, tone: compare }, { k: s1, v: 2, tone: active }, { k: s2, v: 1 }], slots: 3, width: 90, indices: true, bars: true, pointers: [{ name: picked, at: 1 }] }
+        - title: Then server 2
+          text: Now server 2 has the fewest, so it gets the next request. Server 0 is skipped.
+          lines: [3]
+          vars: { active: "[2, 2, 2]", "Math.min": 1 }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 2, tone: compare }, { k: s1, v: 2 }, { k: s2, v: 2, tone: active }], slots: 3, width: 90, indices: true, bars: true, pointers: [{ name: picked, at: 2 }] }
+        - title: Fast requests finish
+          text: The fast requests on servers 1 and 2 finish. Server 0 is still working through its slow ones.
+          vars: { active: "[2, 1, 1]" }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 2, tone: compare }, { k: s1, v: 1, tone: done }, { k: s2, v: 1, tone: done }], slots: 3, width: 90, indices: true, bars: true }
+        - title: Server 0 is left alone
+          text: The next request goes to server 1 again. The stuck server gets no new work until its slow requests finish, so nobody new queues behind them.
+          lines: [3]
+          vars: { active: "[2, 2, 1]", "Math.min": 1 }
+          parts:
+            - { kind: cells, id: a, label: "requests in progress per server", items: [{ k: s0, v: 2, tone: compare }, { k: s1, v: 2, tone: active }, { k: s2, v: 1 }], slots: 3, width: 90, indices: true, bars: true, pointers: [{ name: picked, at: 1 }] }
+        - title: What the simulation found
+          text: In the chapter's simulation, least connections kept the busiest server to 4 requests in progress, against 9 for round robin.
+          vars: {}
+          parts:
+            - { kind: note, id: n, text: "least connections: busiest server peaked at 4 requests in progress", tone: found }

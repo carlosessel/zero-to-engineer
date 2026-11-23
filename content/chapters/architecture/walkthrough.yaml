@@ -1,0 +1,111 @@
+- id: architecture-layers
+  title: One request through three layers
+  hint: Follow an order through the interface, the business logic and data access. Notice that each layer talks only to its neighbours.
+  steps:
+    - title: "A request arrives"
+      text: "The interface layer receives the HTTP request. Its job is to check the input and pass it on; it holds no business rules."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Client", "Interface", "Logic", "Data access", "Database"]
+          slots: 12
+          messages:
+            - { from: "Client", to: "Interface", label: "POST /orders, 900", tone: active }
+            - { from: "Interface", to: "Interface", label: "input valid?", tone: active }
+    - title: "Hand over to the rules"
+      text: "The interface calls the business logic with plain values: an order for 900. No HTTP reaches the middle layer."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Client", "Interface", "Logic", "Data access", "Database"]
+          slots: 12
+          messages:
+            - { from: "Client", to: "Interface", label: "POST /orders, 900", tone: dim }
+            - { from: "Interface", to: "Interface", label: "input valid?", tone: dim }
+            - { from: "Interface", to: "Logic", label: "place order: 900", tone: active }
+    - title: "The rules need data"
+      text: "To apply the credit limit, the logic asks the data access layer. Only that layer speaks SQL to the database."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Client", "Interface", "Logic", "Data access", "Database"]
+          slots: 12
+          messages:
+            - { from: "Client", to: "Interface", label: "POST /orders, 900", tone: dim }
+            - { from: "Interface", to: "Interface", label: "input valid?", tone: dim }
+            - { from: "Interface", to: "Logic", label: "place order: 900", tone: dim }
+            - { from: "Logic", to: "Data access", label: "credit limit?", tone: active }
+            - { from: "Data access", to: "Database", label: "SELECT limit", tone: active }
+    - title: "The answer comes back"
+      text: "The database returns the customer's limit, 500, and data access hands it up as a plain number."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Client", "Interface", "Logic", "Data access", "Database"]
+          slots: 12
+          messages:
+            - { from: "Client", to: "Interface", label: "POST /orders, 900", tone: dim }
+            - { from: "Interface", to: "Interface", label: "input valid?", tone: dim }
+            - { from: "Interface", to: "Logic", label: "place order: 900", tone: dim }
+            - { from: "Logic", to: "Data access", label: "credit limit?", tone: dim }
+            - { from: "Data access", to: "Database", label: "SELECT limit", tone: dim }
+            - { from: "Database", to: "Data access", label: "500", tone: found }
+            - { from: "Data access", to: "Logic", label: "500", tone: found }
+    - title: "Apply the rule"
+      text: "An order over the credit limit needs approval. 900 is over 500, so this one does. This decision lives only in the middle layer."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Client", "Interface", "Logic", "Data access", "Database"]
+          slots: 12
+          messages:
+            - { from: "Client", to: "Interface", label: "POST /orders, 900", tone: dim }
+            - { from: "Interface", to: "Interface", label: "input valid?", tone: dim }
+            - { from: "Interface", to: "Logic", label: "place order: 900", tone: dim }
+            - { from: "Logic", to: "Data access", label: "credit limit?", tone: dim }
+            - { from: "Data access", to: "Database", label: "SELECT limit", tone: dim }
+            - { from: "Database", to: "Data access", label: "500", tone: dim }
+            - { from: "Data access", to: "Logic", label: "500", tone: dim }
+            - { from: "Logic", to: "Logic", label: "900 > 500: approve?", tone: compare }
+    - title: "Save the outcome"
+      text: "The logic asks for the order to be saved as needing approval, and data access writes it to the database."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Client", "Interface", "Logic", "Data access", "Database"]
+          slots: 12
+          messages:
+            - { from: "Client", to: "Interface", label: "POST /orders, 900", tone: dim }
+            - { from: "Interface", to: "Interface", label: "input valid?", tone: dim }
+            - { from: "Interface", to: "Logic", label: "place order: 900", tone: dim }
+            - { from: "Logic", to: "Data access", label: "credit limit?", tone: dim }
+            - { from: "Data access", to: "Database", label: "SELECT limit", tone: dim }
+            - { from: "Database", to: "Data access", label: "500", tone: dim }
+            - { from: "Data access", to: "Logic", label: "500", tone: dim }
+            - { from: "Logic", to: "Logic", label: "900 > 500: approve?", tone: dim }
+            - { from: "Logic", to: "Data access", label: "save, needs approval", tone: active }
+            - { from: "Data access", to: "Database", label: "INSERT order", tone: active }
+    - title: "Back out through the interface"
+      text: "The result travels back up, and the interface turns it into an HTTP response."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Client", "Interface", "Logic", "Data access", "Database"]
+          slots: 12
+          messages:
+            - { from: "Client", to: "Interface", label: "POST /orders, 900", tone: dim }
+            - { from: "Interface", to: "Interface", label: "input valid?", tone: dim }
+            - { from: "Interface", to: "Logic", label: "place order: 900", tone: dim }
+            - { from: "Logic", to: "Data access", label: "credit limit?", tone: dim }
+            - { from: "Data access", to: "Database", label: "SELECT limit", tone: dim }
+            - { from: "Database", to: "Data access", label: "500", tone: dim }
+            - { from: "Data access", to: "Logic", label: "500", tone: dim }
+            - { from: "Logic", to: "Logic", label: "900 > 500: approve?", tone: dim }
+            - { from: "Logic", to: "Data access", label: "save, needs approval", tone: dim }
+            - { from: "Data access", to: "Database", label: "INSERT order", tone: dim }
+            - { from: "Logic", to: "Interface", label: "needs approval", tone: found }
+            - { from: "Interface", to: "Client", label: "reply: needs approval", tone: found }
+    - title: Why the rules sit alone
+      text: The logic never touched HTTP or SQL, so you can test the credit rule by handing it a fake data access layer, and change the database without rewriting the rules.
+      parts:
+        - { kind: note, id: n, text: "Test the rule alone: limit 500, order 900 → needs approval", tone: found }

@@ -1,0 +1,144 @@
+- id: db-security-row-level-security
+  title: A policy filters every query
+  hint: "Watch the same table look different once row-level security is on: the web service sees and writes only its own shop's notes."
+  language: SQL
+  code: |
+    CREATE TABLE notes (
+      id      integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+      shop_id integer NOT NULL,
+      body    text NOT NULL
+    );
+    INSERT INTO notes (shop_id, body) VALUES (1, 'Leeds: oven 2 needs a service'), (2, 'York: new flour supplier'), (1, 'Leeds: rota for December');
+
+    ALTER TABLE notes ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY notes_by_shop ON notes
+      USING (shop_id = current_setting('app.shop_id')::integer)
+      WITH CHECK (shop_id = current_setting('app.shop_id')::integer);
+    GRANT SELECT, INSERT ON notes TO bakery_app;
+
+    SET ROLE web_service;
+    SET app.shop_id = '1';
+    SELECT shop_id, body FROM notes ORDER BY id;
+    INSERT INTO notes (shop_id, body) VALUES (2, 'Trying to write to York');
+    RESET ROLE;
+  steps:
+    - title: Notes from two shops
+      text: One table holds notes for the Leeds shop (shop 1) and the York shop (shop 2). Without anything else, whoever may read the table reads every row.
+      lines: [ 1, 2, 3, 4, 5, 6 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: n
+              title: notes
+              columns: [ shop_id, body ]
+              rows:
+                - { k: n1, cells: [ 1, "Leeds: oven 2 needs a service" ] }
+                - { k: n2, cells: [ 2, "York: new flour supplier" ] }
+                - { k: n3, cells: [ 1, "Leeds: rota for December" ] }
+        - kind: kv
+          id: s
+          label: This session
+          slots: 2
+          rows:
+            - { name: role, value: (owner) }
+        - { kind: terminal, id: out, slots: 4, lines: [] }
+    - title: Turn on row-level security
+      text: The policy is a condition PostgreSQL adds to every query on notes. USING decides which rows can be seen; WITH CHECK decides which rows may be written.
+      lines: [ 8, 9, 10, 11 ]
+      parts:
+        - kind: note
+          id: p
+          text: "policy: shop_id = current_setting('app.shop_id')"
+          tone: active
+    - title: The application connects
+      text: The web service is a member of bakery_app, which may select and insert. For this request the application says it is working for shop 1.
+      lines: [ 12, 14, 15 ]
+      vars: { app.shop_id: "1" }
+      parts:
+        - kind: kv
+          id: s
+          label: This session
+          slots: 2
+          rows:
+            - { name: role, value: web_service, tone: active }
+            - { name: app.shop_id, value: "'1'", tone: active }
+        - kind: note
+          id: p
+          text: "policy: shop_id = 1"
+          tone: compare
+    - title: The query has no WHERE
+      text: The SELECT asks for every note. The policy adds shop_id = 1 for it, so York's note is simply not there.
+      lines: [ 16 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: n
+              title: notes, as web_service sees them
+              columns: [ shop_id, body ]
+              rows:
+                - { k: n1, cells: [ 1, "Leeds: oven 2 needs a service" ], tone: found }
+                - { k: n2, cells: [ 2, "York: new flour supplier" ], tone: dim }
+                - { k: n3, cells: [ 1, "Leeds: rota for December" ], tone: found }
+        - { kind: terminal, id: out, slots: 4, lines: [ "  1 | Leeds: oven 2 needs a service", "  1 | Leeds: rota for December", (2 rows) ] }
+    - title: Writing for another shop
+      text: The service now tries to add a note for shop 2. WITH CHECK tests the new row against the policy, and 2 is not 1.
+      lines: [ 17 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 4
+          tables:
+            - id: n
+              title: notes, as web_service sees them
+              columns: [ shop_id, body ]
+              rows:
+                - { k: n1, cells: [ 1, "Leeds: oven 2 needs a service" ] }
+                - { k: n2, cells: [ 2, "York: new flour supplier" ], tone: dim }
+                - { k: n3, cells: [ 1, "Leeds: rota for December" ] }
+                - { k: new, cells: [ 2, Trying to write to York ], tone: bad }
+    - title: Refused
+      text: The insert is rejected, so one shop cannot write into another's notes, even through a bug in the application.
+      lines: [ 17 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: n
+              title: notes, as web_service sees them
+              columns: [ shop_id, body ]
+              rows:
+                - { k: n1, cells: [ 1, "Leeds: oven 2 needs a service" ] }
+                - { k: n2, cells: [ 2, "York: new flour supplier" ], tone: dim }
+                - { k: n3, cells: [ 1, "Leeds: rota for December" ] }
+        - { kind: terminal, id: out, slots: 4, lines: [ "  1 | Leeds: oven 2 needs a service", "  1 | Leeds: rota for December", (2 rows), 'ERROR:  new row violates row-level security policy for table "notes"' ] }
+    - title: Owners are not filtered
+      text: Table owners and superusers bypass RLS unless the table is set to FORCE ROW LEVEL SECURITY. That is one more reason the application must not connect as the owner.
+      lines: [ 18 ]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: n
+              title: notes
+              columns: [ shop_id, body ]
+              rows:
+                - { k: n1, cells: [ 1, "Leeds: oven 2 needs a service" ] }
+                - { k: n2, cells: [ 2, "York: new flour supplier" ] }
+                - { k: n3, cells: [ 1, "Leeds: rota for December" ] }
+        - kind: kv
+          id: s
+          label: This session
+          slots: 2
+          rows:
+            - { name: role, value: (owner again) }
+        - kind: note
+          id: p
+          text: "owner: policy not applied"
+          tone: dim

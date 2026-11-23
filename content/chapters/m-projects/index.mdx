@@ -86,6 +86,8 @@ with open(path) as log:
 
 It prints `after restart: {'price:RYE-400': 480}` and `log entries: 4 for 1 live key`: the store survived losing its memory because every change was on disk first, and the log already holds four entries for one key, which is why stage 3's compaction exists. Then the real questions start: what if the process crashes halfway through writing a line? How slow is `fsync` on your disk, and does batching several writes into one `fsync` (group commit) help? How do you compact while still accepting writes?
 
+<Walkthrough name="m-projects-write-ahead-log" />
+
 **Done when**: a test that kills the process at random moments during writes never loses an acknowledged write and never corrupts the store.
 
 ## Project 2: a message queue

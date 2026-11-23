@@ -1,0 +1,159 @@
+- id: m-oop-encapsulation
+  title: An account that guards its balance
+  hint: Watch every change to the balance pass through a method that checks the rules first.
+  language: Java
+  code: |
+    void deposit(long pence) {
+        if (pence <= 0) throw new IllegalArgumentException("Deposit must be positive");
+        balancePence += pence;
+    }
+
+    void withdraw(long pence) {
+        if (pence <= 0) throw new IllegalArgumentException("Withdrawal must be positive");
+        if (pence > balancePence) throw new IllegalStateException("Insufficient funds");
+        balancePence -= pence;
+    }
+
+    Account account = new Account("Ama");
+    account.deposit(5_000);
+    account.withdraw(1_250);
+    System.out.println("Balance: " + account.balance());
+    try {
+        account.withdraw(10_000);
+    } catch (IllegalStateException e) {
+        System.out.println("Refused: " + e.getMessage());
+    }
+    System.out.println("Balance: " + account.balance());
+  steps:
+    - title: A new account
+      text: The object holds its state in private fields. A long field starts at 0, so Ama's balance is 0 pence. Code outside the class cannot read or set balancePence directly.
+      lines: [12]
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, account]
+          slots: 6
+          messages:
+            - { from: main, to: account, label: "new Account(\"Ama\")", tone: active }
+        - kind: kv
+          id: state
+          label: "Inside account (private)"
+          slots: 2
+          rows:
+            - { name: owner, value: "Ama" }
+            - { name: balancePence, value: "0", tone: active }
+        - { kind: terminal, id: out, lines: [], slots: 3 }
+    - title: deposit(5_000)
+      text: main asks the object to deposit. The method checks the amount is positive, and only then changes the balance.
+      lines: [1, 2, 3, 13]
+      vars: { pence: 5000 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, account]
+          slots: 6
+          messages:
+            - { from: main, to: account, label: "new Account(\"Ama\")", tone: dim }
+            - { from: main, to: account, label: "deposit(5_000)", tone: active }
+        - kind: kv
+          id: state
+          label: "Inside account (private)"
+          slots: 2
+          rows:
+            - { name: owner, value: "Ama" }
+            - { name: balancePence, value: "5000", tone: active }
+    - title: withdraw(1_250)
+      text: Both checks pass. The amount is positive and no more than the balance, so 1,250 is taken off, leaving 3,750.
+      lines: [6, 7, 8, 9, 14]
+      vars: { pence: 1250 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, account]
+          slots: 6
+          messages:
+            - { from: main, to: account, label: "new Account(\"Ama\")", tone: dim }
+            - { from: main, to: account, label: "deposit(5_000)", tone: dim }
+            - { from: main, to: account, label: "withdraw(1_250)", tone: active }
+        - kind: kv
+          id: state
+          label: "Inside account (private)"
+          slots: 2
+          rows:
+            - { name: owner, value: "Ama" }
+            - { name: balancePence, value: "3750", tone: active }
+    - title: Reading the balance
+      text: balance() returns the value without letting the caller change it.
+      lines: [15]
+      vars: {}
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, account]
+          slots: 6
+          messages:
+            - { from: main, to: account, label: "new Account(\"Ama\")", tone: dim }
+            - { from: main, to: account, label: "deposit(5_000)", tone: dim }
+            - { from: main, to: account, label: "withdraw(1_250)", tone: dim }
+            - { from: main, to: account, label: "balance()", tone: active }
+            - { from: account, to: main, label: "3750", tone: found }
+        - kind: kv
+          id: state
+          label: "Inside account (private)"
+          slots: 2
+          rows:
+            - { name: owner, value: "Ama" }
+            - { name: balancePence, value: "3750", tone: compare }
+        - { kind: terminal, id: out, lines: ["Balance: 3750"], slots: 3 }
+    - title: withdraw(10_000) is refused
+      text: 10,000 is more than the balance of 3,750, so the second check throws IllegalStateException. The line that would subtract never runs.
+      lines: [8, 17]
+      vars: { pence: 10000 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, account]
+          slots: 6
+          messages:
+            - { from: main, to: account, label: "new Account(\"Ama\")", tone: dim }
+            - { from: main, to: account, label: "deposit(5_000)", tone: dim }
+            - { from: main, to: account, label: "withdraw(1_250)", tone: dim }
+            - { from: main, to: account, label: "balance()", tone: dim }
+            - { from: account, to: main, label: "3750", tone: dim }
+            - { from: main, to: account, label: "withdraw(10_000)", tone: active }
+        - kind: kv
+          id: state
+          label: "Inside account (private)"
+          slots: 2
+          rows:
+            - { name: owner, value: "Ama" }
+            - { name: balancePence, value: "3750", tone: compare }
+    - title: The caller hears why
+      text: The exception travels back to main, which catches it and prints the message.
+      lines: [18, 19]
+      parts:
+        - kind: seq
+          id: s
+          actors: [main, account]
+          slots: 6
+          messages:
+            - { from: main, to: account, label: "deposit(5_000)", tone: dim }
+            - { from: main, to: account, label: "withdraw(1_250)", tone: dim }
+            - { from: main, to: account, label: "balance()", tone: dim }
+            - { from: account, to: main, label: "3750", tone: dim }
+            - { from: main, to: account, label: "withdraw(10_000)", tone: dim }
+            - { from: account, to: main, label: "IllegalStateException: Insufficient funds", tone: bad }
+        - { kind: terminal, id: out, lines: ["Balance: 3750", "Refused: Insufficient funds"], slots: 3 }
+    - title: The invariant held
+      text: The balance is still 3,750. Every change went through deposit or withdraw, so the balance can never go below zero, whoever uses the class.
+      lines: [21]
+      vars: {}
+      parts:
+        - kind: kv
+          id: state
+          label: "Inside account (private)"
+          slots: 2
+          rows:
+            - { name: owner, value: "Ama" }
+            - { name: balancePence, value: "3750", tone: found }
+        - { kind: terminal, id: out, lines: ["Balance: 3750", "Refused: Insufficient funds", "Balance: 3750"], slots: 3 }

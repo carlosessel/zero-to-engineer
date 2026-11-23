@@ -1,0 +1,117 @@
+- id: math-vectors-matrix-times-vector
+  title: A matrix times a vector
+  hint: Watch each row of the matrix meet the vector in a dot product, one output number per row.
+  language: Text
+  code: |
+    | 1  2 |   | 5 |     | 1*5 + 2*6 |     | 17 |
+    | 3  4 | × | 6 |  =  | 3*5 + 4*6 |  =  | 39 |
+  steps:
+    - title: A machine and its input
+      text: "The matrix has 2 rows and 2 columns, so its shape is 2 × 2. The vector has 2 entries. Columns and entries match, so the multiplication can go ahead."
+      lines: [1, 2]
+      vars: { "matrix shape": "2 × 2", "vector entries": 2 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: m
+              title: "matrix (2 × 2)"
+              columns: ["col 1", "col 2"]
+              rows: [["1", "2"], ["3", "4"]]
+            - id: v
+              title: vector
+              columns: [entry]
+              rows: [["5"], ["6"]]
+        - kind: cells
+          id: out
+          label: "output vector"
+          items: []
+          slots: 2
+          empty: "nothing yet"
+    - title: Row 1 meets the vector
+      text: "Take the first row, [1, 2], and the vector, [5, 6]. Multiply matching entries: 1 × 5 = 5 and 2 × 6 = 12."
+      lines: [1]
+      vars: { "1 * 5": 5, "2 * 6": 12 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: m
+              title: "matrix (2 × 2)"
+              columns: ["col 1", "col 2"]
+              rows: [{ cells: ["1", "2"], tone: active }, ["3", "4"]]
+            - id: v
+              title: vector
+              columns: [entry]
+              rows: [{ cells: ["5"], tone: compare }, { cells: ["6"], tone: compare }]
+    - title: Add them up
+      text: "5 + 12 = 17. That is the dot product of row 1 with the vector, and it becomes the first number of the output."
+      lines: [1]
+      vars: { "row 1 · vector": "5 + 12 = 17" }
+      parts:
+        - kind: cells
+          id: out
+          label: "output vector"
+          items: [{ k: o1, v: 17, tone: found }]
+          slots: 2
+          empty: "nothing yet"
+    - title: Row 2 meets the vector
+      text: "The same again with the second row, [3, 4]: 3 × 5 = 15 and 4 × 6 = 24."
+      lines: [2]
+      vars: { "3 * 5": 15, "4 * 6": 24 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: m
+              title: "matrix (2 × 2)"
+              columns: ["col 1", "col 2"]
+              rows: [{ cells: ["1", "2"], tone: dim }, { cells: ["3", "4"], tone: active }]
+            - id: v
+              title: vector
+              columns: [entry]
+              rows: [{ cells: ["5"], tone: compare }, { cells: ["6"], tone: compare }]
+        - kind: cells
+          id: out
+          label: "output vector"
+          items: [{ k: o1, v: 17 }]
+          slots: 2
+    - title: The second output number
+      text: "15 + 24 = 39. Each output number is the dot product of one row with the vector."
+      lines: [2]
+      vars: { "row 2 · vector": "15 + 24 = 39" }
+      parts:
+        - kind: cells
+          id: out
+          label: "output vector"
+          items: [{ k: o1, v: 17 }, { k: o2, v: 39, tone: found }]
+          slots: 2
+    - title: A new vector
+      text: "[5, 6] went in and [17, 39] came out. The matrix is a machine that transforms vectors; one layer of a neural network does exactly this."
+      vars: { result: "[17, 39]" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: m
+              title: "matrix (2 × 2)"
+              columns: ["col 1", "col 2"]
+              rows: [["1", "2"], ["3", "4"]]
+            - id: v
+              title: vector
+              columns: [entry]
+              rows: [["5"], ["6"]]
+        - kind: cells
+          id: out
+          label: "output vector"
+          items: [{ k: o1, v: 17, tone: done }, { k: o2, v: 39, tone: done }]
+          slots: 2
+    - title: When shapes do not match
+      text: "A matrix with 3 columns cannot multiply [5, 6]: each row would have a third number with nothing to pair with. Columns must equal entries, or you get an error."
+      vars: { "matrix shape": "2 × 3", "vector entries": 2 }
+      parts:
+        - { kind: note, id: n, text: "2 × 3 matrix × 2-entry vector: 3 columns, 2 entries → error", tone: bad }

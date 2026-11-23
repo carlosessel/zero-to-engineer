@@ -1,0 +1,122 @@
+- id: m-problem-solving-merge-intervals
+  title: Merging the oven intervals
+  hint: Watch each sorted interval either stretch the last merged one or start a new one.
+  language: TypeScript
+  code: |
+    function mergeIntervals(intervals: [number, number][]): [number, number][] {
+      const sorted = [...intervals].sort((a, b) => a[0] - b[0]);
+      const merged: [number, number][] = [];
+      for (const [start, end] of sorted) {
+        const last = merged[merged.length - 1];
+        if (last && start <= last[1]) {
+          last[1] = Math.max(last[1], end);
+        } else {
+          merged.push([start, end]);
+        }
+      }
+      return merged;
+    }
+
+    console.log(mergeIntervals([[9, 11], [10, 12], [13, 14], [14, 16], [18, 19]]));
+  steps:
+    - title: Sort by start time
+      text: Once the intervals are sorted by start, each one can only overlap the last interval already merged. That is the whole idea. This input happens to be sorted already.
+      lines: [2, 3]
+      parts:
+        - kind: cells
+          id: in
+          label: "sorted"
+          width: 80
+          slots: 5
+          items: ["[9, 11]", "[10, 12]", "[13, 14]", "[14, 16]", "[18, 19]"]
+        - { kind: cells, id: out, label: "merged", width: 80, slots: 5, items: [], empty: "empty" }
+    - title: "[9, 11]: nothing to merge with"
+      text: merged is empty, so there is no last interval. [9, 11] is pushed as the first merged period.
+      lines: [4, 5, 9]
+      vars: { start: 9, end: 11, last: none }
+      parts:
+        - kind: cells
+          id: in
+          label: "sorted"
+          width: 80
+          slots: 5
+          pointers: [{ name: current, at: 0 }]
+          items: [{ v: "[9, 11]", tone: active }, "[10, 12]", "[13, 14]", "[14, 16]", "[18, 19]"]
+        - { kind: cells, id: out, label: "merged", width: 80, slots: 5, items: [{ k: m1, v: "[9, 11]", tone: active }] }
+    - title: "[10, 12] overlaps"
+      text: It starts at 10, before the last period ends at 11, so they overlap. Instead of adding a new period, the last one's end is stretched to the larger of 11 and 12.
+      lines: [5, 6, 7]
+      vars: { start: 10, end: 12, last: "[9, 11]" }
+      parts:
+        - kind: cells
+          id: in
+          label: "sorted"
+          width: 80
+          slots: 5
+          pointers: [{ name: current, at: 1 }]
+          items: [{ v: "[9, 11]", tone: done }, { v: "[10, 12]", tone: active }, "[13, 14]", "[14, 16]", "[18, 19]"]
+        - { kind: cells, id: out, label: "merged", width: 80, slots: 5, items: [{ k: m1, v: "[9, 12]", tone: active }] }
+    - title: "[13, 14] starts a new period"
+      text: 13 is after 12, where the last period ends, so there is a gap. All the ovens were off between 12 and 13, and [13, 14] is pushed as a new period.
+      lines: [6, 8, 9]
+      vars: { start: 13, end: 14, last: "[9, 12]" }
+      parts:
+        - kind: cells
+          id: in
+          label: "sorted"
+          width: 80
+          slots: 5
+          pointers: [{ name: current, at: 2 }]
+          items: [{ v: "[9, 11]", tone: done }, { v: "[10, 12]", tone: done }, { v: "[13, 14]", tone: active }, "[14, 16]", "[18, 19]"]
+        - { kind: cells, id: out, label: "merged", width: 80, slots: 5, items: [{ k: m1, v: "[9, 12]", tone: done }, { k: m2, v: "[13, 14]", tone: active }] }
+    - title: "[14, 16] touches"
+      text: It starts at 14, exactly where the last period ends. The test is start <= last end, so touching intervals merge, as decided at the start. The period becomes [13, 16].
+      lines: [6, 7]
+      vars: { start: 14, end: 16, last: "[13, 14]" }
+      parts:
+        - kind: cells
+          id: in
+          label: "sorted"
+          width: 80
+          slots: 5
+          pointers: [{ name: current, at: 3 }]
+          items: [{ v: "[9, 11]", tone: done }, { v: "[10, 12]", tone: done }, { v: "[13, 14]", tone: done }, { v: "[14, 16]", tone: active }, "[18, 19]"]
+        - { kind: cells, id: out, label: "merged", width: 80, slots: 5, items: [{ k: m1, v: "[9, 12]", tone: done }, { k: m2, v: "[13, 16]", tone: active }] }
+    - title: "[18, 19] stands alone"
+      text: 18 is after 16, so another gap, and a third period is pushed.
+      lines: [6, 8, 9]
+      vars: { start: 18, end: 19, last: "[13, 16]" }
+      parts:
+        - kind: cells
+          id: in
+          label: "sorted"
+          width: 80
+          slots: 5
+          pointers: [{ name: current, at: 4 }]
+          items: [{ v: "[9, 11]", tone: done }, { v: "[10, 12]", tone: done }, { v: "[13, 14]", tone: done }, { v: "[14, 16]", tone: done }, { v: "[18, 19]", tone: active }]
+        - { kind: cells, id: out, label: "merged", width: 80, slots: 5, items: [{ k: m1, v: "[9, 12]", tone: done }, { k: m2, v: "[13, 16]", tone: done }, { k: m3, v: "[18, 19]", tone: active }] }
+    - title: Three periods
+      text: "The result is [[9, 12], [13, 16], [18, 19]]: one pass over sorted data. Sorting costs O(n log n) and the pass O(n), against O(n²) or worse for the brute force."
+      lines: [12, 15]
+      vars: {}
+      parts:
+        - kind: cells
+          id: in
+          label: "sorted"
+          width: 80
+          slots: 5
+          items: [{ v: "[9, 11]", tone: dim }, { v: "[10, 12]", tone: dim }, { v: "[13, 14]", tone: dim }, { v: "[14, 16]", tone: dim }, { v: "[18, 19]", tone: dim }]
+        - { kind: cells, id: out, label: "merged", width: 80, slots: 5, items: [{ k: m1, v: "[9, 12]", tone: found }, { k: m2, v: "[13, 16]", tone: found }, { k: m3, v: "[18, 19]", tone: found }] }
+    - title: Why Math.max matters
+      text: "With [[1, 10], [2, 3]], the second interval sits inside the first. Setting last end = 3 would wrongly shorten it; taking the larger end keeps [1, 10]. Awkward examples like this are worth testing by hand."
+      lines: [7]
+      vars: { start: 2, end: 3, last: "[1, 10]", "Math.max(10, 3)": 10 }
+      parts:
+        - kind: cells
+          id: in
+          label: "sorted"
+          width: 80
+          slots: 5
+          pointers: [{ name: current, at: 1 }]
+          items: [{ k: c1, v: "[1, 10]", tone: done }, { k: c2, v: "[2, 3]", tone: active }]
+        - { kind: cells, id: out, label: "merged", width: 80, slots: 5, items: [{ k: m1, v: "[1, 10]", tone: found }] }

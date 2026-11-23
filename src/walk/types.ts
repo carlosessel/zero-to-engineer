@@ -72,7 +72,35 @@ export interface GraphPart {
   id: string;
   height: number;
   nodes: GraphNode[];
-  edges: { a: string; b: string; tone?: Tone }[];
+  /** Lines between nodes. With directed, an arrowhead points at b. A label sits halfway along. */
+  edges: { a: string; b: string; tone?: Tone; directed?: boolean; label?: string }[];
+}
+
+/** Actors side by side, with messages passed between them, newest at the bottom. */
+export interface SeqPart {
+  kind: 'seq';
+  id: string;
+  actors: string[];
+  messages: { from: string; to: string; label: string; tone?: Tone }[];
+  /** Messages to leave room for. */
+  slots?: number;
+}
+
+/** Names pointing at values: variables, settings, headers, environment. */
+export interface KvPart {
+  kind: 'kv';
+  id: string;
+  label?: string;
+  rows: { k: string; name: string; value: string; tone?: Tone }[];
+  slots?: number;
+}
+
+/** A terminal or console window, showing commands and output. */
+export interface TerminalPart {
+  kind: 'terminal';
+  id: string;
+  lines: string[];
+  slots?: number;
 }
 
 export interface BucketsPart {
@@ -90,7 +118,7 @@ export interface NotePart {
   tone?: Tone;
 }
 
-export type Part = CellsPart | TablesPart | GraphPart | BucketsPart | NotePart;
+export type Part = CellsPart | TablesPart | GraphPart | BucketsPart | NotePart | SeqPart | KvPart | TerminalPart;
 
 export interface Frame {
   title: string;

@@ -155,6 +155,8 @@ Console.WriteLine();
 
 It prints `4 8 16 32 64`: the capacity doubles each time it fills. (Java's `ArrayList` grows by half instead, 10, 15, 22, 33…, which wastes less space and copies a little more often; both are O(1) amortised.) If you know the final size in advance, create the list with that capacity and avoid the copying entirely.
 
+<Walkthrough name="m-complexity-amortised-append" />
+
 Amortised is not the same as average: amortised is a guarantee over any sequence of operations, while average depends on the inputs being random. But amortised costs still have occasional slow operations, which can matter for latency-sensitive code.
 
 ## Measuring: where Big O stops

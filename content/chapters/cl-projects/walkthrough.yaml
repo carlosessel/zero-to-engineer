@@ -1,0 +1,160 @@
+- id: cl-projects-route
+  title: The route through the projects
+  hint: Watch the five projects light up in order, each building on the last, with one checklist item from each.
+  steps:
+    - title: Five projects, in order
+      text: Each project uses part of the course on something real, and each builds on the ones before. A project is done when every box on its checklist is ticked.
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: p1, label: 1 working set-up, x: 0.08, y: 0.15, tone: base, note: "context, settings" }
+            - { k: p2, label: 2 skill + hook, x: 0.5, y: 0.15, tone: base, note: extending }
+            - { k: p3, label: 3 MCP server, x: 0.92, y: 0.15, tone: base, note: MCP }
+            - { k: p4, label: 4 automation, x: 0.7, y: 0.85, tone: base, note: "automation, safety" }
+            - { k: p5, label: 5 your agent, x: 0.25, y: 0.85, tone: base, note: "API, agents, evals" }
+          edges:
+            - { a: p1, b: p2, directed: true, tone: base }
+            - { a: p2, b: p3, directed: true, tone: base }
+            - { a: p3, b: p4, directed: true, tone: base }
+            - { a: p4, b: p5, directed: true, tone: base }
+        - { kind: kv, id: c, label: A checklist item to tick honestly, slots: 1, rows: [] }
+    - title: 1. Your working set-up
+      text: "Set up Claude Code properly on a real project: a short CLAUDE.md, permission rules, a check, and a habit of reading every diff."
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: p1, label: 1 working set-up, x: 0.08, y: 0.15, tone: active, note: "context, settings" }
+            - { k: p2, label: 2 skill + hook, x: 0.5, y: 0.15, tone: base, note: extending }
+            - { k: p3, label: 3 MCP server, x: 0.92, y: 0.15, tone: base, note: MCP }
+            - { k: p4, label: 4 automation, x: 0.7, y: 0.85, tone: base, note: "automation, safety" }
+            - { k: p5, label: 5 your agent, x: 0.25, y: 0.85, tone: base, note: "API, agents, evals" }
+          edges:
+            - { a: p1, b: p2, directed: true, tone: base }
+            - { a: p2, b: p3, directed: true, tone: base }
+            - { a: p3, b: p4, directed: true, tone: base }
+            - { a: p4, b: p5, directed: true, tone: base }
+        - kind: kv
+          id: c
+          label: A checklist item to tick honestly
+          slots: 1
+          rows:
+            - { name: CLAUDE.md, value: "under 30 lines, with the check commands", tone: active }
+    - title: 2. A skill and a hook
+      text: Turn a workflow you repeat into a skill and a must-never rule into a hook, then package both as a plugin.
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: p1, label: 1 working set-up, x: 0.08, y: 0.15, tone: done, note: "context, settings" }
+            - { k: p2, label: 2 skill + hook, x: 0.5, y: 0.15, tone: active, note: extending }
+            - { k: p3, label: 3 MCP server, x: 0.92, y: 0.15, tone: base, note: MCP }
+            - { k: p4, label: 4 automation, x: 0.7, y: 0.85, tone: base, note: "automation, safety" }
+            - { k: p5, label: 5 your agent, x: 0.25, y: 0.85, tone: base, note: "API, agents, evals" }
+          edges:
+            - { a: p1, b: p2, directed: true, tone: done }
+            - { a: p2, b: p3, directed: true, tone: base }
+            - { a: p3, b: p4, directed: true, tone: base }
+            - { a: p4, b: p5, directed: true, tone: base }
+        - kind: kv
+          id: c
+          label: A checklist item to tick honestly
+          slots: 1
+          rows:
+            - { name: the hook, value: you have watched it block something, tone: active }
+    - title: 3. An MCP server
+      text: Give Claude access to a system you actually use, with a few clear tools and the least access possible.
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: p1, label: 1 working set-up, x: 0.08, y: 0.15, tone: done, note: "context, settings" }
+            - { k: p2, label: 2 skill + hook, x: 0.5, y: 0.15, tone: done, note: extending }
+            - { k: p3, label: 3 MCP server, x: 0.92, y: 0.15, tone: active, note: MCP }
+            - { k: p4, label: 4 automation, x: 0.7, y: 0.85, tone: base, note: "automation, safety" }
+            - { k: p5, label: 5 your agent, x: 0.25, y: 0.85, tone: base, note: "API, agents, evals" }
+          edges:
+            - { a: p1, b: p2, directed: true, tone: done }
+            - { a: p2, b: p3, directed: true, tone: done }
+            - { a: p3, b: p4, directed: true, tone: base }
+            - { a: p4, b: p5, directed: true, tone: base }
+        - kind: kv
+          id: c
+          label: A checklist item to tick honestly
+          slots: 1
+          rows:
+            - { name: the tools, value: "tested directly, without Claude", tone: active }
+    - title: 4. An automation
+      text: Automate a recurring job in GitHub Actions or as a scheduled task, ending in something a person approves.
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: p1, label: 1 working set-up, x: 0.08, y: 0.15, tone: done, note: "context, settings" }
+            - { k: p2, label: 2 skill + hook, x: 0.5, y: 0.15, tone: done, note: extending }
+            - { k: p3, label: 3 MCP server, x: 0.92, y: 0.15, tone: done, note: MCP }
+            - { k: p4, label: 4 automation, x: 0.7, y: 0.85, tone: active, note: "automation, safety" }
+            - { k: p5, label: 5 your agent, x: 0.25, y: 0.85, tone: base, note: "API, agents, evals" }
+          edges:
+            - { a: p1, b: p2, directed: true, tone: done }
+            - { a: p2, b: p3, directed: true, tone: done }
+            - { a: p3, b: p4, directed: true, tone: done }
+            - { a: p4, b: p5, directed: true, tone: base }
+        - kind: kv
+          id: c
+          label: A checklist item to tick honestly
+          slots: 1
+          rows:
+            - { name: main branch, value: protected so it cannot merge, tone: active }
+    - title: 5. An agent of your own
+      text: Build a small agent with the API or the Agent SDK, and evaluate it. It draws on the most chapters, which is why it comes last.
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: p1, label: 1 working set-up, x: 0.08, y: 0.15, tone: done, note: "context, settings" }
+            - { k: p2, label: 2 skill + hook, x: 0.5, y: 0.15, tone: done, note: extending }
+            - { k: p3, label: 3 MCP server, x: 0.92, y: 0.15, tone: done, note: MCP }
+            - { k: p4, label: 4 automation, x: 0.7, y: 0.85, tone: done, note: "automation, safety" }
+            - { k: p5, label: 5 your agent, x: 0.25, y: 0.85, tone: active, note: "API, agents, evals" }
+          edges:
+            - { a: p1, b: p2, directed: true, tone: done }
+            - { a: p2, b: p3, directed: true, tone: done }
+            - { a: p3, b: p4, directed: true, tone: done }
+            - { a: p4, b: p5, directed: true, tone: done }
+        - kind: kv
+          id: c
+          label: A checklist item to tick honestly
+          slots: 1
+          rows:
+            - { name: evaluation, value: "20+ cases, pass rate before and after", tone: active }
+    - title: Evidence, not claims
+      text: At the end you have a set-up, extensions, a server, an automation and an agent, plus notes and results showing they work. That evidence is what to show in an interview.
+      parts:
+        - kind: graph
+          id: g
+          height: 240
+          nodes:
+            - { k: p1, label: 1 working set-up, x: 0.08, y: 0.15, tone: found, note: "context, settings" }
+            - { k: p2, label: 2 skill + hook, x: 0.5, y: 0.15, tone: found, note: extending }
+            - { k: p3, label: 3 MCP server, x: 0.92, y: 0.15, tone: found, note: MCP }
+            - { k: p4, label: 4 automation, x: 0.7, y: 0.85, tone: found, note: "automation, safety" }
+            - { k: p5, label: 5 your agent, x: 0.25, y: 0.85, tone: found, note: "API, agents, evals" }
+          edges:
+            - { a: p1, b: p2, directed: true, tone: done }
+            - { a: p2, b: p3, directed: true, tone: done }
+            - { a: p3, b: p4, directed: true, tone: done }
+            - { a: p4, b: p5, directed: true, tone: done }
+        - kind: kv
+          id: c
+          label: A checklist item to tick honestly
+          slots: 1
+          rows:
+            - { name: all five, value: "every box ticked, notes kept", tone: found }

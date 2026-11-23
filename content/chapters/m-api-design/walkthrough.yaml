@@ -1,0 +1,134 @@
+- id: m-api-design-idempotency-key
+  title: A retried POST that charges once
+  hint: Watch the server remember each idempotency key, so a retry gets the stored answer instead of a second charge.
+  language: TypeScript
+  code: |
+    function createCharge(idempotencyKey: string, pence: number) {
+      const previous = seen.get(idempotencyKey);
+      if (previous) return { ...previous, replayed: true };
+      const charge = { id: `ch_${charges.length + 1}`, pence };
+      charges.push(charge);
+      const response = { status: 201, body: charge };
+      seen.set(idempotencyKey, response);
+      return { ...response, replayed: false };
+    }
+
+    console.log(createCharge("5f0c-order-7", 5400));
+    console.log(createCharge("5f0c-order-7", 5400));
+    console.log(createCharge("91ab-order-8", 900));
+    console.log(charges.length);
+  steps:
+    - title: The client picks a key
+      text: Before sending, the client makes a unique idempotency key for this one operation and sends it in the Idempotency-Key header with the POST.
+      lines: [11]
+      vars: { "Idempotency-Key": 5f0c-order-7, pence: 5400 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, API]
+          slots: 6
+          messages:
+            - { from: Client, to: API, label: "POST charge, key 5f0c-order-7, 5400p", tone: active }
+        - { kind: kv, id: seen, label: "seen: keys and stored responses", slots: 2, rows: [] }
+        - { kind: cells, id: charges, label: "charges", items: [], slots: 3, width: 110, empty: "none yet" }
+    - title: A new key does the work
+      text: The key is not in seen, so the server creates charge ch_1 and stores the response under the key before returning it.
+      lines: [2, 4, 5, 6, 7]
+      parts:
+        - kind: kv
+          id: seen
+          label: "seen: keys and stored responses"
+          slots: 2
+          rows: [{ name: 5f0c-order-7, value: "201, ch_1, 5400p", tone: active }]
+        - kind: cells
+          id: charges
+          label: "charges"
+          slots: 3
+          width: 110
+          items: [{ k: ch1, v: "ch_1 5400p", tone: active }]
+    - title: The response is lost
+      text: Networks fail. Suppose the connection drops before the 201 reaches the client. The client cannot tell whether the card was charged.
+      lines: [8]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, API]
+          slots: 6
+          messages:
+            - { from: Client, to: API, label: "POST charge, key 5f0c-order-7, 5400p", tone: dim }
+            - { from: API, to: Client, label: "201 ch_1 (lost on the way)", tone: bad }
+    - title: The client retries with the same key
+      text: The only safe recovery is to retry. The client sends exactly the same request, with the same key.
+      lines: [12]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, API]
+          slots: 6
+          messages:
+            - { from: Client, to: API, label: "POST charge, key 5f0c-order-7, 5400p", tone: dim }
+            - { from: API, to: Client, label: "201 ch_1 (lost on the way)", tone: dim }
+            - { from: Client, to: API, label: "retry: key 5f0c-order-7, 5400p", tone: active }
+    - title: A seen key replays the answer
+      text: This time seen has the key, so the server returns the stored response with replayed true. No second charge is made.
+      lines: [2, 3]
+      vars: { "Idempotency-Key": 5f0c-order-7, replayed: "true" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, API]
+          slots: 6
+          messages:
+            - { from: Client, to: API, label: "POST charge, key 5f0c-order-7, 5400p", tone: dim }
+            - { from: API, to: Client, label: "201 ch_1 (lost on the way)", tone: dim }
+            - { from: Client, to: API, label: "retry: key 5f0c-order-7, 5400p", tone: dim }
+            - { from: API, to: Client, label: "201 ch_1, replayed: true", tone: found }
+        - kind: kv
+          id: seen
+          label: "seen: keys and stored responses"
+          slots: 2
+          rows: [{ name: 5f0c-order-7, value: "201, ch_1, 5400p", tone: compare }]
+        - kind: cells
+          id: charges
+          label: "charges"
+          slots: 3
+          width: 110
+          items: [{ k: ch1, v: "ch_1 5400p" }]
+    - title: A different operation, a different key
+      text: A new order gets a new key, 91ab-order-8, so the server treats it as new work and creates ch_2.
+      lines: [13]
+      vars: { "Idempotency-Key": 91ab-order-8, pence: 900 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, API]
+          slots: 6
+          messages:
+            - { from: Client, to: API, label: "POST charge, key 5f0c-order-7, 5400p", tone: dim }
+            - { from: API, to: Client, label: "201 ch_1 (lost on the way)", tone: dim }
+            - { from: Client, to: API, label: "retry: key 5f0c-order-7, 5400p", tone: dim }
+            - { from: API, to: Client, label: "201 ch_1, replayed: true", tone: dim }
+            - { from: Client, to: API, label: "POST charge, key 91ab-order-8, 900p", tone: active }
+            - { from: API, to: Client, label: "201 ch_2, replayed: false", tone: found }
+        - kind: kv
+          id: seen
+          label: "seen: keys and stored responses"
+          slots: 2
+          rows: [{ name: 5f0c-order-7, value: "201, ch_1, 5400p" }, { name: 91ab-order-8, value: "201, ch_2, 900p", tone: active }]
+        - kind: cells
+          id: charges
+          label: "charges"
+          slots: 3
+          width: 110
+          items: [{ k: ch1, v: "ch_1 5400p" }, { k: ch2, v: "ch_2 900p", tone: active }]
+    - title: Three requests, two charges
+      text: charges.length is 2. The retry did not charge twice. A real server keeps the keys in its database, in the same transaction as the work, and expires them after a day or so.
+      lines: [14]
+      vars: { "charges.length": 2 }
+      parts:
+        - kind: cells
+          id: charges
+          label: "charges"
+          slots: 3
+          width: 110
+          items: [{ k: ch1, v: "ch_1 5400p", tone: found }, { k: ch2, v: "ch_2 900p", tone: found }]

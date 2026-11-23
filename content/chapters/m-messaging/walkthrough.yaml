@@ -1,0 +1,146 @@
+- id: m-messaging-outbox
+  title: The transactional outbox
+  hint: Watch the order and its event being saved in one transaction, and the relay publishing from the outbox table later, through a crash and a broker outage.
+  language: Python
+  code: |
+    def place_order(order_id, customer, pence, fail_after_save=False):
+        db.execute("BEGIN")
+        db.execute("INSERT INTO orders VALUES (?, ?, ?)", (order_id, customer, pence))
+        db.execute(
+            "INSERT INTO outbox (topic, payload) VALUES ('order-placed', ?)",
+            (json.dumps({"order": order_id, "customer": customer, "pence": pence}),),
+        )
+        if fail_after_save:
+            db.execute("ROLLBACK")
+            return "crashed before commit: nothing saved, nothing published"
+        db.execute("COMMIT")
+        return "saved with its event"
+
+
+    def relay(publish_fails=False):
+        rows = db.execute("SELECT id, topic, payload FROM outbox WHERE sent_at IS NULL ORDER BY id").fetchall()
+        for row_id, topic, payload in rows:
+            if publish_fails:
+                return "broker down; will retry"
+            broker.append((topic, json.loads(payload)["order"]))
+            db.execute("UPDATE outbox SET sent_at = CURRENT_TIMESTAMP WHERE id = ?", (row_id,))
+        return f"published {len(rows)}"
+
+
+    def main():
+        print(place_order("o-7", "c-17", 5400))
+        print(place_order("o-8", "c-4", 900, fail_after_save=True))
+        print(relay(publish_fails=True))
+        print(place_order("o-9", "c-17", 1250))
+        print(relay())
+        print("broker received:", broker)
+  steps:
+    - title: Two places, no shared transaction
+      text: We must save an order and publish an event about it. The database and the broker cannot share one transaction, so doing one after the other can lose the event or announce an order that was never saved.
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: o, title: orders, columns: [id, customer, pence], rows: [] }
+            - { id: x, title: outbox, columns: [id, payload, sent_at], rows: [] }
+        - { kind: cells, id: b, label: "broker received", items: [], slots: 2, width: 70, empty: "nothing yet" }
+        - { kind: terminal, id: out, lines: [], slots: 6 }
+    - title: Order and event, one transaction
+      text: place_order writes the order and an outbox row describing the event inside the same transaction. The payload is JSON with the order's details; sent_at is empty because nothing has been published.
+      lines: [2, 3, 4, 5, 6, 7, 26]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: o, title: orders, columns: [id, customer, pence], rows: [{ cells: [o-7, c-17, "5400"], tone: active }] }
+            - { id: x, title: outbox, columns: [id, payload, sent_at], rows: [{ cells: ["1", "o-7 event", null], tone: active }] }
+    - title: Commit both together
+      text: COMMIT makes both rows permanent at the same moment. Either both exist or neither does.
+      lines: [11, 12]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: o, title: orders, columns: [id, customer, pence], rows: [{ cells: [o-7, c-17, "5400"], tone: done }] }
+            - { id: x, title: outbox, columns: [id, payload, sent_at], rows: [{ cells: ["1", "o-7 event", null], tone: done }] }
+        - { kind: terminal, id: out, lines: ["saved with its event"], slots: 6 }
+    - title: A crash before commit
+      text: The second order is written, then the process fails before COMMIT. ROLLBACK undoes both rows, so there is no order and no event to publish.
+      lines: [8, 9, 10, 27]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: o, title: orders, columns: [id, customer, pence], rows: [{ cells: [o-7, c-17, "5400"] }, { cells: [o-8, c-4, "900"], tone: bad }] }
+            - { id: x, title: outbox, columns: [id, payload, sent_at], rows: [{ cells: ["1", "o-7 event", null] }, { cells: ["2", "o-8 event", null], tone: bad }] }
+        - { kind: terminal, id: out, lines: ["saved with its event", "crashed before commit: nothing saved, nothing published"], slots: 6 }
+    - title: The relay finds the broker down
+      text: A separate relay reads the outbox rows not yet sent. The broker is down, so it gives up for now; the row stays unsent and will be tried again.
+      lines: [16, 17, 18, 19, 28]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: o, title: orders, columns: [id, customer, pence], rows: [{ cells: [o-7, c-17, "5400"] }] }
+            - { id: x, title: outbox, columns: [id, payload, sent_at], rows: [{ cells: ["1", "o-7 event", null], tone: compare }] }
+        - { kind: cells, id: b, label: "broker received", items: [], slots: 2, width: 70, empty: "broker down" }
+        - { kind: terminal, id: out, lines: ["saved with its event", "crashed before commit: nothing saved, nothing published", "broker down; will retry"], slots: 6 }
+    - title: Another order, saved with its event
+      text: The third order commits with its own outbox row. Now two events are waiting to be published.
+      lines: [11, 12, 29]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: o, title: orders, columns: [id, customer, pence], rows: [{ cells: [o-7, c-17, "5400"] }, { cells: [o-9, c-17, "1250"], tone: active }] }
+            - { id: x, title: outbox, columns: [id, payload, sent_at], rows: [{ cells: ["1", "o-7 event", null] }, { cells: ["2", "o-9 event", null], tone: active }] }
+        - { kind: cells, id: b, label: "broker received", items: [], slots: 2, width: 70, empty: "nothing yet" }
+        - { kind: terminal, id: out, lines: ["saved with its event", "crashed before commit: nothing saved, nothing published", "broker down; will retry", "saved with its event"], slots: 6 }
+    - title: Publish, then mark as sent
+      text: The broker is back. The relay publishes the o-7 event, then records the time in sent_at so it will not pick that row again.
+      lines: [20, 21, 30]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: o, title: orders, columns: [id, customer, pence], rows: [{ cells: [o-7, c-17, "5400"] }, { cells: [o-9, c-17, "1250"] }] }
+            - { id: x, title: outbox, columns: [id, payload, sent_at], rows: [{ cells: ["1", "o-7 event", "set"], tone: found }, { cells: ["2", "o-9 event", null] }] }
+        - { kind: cells, id: b, label: "broker received", items: [{ k: o-7, v: o-7, tone: found }], slots: 2, width: 70, empty: "nothing yet" }
+    - title: Every saved order, exactly its event
+      text: The relay does the same for o-9 and reports two published. Both saved orders produced their event despite a crash and an outage, and the failed order produced neither.
+      lines: [22, 31]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: o, title: orders, columns: [id, customer, pence], rows: [{ cells: [o-7, c-17, "5400"] }, { cells: [o-9, c-17, "1250"] }] }
+            - { id: x, title: outbox, columns: [id, payload, sent_at], rows: [{ cells: ["1", "o-7 event", "set"] }, { cells: ["2", "o-9 event", "set"], tone: found }] }
+        - { kind: cells, id: b, label: "broker received", items: [{ k: o-7, v: o-7 }, { k: o-9, v: o-9, tone: found }], slots: 2, width: 70, empty: "nothing yet" }
+        - kind: terminal
+          id: out
+          slots: 6
+          lines:
+            - "saved with its event"
+            - "crashed before commit: nothing saved, nothing published"
+            - "broker down; will retry"
+            - "saved with its event"
+            - "published 2"
+            - "broker received: [('order-placed', 'o-7'), ('order-placed', 'o-9')]"
+    - title: Never lost, but maybe twice
+      text: If the relay crashed between publishing and marking the row sent, it would publish that event again after restarting. So consumers must still be idempotent.
+      lines: [20, 21]
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - { id: o, title: orders, columns: [id, customer, pence], rows: [{ cells: [o-7, c-17, "5400"] }, { cells: [o-9, c-17, "1250"] }] }
+            - { id: x, title: outbox, columns: [id, payload, sent_at], rows: [{ cells: ["1", "o-7 event", "set"], tone: compare }, { cells: ["2", "o-9 event", "set"], tone: compare }] }

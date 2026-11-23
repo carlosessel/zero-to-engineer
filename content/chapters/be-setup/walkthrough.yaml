@@ -1,0 +1,65 @@
+- id: be-setup-docker-postgres
+  title: A throwaway database in four commands
+  hint: Watch a container appear, run PostgreSQL for you, and disappear again, leaving nothing installed on your machine.
+  language: Shell
+  code: |
+    docker run --rm hello-world
+    docker run --rm -d --name try-postgres -e POSTGRES_PASSWORD=local-only -p 5432:5432 postgres:17
+    docker ps
+    docker stop try-postgres
+  steps:
+    - title: Nothing running
+      text: Docker is installed but no containers are running. A container runs a program with everything it needs, kept apart from the rest of your machine.
+      parts:
+        - { kind: kv, id: c, label: Containers on your machine, slots: 2, rows: [] }
+        - { kind: terminal, id: t, slots: 6, lines: [] }
+    - title: Check Docker works
+      text: hello-world is a tiny image that prints a greeting and exits. --rm removes the container as soon as it stops, so nothing is left behind.
+      lines: [ 1 ]
+      parts:
+        - kind: kv
+          id: c
+          label: Containers on your machine
+          slots: 2
+          rows:
+            - { name: hello-world, value: "ran, printed, removed", tone: done }
+        - { kind: terminal, id: t, slots: 6, lines: [ $ docker run --rm hello-world, Hello from Docker! ] }
+    - title: Start PostgreSQL
+      text: -d runs it in the background, --name gives it a name, -e sets the password for this throwaway database, and -p makes it reachable on port 5432.
+      lines: [ 2 ]
+      vars: { image: postgres:17, port: "5432" }
+      parts:
+        - kind: kv
+          id: c
+          label: Containers on your machine
+          slots: 2
+          rows:
+            - { name: try-postgres, value: "running, port 5432", tone: active }
+        - { kind: terminal, id: t, slots: 6, lines: [ $ docker run --rm hello-world, Hello from Docker!, $ docker run --rm -d --name try-postgres ... -p 5432:5432 postgres:17 ] }
+    - title: See it running
+      text: docker ps lists the containers that are running now; try-postgres is among them.
+      lines: [ 3 ]
+      parts:
+        - kind: kv
+          id: c
+          label: Containers on your machine
+          slots: 2
+          rows:
+            - { name: try-postgres, value: "running, port 5432", tone: found }
+        - { kind: terminal, id: t, slots: 6, lines: [ $ docker run --rm hello-world, Hello from Docker!, $ docker run --rm -d --name try-postgres ... -p 5432:5432 postgres:17, $ docker ps ] }
+    - title: Talk to it
+      text: docker exec runs psql inside the container. SELECT version(); prints a version string beginning PostgreSQL 17, so the database really is there. \q leaves psql.
+      parts:
+        - { kind: terminal, id: t, slots: 6, lines: [ $ docker run --rm -d --name try-postgres ... -p 5432:5432 postgres:17, $ docker ps, $ docker exec -it try-postgres psql -U postgres, postgres=# SELECT version();, " PostgreSQL 17.…", postgres=# \q ] }
+    - title: Stop it, and it is gone
+      text: docker stop stops the container, and because of --rm it is removed too. You will use exactly this in the data part of the course.
+      lines: [ 4 ]
+      vars: {}
+      parts:
+        - kind: kv
+          id: c
+          label: Containers on your machine
+          slots: 2
+          rows:
+            - { name: try-postgres, value: stopped and removed, tone: dim }
+        - { kind: terminal, id: t, slots: 6, lines: [ $ docker ps, $ docker exec -it try-postgres psql -U postgres, postgres=# SELECT version();, " PostgreSQL 17.…", postgres=# \q, $ docker stop try-postgres ] }

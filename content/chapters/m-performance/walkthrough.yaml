@@ -1,0 +1,156 @@
+- id: m-performance-n-plus-one
+  title: N+1 queries against one batch
+  hint: Count the round trips to the database. Both versions give the same result; one asks six times, the other twice.
+  language: TypeScript
+  code: |
+    let queries = 0;
+    const db = {
+      orders: () => { queries++; return [1, 2, 3, 4, 5].map((id) => ({ id, customerId: id % 3 })); },
+      customer: (id: number) => { queries++; return { id, name: `customer ${id}` }; },
+      customers: (ids: number[]) => { queries++; return ids.map((id) => ({ id, name: `customer ${id}` })); },
+    };
+
+    const nPlusOne = db.orders().map((o) => ({ ...o, customer: db.customer(o.customerId).name }));
+    const nPlusOneQueries = queries;
+
+    queries = 0;
+    const orders = db.orders();
+    const byId = new Map(db.customers([...new Set(orders.map((o) => o.customerId))]).map((c) => [c.id, c]));
+    const batched = orders.map((o) => ({ ...o, customer: byId.get(o.customerId)!.name }));
+
+    console.log(nPlusOneQueries, queries, JSON.stringify(nPlusOne) === JSON.stringify(batched));
+  examples:
+    - label: N+1 queries
+      steps:
+        - title: One query for the list
+          text: The page first asks the database for its orders. That is one round trip, and it brings back five orders.
+          lines: [3, 8]
+          vars: { queries: 1 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [App, Database]
+              slots: 6
+              messages:
+                - { from: App, to: Database, label: "orders()", tone: active }
+            - kind: cells
+              id: c
+              label: "customerId of each order"
+              slots: 5
+              items: [1, 2, 0, 1, 2]
+        - title: Then one query per order
+          text: For each order, the map calls db.customer, which is another round trip. The first order needs customer 1.
+          lines: [4, 8]
+          vars: { queries: 2 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [App, Database]
+              slots: 6
+              messages:
+                - { from: App, to: Database, label: "orders()", tone: dim }
+                - { from: App, to: Database, label: "customer(1)", tone: active }
+            - kind: cells
+              id: c
+              label: "customerId of each order"
+              slots: 5
+              items: [{ v: 1, tone: active }, 2, 0, 1, 2]
+              pointers: [{ name: o, at: 0 }]
+        - title: And another, and another
+          text: The second and third orders need customers 2 and 0, one round trip each.
+          lines: [8]
+          vars: { queries: 4 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [App, Database]
+              slots: 6
+              messages:
+                - { from: App, to: Database, label: "orders()", tone: dim }
+                - { from: App, to: Database, label: "customer(1)", tone: dim }
+                - { from: App, to: Database, label: "customer(2)", tone: active }
+                - { from: App, to: Database, label: "customer(0)", tone: active }
+            - kind: cells
+              id: c
+              label: "customerId of each order"
+              slots: 5
+              items: [{ v: 1, tone: done }, { v: 2, tone: active }, { v: 0, tone: active }, 1, 2]
+              pointers: [{ name: o, at: 2 }]
+        - title: The same customers again
+          text: The last two orders belong to customers 1 and 2, already fetched, but the loop asks again. Five orders cost one query for the list plus one each, six in all.
+          lines: [8, 9]
+          vars: { queries: 6 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [App, Database]
+              slots: 6
+              messages:
+                - { from: App, to: Database, label: "orders()", tone: dim }
+                - { from: App, to: Database, label: "customer(1)", tone: dim }
+                - { from: App, to: Database, label: "customer(2)", tone: dim }
+                - { from: App, to: Database, label: "customer(0)", tone: dim }
+                - { from: App, to: Database, label: "customer(1) again", tone: bad }
+                - { from: App, to: Database, label: "customer(2) again", tone: bad }
+            - kind: cells
+              id: c
+              label: "customerId of each order"
+              slots: 5
+              items: [{ v: 1, tone: done }, { v: 2, tone: done }, { v: 0, tone: done }, { v: 1, tone: bad }, { v: 2, tone: bad }]
+              pointers: [{ name: o, at: 4 }]
+        - title: Why it hurts
+          text: Each round trip costs time. With 50 orders per page and 5 ms per round trip, 51 queries take about 255 ms.
+          vars: { queries: 6, "50 orders": "51 queries ≈ 255 ms" }
+    - label: One batch
+      steps:
+        - title: One query for the list
+          text: The batched version starts the same way, with one query for the orders.
+          lines: [11, 12]
+          vars: { queries: 1 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [App, Database]
+              slots: 6
+              messages:
+                - { from: App, to: Database, label: "orders()", tone: active }
+            - kind: cells
+              id: c
+              label: "customerId of each order"
+              slots: 5
+              items: [1, 2, 0, 1, 2]
+        - title: Collect the ids first
+          text: Before asking for any customer, it gathers the customer ids into a Set, which keeps each id once. Five orders need only three customers.
+          lines: [13]
+          parts:
+            - kind: cells
+              id: c
+              label: "customerId of each order"
+              slots: 5
+              items: [{ v: 1, tone: compare }, { v: 2, tone: compare }, { v: 0, tone: compare }, { v: 1, tone: dim }, { v: 2, tone: dim }]
+            - kind: cells
+              id: ids
+              label: "distinct ids"
+              slots: 5
+              items: [{ v: 1, tone: found }, { v: 2, tone: found }, { v: 0, tone: found }]
+        - title: One query for all of them
+          text: db.customers fetches all three customers in a single round trip, and the results go into a Map keyed by id.
+          lines: [5, 13]
+          vars: { queries: 2 }
+          parts:
+            - kind: seq
+              id: s
+              actors: [App, Database]
+              slots: 6
+              messages:
+                - { from: App, to: Database, label: "orders()", tone: dim }
+                - { from: App, to: Database, label: "customers([1, 2, 0])", tone: found }
+        - title: Look-ups cost nothing
+          text: Joining each order to its customer is now a look-up in the Map, in memory. No more queries are sent.
+          lines: [14]
+          vars: { queries: 2 }
+        - title: Same result, a third of the queries
+          text: The program prints 6 2 true. With 50 orders per page and 5 ms per round trip, that is 10 ms instead of 255 ms.
+          lines: [16]
+          parts:
+            - { kind: terminal, id: out, slots: 1, lines: ["6 2 true"] }

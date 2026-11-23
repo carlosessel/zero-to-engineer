@@ -70,6 +70,8 @@ kitchen total: 6750
 
 The till (the producer) puts orders on a queue that holds only two; the kitchen (the consumer) takes 20 ms per order. Once the queue is full, `put` blocks until the kitchen takes one: back-pressure in action. The special `DONE` order (a **poison pill**) tells the consumer to stop once everything before it is processed. The exact interleaving of lines can vary between runs; the orders are always baked in order and the total is always 6,750.
 
+<Walkthrough name="m-concurrency-patterns-bounded-queue" />
+
 .NET's **channels** (`System.Threading.Channels`) are the async version, with several consumers sharing the work:
 
 ```csharp

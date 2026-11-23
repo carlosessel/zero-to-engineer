@@ -1,0 +1,136 @@
+- id: data-modeling-normalisation
+  title: Store each fact once
+  hint: Ama moves house. Switch between the two designs and compare how many rows must change, and what can go wrong.
+  examples:
+    - label: "City copied onto every order"
+      steps:
+        - title: The same fact, three times
+          text: Ama's city is copied onto each of her three orders. It looks harmless while nothing changes.
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: o
+                  title: orders
+                  columns: ["id", "customer", "city", "amount"]
+                  rows: [["101", "Ama", "Accra", "40"], ["102", "Ama", "Accra", "25"], ["103", "Ama", "Accra", "60"]]
+        - title: Ama moves to Tema
+          text: Now every copy must be changed. The first order is updated.
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: o
+                  title: orders
+                  columns: ["id", "customer", "city", "amount"]
+                  rows: [{ cells: ["101", "Ama", "Tema", "40"], tone: active }, ["102", "Ama", "Accra", "25"], ["103", "Ama", "Accra", "60"]]
+        - title: And the second
+          text: Two down. With a hundred orders this would be a hundred rows to update.
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: o
+                  title: orders
+                  columns: ["id", "customer", "city", "amount"]
+                  rows: [["101", "Ama", "Tema", "40"], { cells: ["102", "Ama", "Tema", "25"], tone: active }, ["103", "Ama", "Accra", "60"]]
+        - title: One copy is missed
+          text: The third order still says Accra. Now the data contradicts itself, and nothing tells you which copy is true.
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: o
+                  title: orders
+                  columns: ["id", "customer", "city", "amount"]
+                  rows: [["101", "Ama", "Tema", "40"], ["102", "Ama", "Tema", "25"], { cells: ["103", "Ama", "Accra", "60"], tone: bad }]
+    - label: "City stored once"
+      steps:
+        - title: Each fact in one place
+          text: The city lives only on the customer. Each order holds customer_id, a pointer to the customer, instead of a copy.
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: c
+                  title: customers
+                  columns: ["id", "name", "city"]
+                  rows: [["1", "Ama", "Accra"]]
+                - id: o
+                  title: orders
+                  columns: ["id", "customer_id", "amount"]
+                  rows: [["101", "1", "40"], ["102", "1", "25"], ["103", "1", "60"]]
+        - title: Join when you need it
+          text: To show each order with its city, join the two tables. The city comes from the one customer row.
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: c
+                  title: customers
+                  columns: ["id", "name", "city"]
+                  rows: [{ cells: ["1", "Ama", "Accra"], tone: compare }]
+                - id: o
+                  title: orders
+                  columns: ["id", "customer_id", "amount"]
+                  rows: [{ cells: ["101", "1", "40"], tone: compare }, { cells: ["102", "1", "25"], tone: compare }, { cells: ["103", "1", "60"], tone: compare }]
+            - kind: tables
+              id: j
+              slots: 3
+              tables:
+                - id: j
+                  title: orders joined to customers
+                  columns: ["order", "customer", "city"]
+                  rows: [["101", "Ama", "Accra"], ["102", "Ama", "Accra"], ["103", "Ama", "Accra"]]
+        - title: Ama moves to Tema
+          text: One row changes. There are no copies to miss.
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: c
+                  title: customers
+                  columns: ["id", "name", "city"]
+                  rows: [{ cells: ["1", "Ama", "Tema"], tone: active }]
+                - id: o
+                  title: orders
+                  columns: ["id", "customer_id", "amount"]
+                  rows: [["101", "1", "40"], ["102", "1", "25"], ["103", "1", "60"]]
+            - kind: tables
+              id: j
+              slots: 3
+              tables:
+                - id: j
+                  title: orders joined to customers
+                  columns: ["order", "customer", "city"]
+                  rows: [{ cells: ["101", "Ama", "Accra"], tone: dim }, { cells: ["102", "Ama", "Accra"], tone: dim }, { cells: ["103", "Ama", "Accra"], tone: dim }]
+        - title: Every order agrees
+          text: The next join reads the new city for all three orders. Store each fact once, and the data cannot contradict itself.
+          parts:
+            - kind: tables
+              id: t
+              slots: 3
+              tables:
+                - id: c
+                  title: customers
+                  columns: ["id", "name", "city"]
+                  rows: [["1", "Ama", "Tema"]]
+                - id: o
+                  title: orders
+                  columns: ["id", "customer_id", "amount"]
+                  rows: [["101", "1", "40"], ["102", "1", "25"], ["103", "1", "60"]]
+            - kind: tables
+              id: j
+              slots: 3
+              tables:
+                - id: j
+                  title: orders joined to customers
+                  columns: ["order", "customer", "city"]
+                  rows: [{ cells: ["101", "Ama", "Tema"], tone: found }, { cells: ["102", "Ama", "Tema"], tone: found }, { cells: ["103", "Ama", "Tema"], tone: found }]

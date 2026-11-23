@@ -1,0 +1,172 @@
+- id: m-cloud-iac-plan
+  title: How terraform plan decides
+  hint: Watch the plan compare what the code wants with what exists, one resource at a time, and build its list of changes.
+  language: TypeScript
+  code: |
+    type Resource = Record<string, string>;
+
+    function plan(desired: Record<string, Resource>, actual: Record<string, Resource>): string[] {
+      const steps: string[] = [];
+      for (const [name, wanted] of Object.entries(desired)) {
+        const current = actual[name];
+        if (!current) steps.push(`+ create ${name}`);
+        else {
+          const changes = Object.keys(wanted).filter((k) => wanted[k] !== current[k]).map((k) => `${k}: ${current[k] ?? "(none)"} -> ${wanted[k]}`);
+          if (changes.length) steps.push(`~ update ${name} (${changes.join(", ")})`);
+        }
+      }
+      for (const name of Object.keys(actual)) if (!desired[name]) steps.push(`- destroy ${name}`);
+      return steps.length ? steps : ["no changes"];
+    }
+
+    const actual = {
+      "aws_s3_bucket.invoices": { bucket: "shop-invoices-prod", owner: "orders-team" },
+      "aws_instance.old_worker": { type: "t3.large" },
+    };
+    const desired = {
+      "aws_s3_bucket.invoices": { bucket: "shop-invoices-prod", owner: "billing-team" },
+      "aws_sqs_queue.order_events": { name: "order-events" },
+    };
+    console.log(plan(desired, actual));
+    console.log(plan(desired, desired));
+  steps:
+    - title: Two descriptions
+      text: actual is what Terraform's state says exists now. desired is what the code asks for. The plan's whole job is to compare them.
+      lines: [17, 18, 19, 20, 21, 22, 23, 24]
+      parts:
+        - kind: tables
+          id: act
+          slots: 2
+          tables:
+            - id: a
+              title: "actual (state)"
+              columns: [resource, settings]
+              rows:
+                - ["aws_s3_bucket.invoices", "owner: orders-team"]
+                - ["aws_instance.old_worker", "type: t3.large"]
+        - kind: tables
+          id: des
+          slots: 2
+          tables:
+            - id: d
+              title: "desired (code)"
+              columns: [resource, settings]
+              rows:
+                - ["aws_s3_bucket.invoices", "owner: billing-team"]
+                - ["aws_sqs_queue.order_events", "name: order-events"]
+        - { kind: terminal, id: out, slots: 4, lines: ["$ terraform plan"] }
+    - title: The bucket exists, but differs
+      text: The invoices bucket is in both. Its bucket name matches, but its owner tag does not, so the plan records an update to that one setting.
+      lines: [5, 6, 9, 10]
+      parts:
+        - kind: tables
+          id: act
+          slots: 2
+          tables:
+            - id: a
+              title: "actual (state)"
+              columns: [resource, settings]
+              rows:
+                - { cells: ["aws_s3_bucket.invoices", "owner: orders-team"], tone: compare }
+                - ["aws_instance.old_worker", "type: t3.large"]
+        - kind: tables
+          id: des
+          slots: 2
+          tables:
+            - id: d
+              title: "desired (code)"
+              columns: [resource, settings]
+              rows:
+                - { cells: ["aws_s3_bucket.invoices", "owner: billing-team"], tone: active }
+                - ["aws_sqs_queue.order_events", "name: order-events"]
+        - kind: terminal
+          id: out
+          slots: 4
+          lines: ["$ terraform plan", "~ update aws_s3_bucket.invoices (owner: orders-team -> billing-team)"]
+    - title: The queue does not exist yet
+      text: The order_events queue is wanted but missing from the actual resources, so the plan says create it.
+      lines: [6, 7]
+      parts:
+        - kind: tables
+          id: act
+          slots: 2
+          tables:
+            - id: a
+              title: "actual (state)"
+              columns: [resource, settings]
+              rows:
+                - ["aws_s3_bucket.invoices", "owner: orders-team"]
+                - ["aws_instance.old_worker", "type: t3.large"]
+        - kind: tables
+          id: des
+          slots: 2
+          tables:
+            - id: d
+              title: "desired (code)"
+              columns: [resource, settings]
+              rows:
+                - ["aws_s3_bucket.invoices", "owner: billing-team"]
+                - { cells: ["aws_sqs_queue.order_events", "name: order-events"], tone: found }
+        - kind: terminal
+          id: out
+          slots: 4
+          lines: ["$ terraform plan", "~ update aws_s3_bucket.invoices (owner: orders-team -> billing-team)", "+ create aws_sqs_queue.order_events"]
+    - title: The old worker is no longer wanted
+      text: The second loop looks the other way. old_worker exists but is not in the code, so the plan says destroy it. Read destroys carefully.
+      lines: [13]
+      parts:
+        - kind: tables
+          id: act
+          slots: 2
+          tables:
+            - id: a
+              title: "actual (state)"
+              columns: [resource, settings]
+              rows:
+                - ["aws_s3_bucket.invoices", "owner: orders-team"]
+                - { cells: ["aws_instance.old_worker", "type: t3.large"], tone: bad }
+        - kind: tables
+          id: des
+          slots: 2
+          tables:
+            - id: d
+              title: "desired (code)"
+              columns: [resource, settings]
+              rows:
+                - ["aws_s3_bucket.invoices", "owner: billing-team"]
+                - ["aws_sqs_queue.order_events", "name: order-events"]
+        - kind: terminal
+          id: out
+          slots: 4
+          lines: ["$ terraform plan", "~ update aws_s3_bucket.invoices (owner: orders-team -> billing-team)", "+ create aws_sqs_queue.order_events", "- destroy aws_instance.old_worker"]
+    - title: A person reviews the plan
+      text: Nothing has changed yet. The plan lists exactly what will be created, changed or destroyed, so a reviewer can approve it before terraform apply runs.
+      lines: [25]
+    - title: After apply, reality matches the code
+      text: terraform apply makes the three changes and updates the state. Now actual equals desired.
+      lines: [26]
+      parts:
+        - kind: tables
+          id: act
+          slots: 2
+          tables:
+            - id: a
+              title: "actual (state)"
+              columns: [resource, settings]
+              rows:
+                - { cells: ["aws_s3_bucket.invoices", "owner: billing-team"], tone: done }
+                - { cells: ["aws_sqs_queue.order_events", "name: order-events"], tone: done }
+        - kind: tables
+          id: des
+          slots: 2
+          tables:
+            - id: d
+              title: "desired (code)"
+              columns: [resource, settings]
+              rows:
+                - ["aws_s3_bucket.invoices", "owner: billing-team"]
+                - ["aws_sqs_queue.order_events", "name: order-events"]
+        - { kind: terminal, id: out, slots: 4, lines: ["$ terraform plan", "no changes"] }
+    - title: Running it again changes nothing
+      text: Planning the same code against matching reality prints no changes. Applying the same code twice does nothing the second time; IaC is declarative and idempotent.
+      lines: [26]

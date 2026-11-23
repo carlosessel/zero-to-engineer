@@ -1,0 +1,80 @@
+- id: architectures-transfer-learning
+  title: Borrowing a trained network
+  hint: Watch a network trained on ImageNet get frozen and given a new final layer, so only a tiny part has to learn your task.
+  language: Python
+  code: |
+    from torchvision import models
+    from torch import nn
+
+    model = models.resnet18(weights="DEFAULT")       # pretrained on ImageNet
+    for p in model.parameters():
+        p.requires_grad = False                      # freeze what it knows
+    model.fc = nn.Linear(model.fc.in_features, 2)    # new head: your 2 classes
+  steps:
+    - title: Download a trained network
+      text: "resnet18 is a convolutional network someone already trained on ImageNet, a huge set of labelled photos. Its weights arrive ready-made: about 11.7 million numbers."
+      lines: [4]
+      vars: { weights: "11,689,512", "learning?": "all of them" }
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { k: img, label: "photo", x: 0, y: 0.5 }
+            - { k: early, label: "early layers", x: 0.3, y: 0.5, tone: active, note: "edges, textures" }
+            - { k: late, label: "later layers", x: 0.63, y: 0.5, tone: active, note: "shapes, parts" }
+            - { k: head, label: "fc", x: 1, y: 0.5, tone: active, note: "1,000 ImageNet classes" }
+          edges:
+            - { a: img, b: early, directed: true }
+            - { a: early, b: late, directed: true }
+            - { a: late, b: head, directed: true, label: "512 numbers" }
+    - title: What it already knows
+      text: "Its layers have learned general patterns, simple ones early and combinations later. The last layer, fc, turns 512 numbers into scores for ImageNet's 1,000 classes, not yours."
+      lines: [4]
+    - title: Freeze everything
+      text: "Setting requires_grad = False on every parameter tells PyTorch not to compute gradients for it, so training will not change it. What it knows is kept."
+      lines: [5, 6]
+      vars: { weights: "11,689,512", "learning?": "none (all frozen)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { k: img, label: "photo", x: 0, y: 0.5 }
+            - { k: early, label: "early layers", x: 0.3, y: 0.5, tone: dim, note: "frozen" }
+            - { k: late, label: "later layers", x: 0.63, y: 0.5, tone: dim, note: "frozen" }
+            - { k: head, label: "fc", x: 1, y: 0.5, tone: dim, note: "frozen" }
+          edges:
+            - { a: img, b: early, directed: true, tone: dim }
+            - { a: early, b: late, directed: true, tone: dim }
+            - { a: late, b: head, directed: true, tone: dim, label: "512 numbers" }
+    - title: Swap in a new head
+      text: "model.fc.in_features is 512, so nn.Linear(512, 2) takes the same 512 numbers and gives 2 scores, one per class of yours. The old 1,000-class layer is thrown away."
+      lines: [7]
+      vars: { "fc.in_features": 512, "new head": "Linear(512, 2)" }
+      parts:
+        - kind: graph
+          id: g
+          height: 200
+          nodes:
+            - { k: img, label: "photo", x: 0, y: 0.5 }
+            - { k: early, label: "early layers", x: 0.3, y: 0.5, tone: dim, note: "frozen" }
+            - { k: late, label: "later layers", x: 0.63, y: 0.5, tone: dim, note: "frozen" }
+            - { k: head, label: "new fc", x: 1, y: 0.5, tone: found, note: "2 classes, trainable" }
+          edges:
+            - { a: img, b: early, directed: true, tone: dim }
+            - { a: early, b: late, directed: true, tone: dim }
+            - { a: late, b: head, directed: true, tone: active, label: "512 numbers" }
+    - title: Count what will learn
+      text: "The new layer has 512 × 2 weights plus 2 biases: 1,026 numbers. A newly made layer can learn by default, so these are the only ones training will change."
+      vars: { "frozen weights": "11,176,512", "trainable weights": "1,026" }
+      parts:
+        - kind: cells
+          id: c
+          label: "weights in the model now"
+          width: 150
+          items: [{ k: fz, v: "11,176,512 frozen", tone: dim }, { k: tr, v: "1,026 trainable", tone: found }]
+          slots: 2
+    - title: Why a few hundred images are enough
+      text: "Training now only has to teach about 0.01% of the network: how to turn features it already recognises into your 2 classes. That is why a few hundred labelled images can beat months of training from zero."
+      lines: [4, 5, 6, 7]

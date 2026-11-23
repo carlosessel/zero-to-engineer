@@ -1,0 +1,154 @@
+- id: m-patterns-behavioural-command-undo
+  title: Commands that can be undone
+  hint: Watch each command change the basket and land on the history stack, then come off the stack again as it is undone.
+  language: TypeScript
+  code: |
+    class Basket {
+      items = new Map<string, number>();
+      add(product: string, qty: number) {
+        this.items.set(product, (this.items.get(product) ?? 0) + qty);
+        if (this.items.get(product)! <= 0) this.items.delete(product);
+      }
+    }
+
+    const addItem = (basket: Basket, product: string, qty: number): Command => ({
+      execute: () => basket.add(product, qty),
+      undo: () => basket.add(product, -qty),
+      describe: () => `add ${qty} ${product}`,
+    });
+
+    class CommandHistory {
+      private done: Command[] = [];
+      run(c: Command) { c.execute(); this.done.push(c); }
+      undo() { this.done.pop()?.undo(); }
+      log() { return this.done.map((c) => c.describe()); }
+    }
+
+    const basket = new Basket();
+    const commands = new CommandHistory();
+    commands.run(addItem(basket, "rye loaf", 2));
+    commands.run(addItem(basket, "croissant", 3));
+    commands.run(addItem(basket, "rye loaf", 1));
+    console.log([...basket.items], commands.log());
+    commands.undo();
+    commands.undo();
+    console.log([...basket.items]);
+  steps:
+    - title: An empty basket and history
+      text: The basket holds products and quantities. The history keeps every command it has run, newest on top, so it can undo them in reverse order.
+      lines: [22, 23]
+      parts:
+        - { kind: kv, id: basket, label: "basket.items", slots: 2, rows: [] }
+        - { kind: cells, id: done, label: "commands.done (newest on top)", orient: column, slots: 3, width: 150, items: [], empty: "empty" }
+    - title: A request becomes an object
+      text: addItem does not touch the basket. It returns an object that knows how to execute, undo and describe "add 2 rye loaf". run then executes it and pushes it onto the history.
+      lines: [9, 10, 11, 12, 13, 17, 24]
+      parts:
+        - kind: kv
+          id: basket
+          label: "basket.items"
+          slots: 2
+          rows: [{ name: rye loaf, value: "2", tone: active }]
+        - kind: cells
+          id: done
+          label: "commands.done (newest on top)"
+          orient: column
+          slots: 3
+          width: 150
+          items: [{ k: c1, v: "add 2 rye loaf", tone: active }]
+    - title: A second command
+      text: The same steps for three croissants. Each command remembers its own basket, product and quantity.
+      lines: [17, 25]
+      parts:
+        - kind: kv
+          id: basket
+          label: "basket.items"
+          slots: 2
+          rows: [{ name: rye loaf, value: "2" }, { name: croissant, value: "3", tone: active }]
+        - kind: cells
+          id: done
+          label: "commands.done (newest on top)"
+          orient: column
+          slots: 3
+          width: 150
+          items: [{ k: c2, v: "add 3 croissant", tone: active }, { k: c1, v: "add 2 rye loaf" }]
+    - title: One more rye loaf
+      text: Basket.add adds to what is already there, so rye loaf goes from 2 to 3. The history now holds three commands.
+      lines: [4, 17, 26]
+      parts:
+        - kind: kv
+          id: basket
+          label: "basket.items"
+          slots: 2
+          rows: [{ name: rye loaf, value: "3", tone: active }, { name: croissant, value: "3" }]
+        - kind: cells
+          id: done
+          label: "commands.done (newest on top)"
+          orient: column
+          slots: 3
+          width: 150
+          items: [{ k: c3, v: "add 1 rye loaf", tone: active }, { k: c2, v: "add 3 croissant" }, { k: c1, v: "add 2 rye loaf" }]
+    - title: The log reads like a history
+      text: Because each request is an object, it can be described and logged. The program prints the basket, rye loaf 3 and croissant 3, and the three-command log.
+      lines: [19, 27]
+      parts:
+        - kind: kv
+          id: basket
+          label: "basket.items"
+          slots: 2
+          rows: [{ name: rye loaf, value: "3", tone: compare }, { name: croissant, value: "3", tone: compare }]
+        - kind: cells
+          id: done
+          label: "commands.done (newest on top)"
+          orient: column
+          slots: 3
+          width: 150
+          items: [{ k: c3, v: "add 1 rye loaf", tone: compare }, { k: c2, v: "add 3 croissant", tone: compare }, { k: c1, v: "add 2 rye loaf", tone: compare }]
+    - title: Undo the newest command
+      text: undo pops the top command, "add 1 rye loaf", and calls its undo, which adds -1. Rye loaf is back to 2.
+      lines: [18, 11, 28]
+      parts:
+        - kind: kv
+          id: basket
+          label: "basket.items"
+          slots: 2
+          rows: [{ name: rye loaf, value: "2", tone: active }, { name: croissant, value: "3" }]
+        - kind: cells
+          id: done
+          label: "commands.done (newest on top)"
+          orient: column
+          slots: 3
+          width: 150
+          items: [{ k: c2, v: "add 3 croissant" }, { k: c1, v: "add 2 rye loaf" }]
+    - title: Undo again
+      text: The next pop is "add 3 croissant". Adding -3 leaves 0, and Basket.add deletes a product whose quantity is 0 or less.
+      lines: [18, 11, 5, 29]
+      parts:
+        - kind: kv
+          id: basket
+          label: "basket.items"
+          slots: 2
+          rows: [{ name: rye loaf, value: "2" }, { name: croissant, value: "0, so deleted", tone: bad }]
+        - kind: cells
+          id: done
+          label: "commands.done (newest on top)"
+          orient: column
+          slots: 3
+          width: 150
+          items: [{ k: c1, v: "add 2 rye loaf" }]
+    - title: Back to the first command
+      text: The program prints only rye loaf, 2. Undoing in reverse order works because the history is a stack, and each command knows how to reverse itself.
+      lines: [30]
+      parts:
+        - kind: kv
+          id: basket
+          label: "basket.items"
+          slots: 2
+          rows: [{ name: rye loaf, value: "2", tone: found }]
+        - kind: cells
+          id: done
+          label: "commands.done (newest on top)"
+          orient: column
+          slots: 3
+          width: 150
+          items: [{ k: c1, v: "add 2 rye loaf", tone: done }]

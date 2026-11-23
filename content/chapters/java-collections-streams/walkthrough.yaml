@@ -1,0 +1,103 @@
+- id: java-collections-streams-pipeline
+  title: Orders through a stream pipeline
+  hint: Watch which orders survive each stage of the pipeline, and how the last stage turns them into a list.
+  language: Java
+  code: |
+    List<String> bigDelivered = orders.stream()
+        .filter(o -> o.status() == Status.DELIVERED && o.totalPence() >= 2000)
+        .sorted(Comparator.comparingInt(Order::totalPence).reversed())
+        .map(o -> o.id() + " " + o.customer() + " " + o.totalPence() + "p")
+        .toList();
+    System.out.println(bigDelivered);
+  steps:
+    - title: The source list
+      text: orders holds five Order records. orders.stream() starts a pipeline over them; the list itself will not be changed.
+      lines: [1]
+      parts:
+        - kind: tables
+          id: src
+          slots: 5
+          tables:
+            - id: o
+              title: orders
+              columns: [id, customer, totalPence, status]
+              rows:
+                - [o-1, Ama, 1250, DELIVERED]
+                - [o-2, Kofi, 450, PAID]
+                - [o-3, Ama, 3100, DELIVERED]
+                - [o-4, Esi, 980, CANCELLED]
+                - [o-5, Kofi, 2200, DELIVERED]
+        - { kind: cells, id: out, label: "coming out of the pipeline", items: [], slots: 5, width: 130, empty: "nothing yet" }
+    - title: Nothing runs yet
+      text: filter, sorted and map only describe the work. Streams are lazy, so no order is looked at until a terminal operation such as toList asks for a result.
+      lines: [2, 3, 4]
+    - title: filter keeps or drops each order
+      text: "The lambda is a test. o-1 is delivered but under 2000p; o-2 and o-4 are not delivered. Only o-3 and o-5 pass both checks."
+      lines: [2]
+      parts:
+        - kind: tables
+          id: src
+          slots: 5
+          tables:
+            - id: o
+              title: orders
+              columns: [id, customer, totalPence, status]
+              rows:
+                - { cells: [o-1, Ama, 1250, DELIVERED], tone: bad }
+                - { cells: [o-2, Kofi, 450, PAID], tone: bad }
+                - { cells: [o-3, Ama, 3100, DELIVERED], tone: found }
+                - { cells: [o-4, Esi, 980, CANCELLED], tone: bad }
+                - { cells: [o-5, Kofi, 2200, DELIVERED], tone: found }
+        - kind: cells
+          id: out
+          label: "after filter"
+          slots: 5
+          width: 130
+          items: [{ k: o3, v: "o-3 (3100)", tone: active }, { k: o5, v: "o-5 (2200)", tone: active }]
+    - title: sorted puts the biggest first
+      text: comparingInt(Order::totalPence) sorts by total, smallest first; reversed() flips it. 3100 comes before 2200.
+      lines: [3]
+      parts:
+        - kind: cells
+          id: out
+          label: "after sorted"
+          slots: 5
+          width: 130
+          items: [{ k: o3, v: "o-3 (3100)", tone: active }, { k: o5, v: "o-5 (2200)", tone: active }]
+    - title: map turns each order into text
+      text: map replaces each item with whatever the lambda returns, here a string built from the id, customer and total.
+      lines: [4]
+      parts:
+        - kind: cells
+          id: out
+          label: "after map"
+          slots: 5
+          width: 130
+          items: [{ k: o3, v: "o-3 Ama 3100p", tone: active }, { k: o5, v: "o-5 Kofi 2200p", tone: active }]
+    - title: toList collects the result
+      text: toList is the terminal operation. It runs the pipeline and gathers what comes out into a new list.
+      lines: [5, 6]
+      parts:
+        - kind: tables
+          id: src
+          slots: 5
+          tables:
+            - id: o
+              title: orders
+              columns: [id, customer, totalPence, status]
+              rows:
+                - [o-1, Ama, 1250, DELIVERED]
+                - [o-2, Kofi, 450, PAID]
+                - [o-3, Ama, 3100, DELIVERED]
+                - [o-4, Esi, 980, CANCELLED]
+                - [o-5, Kofi, 2200, DELIVERED]
+        - kind: cells
+          id: out
+          label: "bigDelivered"
+          slots: 5
+          width: 130
+          indices: true
+          items: [{ k: o3, v: "o-3 Ama 3100p", tone: found }, { k: o5, v: "o-5 Kofi 2200p", tone: found }]
+    - title: The source is unchanged
+      text: "It prints [o-3 Ama 3100p, o-5 Kofi 2200p]. orders still holds all five records, so it can be streamed again for the next question."
+      lines: [6]

@@ -83,6 +83,8 @@ try {
 
 It prints `3500`, then `-300`, then `TypeError`. A careful reviewer finds all three problems before any customer does: a coupon larger than the basket gives a **negative total**; an unknown or lowercase code makes `find` return `undefined`, and the `!` (a **non-null assertion**, which tells the compiler "trust me") turns that into a crash instead of a clear "invalid code" result; and `==` should be `===`. The tests in the PR would also be worth checking: they evidently only tried a valid uppercase code on a large basket.
 
+<Walkthrough name="m-code-review-coupon" />
+
 ## Writing review comments
 
 Review comments are read by a person who has put work into the change. Clear, kind comments get better results, faster:

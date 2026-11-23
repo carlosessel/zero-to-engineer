@@ -25,6 +25,8 @@ HTTP has no memory; each request arrives as a stranger. Two common solutions:
 - **Sessions**: after login the server creates a random session id, remembers which user it belongs to, and sends it to the browser in a **cookie**. The browser returns the cookie with every request.
 - **Tokens**: the server issues a signed token, often a JWT, stating who the user is and when it expires. The client sends it in a header. The server checks the signature instead of looking anything up.
 
+<Walkthrough name="auth-session-login" />
+
 ## Authorisation
 
 Check permissions on the server for every request. Hiding a button in the front end protects nothing, because anyone can call your API directly. The classic bug: `GET /orders/123` returns the order without checking that order 123 belongs to the person asking.

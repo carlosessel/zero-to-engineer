@@ -1,0 +1,145 @@
+- id: tools-loop
+  title: The tool-use loop
+  hint: Follow "Where is order B42?" between your code, the model and the tool, and watch the messages list grow.
+  language: Python
+  code: |
+    def get_order_status(order_id: str) -> str:
+        return {"A17": "shipped", "B42": "processing"}.get(order_id, "not found")
+
+    messages = [{"role": "user", "content": "Where is order B42?"}]
+    while True:
+        msg = client.messages.create(model=MODEL, max_tokens=1000,
+                                     tools=tools, messages=messages)
+        messages.append({"role": "assistant", "content": msg.content})
+        if msg.stop_reason != "tool_use":
+            break
+        results = []
+        for block in msg.content:
+            if block.type == "tool_use":
+                out = get_order_status(**block.input)
+                results.append({"type": "tool_result",
+                                "tool_use_id": block.id, "content": out})
+        messages.append({"role": "user", "content": results})
+
+    print(reply_text(msg))
+  steps:
+    - title: "The question"
+      text: "The conversation starts with one user message. The model has been told about one tool: its name, what it does, and that it needs an order_id."
+      lines: [4]
+      vars: { stop_reason: "-" }
+      parts:
+        - kind: kv
+          id: m
+          label: "messages"
+          slots: 4
+          rows:
+            - { k: m0, name: "user", value: "Where is order B42?", tone: active }
+        - kind: seq
+          id: s
+          actors: ["Your code", Model, get_order_status]
+          slots: 6
+          messages: []
+    - title: "Call 1"
+      text: "Your code sends the messages and the tool descriptions together."
+      lines: [6, 7]
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Your code", Model, get_order_status]
+          slots: 6
+          messages:
+            - { from: "Your code", to: "Model", label: "call 1: question + tools", tone: active }
+    - title: "The model asks for a tool"
+      text: "It cannot look up orders itself, so it replies with a tool_use block naming the tool and its arguments. stop_reason is \"tool_use\", so the loop does not break."
+      lines: [8, 9, 10]
+      vars: { stop_reason: "tool_use" }
+      parts:
+        - kind: kv
+          id: m
+          label: "messages"
+          slots: 4
+          rows:
+            - { k: m0, name: "user", value: "Where is order B42?" }
+            - { k: m1, name: "assistant", value: "tool_use: get_order_status, B42", tone: active }
+        - kind: seq
+          id: s
+          actors: ["Your code", Model, get_order_status]
+          slots: 6
+          messages:
+            - { from: "Your code", to: "Model", label: "call 1: question + tools", tone: dim }
+            - { from: "Model", to: "Your code", label: "tool_use: order_id B42", tone: active }
+    - title: "Your code runs the tool"
+      text: "The model never executes anything. Your code finds the tool_use block and calls the real Python function with the arguments the model chose."
+      lines: [12, 13, 14]
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Your code", Model, get_order_status]
+          slots: 6
+          messages:
+            - { from: "Your code", to: "Model", label: "call 1: question + tools", tone: dim }
+            - { from: "Model", to: "Your code", label: "tool_use: order_id B42", tone: dim }
+            - { from: "Your code", to: "get_order_status", label: "get_order_status(order_id=\"B42\")", tone: active }
+    - title: "The result"
+      text: "get_order_status looks up B42 and returns \"processing\". Your code wraps it in a tool_result, with the id of the request it answers."
+      lines: [2, 15, 16]
+      vars: { stop_reason: "tool_use", out: "processing" }
+      parts:
+        - kind: seq
+          id: s
+          actors: ["Your code", Model, get_order_status]
+          slots: 6
+          messages:
+            - { from: "Your code", to: "Model", label: "call 1: question + tools", tone: dim }
+            - { from: "Model", to: "Your code", label: "tool_use: order_id B42", tone: dim }
+            - { from: "Your code", to: "get_order_status", label: "get_order_status(order_id=\"B42\")", tone: dim }
+            - { from: "get_order_status", to: "Your code", label: "\"processing\"", tone: found }
+    - title: "Send the result back"
+      text: "The result goes into messages as a user turn, and the loop goes round to call the model again with the whole conversation."
+      lines: [17, 5, 6, 7]
+      parts:
+        - kind: kv
+          id: m
+          label: "messages"
+          slots: 4
+          rows:
+            - { k: m0, name: "user", value: "Where is order B42?" }
+            - { k: m1, name: "assistant", value: "tool_use: get_order_status, B42" }
+            - { k: m2, name: "user", value: "tool_result: processing", tone: active }
+        - kind: seq
+          id: s
+          actors: ["Your code", Model, get_order_status]
+          slots: 6
+          messages:
+            - { from: "Your code", to: "Model", label: "call 1: question + tools", tone: dim }
+            - { from: "Model", to: "Your code", label: "tool_use: order_id B42", tone: dim }
+            - { from: "Your code", to: "get_order_status", label: "get_order_status(order_id=\"B42\")", tone: dim }
+            - { from: "get_order_status", to: "Your code", label: "\"processing\"", tone: dim }
+            - { from: "Your code", to: "Model", label: "call 2: ... + tool_result", tone: active }
+    - title: "A final answer"
+      text: "Now the model has what it needs and answers in words. stop_reason is no longer \"tool_use\", so the loop breaks and the reply is printed."
+      lines: [8, 9, 10, 19]
+      vars: { stop_reason: "end_turn" }
+      parts:
+        - kind: kv
+          id: m
+          label: "messages"
+          slots: 4
+          rows:
+            - { k: m0, name: "user", value: "Where is order B42?" }
+            - { k: m1, name: "assistant", value: "tool_use: get_order_status, B42" }
+            - { k: m2, name: "user", value: "tool_result: processing" }
+            - { k: m3, name: "assistant", value: "Order B42 is being processed.", tone: found }
+        - kind: seq
+          id: s
+          actors: ["Your code", Model, get_order_status]
+          slots: 6
+          messages:
+            - { from: "Your code", to: "Model", label: "call 1: question + tools", tone: dim }
+            - { from: "Model", to: "Your code", label: "tool_use: order_id B42", tone: dim }
+            - { from: "Your code", to: "get_order_status", label: "get_order_status(order_id=\"B42\")", tone: dim }
+            - { from: "get_order_status", to: "Your code", label: "\"processing\"", tone: dim }
+            - { from: "Your code", to: "Model", label: "call 2: ... + tool_result", tone: dim }
+            - { from: "Model", to: "Your code", label: "Order B42 is being processed.", tone: found }
+    - title: "The loop in short"
+      text: "Ask, the model requests a tool, your code runs it, send the result back, repeat until it answers. With several tools or questions it simply goes round more times."

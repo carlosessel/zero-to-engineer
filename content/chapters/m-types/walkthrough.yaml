@@ -1,0 +1,141 @@
+- id: m-types-narrowing
+  title: Narrowing a discriminated union
+  hint: Watch the status tag decide which shape the compiler allows, and which fields can be read, in each case.
+  language: TypeScript
+  code: |
+    type RequestState =
+      | { status: "loading" }
+      | { status: "loaded"; data: string[] }
+      | { status: "failed"; error: string };
+
+    function describe(state: RequestState): string {
+      switch (state.status) {
+        case "loading":
+          return "Loading…";
+        case "loaded":
+          return `${state.data.length} products`;
+        case "failed":
+          return `Could not load: ${state.error}`;
+        default: {
+          const unreachable: never = state;
+          return unreachable;
+        }
+      }
+    }
+  steps:
+    - title: Three shapes, no more
+      text: A RequestState is exactly one of three shapes, told apart by the status tag. Only a loaded state has data, and only a failed state has an error.
+      lines: [1, 2, 3, 4]
+      parts:
+        - kind: cells
+          id: shapes
+          label: "the shapes a RequestState can take"
+          slots: 3
+          width: 180
+          items: [{ k: loading, v: "loading" }, { k: loaded, v: "loaded + data" }, { k: failed, v: "failed + error" }]
+        - kind: kv
+          id: fields
+          label: "Fields the compiler lets you read"
+          slots: 2
+          rows:
+            - { name: state.status, value: "\"loading\" | \"loaded\" | \"failed\"" }
+        - { kind: terminal, id: out, lines: [], slots: 3 }
+    - title: Before the switch
+      text: Before checking the tag, state could be any of the three. Reading state.data here would not compile, because a loading state has no data.
+      lines: [6, 7]
+      parts:
+        - kind: cells
+          id: shapes
+          label: "the shapes a RequestState can take"
+          slots: 3
+          width: 180
+          items: [{ k: loading, v: "loading", tone: compare }, { k: loaded, v: "loaded + data", tone: compare }, { k: failed, v: "failed + error", tone: compare }]
+    - title: "Case \"loading\""
+      text: "describe({ status: \"loading\" }) reaches the first case. Inside it, TypeScript has narrowed state to the loading shape, which has only status."
+      lines: [7, 8, 9]
+      vars: { "state.status": "loading" }
+      parts:
+        - kind: cells
+          id: shapes
+          label: "state narrowed to"
+          slots: 3
+          width: 180
+          items: [{ k: loading, v: "loading", tone: active }, { k: loaded, v: "loaded + data", tone: dim }, { k: failed, v: "failed + error", tone: dim }]
+        - kind: kv
+          id: fields
+          label: "Fields the compiler lets you read"
+          slots: 2
+          rows:
+            - { name: state.status, value: "\"loading\"", tone: active }
+        - { kind: terminal, id: out, lines: ["Loading…"], slots: 3 }
+    - title: "Case \"loaded\""
+      text: With data ["rye", "white"], the second case runs. Here state is narrowed to the loaded shape, so state.data exists and the line compiles.
+      lines: [7, 10, 11]
+      vars: { "state.status": "loaded" }
+      parts:
+        - kind: cells
+          id: shapes
+          label: "state narrowed to"
+          slots: 3
+          width: 180
+          items: [{ k: loading, v: "loading", tone: dim }, { k: loaded, v: "loaded + data", tone: active }, { k: failed, v: "failed + error", tone: dim }]
+        - kind: kv
+          id: fields
+          label: "Fields the compiler lets you read"
+          slots: 2
+          rows:
+            - { name: state.status, value: "\"loaded\"" }
+            - { name: state.data, value: "[\"rye\", \"white\"]", tone: active }
+        - { kind: terminal, id: out, lines: ["Loading…", "2 products"], slots: 3 }
+    - title: "Case \"failed\""
+      text: A failed state with error "timeout" reaches the third case, where state.error exists. state.data would not compile here.
+      lines: [7, 12, 13]
+      vars: { "state.status": "failed" }
+      parts:
+        - kind: cells
+          id: shapes
+          label: "state narrowed to"
+          slots: 3
+          width: 180
+          items: [{ k: loading, v: "loading", tone: dim }, { k: loaded, v: "loaded + data", tone: dim }, { k: failed, v: "failed + error", tone: active }]
+        - kind: kv
+          id: fields
+          label: "Fields the compiler lets you read"
+          slots: 2
+          rows:
+            - { name: state.status, value: "\"failed\"" }
+            - { name: state.error, value: "\"timeout\"", tone: active }
+        - { kind: terminal, id: out, lines: ["Loading…", "2 products", "Could not load: timeout"], slots: 3 }
+    - title: Nothing left for default
+      text: After all three cases, no shape remains, so in default state has the type never, a type with no values. Assigning it to never compiles.
+      lines: [14, 15, 16]
+      vars: {}
+      parts:
+        - kind: cells
+          id: shapes
+          label: "shapes left in default"
+          slots: 3
+          width: 180
+          items: [{ k: loading, v: "loading", tone: done }, { k: loaded, v: "loaded + data", tone: done }, { k: failed, v: "failed + error", tone: done }]
+        - kind: kv
+          id: fields
+          label: "Fields the compiler lets you read"
+          slots: 2
+          rows:
+            - { name: state, value: "never (no values left)", tone: found }
+    - title: A forgotten case
+      text: If someone adds a cancelled state and forgets its case, it is left over in default, cannot be assigned to never, and line 15 becomes a compile error. This is an exhaustiveness check.
+      lines: [15]
+      parts:
+        - kind: cells
+          id: shapes
+          label: "shapes left in default"
+          slots: 4
+          width: 140
+          items: [{ k: loading, v: "loading", tone: done }, { k: loaded, v: "loaded + data", tone: done }, { k: failed, v: "failed + error", tone: done }, { k: cancelled, v: "cancelled", tone: bad }]
+        - kind: kv
+          id: fields
+          label: "Fields the compiler lets you read"
+          slots: 2
+          rows:
+            - { name: state, value: "the cancelled shape, not never", tone: bad }

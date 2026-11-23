@@ -1,0 +1,152 @@
+- id: m-anti-patterns-anaemic-vs-rich
+  title: An anaemic order and a rich one
+  hint: Switch between the two orders and try the same bad steps on each.
+  language: TypeScript
+  examples:
+    - label: Anaemic order
+      code: |
+        class AnaemicOrder {
+          status = "open";
+          lines: { product: string; pence: number }[] = [];
+        }
+
+        const anaemic = new AnaemicOrder();
+        anaemic.status = "paid";
+        anaemic.lines.push({ product: "rye loaf", pence: -450 });
+      steps:
+        - title: A bag of fields
+          text: The anaemic order has public fields and no methods. Any rules about orders must live somewhere else, in service classes the caller may or may not use.
+          lines: [1, 2, 3, 4, 6]
+          parts:
+            - kind: kv
+              id: o
+              label: "anaemic order"
+              slots: 2
+              rows:
+                - { name: status, value: "\"open\"" }
+                - { name: lines, value: "[]" }
+        - title: Paid, with nothing in it
+          text: Any code can set status to "paid", even though the order is empty. Nothing objects.
+          lines: [7]
+          parts:
+            - kind: kv
+              id: o
+              label: "anaemic order"
+              slots: 2
+              rows:
+                - { name: status, value: "\"paid\"", tone: bad }
+                - { name: lines, value: "[]" }
+        - title: A negative price, after paying
+          text: A line priced at −450 pence is pushed straight into the array, after the order was paid. Again, nothing objects.
+          lines: [8]
+          parts:
+            - kind: kv
+              id: o
+              label: "anaemic order"
+              slots: 2
+              rows:
+                - { name: status, value: "\"paid\"", tone: bad }
+                - { name: lines, value: "rye loaf, −450 pence", tone: bad }
+        - title: An invalid order
+          text: "The order ends up paid, with a negative-priced line. The program later prints paid 1 for it: it was put into an invalid state with no complaint."
+          parts:
+            - { kind: note, id: n, text: "both bad steps accepted", tone: bad }
+    - label: Rich order
+      code: |
+        class Order {
+          private lines: { product: string; pence: number }[] = [];
+          private paid = false;
+
+          addLine(product: string, pence: number) {
+            if (this.paid) throw new Error("Cannot change a paid order");
+            if (pence <= 0) throw new Error("Price must be positive");
+            this.lines.push({ product, pence });
+          }
+
+          pay() {
+            if (this.lines.length === 0) throw new Error("Cannot pay for an empty order");
+            this.paid = true;
+          }
+
+          total() { return this.lines.reduce((sum, l) => sum + l.pence, 0); }
+        }
+
+        const order = new Order();
+        for (const step of [() => order.pay(), () => order.addLine("rye loaf", 450), () => order.pay(), () => order.addLine("jam", 380)]) {
+          try {
+            step();
+          } catch (e) {
+            console.log((e as Error).message);
+          }
+        }
+      steps:
+        - title: Private fields, public behaviour
+          text: The rich order keeps its fields private. The only way to change it is through addLine and pay, which check the rules first.
+          lines: [1, 2, 3, 19]
+          parts:
+            - kind: kv
+              id: o
+              label: "order (private)"
+              slots: 2
+              rows:
+                - { name: paid, value: "false" }
+                - { name: lines, value: "[]" }
+            - { kind: terminal, id: out, lines: [], slots: 2 }
+        - title: Paying for nothing is refused
+          text: The first step calls pay() on an empty order. The rule fails, an error is thrown, and the order is unchanged.
+          lines: [11, 12, 20, 24]
+          parts:
+            - kind: kv
+              id: o
+              label: "order (private)"
+              slots: 2
+              rows:
+                - { name: paid, value: "false", tone: compare }
+                - { name: lines, value: "[]", tone: compare }
+            - { kind: terminal, id: out, lines: ["Cannot pay for an empty order"], slots: 2 }
+        - title: A valid line
+          text: addLine("rye loaf", 450) passes both checks, so the line is added.
+          lines: [5, 6, 7, 8]
+          parts:
+            - kind: kv
+              id: o
+              label: "order (private)"
+              slots: 2
+              rows:
+                - { name: paid, value: "false" }
+                - { name: lines, value: "rye loaf, 450 pence", tone: active }
+        - title: Now paying works
+          text: The order has a line, so pay() succeeds and marks it paid.
+          lines: [11, 12, 13]
+          parts:
+            - kind: kv
+              id: o
+              label: "order (private)"
+              slots: 2
+              rows:
+                - { name: paid, value: "true", tone: active }
+                - { name: lines, value: "rye loaf, 450 pence" }
+        - title: No changes after payment
+          text: Adding jam to a paid order breaks a rule, so addLine throws and the order keeps its single line.
+          lines: [5, 6, 24]
+          parts:
+            - kind: kv
+              id: o
+              label: "order (private)"
+              slots: 2
+              rows:
+                - { name: paid, value: "true", tone: compare }
+                - { name: lines, value: "rye loaf, 450 pence" }
+            - { kind: terminal, id: out, lines: ["Cannot pay for an empty order", "Cannot change a paid order"], slots: 2 }
+        - title: Always valid
+          text: The rich order refused both bad steps, and its total is 450. Because the object protects its own rules, no caller can skip them.
+          lines: [16]
+          vars: { "order.total()": 450 }
+          parts:
+            - kind: kv
+              id: o
+              label: "order (private)"
+              slots: 2
+              rows:
+                - { name: paid, value: "true", tone: found }
+                - { name: lines, value: "rye loaf, 450 pence", tone: found }

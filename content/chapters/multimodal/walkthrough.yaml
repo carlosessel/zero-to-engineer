@@ -1,0 +1,77 @@
+- id: multimodal-voice-chain
+  title: A voice assistant, stage by stage
+  hint: Follow one spoken question through three models, transcribe, think and speak, and see why each stage streams into the next.
+  steps:
+    - title: "Someone speaks"
+      text: "A person asks the voice assistant out loud: “Is the shop open on Saturday?” What arrives is sound, not text."
+      vars: { stage: "1 of 3: transcribe" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Person, "Speech-to-text", Model, "Text-to-speech"]
+          slots: 5
+          messages:
+            - { from: "Person", to: "Speech-to-text", label: "audio: a spoken question", tone: active }
+    - title: "Transcribe"
+      text: "A speech-to-text model such as Whisper turns the audio into written words. Whisper is open and can run locally."
+      vars: { stage: "1 of 3: transcribe", text: "Is the shop open on Saturday?" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Person, "Speech-to-text", Model, "Text-to-speech"]
+          slots: 5
+          messages:
+            - { from: "Person", to: "Speech-to-text", label: "audio: a spoken question", tone: dim }
+            - { from: "Speech-to-text", to: "Model", label: "text of the question", tone: active }
+    - title: "Think"
+      text: "The text goes to a language model like any other user message. It works out a reply in text."
+      vars: { stage: "2 of 3: think" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Person, "Speech-to-text", Model, "Text-to-speech"]
+          slots: 5
+          messages:
+            - { from: "Person", to: "Speech-to-text", label: "audio: a spoken question", tone: dim }
+            - { from: "Speech-to-text", to: "Model", label: "text of the question", tone: dim }
+            - { from: "Model", to: "Model", label: "think", tone: active }
+    - title: "Stream the reply"
+      text: "The reply is streamed: the first words leave the model while later ones are still being generated, instead of waiting for the whole answer."
+      vars: { stage: "2 of 3: think" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Person, "Speech-to-text", Model, "Text-to-speech"]
+          slots: 5
+          messages:
+            - { from: "Person", to: "Speech-to-text", label: "audio: a spoken question", tone: dim }
+            - { from: "Speech-to-text", to: "Model", label: "text of the question", tone: dim }
+            - { from: "Model", to: "Model", label: "think", tone: dim }
+            - { from: "Model", to: "Text-to-speech", label: "reply text, piece by piece", tone: active }
+    - title: "Speak"
+      text: "A text-to-speech model turns the words into voice. It can start speaking the first piece while more text is still arriving."
+      vars: { stage: "3 of 3: speak" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Person, "Speech-to-text", Model, "Text-to-speech"]
+          slots: 5
+          messages:
+            - { from: "Person", to: "Speech-to-text", label: "audio: a spoken question", tone: dim }
+            - { from: "Speech-to-text", to: "Model", label: "text of the question", tone: dim }
+            - { from: "Model", to: "Model", label: "think", tone: dim }
+            - { from: "Model", to: "Text-to-speech", label: "reply text, piece by piece", tone: dim }
+            - { from: "Text-to-speech", to: "Person", label: "voice, as soon as it can", tone: found }
+    - title: "Why everything streams"
+      text: "Three models run one after another, and the person is waiting in silence. Streaming each stage into the next is what keeps the pause short enough to feel like a conversation."
+      parts:
+        - kind: seq
+          id: s
+          actors: [Person, "Speech-to-text", Model, "Text-to-speech"]
+          slots: 5
+          messages:
+            - { from: "Person", to: "Speech-to-text", label: "audio: a spoken question", tone: dim }
+            - { from: "Speech-to-text", to: "Model", label: "text of the question", tone: dim }
+            - { from: "Model", to: "Model", label: "think", tone: dim }
+            - { from: "Model", to: "Text-to-speech", label: "reply text, piece by piece", tone: dim }
+            - { from: "Text-to-speech", to: "Person", label: "voice, as soon as it can", tone: dim }

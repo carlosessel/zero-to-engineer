@@ -1,0 +1,135 @@
+- id: db-analytics-week-over-week
+  title: Week over week with lag
+  hint: Watch lag reach back one row in week order, and the change from the previous week be worked out from it.
+  language: SQL
+  code: |
+    WITH weekly AS (
+      SELECT date_trunc('week', date_key)::date AS week, sum(revenue_pence) AS revenue
+      FROM fact_sales
+      GROUP BY week
+    )
+    SELECT week, revenue,
+           lag(revenue) OVER (ORDER BY week) AS previous_week,
+           round(100.0 * (revenue - lag(revenue) OVER (ORDER BY week)) / lag(revenue) OVER (ORDER BY week), 1) AS change_percent
+    FROM weekly
+    ORDER BY week;
+  steps:
+    - title: One row per week
+      text: The CTE groups the fact table by week (date_trunc rounds each date down to its Monday) and sums the revenue. Seven weeks have sales.
+      lines: [ 1, 2, 3, 4, 5 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 7
+          tables:
+            - id: w
+              title: weekly, with lag
+              columns: [ week, revenue, previous_week, change_percent ]
+              rows:
+                - { k: 2026-09-28, cells: [ 2026-09-28, 3070, "", "" ] }
+                - { k: 2026-10-05, cells: [ 2026-10-05, 5270, "", "" ] }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 5870, "", "" ] }
+                - { k: 2026-10-19, cells: [ 2026-10-19, 4520, "", "" ] }
+                - { k: 2026-10-26, cells: [ 2026-10-26, 3035, "", "" ] }
+                - { k: 2026-11-02, cells: [ 2026-11-02, 3300, "", "" ] }
+                - { k: 2026-11-09, cells: [ 2026-11-09, 4260, "", "" ] }
+    - title: The first week has nothing before it
+      text: lag(revenue) OVER (ORDER BY week) gives the revenue from the row before, in week order. The first week has no row before it, so lag gives NULL and so does the change.
+      lines: [ 7 ]
+      vars: { previous_week: "NULL" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 7
+          tables:
+            - id: w
+              title: weekly, with lag
+              columns: [ week, revenue, previous_week, change_percent ]
+              rows:
+                - { k: 2026-09-28, cells: [ 2026-09-28, 3070, null, null ], tone: active }
+                - { k: 2026-10-05, cells: [ 2026-10-05, 5270, "", "" ] }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 5870, "", "" ] }
+                - { k: 2026-10-19, cells: [ 2026-10-19, 4520, "", "" ] }
+                - { k: 2026-10-26, cells: [ 2026-10-26, 3035, "", "" ] }
+                - { k: 2026-11-02, cells: [ 2026-11-02, 3300, "", "" ] }
+                - { k: 2026-11-09, cells: [ 2026-11-09, 4260, "", "" ] }
+    - title: Week two looks back
+      text: For the week of 5 October, lag reaches back to 3,070. The change is 100 × (5270 − 3070) / 3070, which rounds to 71.7 percent.
+      lines: [ 7, 8 ]
+      vars: { previous_week: "3070", change: 100 × 2200 / 3070 = 71.7 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 7
+          tables:
+            - id: w
+              title: weekly, with lag
+              columns: [ week, revenue, previous_week, change_percent ]
+              rows:
+                - { k: 2026-09-28, cells: [ 2026-09-28, 3070, null, null ], tone: compare }
+                - { k: 2026-10-05, cells: [ 2026-10-05, 5270, 3070, "71.7" ], tone: active }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 5870, "", "" ] }
+                - { k: 2026-10-19, cells: [ 2026-10-19, 4520, "", "" ] }
+                - { k: 2026-10-26, cells: [ 2026-10-26, 3035, "", "" ] }
+                - { k: 2026-11-02, cells: [ 2026-11-02, 3300, "", "" ] }
+                - { k: 2026-11-09, cells: [ 2026-11-09, 4260, "", "" ] }
+    - title: And so on, one row at a time
+      text: Each row compares itself with the row just before it. 5,870 against 5,270 is up 11.4 percent.
+      lines: [ 7, 8 ]
+      vars: { previous_week: "5270", change: 100 × 600 / 5270 = 11.4 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 7
+          tables:
+            - id: w
+              title: weekly, with lag
+              columns: [ week, revenue, previous_week, change_percent ]
+              rows:
+                - { k: 2026-09-28, cells: [ 2026-09-28, 3070, null, null ] }
+                - { k: 2026-10-05, cells: [ 2026-10-05, 5270, 3070, "71.7" ], tone: compare }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 5870, 5270, "11.4" ], tone: active }
+                - { k: 2026-10-19, cells: [ 2026-10-19, 4520, "", "" ] }
+                - { k: 2026-10-26, cells: [ 2026-10-26, 3035, "", "" ] }
+                - { k: 2026-11-02, cells: [ 2026-11-02, 3300, "", "" ] }
+                - { k: 2026-11-09, cells: [ 2026-11-09, 4260, "", "" ] }
+    - title: A fall is negative
+      text: Revenue dropped from 5,870 to 4,520, so the change is −23.0 percent.
+      lines: [ 8 ]
+      vars: { previous_week: "5870", change: 100 × −1350 / 5870 = −23.0 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 7
+          tables:
+            - id: w
+              title: weekly, with lag
+              columns: [ week, revenue, previous_week, change_percent ]
+              rows:
+                - { k: 2026-09-28, cells: [ 2026-09-28, 3070, null, null ] }
+                - { k: 2026-10-05, cells: [ 2026-10-05, 5270, 3070, "71.7" ] }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 5870, 5270, "11.4" ], tone: compare }
+                - { k: 2026-10-19, cells: [ 2026-10-19, 4520, 5870, "-23.0" ], tone: bad }
+                - { k: 2026-10-26, cells: [ 2026-10-26, 3035, "", "" ] }
+                - { k: 2026-11-02, cells: [ 2026-11-02, 3300, "", "" ] }
+                - { k: 2026-11-09, cells: [ 2026-11-09, 4260, "", "" ] }
+    - title: Every week done
+      text: "The same rule fills every row. No self join was needed: the window function sees the neighbouring row directly."
+      lines: [ 6, 7, 8, 9, 10 ]
+      vars: {}
+      parts:
+        - kind: tables
+          id: t
+          slots: 7
+          tables:
+            - id: w
+              title: weekly, with lag
+              columns: [ week, revenue, previous_week, change_percent ]
+              rows:
+                - { k: 2026-09-28, cells: [ 2026-09-28, 3070, null, null ], tone: done }
+                - { k: 2026-10-05, cells: [ 2026-10-05, 5270, 3070, "71.7" ], tone: done }
+                - { k: 2026-10-12, cells: [ 2026-10-12, 5870, 5270, "11.4" ], tone: done }
+                - { k: 2026-10-19, cells: [ 2026-10-19, 4520, 5870, "-23.0" ], tone: done }
+                - { k: 2026-10-26, cells: [ 2026-10-26, 3035, 4520, "-32.9" ], tone: done }
+                - { k: 2026-11-02, cells: [ 2026-11-02, 3300, 3035, "8.7" ], tone: done }
+                - { k: 2026-11-09, cells: [ 2026-11-09, 4260, 3300, "29.1" ], tone: found }

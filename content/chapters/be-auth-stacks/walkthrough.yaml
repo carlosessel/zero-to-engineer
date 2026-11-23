@@ -1,0 +1,221 @@
+- id: be-auth-stacks-middleware-checks
+  title: Seven calls through the checks
+  hint: Each call passes through the route's middleware in order; watch which check stops it, and with which status code.
+  language: TypeScript
+  code: |
+    async function authenticate(req: AuthedRequest, res: Response, next: NextFunction) {
+      const header = req.headers.authorization ?? "";
+      if (!header.startsWith("Bearer ")) {
+        res.status(401).json({ title: "Sign in required", status: 401 });
+        return;
+      }
+      try {
+        const { payload } = await jwtVerify(header.slice(7), key, { issuer, audience, algorithms: ["HS256"] });
+        req.user = payload as Claims;
+        next();
+      } catch {
+        res.status(401).json({ title: "Invalid or expired token", status: 401 });
+      }
+    }
+
+    function requireRole(role: string) {
+      return (req: AuthedRequest, res: Response, next: NextFunction) => {
+        if (req.user?.role !== role) {
+          res.status(403).json({ title: "Forbidden", status: 403 });
+          return;
+        }
+        next();
+      };
+    }
+
+    app.get("/orders/:id", authenticate, (req: AuthedRequest, res: Response) => {
+      const owner = orderOwners.get(String(req.params.id));
+      if (!owner || (owner !== req.user!.sub && req.user!.role !== "staff")) {
+        res.status(404).json({ title: "Not Found", status: 404 });
+        return;
+      }
+      res.json({ id: req.params.id, owner });
+    });
+
+    app.get("/reports/sales", authenticate, requireRole("staff"), (_req: Request, res: Response) => {
+      res.send("today: 42 orders");
+    });
+  steps:
+    - title: Two routes, two chains
+      text: Each route lists the functions a request passes through, in order. Orders need authenticate, then the handler. The sales report needs authenticate, then requireRole("staff"), then the handler.
+      lines: [26, 35]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: request, x: 0, y: 0.5 }
+            - { label: authenticate, x: 0.3, y: 0.5 }
+            - { label: requireRole, x: 0.62, y: 0.1 }
+            - { label: sales handler, x: 0.88, y: 0.1 }
+            - { label: orders handler, x: 0.88, y: 0.9 }
+          edges:
+            - { a: request, b: authenticate, directed: true }
+            - { a: authenticate, b: requireRole, directed: true }
+            - { a: requireRole, b: sales handler, directed: true }
+            - { a: authenticate, b: orders handler, directed: true }
+        - { kind: terminal, id: out, lines: [], slots: 7 }
+    - title: No token
+      text: "GET /orders/o-1 arrives with no Authorization header. authenticate stops it at once with 401: sign in first. The handler never runs."
+      lines: [2, 3, 4, 5]
+      vars: { call: "GET /orders/o-1", token: none }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: request, x: 0, y: 0.5, tone: active }
+            - { label: authenticate, x: 0.3, y: 0.5, tone: bad, note: "401" }
+            - { label: requireRole, x: 0.62, y: 0.1, tone: dim }
+            - { label: sales handler, x: 0.88, y: 0.1, tone: dim }
+            - { label: orders handler, x: 0.88, y: 0.9, tone: dim }
+          edges:
+            - { a: request, b: authenticate, directed: true, tone: active }
+            - { a: authenticate, b: requireRole, directed: true, tone: dim }
+            - { a: requireRole, b: sales handler, directed: true, tone: dim }
+            - { a: authenticate, b: orders handler, directed: true, tone: dim }
+        - { kind: terminal, id: out, lines: ["  GET /orders/o-1 -> 401"], slots: 7 }
+    - title: Ama's token is checked
+      text: Now Ama sends her token. jwtVerify checks the signature, issuer, audience, expiry and that the algorithm is HS256. It passes, so her claims go on req.user and next() moves on.
+      lines: [8, 9, 10]
+      vars: { call: "GET /orders/o-1", "req.user.sub": ama@example.com, "req.user.role": customer }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: request, x: 0, y: 0.5, tone: done }
+            - { label: authenticate, x: 0.3, y: 0.5, tone: found }
+            - { label: requireRole, x: 0.62, y: 0.1, tone: dim }
+            - { label: sales handler, x: 0.88, y: 0.1, tone: dim }
+            - { label: orders handler, x: 0.88, y: 0.9, tone: active }
+          edges:
+            - { a: request, b: authenticate, directed: true, tone: done }
+            - { a: authenticate, b: requireRole, directed: true, tone: dim }
+            - { a: requireRole, b: sales handler, directed: true, tone: dim }
+            - { a: authenticate, b: orders handler, directed: true, tone: active }
+    - title: Her own order
+      text: The handler looks up o-1's owner, ama@example.com, and compares it with the sub claim from the validated token. They match, so she gets 200 and the order.
+      lines: [27, 28, 32]
+      vars: { call: "GET /orders/o-1", "req.user.sub": ama@example.com, "req.user.role": customer, owner: ama@example.com }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: request, x: 0, y: 0.5, tone: done }
+            - { label: authenticate, x: 0.3, y: 0.5, tone: done }
+            - { label: requireRole, x: 0.62, y: 0.1, tone: dim }
+            - { label: sales handler, x: 0.88, y: 0.1, tone: dim }
+            - { label: orders handler, x: 0.88, y: 0.9, tone: found, note: "200" }
+          edges:
+            - { a: request, b: authenticate, directed: true, tone: done }
+            - { a: authenticate, b: requireRole, directed: true, tone: dim }
+            - { a: requireRole, b: sales handler, directed: true, tone: dim }
+            - { a: authenticate, b: orders handler, directed: true, tone: done }
+        - { kind: terminal, id: out, lines: ["  GET /orders/o-1 -> 401", "  GET /orders/o-1 -> 200"], slots: 7 }
+    - title: Someone else's order
+      text: Ama asks for o-2, which belongs to Kofi. Her token is valid, but she is not the owner and not staff, so the answer is 404, as if the order did not exist. Checking only "signed in?" here would be an IDOR flaw.
+      lines: [28, 29]
+      vars: { call: "GET /orders/o-2", "req.user.sub": ama@example.com, "req.user.role": customer, owner: kofi@example.com }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: request, x: 0, y: 0.5, tone: done }
+            - { label: authenticate, x: 0.3, y: 0.5, tone: done }
+            - { label: requireRole, x: 0.62, y: 0.1, tone: dim }
+            - { label: sales handler, x: 0.88, y: 0.1, tone: dim }
+            - { label: orders handler, x: 0.88, y: 0.9, tone: bad, note: "404" }
+          edges:
+            - { a: request, b: authenticate, directed: true, tone: done }
+            - { a: authenticate, b: requireRole, directed: true, tone: dim }
+            - { a: requireRole, b: sales handler, directed: true, tone: dim }
+            - { a: authenticate, b: orders handler, directed: true, tone: done }
+        - { kind: terminal, id: out, lines: ["  GET /orders/o-1 -> 401", "  GET /orders/o-1 -> 200", "  GET /orders/o-2 -> 404"], slots: 7 }
+    - title: Staff may read any order
+      text: Kofi asks for o-2. He happens to own it, and his role claim is staff, which would let him read any order anyway. 200.
+      lines: [28, 32]
+      vars: { call: "GET /orders/o-2", "req.user.sub": kofi@example.com, "req.user.role": staff, owner: kofi@example.com }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: request, x: 0, y: 0.5, tone: done }
+            - { label: authenticate, x: 0.3, y: 0.5, tone: done }
+            - { label: requireRole, x: 0.62, y: 0.1, tone: dim }
+            - { label: sales handler, x: 0.88, y: 0.1, tone: dim }
+            - { label: orders handler, x: 0.88, y: 0.9, tone: found, note: "200" }
+          edges:
+            - { a: request, b: authenticate, directed: true, tone: done }
+            - { a: authenticate, b: requireRole, directed: true, tone: dim }
+            - { a: requireRole, b: sales handler, directed: true, tone: dim }
+            - { a: authenticate, b: orders handler, directed: true, tone: done }
+        - { kind: terminal, id: out, lines: ["  GET /orders/o-1 -> 401", "  GET /orders/o-1 -> 200", "  GET /orders/o-2 -> 404", "  GET /orders/o-2 -> 200"], slots: 7 }
+    - title: Signed in, but not allowed
+      text: Ama asks for the sales report. authenticate lets her through, but requireRole("staff") finds the role customer and answers 403 Forbidden.
+      lines: [18, 19]
+      vars: { call: "GET /reports/sales", "req.user.sub": ama@example.com, "req.user.role": customer }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: request, x: 0, y: 0.5, tone: done }
+            - { label: authenticate, x: 0.3, y: 0.5, tone: done }
+            - { label: requireRole, x: 0.62, y: 0.1, tone: bad, note: "403" }
+            - { label: sales handler, x: 0.88, y: 0.1, tone: dim }
+            - { label: orders handler, x: 0.88, y: 0.9, tone: dim }
+          edges:
+            - { a: request, b: authenticate, directed: true, tone: done }
+            - { a: authenticate, b: requireRole, directed: true, tone: done }
+            - { a: requireRole, b: sales handler, directed: true, tone: dim }
+            - { a: authenticate, b: orders handler, directed: true, tone: dim }
+        - { kind: terminal, id: out, lines: ["  GET /orders/o-1 -> 401", "  GET /orders/o-1 -> 200", "  GET /orders/o-2 -> 404", "  GET /orders/o-2 -> 200", "  GET /reports/sales -> 403"], slots: 7 }
+    - title: Staff get the report
+      text: 'Kofi''s role is staff, so requireRole calls next() and the handler sends "today: 42 orders". 200.'
+      lines: [22, 36]
+      vars: { call: "GET /reports/sales", "req.user.sub": kofi@example.com, "req.user.role": staff }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: request, x: 0, y: 0.5, tone: done }
+            - { label: authenticate, x: 0.3, y: 0.5, tone: done }
+            - { label: requireRole, x: 0.62, y: 0.1, tone: done }
+            - { label: sales handler, x: 0.88, y: 0.1, tone: found, note: "200" }
+            - { label: orders handler, x: 0.88, y: 0.9, tone: dim }
+          edges:
+            - { a: request, b: authenticate, directed: true, tone: done }
+            - { a: authenticate, b: requireRole, directed: true, tone: done }
+            - { a: requireRole, b: sales handler, directed: true, tone: done }
+            - { a: authenticate, b: orders handler, directed: true, tone: dim }
+        - { kind: terminal, id: out, lines: ["  GET /orders/o-1 -> 401", "  GET /orders/o-1 -> 200", "  GET /orders/o-2 -> 404", "  GET /orders/o-2 -> 200", "  GET /reports/sales -> 403", "  GET /reports/sales -> 200"], slots: 7 }
+    - title: A tampered token
+      text: The last call uses Ama's token with its final four characters changed. The signature no longer matches, jwtVerify throws, and the catch block answers 401. 401 means "who are you?", 403 "not allowed", 404 "nothing for you here".
+      lines: [11, 12]
+      vars: { call: "GET /reports/sales", token: tampered }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { label: request, x: 0, y: 0.5, tone: active }
+            - { label: authenticate, x: 0.3, y: 0.5, tone: bad, note: "401" }
+            - { label: requireRole, x: 0.62, y: 0.1, tone: dim }
+            - { label: sales handler, x: 0.88, y: 0.1, tone: dim }
+            - { label: orders handler, x: 0.88, y: 0.9, tone: dim }
+          edges:
+            - { a: request, b: authenticate, directed: true, tone: active }
+            - { a: authenticate, b: requireRole, directed: true, tone: dim }
+            - { a: requireRole, b: sales handler, directed: true, tone: dim }
+            - { a: authenticate, b: orders handler, directed: true, tone: dim }
+        - { kind: terminal, id: out, lines: ["  GET /orders/o-1 -> 401", "  GET /orders/o-1 -> 200", "  GET /orders/o-2 -> 404", "  GET /orders/o-2 -> 200", "  GET /reports/sales -> 403", "  GET /reports/sales -> 200", "  GET /reports/sales -> 401"], slots: 7 }

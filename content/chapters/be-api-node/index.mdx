@@ -166,6 +166,8 @@ const server = app.listen(0, async () => {
 
 It prints `201 /orders/o-1001 {"id":"o-1001","customer":"Ama","lineCount":1}`, then `400 application/problem+json; charset=utf-8` and the list of problems: `customer` too short, `lines.0.sku` not a product code, `lines.0.quantity` too big. Notes:
 
+<Walkthrough name="be-api-node-zod-validation" />
+
 - **`safeParse`** returns either `success: true` with the parsed `data`, or the `error` with every **issue** and its path. `parse` throws instead.
 - **`z.infer`** turns the schema into a TypeScript type, so the type and the runtime check can never disagree.
 - Zod **strips unknown keys** by default (the `admin: true` above never reaches your code), which protects against over-posting (<Ref to="m-appsec" />). `.trim()` also cleaned up `" Ama "`.

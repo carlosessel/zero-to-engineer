@@ -1,0 +1,124 @@
+- id: ai-tools-working-loop
+  title: Using an assistant without losing control
+  hint: Follow one small task through context, a plan, a draft, tests and review. Notice who checks what at each step.
+  steps:
+    - title: "Give context"
+      text: "The assistant does not know your codebase unless shown it. Say what the code is for, the constraints, the surrounding code, and an example of the result you want."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["You", "AI assistant", "Tests"]
+          slots: 10
+          messages:
+            - { from: "You", to: "AI assistant", label: "context: purpose, limits, example", tone: active }
+    - title: "Ask for a plan first"
+      text: "On anything large, a plan comes before code, so you can check the direction before there is much to undo."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["You", "AI assistant", "Tests"]
+          slots: 10
+          messages:
+            - { from: "You", to: "AI assistant", label: "context: purpose, limits, example", tone: dim }
+            - { from: "You", to: "AI assistant", label: "plan first, please", tone: active }
+            - { from: "AI assistant", to: "You", label: "plan: 3 small steps", tone: found }
+    - title: "A draft for one small step"
+      text: "Build in small steps you can check. The assistant drafts the code for the first one."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["You", "AI assistant", "Tests"]
+          slots: 10
+          messages:
+            - { from: "You", to: "AI assistant", label: "context: purpose, limits, example", tone: dim }
+            - { from: "You", to: "AI assistant", label: "plan first, please", tone: dim }
+            - { from: "AI assistant", to: "You", label: "plan: 3 small steps", tone: dim }
+            - { from: "AI assistant", to: "You", label: "draft code for step 1", tone: active }
+        - { kind: note, id: n, text: "Draft received: not yet trusted", tone: compare }
+    - title: "Test everything it writes"
+      text: "Your tests are how you verify a machine's work. One fails on empty input: confident code that is subtly wrong."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["You", "AI assistant", "Tests"]
+          slots: 10
+          messages:
+            - { from: "You", to: "AI assistant", label: "context: purpose, limits, example", tone: dim }
+            - { from: "You", to: "AI assistant", label: "plan first, please", tone: dim }
+            - { from: "AI assistant", to: "You", label: "plan: 3 small steps", tone: dim }
+            - { from: "AI assistant", to: "You", label: "draft code for step 1", tone: dim }
+            - { from: "You", to: "Tests", label: "run the tests", tone: active }
+            - { from: "Tests", to: "You", label: "1 failed: empty input", tone: bad }
+        - { kind: note, id: n, text: "Draft: one test failing", tone: bad }
+    - title: "Understand, then fix"
+      text: "You read the code line by line until you can explain it, find why empty input breaks it, and fix it."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["You", "AI assistant", "Tests"]
+          slots: 10
+          messages:
+            - { from: "You", to: "AI assistant", label: "context: purpose, limits, example", tone: dim }
+            - { from: "You", to: "AI assistant", label: "plan first, please", tone: dim }
+            - { from: "AI assistant", to: "You", label: "plan: 3 small steps", tone: dim }
+            - { from: "AI assistant", to: "You", label: "draft code for step 1", tone: dim }
+            - { from: "You", to: "Tests", label: "run the tests", tone: dim }
+            - { from: "Tests", to: "You", label: "1 failed: empty input", tone: dim }
+            - { from: "You", to: "You", label: "read it line by line, fix", tone: active }
+        - { kind: note, id: n, text: "Draft: fixed, understood", tone: compare }
+    - title: "Green"
+      text: "With the fix in, every test passes."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["You", "AI assistant", "Tests"]
+          slots: 10
+          messages:
+            - { from: "You", to: "AI assistant", label: "context: purpose, limits, example", tone: dim }
+            - { from: "You", to: "AI assistant", label: "plan first, please", tone: dim }
+            - { from: "AI assistant", to: "You", label: "plan: 3 small steps", tone: dim }
+            - { from: "AI assistant", to: "You", label: "draft code for step 1", tone: dim }
+            - { from: "You", to: "Tests", label: "run the tests", tone: dim }
+            - { from: "Tests", to: "You", label: "1 failed: empty input", tone: dim }
+            - { from: "You", to: "You", label: "read it line by line, fix", tone: dim }
+            - { from: "You", to: "Tests", label: "run again", tone: active }
+            - { from: "Tests", to: "You", label: "all passed", tone: found }
+        - { kind: note, id: n, text: "Draft: tests pass", tone: found }
+    - title: "Review for security"
+      text: "Check input validation, access checks and secrets especially; these are the holes assistants tend to introduce."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["You", "AI assistant", "Tests"]
+          slots: 10
+          messages:
+            - { from: "You", to: "AI assistant", label: "context: purpose, limits, example", tone: dim }
+            - { from: "You", to: "AI assistant", label: "plan first, please", tone: dim }
+            - { from: "AI assistant", to: "You", label: "plan: 3 small steps", tone: dim }
+            - { from: "AI assistant", to: "You", label: "draft code for step 1", tone: dim }
+            - { from: "You", to: "Tests", label: "run the tests", tone: dim }
+            - { from: "Tests", to: "You", label: "1 failed: empty input", tone: dim }
+            - { from: "You", to: "You", label: "read it line by line, fix", tone: dim }
+            - { from: "You", to: "Tests", label: "run again", tone: dim }
+            - { from: "Tests", to: "You", label: "all passed", tone: dim }
+            - { from: "You", to: "You", label: "review: input, access, secrets", tone: active }
+        - { kind: note, id: n, text: "Ready: explained, tested, reviewed", tone: found }
+    - title: "Your name on it"
+      text: "Only now is it ready to merge. The assistant does not carry responsibility for this code; you do."
+      parts:
+        - kind: seq
+          id: s
+          actors: ["You", "AI assistant", "Tests"]
+          slots: 10
+          messages:
+            - { from: "You", to: "AI assistant", label: "context: purpose, limits, example", tone: dim }
+            - { from: "You", to: "AI assistant", label: "plan first, please", tone: dim }
+            - { from: "AI assistant", to: "You", label: "plan: 3 small steps", tone: dim }
+            - { from: "AI assistant", to: "You", label: "draft code for step 1", tone: dim }
+            - { from: "You", to: "Tests", label: "run the tests", tone: dim }
+            - { from: "Tests", to: "You", label: "1 failed: empty input", tone: dim }
+            - { from: "You", to: "You", label: "read it line by line, fix", tone: dim }
+            - { from: "You", to: "Tests", label: "run again", tone: dim }
+            - { from: "Tests", to: "You", label: "all passed", tone: dim }
+            - { from: "You", to: "You", label: "review: input, access, secrets", tone: dim }
+        - { kind: note, id: n, text: "Ready: explained, tested, reviewed", tone: found }

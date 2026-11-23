@@ -1,0 +1,66 @@
+- id: m-errors-try-with-resources
+  title: Cleaning up when an exception is thrown
+  hint: Watch the open resources pile up, then close in reverse order as the exception passes, before the catch block runs.
+  language: Java
+  code: |
+    static class Resource implements AutoCloseable {
+        Resource(String name) {
+            this.name = name;
+            System.out.println("open " + name);
+        }
+        public void close() {
+            System.out.println("close " + name);
+        }
+    }
+
+    try (Resource db = new Resource("database"); Resource file = new Resource("file")) {
+        System.out.println("working");
+        throw new IllegalStateException("disk full");
+    } catch (IllegalStateException e) {
+        System.out.println("caught: " + e.getMessage());
+    }
+  steps:
+    - title: Open the database
+      text: The try-with-resources statement opens its resources from left to right. The database resource is opened first.
+      lines: [2, 3, 4, 11]
+      parts:
+        - { kind: cells, id: open, label: "open resources (newest on top)", orient: column, slots: 2, width: 120, items: [{ k: db, v: database, tone: active }] }
+        - { kind: note, id: ex, text: "no exception", tone: dim }
+        - { kind: terminal, id: out, lines: ["open database"], slots: 6 }
+    - title: Open the file
+      text: Then the file is opened, on top of the database. Both must be released, whatever happens next.
+      lines: [2, 3, 4, 11]
+      parts:
+        - { kind: cells, id: open, label: "open resources (newest on top)", orient: column, slots: 2, width: 120, items: [{ k: file, v: file, tone: active }, { k: db, v: database }] }
+        - { kind: terminal, id: out, lines: ["open database", "open file"], slots: 6 }
+    - title: The body runs
+      text: With both resources open, the body of the try block starts its work.
+      lines: [12]
+      parts:
+        - { kind: cells, id: open, label: "open resources (newest on top)", orient: column, slots: 2, width: 120, items: [{ k: file, v: file }, { k: db, v: database }] }
+        - { kind: terminal, id: out, lines: ["open database", "open file", "working"], slots: 6 }
+    - title: An exception is thrown
+      text: Throwing stops the block immediately. Nothing after the throw in this block will run, but the open resources still need closing.
+      lines: [13]
+      parts:
+        - { kind: cells, id: open, label: "open resources (newest on top)", orient: column, slots: 2, width: 120, items: [{ k: file, v: file, tone: compare }, { k: db, v: database, tone: compare }] }
+        - { kind: note, id: ex, text: "IllegalStateException: disk full (on its way out)", tone: bad }
+    - title: Close the file first
+      text: Java closes the resources automatically, in reverse order of opening. The file was opened last, so it is closed first.
+      lines: [6, 7]
+      parts:
+        - { kind: cells, id: open, label: "open resources (newest on top)", orient: column, slots: 2, width: 120, items: [{ k: file, v: file, tone: done }, { k: db, v: database, tone: compare }] }
+        - { kind: terminal, id: out, lines: ["open database", "open file", "working", "close file"], slots: 6 }
+    - title: Then the database
+      text: The database is closed next. Both resources are now released, and the exception has still not been caught.
+      lines: [6, 7]
+      parts:
+        - { kind: cells, id: open, label: "open resources (newest on top)", orient: column, slots: 2, width: 120, items: [], empty: "all closed" }
+        - { kind: terminal, id: out, lines: ["open database", "open file", "working", "close file", "close database"], slots: 6 }
+    - title: Only now, the catch block
+      text: The exception reaches the catch block, which prints its message. Cleanup happened before the catch, so no connection or file was left open, even though the work failed.
+      lines: [14, 15]
+      vars: { "e.getMessage()": "disk full" }
+      parts:
+        - { kind: note, id: ex, text: "IllegalStateException: disk full (caught)", tone: found }
+        - { kind: terminal, id: out, lines: ["open database", "open file", "working", "close file", "close database", "caught: disk full"], slots: 6 }

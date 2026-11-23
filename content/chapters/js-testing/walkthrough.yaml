@@ -1,0 +1,328 @@
+- id: js-testing-first-run
+  title: A test run, assertion by assertion
+  hint: Watch Vitest compare each received value with the expected one, then read the report.
+  language: JavaScript
+  examples:
+    - label: All pass
+      code: |-
+        import { describe, expect, it } from "vitest";
+        import { applyDiscount, formatPrice, lineTotal } from "./price.js";
+
+        describe("lineTotal", () => {
+          it("multiplies the price by the quantity", () => {
+            expect(lineTotal(2.75, 3)).toBe(8.25);
+          });
+
+          it("is zero when the quantity is zero", () => {
+            expect(lineTotal(4.5, 0)).toBe(0);
+          });
+        });
+
+        describe("formatPrice", () => {
+          it("adds a pound sign and two decimal places", () => {
+            expect(formatPrice(4.5)).toBe("£4.50");
+          });
+
+          it("rounds to the nearest penny", () => {
+            expect(formatPrice(3.456)).toBe("£3.46");
+          });
+        });
+
+        describe("applyDiscount", () => {
+          it("takes the percentage off", () => {
+            expect(applyDiscount(20, 25)).toBe(15);
+          });
+        });
+      steps:
+        - title: Vitest finds the test file
+          text: npx vitest run looks for files whose names end in .test.js. It finds src/price.test.js, which imports the three functions being tested.
+          lines:
+            - 1
+            - 2
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: r
+                  title: expect(received).toBe(expected)
+                  columns:
+                    - call
+                    - received
+                    - expected
+                  rows: []
+            - kind: terminal
+              id: out
+              slots: 3
+              lines:
+                - $ npx vitest run
+        - title: The first test
+          text: "it defines one test. expect takes the actual value: lineTotal(2.75, 3) gives 8.25. toBe says it should be 8.25. They match, so the test passes."
+          lines:
+            - 5
+            - 6
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: r
+                  title: expect(received).toBe(expected)
+                  columns:
+                    - call
+                    - received
+                    - expected
+                  rows:
+                    - cells:
+                        - lineTotal(2.75, 3)
+                        - "8.25"
+                        - "8.25"
+                      tone: active
+        - title: The second test
+          text: lineTotal(4.5, 0) gives 0, as expected. Another pass.
+          lines:
+            - 9
+            - 10
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: r
+                  title: expect(received).toBe(expected)
+                  columns:
+                    - call
+                    - received
+                    - expected
+                  rows:
+                    - cells:
+                        - lineTotal(2.75, 3)
+                        - "8.25"
+                        - "8.25"
+                      tone: found
+                    - cells:
+                        - lineTotal(4.5, 0)
+                        - "0"
+                        - "0"
+                      tone: active
+        - title: formatPrice
+          text: The next describe groups two tests for formatPrice. Both return exactly the text expected, pound sign and two decimal places included.
+          lines:
+            - 14
+            - 15
+            - 16
+            - 19
+            - 20
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: r
+                  title: expect(received).toBe(expected)
+                  columns:
+                    - call
+                    - received
+                    - expected
+                  rows:
+                    - cells:
+                        - lineTotal(2.75, 3)
+                        - "8.25"
+                        - "8.25"
+                      tone: found
+                    - cells:
+                        - lineTotal(4.5, 0)
+                        - "0"
+                        - "0"
+                      tone: found
+                    - cells:
+                        - formatPrice(4.5)
+                        - '"£4.50"'
+                        - '"£4.50"'
+                      tone: active
+                    - cells:
+                        - formatPrice(3.456)
+                        - '"£3.46"'
+                        - '"£3.46"'
+                      tone: active
+        - title: applyDiscount
+          text: 25 per cent off 20 is 15, and applyDiscount returns 15.
+          lines:
+            - 25
+            - 26
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: r
+                  title: expect(received).toBe(expected)
+                  columns:
+                    - call
+                    - received
+                    - expected
+                  rows:
+                    - cells:
+                        - lineTotal(2.75, 3)
+                        - "8.25"
+                        - "8.25"
+                      tone: found
+                    - cells:
+                        - lineTotal(4.5, 0)
+                        - "0"
+                        - "0"
+                      tone: found
+                    - cells:
+                        - formatPrice(4.5)
+                        - '"£4.50"'
+                        - '"£4.50"'
+                      tone: found
+                    - cells:
+                        - formatPrice(3.456)
+                        - '"£3.46"'
+                        - '"£3.46"'
+                      tone: found
+                    - cells:
+                        - applyDiscount(20, 25)
+                        - "15"
+                        - "15"
+                      tone: active
+        - title: The report
+          text: All five assertions held, so Vitest reports 5 passed. The tests check behaviour, what goes in and what comes out, not how each function works inside.
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: r
+                  title: expect(received).toBe(expected)
+                  columns:
+                    - call
+                    - received
+                    - expected
+                  rows:
+                    - cells:
+                        - lineTotal(2.75, 3)
+                        - "8.25"
+                        - "8.25"
+                      tone: found
+                    - cells:
+                        - lineTotal(4.5, 0)
+                        - "0"
+                        - "0"
+                      tone: found
+                    - cells:
+                        - formatPrice(4.5)
+                        - '"£4.50"'
+                        - '"£4.50"'
+                      tone: found
+                    - cells:
+                        - formatPrice(3.456)
+                        - '"£3.46"'
+                        - '"£3.46"'
+                      tone: found
+                    - cells:
+                        - applyDiscount(20, 25)
+                        - "15"
+                        - "15"
+                      tone: found
+            - kind: terminal
+              id: out
+              slots: 3
+              lines:
+                - $ npx vitest run
+                - " ✓ src/price.test.js (5 tests) 4ms"
+                - "      Tests  5 passed (5)"
+    - label: A wrong expected value
+      code: |-
+        import { expect, it } from "vitest";
+        import { lineTotal } from "./price.js";
+
+        it("multiplies the price by the quantity", () => {
+          expect(lineTotal(2.75, 3)).toBe(8.2);
+        });
+      steps:
+        - title: A mistake in the test
+          text: Someone worked out 2.75 × 3 in their head and wrote 8.2 as the expected value.
+          lines:
+            - 5
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: r
+                  title: expect(received).toBe(expected)
+                  columns:
+                    - call
+                    - received
+                    - expected
+                  rows: []
+            - kind: terminal
+              id: out
+              slots: 3
+              lines:
+                - $ npx vitest run
+        - title: The values differ
+          text: lineTotal(2.75, 3) gives 8.25, but toBe expects 8.2. They are not equal, so the test fails.
+          lines:
+            - 5
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: r
+                  title: expect(received).toBe(expected)
+                  columns:
+                    - call
+                    - received
+                    - expected
+                  rows:
+                    - cells:
+                        - lineTotal(2.75, 3)
+                        - "8.25"
+                        - "8.2"
+                      tone: bad
+        - title: Which test failed
+          text: The report names the file, then the test's name.
+          parts:
+            - kind: terminal
+              id: out
+              slots: 5
+              lines:
+                - " FAIL  src/price.test.js > multiplies the price by the quantity"
+                - "AssertionError: expected 8.25 to be 8.2 // Object.is equality"
+        - title: Received against expected
+          text: Then what was expected (8.2) against what was received (8.25), and the line of the test, line 5.
+          lines:
+            - 5
+          parts:
+            - kind: terminal
+              id: out
+              slots: 5
+              lines:
+                - " FAIL  src/price.test.js > multiplies the price by the quantity"
+                - "AssertionError: expected 8.25 to be 8.2 // Object.is equality"
+                - "- 8.2"
+                - + 8.25
+                - " ❯ src/price.test.js:5:30"
+        - title: A failure is a question
+          text: Here the test is wrong, not the code. A failure asks which is right. Making a new test fail once on purpose shows that it can fail at all.
+          parts:
+            - kind: tables
+              id: t
+              slots: 5
+              tables:
+                - id: r
+                  title: expect(received).toBe(expected)
+                  columns:
+                    - call
+                    - received
+                    - expected
+                  rows:
+                    - cells:
+                        - lineTotal(2.75, 3)
+                        - "8.25"
+                        - "8.2"
+                      tone: compare

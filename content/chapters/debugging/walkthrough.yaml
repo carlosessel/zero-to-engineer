@@ -1,0 +1,104 @@
+- id: debugging-method
+  title: The method, on one bug
+  hint: Follow one crash through the five steps of the method, and see each guess checked against real values.
+  language: Python
+  code: |
+    def average(numbers):
+        print("DEBUG numbers =", numbers)      # the quickest tool there is
+        return sum(numbers) / len(numbers)
+  steps:
+    - title: Reproduce it
+      text: Running stats.py crashes every time, in the same way. A bug you can make happen on demand is a bug you can fix.
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { label: Reproduce, x: 0.05, y: 0, tone: active }
+            - { label: Read the error, x: 0.275, y: 1 }
+            - { label: One guess, x: 0.5, y: 0 }
+            - { label: Check it, x: 0.725, y: 1 }
+            - { label: Fix the cause, x: 0.95, y: 0 }
+          edges:
+            - { a: Reproduce, b: Read the error, directed: true }
+            - { a: Read the error, b: One guess, directed: true }
+            - { a: One guess, b: Check it, directed: true }
+            - { a: Check it, b: Fix the cause, directed: true }
+        - { kind: terminal, id: t, lines: ["$ python stats.py", "Traceback (most recent call last):", "  ...", "ZeroDivisionError: division by zero"], slots: 6 }
+    - title: Read the error, from the bottom
+      text: The last line names the problem, dividing by zero. The lines above it point at the return line in average.
+      lines: [3]
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { label: Reproduce, x: 0.05, y: 0, tone: done }
+            - { label: Read the error, x: 0.275, y: 1, tone: active }
+            - { label: One guess, x: 0.5, y: 0 }
+            - { label: Check it, x: 0.725, y: 1 }
+            - { label: Fix the cause, x: 0.95, y: 0 }
+          edges:
+            - { a: Reproduce, b: Read the error, directed: true, tone: done }
+            - { a: Read the error, b: One guess, directed: true }
+            - { a: One guess, b: Check it, directed: true }
+            - { a: Check it, b: Fix the cause, directed: true }
+    - title: Form one guess
+      text: The only division is by len(numbers). Guess, the list is empty. If that is right, printing numbers will show [].
+      lines: [3]
+      vars: { guess: "numbers is empty" }
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { label: Reproduce, x: 0.05, y: 0, tone: done }
+            - { label: Read the error, x: 0.275, y: 1, tone: done }
+            - { label: One guess, x: 0.5, y: 0, tone: active }
+            - { label: Check it, x: 0.725, y: 1 }
+            - { label: Fix the cause, x: 0.95, y: 0 }
+          edges:
+            - { a: Reproduce, b: Read the error, directed: true, tone: done }
+            - { a: Read the error, b: One guess, directed: true, tone: done }
+            - { a: One guess, b: Check it, directed: true }
+            - { a: Check it, b: Fix the cause, directed: true }
+    - title: Check it with real values
+      text: Instead of staring at the code, add one print and run it again. The printed value is the evidence.
+      lines: [2]
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { label: Reproduce, x: 0.05, y: 0, tone: done }
+            - { label: Read the error, x: 0.275, y: 1, tone: done }
+            - { label: One guess, x: 0.5, y: 0, tone: done }
+            - { label: Check it, x: 0.725, y: 1, tone: active }
+            - { label: Fix the cause, x: 0.95, y: 0 }
+          edges:
+            - { a: Reproduce, b: Read the error, directed: true, tone: done }
+            - { a: Read the error, b: One guess, directed: true, tone: done }
+            - { a: One guess, b: Check it, directed: true, tone: done }
+            - { a: Check it, b: Fix the cause, directed: true }
+        - { kind: terminal, id: t, lines: ["$ python stats.py", "DEBUG numbers = []", "Traceback (most recent call last):", "  ...", "ZeroDivisionError: division by zero"], slots: 6 }
+    - title: The guess was right
+      text: numbers really is empty, so len(numbers) is 0. This is one of the usual suspects, assuming a value that is actually empty.
+      vars: { numbers: "[]", "len(numbers)": "0" }
+    - title: Fix the cause, not the symptom
+      text: Hiding the error would leave the empty list in place. The fix belongs where the list should have been filled, then you confirm the original steps now work.
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 180
+          nodes:
+            - { label: Reproduce, x: 0.05, y: 0, tone: done }
+            - { label: Read the error, x: 0.275, y: 1, tone: done }
+            - { label: One guess, x: 0.5, y: 0, tone: done }
+            - { label: Check it, x: 0.725, y: 1, tone: done }
+            - { label: Fix the cause, x: 0.95, y: 0, tone: found }
+          edges:
+            - { a: Reproduce, b: Read the error, directed: true, tone: done }
+            - { a: Read the error, b: One guess, directed: true, tone: done }
+            - { a: One guess, b: Check it, directed: true, tone: done }
+            - { a: Check it, b: Fix the cause, directed: true, tone: done }

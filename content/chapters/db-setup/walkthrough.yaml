@@ -1,0 +1,96 @@
+- id: db-setup-bakery
+  title: From nothing to the bakery database
+  hint: Follow the setup commands and watch the six bakery tables, and the keys between them, appear.
+  steps:
+    - title: Start PostgreSQL
+      text: With Docker, one command downloads PostgreSQL 18 and starts it in the background on port 5432. The password is only for a database on your own machine.
+      parts:
+        - { kind: terminal, id: t, slots: 5, lines: [ $ docker run --name bakery-db ... -p 5432:5432 -d postgres:18 ] }
+        - { kind: graph, id: g, height: 260, nodes: [], edges: [] }
+    - title: Open psql
+      text: "The second command opens psql inside the container. The prompt shows which database you are connected to: the default one, called postgres."
+      parts:
+        - { kind: terminal, id: t, slots: 5, lines: [ $ docker run --name bakery-db ... -p 5432:5432 -d postgres:18, $ docker exec -it bakery-db psql -U postgres, postgres=# ] }
+    - title: Create and connect
+      text: CREATE DATABASE makes an empty bakery database; \c bakery connects to it. Running the script while still in postgres is a common mistake.
+      parts:
+        - { kind: terminal, id: t, slots: 5, lines: [ $ docker exec -it bakery-db psql -U postgres, postgres=# CREATE DATABASE bakery;, CREATE DATABASE, postgres=# \c bakery, bakery=# ] }
+    - title: The tables appear
+      text: "The script first creates six tables. Arrows show foreign keys: each order must belong to a real customer and a real shop."
+      parts:
+        - { kind: terminal, id: t, slots: 5, lines: [ bakery=# \i bakery.sql, CREATE TABLE ] }
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: shops, label: shops, x: 0.12, y: 0.2, tone: active }
+            - { k: staff, label: staff, x: 0.12, y: 0.8, tone: active }
+            - { k: customers, label: customers, x: 0.5, y: 0.2, tone: active }
+            - { k: orders, label: orders, x: 0.5, y: 0.8, tone: active }
+            - { k: products, label: products, x: 0.88, y: 0.2, tone: active }
+            - { k: order_lines, label: order_lines, x: 0.88, y: 0.8, tone: active }
+          edges:
+            - { a: staff, b: shops, directed: true, label: shop_id }
+            - { a: orders, b: customers, directed: true, label: customer_id }
+            - { a: orders, b: shops, directed: true, label: shop_id }
+            - { a: order_lines, b: orders, directed: true, label: order_id }
+            - { a: order_lines, b: products, directed: true, label: product_id }
+    - title: Order lines link orders to products
+      text: One order line is one product in an order. order_lines points at both orders and products, so an order can hold many products. staff also has manager_id, pointing at another staff row.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: shops, label: shops, x: 0.12, y: 0.2, tone: base }
+            - { k: staff, label: staff, x: 0.12, y: 0.8, tone: base }
+            - { k: customers, label: customers, x: 0.5, y: 0.2, tone: base }
+            - { k: orders, label: orders, x: 0.5, y: 0.8, tone: compare }
+            - { k: products, label: products, x: 0.88, y: 0.2, tone: compare }
+            - { k: order_lines, label: order_lines, x: 0.88, y: 0.8, tone: active }
+          edges:
+            - { a: staff, b: shops, directed: true, label: shop_id }
+            - { a: orders, b: customers, directed: true, label: customer_id }
+            - { a: orders, b: shops, directed: true, label: shop_id }
+            - { a: order_lines, b: orders, directed: true, label: order_id }
+            - { a: order_lines, b: products, directed: true, label: product_id }
+    - title: The rows go in
+      text: Then the INSERT statements fill the tables with a small bakery chain's data.
+      parts:
+        - { kind: terminal, id: t, slots: 5, lines: [ bakery=# \i bakery.sql, CREATE TABLE, INSERT 0 3, ..., INSERT 0 33 ] }
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: shops, label: shops, x: 0.12, y: 0.2, tone: base, note: 3 rows }
+            - { k: staff, label: staff, x: 0.12, y: 0.8, tone: base, note: 9 rows }
+            - { k: customers, label: customers, x: 0.5, y: 0.2, tone: base, note: 9 rows }
+            - { k: orders, label: orders, x: 0.5, y: 0.8, tone: base, note: 20 rows }
+            - { k: products, label: products, x: 0.88, y: 0.2, tone: base, note: 12 rows }
+            - { k: order_lines, label: order_lines, x: 0.88, y: 0.8, tone: base, note: 33 rows }
+          edges:
+            - { a: staff, b: shops, directed: true, label: shop_id }
+            - { a: orders, b: customers, directed: true, label: customer_id }
+            - { a: orders, b: shops, directed: true, label: shop_id }
+            - { a: order_lines, b: orders, directed: true, label: order_id }
+            - { a: order_lines, b: products, directed: true, label: product_id }
+    - title: Check the counts
+      text: The counting query should print 3, 9, 9, 12, 20 and 33. If your counts match, every result in the course will match yours.
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { k: shops, label: shops, x: 0.12, y: 0.2, tone: found, note: 3 rows }
+            - { k: staff, label: staff, x: 0.12, y: 0.8, tone: found, note: 9 rows }
+            - { k: customers, label: customers, x: 0.5, y: 0.2, tone: found, note: 9 rows }
+            - { k: orders, label: orders, x: 0.5, y: 0.8, tone: found, note: 20 rows }
+            - { k: products, label: products, x: 0.88, y: 0.2, tone: found, note: 12 rows }
+            - { k: order_lines, label: order_lines, x: 0.88, y: 0.8, tone: found, note: 33 rows }
+          edges:
+            - { a: staff, b: shops, directed: true, label: shop_id }
+            - { a: orders, b: customers, directed: true, label: customer_id }
+            - { a: orders, b: shops, directed: true, label: shop_id }
+            - { a: order_lines, b: orders, directed: true, label: order_id }
+            - { a: order_lines, b: products, directed: true, label: product_id }
+        - { kind: terminal, id: t, slots: 5, lines: [ "bakery=# SELECT 'shops' AS table_name, count(*) AS rows FROM shops ...", (6 rows) ] }

@@ -1,0 +1,103 @@
+- id: tokens-embeddings-similarity
+  title: From sentences to a similarity table
+  hint: Watch three sentences become three vectors, then every pair get a similarity score from one dot product.
+  language: Python
+  code: |
+    from sentence_transformers import SentenceTransformer
+    model = SentenceTransformer("all-MiniLM-L6-v2")   # small, runs on a laptop
+
+    texts = ["How do I get a refund?",
+             "I want my money back",
+             "What time do you open?"]
+    vecs = model.encode(texts, normalize_embeddings=True)
+    print(vecs.shape)            # (3, 384)
+    print(vecs @ vecs.T)         # similarity table
+  steps:
+    - title: Three sentences
+      text: "Two ask about the same thing in different words; the third is about opening hours. Sentences 1 and 2 share no key words at all."
+      lines: [4, 5, 6]
+      parts:
+        - kind: cells
+          id: txt
+          label: texts
+          width: 200
+          indices: true
+          items: [{ k: a, v: "How do I get a refund?" }, { k: b, v: "I want my money back" }, { k: c, v: "What time do you open?" }]
+          slots: 3
+    - title: Each sentence becomes one vector
+      text: "The embedding model turns each whole sentence into one list of 384 numbers that captures its meaning. Three sentences give an array of shape (3, 384)."
+      lines: [7, 8]
+      vars: { "vecs.shape": "(3, 384)" }
+      parts:
+        - kind: cells
+          id: txt
+          label: "vecs: one row of 384 numbers per sentence"
+          width: 200
+          indices: true
+          items: [{ k: a, v: "vector 0: 384 numbers", tone: active }, { k: b, v: "vector 1: 384 numbers", tone: active }, { k: c, v: "vector 2: 384 numbers", tone: active }]
+          slots: 3
+    - title: All the same length
+      text: "normalize_embeddings=True scales every vector to length 1. Then the dot product of two vectors is their cosine similarity: it measures direction, which here means meaning."
+      lines: [7]
+      vars: { "vecs.shape": "(3, 384)", "each length": 1 }
+    - title: Every pair at once
+      text: "vecs.T flips the array to shape (384, 3), so vecs @ vecs.T is (3, 3). The number in row i, column j is the dot product of sentence i with sentence j."
+      lines: [9]
+      vars: { "vecs.T.shape": "(384, 3)", "result shape": "(3, 3)" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: sim
+              title: "vecs @ vecs.T  (3, 3)"
+              columns: ["", "refund?", "money back", "open?"]
+              rows:
+                - { k: a, cells: ["refund?", "", "", ""] }
+                - { k: b, cells: ["money back", "", "", ""] }
+                - { k: c, cells: ["open?", "", "", ""] }
+    - title: Each sentence with itself
+      text: "On the diagonal each vector meets itself. A length-1 vector dotted with itself gives 1.0, the highest score possible."
+      lines: [9]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: sim
+              title: "vecs @ vecs.T  (3, 3)"
+              columns: ["", "refund?", "money back", "open?"]
+              rows:
+                - { k: a, cells: ["refund?", "1.0", "", ""] }
+                - { k: b, cells: ["money back", "", "1.0", ""] }
+                - { k: c, cells: ["open?", "", "", "1.0"] }
+    - title: Same meaning, different words
+      text: "The refund question and \"I want my money back\" score as close, though they share no key words. The table is symmetrical: 1 with 2 is the same as 2 with 1."
+      lines: [9]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: sim
+              title: "vecs @ vecs.T  (3, 3)"
+              columns: ["", "refund?", "money back", "open?"]
+              rows:
+                - { k: a, cells: ["refund?", "1.0", "high", ""], tone: found }
+                - { k: b, cells: ["money back", "high", "1.0", ""], tone: found }
+                - { k: c, cells: ["open?", "", "", "1.0"] }
+    - title: A different topic scores low
+      text: "Opening hours point in a different direction, so their scores with both refund sentences are low. This is what makes search by meaning, and later RAG, possible."
+      lines: [9]
+      parts:
+        - kind: tables
+          id: t
+          slots: 3
+          tables:
+            - id: sim
+              title: "vecs @ vecs.T  (3, 3)"
+              columns: ["", "refund?", "money back", "open?"]
+              rows:
+                - { k: a, cells: ["refund?", "1.0", "high", "low"] }
+                - { k: b, cells: ["money back", "high", "1.0", "low"] }
+                - { k: c, cells: ["open?", "low", "low", "1.0"], tone: compare }

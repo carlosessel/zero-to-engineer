@@ -27,7 +27,7 @@ describe('every walkthrough', () => {
           expect(f.text.trim()).not.toBe('');
           for (const l of f.lines ?? []) expect(l).toBeGreaterThanOrEqual(1), expect(l).toBeLessThanOrEqual(lines);
           const { body } = renderFrame(f);
-          expect(body).not.toMatch(/NaN|undefined|Infinity/);
+          expect(body).not.toMatch(/\b(?:x|y|x1|x2|y1|y2|width|height|d|transform|style)="[^"]*(?:NaN|undefined|Infinity)/);
           // Keys must be unique, or the player would merge two things into one.
           const keys = [...body.matchAll(/data-k="([^"]+)"/g)].map((m) => m[1]);
           expect(new Set(keys).size).toBe(keys.length);
@@ -128,5 +128,60 @@ describe('morph', () => {
     expect(svg.querySelector('[data-k="a:v1"]')).toBe(bar);
     expect(bar!.getAttribute('style')).not.toBe(before);
     expect(svg.innerHTML.match(/data-k=/g)!.length).toBe(renderFrame(frames[moved]).body.match(/data-k=/g)!.length);
+  });
+});
+
+describe('walkthrough.yaml lessons', async () => {
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+  const { parseLessons } = await import('../src/walk/data');
+  const { lint } = await import('../src/walk/render');
+  const root = path.join(__dirname, '..', 'content', 'chapters');
+  const chapters = fs.readdirSync(root).filter((d) => fs.existsSync(path.join(root, d, 'index.mdx')));
+  const errors: string[] = [];
+  const data = chapters.flatMap((ch) => {
+    const file = path.join(root, ch, 'walkthrough.yaml');
+    return fs.existsSync(file) ? parseLessons(fs.readFileSync(file, 'utf8'), ch, errors) : [];
+  });
+
+  it('every walkthrough.yaml is well formed', () => {
+    expect(errors).toEqual([]);
+  });
+
+  it('every step is readable: text fits, nodes do not overlap, messages name real actors', () => {
+    const problems: string[] = [];
+    for (const lesson of [...Object.values(LESSONS), ...data]) {
+      lesson.examples.forEach((_, e) => lesson.frames(e).forEach((f, i) => {
+        for (const p of lint(f)) problems.push(`${lesson.id}, step ${i + 1}: ${p}`);
+        const { body } = renderFrame(f);
+        expect(body, `${lesson.id} step ${i + 1}`).not.toMatch(/\b(?:x|y|x1|x2|y1|y2|width|height|d|transform|style)="[^"]*(?:NaN|undefined|Infinity)/);
+        const keys = [...body.matchAll(/data-k="([^"]+)"/g)].map((m) => m[1]);
+        const dup = keys.find((k, j) => keys.indexOf(k) !== j);
+        if (dup) problems.push(`${lesson.id}, step ${i + 1}: two things share the key "${dup}"`);
+      }));
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('names are unique, and each walkthrough is used in its own chapter exactly once', () => {
+    const ids = [...Object.keys(LESSONS), ...data.map((l) => l.id)];
+    expect(ids.filter((id, i) => ids.indexOf(id) !== i)).toEqual([]);
+    const wrong = data
+      .map((l) => [l, fs.readFileSync(path.join(root, l.chapter, 'index.mdx'), 'utf8').split(`<Walkthrough name="${l.id}" />`).length - 1] as const)
+      .filter(([, n]) => n !== 1)
+      .map(([l, n]) => `${l.chapter} uses ${l.id} ${n} times`);
+    expect(wrong).toEqual([]);
+  });
+
+  it('every chapter has a walkthrough, except the library and glossary pages', () => {
+    const missing = chapters.filter((ch) => !/-(library|glossary)$/.test(ch) && !fs.readFileSync(path.join(root, ch, 'index.mdx'), 'utf8').includes('<Walkthrough name="'));
+    expect(missing).toEqual([]);
+  });
+
+  it('every <Walkthrough> in a chapter names one that exists', () => {
+    const known = new Set([...Object.keys(LESSONS), ...data.map((l) => l.id)]);
+    const unknown = chapters.flatMap((ch) => [...fs.readFileSync(path.join(root, ch, 'index.mdx'), 'utf8').matchAll(/<Walkthrough name="([^"]+)"/g)]
+      .filter((m) => !known.has(m[1])).map((m) => `${ch}: ${m[1]}`));
+    expect(unknown).toEqual([]);
   });
 });

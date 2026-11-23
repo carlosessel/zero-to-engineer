@@ -1,0 +1,125 @@
+- id: python-collections-dictionary
+  title: A dictionary changes
+  hint: Each entry is a key pointing at a value. Watch values being looked up, changed and added, then visited in order.
+  language: Python
+  code: |
+    student = {"name": "Ama", "age": 20, "courses": ["Maths", "ICT"]}
+    student["name"]            # "Ama"
+    student["age"] = 21        # change a value
+    student["city"] = "Accra"  # add a new key
+
+    for key, value in student.items():
+        print(key, "->", value)
+  steps:
+    - title: Three keys, three values
+      text: The curly brackets make a dictionary. Each key is followed by a colon and its value; a value can even be a list.
+      lines: [1]
+      parts:
+        - kind: kv
+          id: d
+          label: "student"
+          slots: 4
+          rows:
+            - { name: '"name"', value: '"Ama"', tone: active }
+            - { name: '"age"', value: "20", tone: active }
+            - { name: '"courses"', value: '["Maths", "ICT"]', tone: active }
+        - { kind: terminal, id: out, lines: [], slots: 4 }
+    - title: Look up by key
+      text: Square brackets with a key give back its value. Python finds it by name, not by counting positions.
+      lines: [2]
+      vars: { 'student["name"]': '"Ama"' }
+      parts:
+        - kind: kv
+          id: d
+          label: "student"
+          slots: 4
+          rows:
+            - { name: '"name"', value: '"Ama"', tone: found }
+            - { name: '"age"', value: "20" }
+            - { name: '"courses"', value: '["Maths", "ICT"]' }
+    - title: Change a value
+      text: Storing under a key that already exists replaces its value. 20 is gone; age is now 21.
+      lines: [3]
+      vars: {}
+      parts:
+        - kind: kv
+          id: d
+          label: "student"
+          slots: 4
+          rows:
+            - { name: '"name"', value: '"Ama"' }
+            - { name: '"age"', value: "21", tone: active }
+            - { name: '"courses"', value: '["Maths", "ICT"]' }
+    - title: Add a new key
+      text: Storing under a key that does not exist yet adds a new entry. The same line shape both changes and adds.
+      lines: [4]
+      parts:
+        - kind: kv
+          id: d
+          label: "student"
+          slots: 4
+          rows:
+            - { name: '"name"', value: '"Ama"' }
+            - { name: '"age"', value: "21" }
+            - { name: '"courses"', value: '["Maths", "ICT"]' }
+            - { name: '"city"', value: '"Accra"', tone: found }
+    - title: Visit each entry
+      text: items() hands the loop one key and its value at a time. The first round gets name and Ama.
+      lines: [6, 7]
+      vars: { key: '"name"', value: '"Ama"' }
+      parts:
+        - kind: kv
+          id: d
+          label: "student"
+          slots: 4
+          rows:
+            - { name: '"name"', value: '"Ama"', tone: active }
+            - { name: '"age"', value: "21" }
+            - { name: '"courses"', value: '["Maths", "ICT"]' }
+            - { name: '"city"', value: '"Accra"' }
+        - { kind: terminal, id: out, lines: ["name -> Ama"], slots: 4 }
+    - title: The changed age
+      text: The second round sees the new value, 21, because the change on line 3 replaced the old one.
+      lines: [6, 7]
+      vars: { key: '"age"', value: "21" }
+      parts:
+        - kind: kv
+          id: d
+          label: "student"
+          slots: 4
+          rows:
+            - { name: '"name"', value: '"Ama"', tone: done }
+            - { name: '"age"', value: "21", tone: active }
+            - { name: '"courses"', value: '["Maths", "ICT"]' }
+            - { name: '"city"', value: '"Accra"' }
+        - { kind: terminal, id: out, lines: ["name -> Ama", "age -> 21"], slots: 4 }
+    - title: A list as a value
+      text: The value for courses is a whole list, and print shows it as one.
+      lines: [6, 7]
+      vars: { key: '"courses"', value: "['Maths', 'ICT']" }
+      parts:
+        - kind: kv
+          id: d
+          label: "student"
+          slots: 4
+          rows:
+            - { name: '"name"', value: '"Ama"', tone: done }
+            - { name: '"age"', value: "21", tone: done }
+            - { name: '"courses"', value: '["Maths", "ICT"]', tone: active }
+            - { name: '"city"', value: '"Accra"' }
+        - { kind: terminal, id: out, lines: ["name -> Ama", "age -> 21", "courses -> ['Maths', 'ICT']"], slots: 4 }
+    - title: The new key comes last
+      text: city was added last, so it is visited last. Every entry has been seen once, and the loop ends.
+      lines: [6, 7]
+      vars: { key: '"city"', value: '"Accra"' }
+      parts:
+        - kind: kv
+          id: d
+          label: "student"
+          slots: 4
+          rows:
+            - { name: '"name"', value: '"Ama"', tone: done }
+            - { name: '"age"', value: "21", tone: done }
+            - { name: '"courses"', value: '["Maths", "ICT"]', tone: done }
+            - { name: '"city"', value: '"Accra"', tone: active }
+        - { kind: terminal, id: out, lines: ["name -> Ama", "age -> 21", "courses -> ['Maths', 'ICT']", "city -> Accra"], slots: 4 }

@@ -1,0 +1,58 @@
+- id: open-models-quantisation-memory
+  title: How much memory does a model need?
+  hint: Work out the memory for a 7-billion-parameter model as each weight shrinks from 16 bits to 8 and then 4.
+  steps:
+    - title: Count the weights
+      text: "A 7-billion-parameter model stores 7,000,000,000 numbers. To run it, all of them must fit in memory."
+      vars: { parameters: "7 billion" }
+      parts:
+        - kind: cells
+          id: m
+          label: "memory for the weights, in GB"
+          bars: true
+          width: 110
+          items: []
+          slots: 3
+          empty: "not worked out yet"
+    - title: 16 bits per weight
+      text: "Weights are normally 16-bit numbers. 16 bits is 2 bytes, so 7 billion × 2 bytes = 14 billion bytes, about 14 GB."
+      vars: { parameters: "7 billion", "bytes per weight": 2, memory: "14 GB" }
+      parts:
+        - kind: cells
+          id: m
+          label: "memory for the weights, in GB"
+          bars: true
+          width: 110
+          items: [{ k: b16, v: 14, tone: active }]
+          slots: 3
+        - { kind: note, id: n, text: "16-bit: 7 billion × 2 bytes ≈ 14 GB", tone: active }
+    - title: Quantise to 8 bits
+      text: "Quantisation stores each weight in fewer bits. At 8 bits each weight takes 1 byte, so the model needs about 7 GB: half the memory."
+      vars: { parameters: "7 billion", "bytes per weight": 1, memory: "7 GB" }
+      parts:
+        - kind: cells
+          id: m
+          label: "memory for the weights, in GB"
+          bars: true
+          width: 110
+          items: [{ k: b16, v: 14, tone: dim }, { k: b8, v: 7, tone: active }]
+          slots: 3
+        - { kind: note, id: n, text: "8-bit: 7 billion × 1 byte ≈ 7 GB", tone: active }
+    - title: Quantise to 4 bits
+      text: "At 4 bits each weight takes half a byte: 7 billion × 0.5 = 3.5 GB, a quarter of the original. The price is a small loss in quality."
+      vars: { parameters: "7 billion", "bytes per weight": 0.5, memory: "3.5 GB" }
+      parts:
+        - kind: cells
+          id: m
+          label: "memory for the weights, in GB"
+          bars: true
+          width: 110
+          items: [{ k: b16, v: 14, tone: dim }, { k: b8, v: 7, tone: dim }, { k: b4, v: 3.5, tone: found }]
+          slots: 3
+        - { kind: note, id: n, text: "4-bit: 7 billion × 0.5 bytes ≈ 3.5 GB", tone: found }
+    - title: Leave some room
+      text: "The weights are not all that is in memory while a model runs, so the rough guide says a 4-bit 7-billion model needs around 4 to 5 GB."
+      parts:
+        - { kind: note, id: n, text: "4-bit, 7 billion parameters: plan for about 4 to 5 GB", tone: found }
+    - title: The rule to remember
+      text: "Memory ≈ parameter count × bytes per weight. It tells you at a glance whether a model will fit on your laptop or GPU before you download it."

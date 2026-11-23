@@ -1,0 +1,187 @@
+- id: m-design-principles-composition
+  title: Wrappers passing a message along
+  hint: Follow one send call inwards through each wrapper and the result back out.
+  language: TypeScript
+  code: |
+    class SmsNotifier implements Notifier {
+      send(message: string) { return `sms: ${message.slice(0, 22)}`; }
+    }
+
+    class LoggingNotifier implements Notifier {
+      constructor(private inner: Notifier, private log: string[]) {}
+      send(message: string) {
+        this.log.push(`sending "${message}"`);
+        return this.inner.send(message);
+      }
+    }
+
+    class PrefixNotifier implements Notifier {
+      constructor(private inner: Notifier, private prefix: string) {}
+      send(message: string) { return this.inner.send(`${this.prefix} ${message}`); }
+    }
+
+    const sms = new LoggingNotifier(new PrefixNotifier(new SmsNotifier(), "[Bakery]"), log);
+    console.log(sms.send("Your order is ready for collection"));
+  steps:
+    - title: "Three objects, one chain"
+      text: "The highlighted line builds the SMS notifier by wrapping: a LoggingNotifier holds a PrefixNotifier, which holds an SmsNotifier. Each only knows it has an inner Notifier."
+      lines: [18]
+      parts:
+        - kind: kv
+          id: vals
+          label: "Values right now"
+          slots: 3
+          rows:
+            - { name: "message", value: '(not sent yet)' }
+            - { name: "log", value: '[]' }
+            - { name: "result", value: '' }
+    - title: "The caller talks to the outside"
+      text: "The caller only sees a Notifier and calls send. It does not know there are three objects behind it."
+      lines: [19]
+      parts:
+        - kind: seq
+          id: s
+          actors: [caller, Logging, Prefix, Sms]
+          slots: 8
+          messages:
+            - { from: caller, to: Logging, label: 'send(message)', tone: active }
+        - kind: kv
+          id: vals
+          label: "Values right now"
+          slots: 3
+          rows:
+            - { name: "message", value: 'Your order is ready for collection', tone: active }
+            - { name: "log", value: '[]' }
+            - { name: "result", value: '' }
+    - title: "Logging does its one job"
+      text: "LoggingNotifier records what is being sent, then passes the same message on to whatever it wraps."
+      lines: [7, 8, 9]
+      parts:
+        - kind: seq
+          id: s
+          actors: [caller, Logging, Prefix, Sms]
+          slots: 8
+          messages:
+            - { from: caller, to: Logging, label: 'send(message)', tone: dim }
+            - { from: Logging, to: Logging, label: 'log.push', tone: active }
+        - kind: kv
+          id: vals
+          label: "Values right now"
+          slots: 3
+          rows:
+            - { name: "message", value: 'Your order is ready for collection' }
+            - { name: "log", value: '1 entry: sending "Your order is ready…"', tone: active }
+            - { name: "result", value: '' }
+    - title: "Handed to the inner notifier"
+      text: "this.inner.send(message) passes the call inward. The logger does not know, or care, that its inner object is a PrefixNotifier."
+      lines: [9]
+      parts:
+        - kind: seq
+          id: s
+          actors: [caller, Logging, Prefix, Sms]
+          slots: 8
+          messages:
+            - { from: caller, to: Logging, label: 'send(message)', tone: dim }
+            - { from: Logging, to: Logging, label: 'log.push', tone: dim }
+            - { from: Logging, to: Prefix, label: 'send(message)', tone: active }
+        - kind: kv
+          id: vals
+          label: "Values right now"
+          slots: 3
+          rows:
+            - { name: "message", value: 'Your order is ready for collection', tone: active }
+            - { name: "log", value: '1 entry: sending "Your order is ready…"' }
+            - { name: "result", value: '' }
+    - title: "Prefix adds its text"
+      text: "PrefixNotifier puts [Bakery] in front, then delegates to the SmsNotifier inside it."
+      lines: [15]
+      parts:
+        - kind: seq
+          id: s
+          actors: [caller, Logging, Prefix, Sms]
+          slots: 8
+          messages:
+            - { from: caller, to: Logging, label: 'send(message)', tone: dim }
+            - { from: Logging, to: Logging, label: 'log.push', tone: dim }
+            - { from: Logging, to: Prefix, label: 'send(message)', tone: dim }
+            - { from: Prefix, to: Sms, label: 'send("[Bakery] " + …)', tone: active }
+        - kind: kv
+          id: vals
+          label: "Values right now"
+          slots: 3
+          rows:
+            - { name: "message", value: '[Bakery] Your order is ready for collection', tone: active }
+            - { name: "log", value: '1 entry: sending "Your order is ready…"' }
+            - { name: "result", value: '' }
+    - title: "The SMS is cut short"
+      text: "SmsNotifier keeps only the first 22 characters, its tiny limit, and returns the result."
+      lines: [2]
+      parts:
+        - kind: seq
+          id: s
+          actors: [caller, Logging, Prefix, Sms]
+          slots: 8
+          messages:
+            - { from: caller, to: Logging, label: 'send(message)', tone: dim }
+            - { from: Logging, to: Logging, label: 'log.push', tone: dim }
+            - { from: Logging, to: Prefix, label: 'send(message)', tone: dim }
+            - { from: Prefix, to: Sms, label: 'send("[Bakery] " + …)', tone: dim }
+            - { from: Sms, to: Sms, label: 'cut', tone: active }
+        - kind: kv
+          id: vals
+          label: "Values right now"
+          slots: 3
+          rows:
+            - { name: "message", value: '[Bakery] Your order is', tone: active }
+            - { name: "log", value: '1 entry: sending "Your order is ready…"' }
+            - { name: "result", value: 'sms: [Bakery] Your order is', tone: active }
+    - title: "The answer travels back out"
+      text: "Each wrapper returns what its inner notifier returned, so the caller gets the SMS text."
+      lines: [9, 15, 19]
+      parts:
+        - kind: seq
+          id: s
+          actors: [caller, Logging, Prefix, Sms]
+          slots: 8
+          messages:
+            - { from: caller, to: Logging, label: 'send(message)', tone: dim }
+            - { from: Logging, to: Logging, label: 'log.push', tone: dim }
+            - { from: Logging, to: Prefix, label: 'send(message)', tone: dim }
+            - { from: Prefix, to: Sms, label: 'send("[Bakery] " + …)', tone: dim }
+            - { from: Sms, to: Sms, label: 'cut', tone: dim }
+            - { from: Sms, to: Prefix, label: '"sms: …"', tone: dim }
+            - { from: Prefix, to: Logging, label: '"sms: …"', tone: dim }
+            - { from: Logging, to: caller, label: '"sms: …"', tone: found }
+        - kind: kv
+          id: vals
+          label: "Values right now"
+          slots: 3
+          rows:
+            - { name: "message", value: '[Bakery] Your order is' }
+            - { name: "log", value: '1 entry: sending "Your order is ready…"' }
+            - { name: "result", value: 'sms: [Bakery] Your order is', tone: found }
+    - title: "No subclass needed"
+      text: "Logging and prefixing were combined with the SMS channel without writing a LoggingPrefixSmsNotifier class. The same wrappers fit any channel, in any order."
+      lines: [18]
+      parts:
+        - kind: seq
+          id: s
+          actors: [caller, Logging, Prefix, Sms]
+          slots: 8
+          messages:
+            - { from: caller, to: Logging, label: 'send(message)', tone: dim }
+            - { from: Logging, to: Logging, label: 'log.push', tone: dim }
+            - { from: Logging, to: Prefix, label: 'send(message)', tone: dim }
+            - { from: Prefix, to: Sms, label: 'send("[Bakery] " + …)', tone: dim }
+            - { from: Sms, to: Sms, label: 'cut', tone: dim }
+            - { from: Sms, to: Prefix, label: '"sms: …"', tone: dim }
+            - { from: Prefix, to: Logging, label: '"sms: …"', tone: dim }
+            - { from: Logging, to: caller, label: '"sms: …"', tone: dim }
+        - kind: kv
+          id: vals
+          label: "Values right now"
+          slots: 3
+          rows:
+            - { name: "message", value: '[Bakery] Your order is' }
+            - { name: "log", value: '1 entry: sending "Your order is ready…"', tone: found }
+            - { name: "result", value: 'sms: [Bakery] Your order is', tone: found }

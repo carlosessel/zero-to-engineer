@@ -155,6 +155,8 @@ All three give **7** UTF-16 units, **6** code points and **10** UTF-8 bytes: c, 
 - What a person sees as one character may be several code points: a flag, a family emoji, or "é" written as "e" plus a combining accent. Two strings that look identical can be different bytes. **Normalise** text (to the NFC form) before comparing or storing, and use your language's tools for "grapheme" boundaries when it matters.
 - **Garbled text** like `cafÃ©` (called *mojibake*) means bytes written in one encoding were read as another, usually UTF-8 read as Latin-1. Use UTF-8 everywhere, and say so explicitly (in HTTP headers, database settings and file reads) rather than relying on defaults.
 
+<Walkthrough name="m-data-representation-utf8" />
+
 ## Dates and time
 
 Time is the richest source of bugs in this chapter, because human timekeeping is messy.

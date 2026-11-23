@@ -1,0 +1,208 @@
+- id: cc-workflows-discount-bug
+  title: A bug fixed in the right order
+  hint: Follow the double-discount bug through each stage of a good task, and watch what is known grow.
+  steps:
+    - title: The bug
+      text: Customers report that discount codes sometimes apply twice. The fix will go through the same stages every good task does, in order.
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: u, label: understand, x: 0.08, y: 0.15, tone: base }
+            - { k: t, label: failing test, x: 0.5, y: 0.15, tone: base }
+            - { k: p, label: plan, x: 0.9, y: 0.15, tone: base }
+            - { k: c, label: change + check, x: 0.9, y: 0.85, tone: base }
+            - { k: r, label: review, x: 0.5, y: 0.85, tone: base }
+            - { k: s, label: ship, x: 0.08, y: 0.85, tone: base }
+          edges:
+            - { a: u, b: t, directed: true }
+            - { a: t, b: p, directed: true }
+            - { a: p, b: c, directed: true }
+            - { a: c, b: r, directed: true }
+            - { a: r, b: s, directed: true }
+        - { kind: kv, id: known, label: What we know so far, slots: 6, rows: [] }
+    - title: Understand
+      text: "First a question, with no changes: how are discount codes applied at checkout? Claude traces it and finds the route, a service, and a retry wrapper around the payment call."
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: u, label: understand, x: 0.08, y: 0.15, tone: active }
+            - { k: t, label: failing test, x: 0.5, y: 0.15, tone: base }
+            - { k: p, label: plan, x: 0.9, y: 0.15, tone: base }
+            - { k: c, label: change + check, x: 0.9, y: 0.85, tone: base }
+            - { k: r, label: review, x: 0.5, y: 0.85, tone: base }
+            - { k: s, label: ship, x: 0.08, y: 0.85, tone: base }
+          edges:
+            - { a: u, b: t, directed: true }
+            - { a: t, b: p, directed: true }
+            - { a: p, b: c, directed: true }
+            - { a: c, b: r, directed: true }
+            - { a: r, b: s, directed: true }
+        - kind: kv
+          id: known
+          label: What we know so far
+          slots: 6
+          rows:
+            - { k: found, name: found, value: "route, service, retry wrapper", tone: active }
+    - title: Reproduce with a failing test
+      text: "You suspect the retry re-applies the discount. Claude writes a test where the payment times out once. It fails: the discount is applied twice, so the bug is reproduced."
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: u, label: understand, x: 0.08, y: 0.15, tone: done }
+            - { k: t, label: failing test, x: 0.5, y: 0.15, tone: bad }
+            - { k: p, label: plan, x: 0.9, y: 0.15, tone: base }
+            - { k: c, label: change + check, x: 0.9, y: 0.85, tone: base }
+            - { k: r, label: review, x: 0.5, y: 0.85, tone: base }
+            - { k: s, label: ship, x: 0.08, y: 0.85, tone: base }
+          edges:
+            - { a: u, b: t, directed: true, tone: active }
+            - { a: t, b: p, directed: true }
+            - { a: p, b: c, directed: true }
+            - { a: c, b: r, directed: true }
+            - { a: r, b: s, directed: true }
+        - kind: kv
+          id: known
+          label: What we know so far
+          slots: 6
+          rows:
+            - { k: found, name: found, value: "route, service, retry wrapper", tone: base }
+            - { k: test, name: test, value: "fails: discount applied twice", tone: active }
+    - title: Plan
+      text: "In plan mode Claude proposes a fix but edits nothing: apply the discount once before the retry loop, and make the operation safe to repeat. You approve."
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: u, label: understand, x: 0.08, y: 0.15, tone: done }
+            - { k: t, label: failing test, x: 0.5, y: 0.15, tone: done }
+            - { k: p, label: plan, x: 0.9, y: 0.15, tone: active }
+            - { k: c, label: change + check, x: 0.9, y: 0.85, tone: base }
+            - { k: r, label: review, x: 0.5, y: 0.85, tone: base }
+            - { k: s, label: ship, x: 0.08, y: 0.85, tone: base }
+          edges:
+            - { a: u, b: t, directed: true, tone: done }
+            - { a: t, b: p, directed: true, tone: active }
+            - { a: p, b: c, directed: true }
+            - { a: c, b: r, directed: true }
+            - { a: r, b: s, directed: true }
+        - kind: kv
+          id: known
+          label: What we know so far
+          slots: 6
+          rows:
+            - { k: found, name: found, value: "route, service, retry wrapper", tone: base }
+            - { k: test, name: test, value: "fails: discount applied twice", tone: base }
+            - { k: plan, name: plan, value: "discount once, before the retry loop", tone: active }
+    - title: Change with a check
+      text: Claude edits, runs the new test, then the whole suite. Both pass, and you ask for the output as evidence rather than taking its word.
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: u, label: understand, x: 0.08, y: 0.15, tone: done }
+            - { k: t, label: failing test, x: 0.5, y: 0.15, tone: done }
+            - { k: p, label: plan, x: 0.9, y: 0.15, tone: done }
+            - { k: c, label: change + check, x: 0.9, y: 0.85, tone: found }
+            - { k: r, label: review, x: 0.5, y: 0.85, tone: base }
+            - { k: s, label: ship, x: 0.08, y: 0.85, tone: base }
+          edges:
+            - { a: u, b: t, directed: true, tone: done }
+            - { a: t, b: p, directed: true, tone: done }
+            - { a: p, b: c, directed: true, tone: active }
+            - { a: c, b: r, directed: true }
+            - { a: r, b: s, directed: true }
+        - kind: kv
+          id: known
+          label: What we know so far
+          slots: 6
+          rows:
+            - { k: found, name: found, value: "route, service, retry wrapper", tone: base }
+            - { k: test, name: test, value: passes, tone: base }
+            - { k: plan, name: plan, value: "discount once, before the retry loop", tone: base }
+            - { k: whole suite, name: whole suite, value: passes (output shown), tone: active }
+    - title: Review
+      text: "You read the diff: two files and the new test. /code-review finds one more place where a retry could double-charge a delivery fee; Claude adds a test and fixes it."
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: u, label: understand, x: 0.08, y: 0.15, tone: done }
+            - { k: t, label: failing test, x: 0.5, y: 0.15, tone: done }
+            - { k: p, label: plan, x: 0.9, y: 0.15, tone: done }
+            - { k: c, label: change + check, x: 0.9, y: 0.85, tone: done }
+            - { k: r, label: review, x: 0.5, y: 0.85, tone: active }
+            - { k: s, label: ship, x: 0.08, y: 0.85, tone: base }
+          edges:
+            - { a: u, b: t, directed: true, tone: done }
+            - { a: t, b: p, directed: true, tone: done }
+            - { a: p, b: c, directed: true, tone: done }
+            - { a: c, b: r, directed: true, tone: active }
+            - { a: r, b: s, directed: true }
+        - kind: kv
+          id: known
+          label: What we know so far
+          slots: 6
+          rows:
+            - { k: found, name: found, value: "route, service, retry wrapper", tone: base }
+            - { k: test, name: test, value: passes, tone: base }
+            - { k: plan, name: plan, value: "discount once, before the retry loop", tone: base }
+            - { k: whole suite, name: whole suite, value: passes (output shown), tone: base }
+            - { k: review, name: review, value: "delivery fee fixed, with a test", tone: active }
+    - title: Ship
+      text: Claude branches, commits, pushes and opens a pull request. You edit the description to link the customer reports and ask for a human review.
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: u, label: understand, x: 0.08, y: 0.15, tone: done }
+            - { k: t, label: failing test, x: 0.5, y: 0.15, tone: done }
+            - { k: p, label: plan, x: 0.9, y: 0.15, tone: done }
+            - { k: c, label: change + check, x: 0.9, y: 0.85, tone: done }
+            - { k: r, label: review, x: 0.5, y: 0.85, tone: done }
+            - { k: s, label: ship, x: 0.08, y: 0.85, tone: active }
+          edges:
+            - { a: u, b: t, directed: true, tone: done }
+            - { a: t, b: p, directed: true, tone: done }
+            - { a: p, b: c, directed: true, tone: done }
+            - { a: c, b: r, directed: true, tone: done }
+            - { a: r, b: s, directed: true, tone: active }
+        - kind: kv
+          id: known
+          label: What we know so far
+          slots: 6
+          rows:
+            - { k: found, name: found, value: "route, service, retry wrapper", tone: base }
+            - { k: test, name: test, value: passes, tone: base }
+            - { k: plan, name: plan, value: "discount once, before the retry loop", tone: base }
+            - { k: whole suite, name: whole suite, value: passes (output shown), tone: base }
+            - { k: review, name: review, value: "delivery fee fixed, with a test", tone: base }
+            - { k: pull request, name: pull request, value: "opened, waiting for human review", tone: active }
+    - title: The order is the method
+      text: "Nothing here is exotic. The quality comes from the order: understand, reproduce, plan, check, review."
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: u, label: understand, x: 0.08, y: 0.15, tone: done }
+            - { k: t, label: failing test, x: 0.5, y: 0.15, tone: done }
+            - { k: p, label: plan, x: 0.9, y: 0.15, tone: done }
+            - { k: c, label: change + check, x: 0.9, y: 0.85, tone: done }
+            - { k: r, label: review, x: 0.5, y: 0.85, tone: done }
+            - { k: s, label: ship, x: 0.08, y: 0.85, tone: done }
+          edges:
+            - { a: u, b: t, directed: true, tone: done }
+            - { a: t, b: p, directed: true, tone: done }
+            - { a: p, b: c, directed: true, tone: done }
+            - { a: c, b: r, directed: true, tone: done }
+            - { a: r, b: s, directed: true, tone: done }

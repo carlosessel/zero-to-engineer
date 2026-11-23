@@ -1,0 +1,235 @@
+- id: db-migrations-lock-queue
+  title: One waiting ALTER TABLE stops the site
+  hint: Watch web requests pile up behind a migration that is only waiting for its lock, then see lock_timeout make it give up instead.
+  language: SQL
+  examples:
+    - label: Without lock_timeout
+      code: |
+        -- Long report (runs 2 minutes)
+        SELECT ... FROM orders;
+        -- Migration
+        ALTER TABLE orders ADD COLUMN note text;
+      steps:
+        - title: A long report starts
+          text: A report reads orders for two minutes. Reading takes a weak lock on the table, which ordinary web requests do not mind.
+          lines: [ 1, 2 ]
+          vars: { time: "1" }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: active }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: the report, tone: active }
+                - { name: waiting for its lock, value: nobody }
+                - { name: queued behind it, value: nobody }
+        - title: The migration asks for its lock
+          text: ADD COLUMN needs an ACCESS EXCLUSIVE lock, which conflicts with everything, even the report's read. So it must wait for the report to finish.
+          lines: [ 3, 4 ]
+          vars: { time: "2" }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: dim }
+                - { from: Migration, to: Database, label: "ALTER TABLE: needs lock", tone: compare }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: the report }
+                - { name: waiting for its lock, value: the migration, tone: compare }
+                - { name: queued behind it, value: nobody }
+        - title: Everyone else queues
+          text: While the migration waits, every new query on orders queues behind it, because it would conflict with the migration's lock. The site's orders pages hang.
+          vars: { time: "3" }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: dim }
+                - { from: Migration, to: Database, label: "ALTER TABLE: needs lock", tone: compare }
+                - { from: Web, to: Database, label: "SELECT, INSERT orders", tone: bad }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: the report }
+                - { name: waiting for its lock, value: the migration, tone: compare }
+                - { name: queued behind it, value: every web request, tone: bad }
+        - title: The report finishes
+          text: Two minutes after it started, the report ends and releases its lock.
+          vars: { time: "4" }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: dim }
+                - { from: Migration, to: Database, label: "ALTER TABLE: needs lock", tone: compare }
+                - { from: Web, to: Database, label: "SELECT, INSERT orders", tone: bad }
+                - { from: Database, to: Report, label: report finished, tone: done }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: nobody }
+                - { name: waiting for its lock, value: the migration, tone: compare }
+                - { name: queued behind it, value: every web request, tone: bad }
+        - title: A millisecond of work, minutes of delay
+          text: The migration gets its lock and runs in a millisecond, then the queue drains. The change itself was quick; waiting for the lock caused a two-minute outage.
+          lines: [ 4 ]
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: dim }
+                - { from: Migration, to: Database, label: "ALTER TABLE: needs lock", tone: dim }
+                - { from: Web, to: Database, label: "SELECT, INSERT orders", tone: dim }
+                - { from: Database, to: Report, label: report finished, tone: dim }
+                - { from: Database, to: Migration, label: column added, tone: found }
+                - { from: Database, to: Web, label: "served, two minutes late", tone: bad }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: nobody }
+                - { name: waiting for its lock, value: nobody }
+                - { name: queued behind it, value: nobody }
+    - label: With lock_timeout
+      code: |
+        -- Long report (runs 2 minutes)
+        SELECT ... FROM orders;
+        -- Migration
+        SET lock_timeout = '2s';
+        ALTER TABLE orders ADD COLUMN note text;
+      steps:
+        - title: A long report starts
+          text: A report reads orders for two minutes. Reading takes a weak lock on the table, which ordinary web requests do not mind.
+          lines: [ 1, 2 ]
+          vars: { time: "1" }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: active }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: the report, tone: active }
+                - { name: waiting for its lock, value: nobody }
+                - { name: queued behind it, value: nobody }
+        - title: The migration asks for its lock
+          text: This time the migration first sets lock_timeout to two seconds, then asks for its lock. It still has to wait for the report.
+          lines: [ 3, 4, 5 ]
+          vars: { time: "2", lock_timeout: 2s }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: dim }
+                - { from: Migration, to: Database, label: "ALTER TABLE: needs lock", tone: compare }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: the report }
+                - { name: waiting for its lock, value: the migration, tone: compare }
+                - { name: queued behind it, value: nobody }
+        - title: A short queue
+          text: New web requests still queue behind the waiting migration, but only for as long as it is allowed to wait.
+          vars: { time: "2", lock_timeout: 2s }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: dim }
+                - { from: Migration, to: Database, label: "ALTER TABLE: needs lock", tone: compare }
+                - { from: Web, to: Database, label: "SELECT, INSERT orders", tone: compare }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: the report }
+                - { name: waiting for its lock, value: the migration, tone: compare }
+                - { name: queued behind it, value: web requests, tone: compare }
+        - title: The migration gives up
+          text: The lock is not granted within two seconds, so the ALTER fails with "canceling statement due to lock timeout". Nothing has changed.
+          lines: [ 5 ]
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: dim }
+                - { from: Migration, to: Database, label: "ALTER TABLE: needs lock", tone: dim }
+                - { from: Web, to: Database, label: "SELECT, INSERT orders", tone: dim }
+                - { from: Database, to: Migration, label: "lock timeout: cancelled", tone: bad }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: the report }
+                - { name: waiting for its lock, value: nobody }
+                - { name: queued behind it, value: nobody }
+        - title: Traffic flows again
+          text: With the migration out of the way, the waiting web requests run. The report carries on undisturbed.
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Report, to: Database, label: SELECT … FROM orders, tone: dim }
+                - { from: Migration, to: Database, label: "ALTER TABLE: needs lock", tone: dim }
+                - { from: Web, to: Database, label: "SELECT, INSERT orders", tone: dim }
+                - { from: Database, to: Migration, label: "lock timeout: cancelled", tone: dim }
+                - { from: Database, to: Web, label: served, tone: found }
+        - title: Try again later
+          text: The migration tool waits and retries, and succeeds once no long query is in the way. Many teams set lock_timeout in every migration by default.
+          vars: { lock_timeout: 2s }
+          parts:
+            - kind: seq
+              id: s
+              actors: [ Report, Migration, Database, Web ]
+              slots: 6
+              messages:
+                - { from: Migration, to: Database, label: retry ALTER TABLE, tone: active }
+                - { from: Database, to: Migration, label: column added, tone: found }
+            - kind: kv
+              id: l
+              label: Locks on orders
+              slots: 3
+              rows:
+                - { name: holding a lock, value: nobody }
+                - { name: waiting for its lock, value: nobody }
+                - { name: queued behind it, value: nobody }

@@ -1,0 +1,161 @@
+- id: m-machine-cache-lines
+  title: Row by row versus column by column
+  hint: Switch between the two loops and watch which reads find their value already in the cache.
+  language: Java
+  examples:
+    - label: Row by row
+      code: |
+        for (int r = 0; r < N; r++)
+            for (int c = 0; c < N; c++)
+                sum += grid[r][c];
+      steps:
+        - title: The first read misses
+          text: The cache is empty, so reading grid[0][0] is a cache miss, about 100 ns from main memory. The cache fetches a whole 64-byte line, holding 16 neighbouring ints.
+          lines: [3]
+          vars: { reads: 1, misses: 1 }
+          parts:
+            - kind: kv
+              id: cache
+              label: "Cache (holds whole lines)"
+              slots: 3
+              rows:
+                - { name: line A, value: "grid[0][0] … grid[0][15]", tone: active }
+            - kind: cells
+              id: reads
+              label: "reads, in order (red = miss, green = hit)"
+              slots: 6
+              width: 90
+              items: [{ v: "[0][0]", tone: bad }]
+        - title: The next read is free
+          text: The inner loop moves along the row to grid[0][1], the very next int in memory. It arrived with the first line, so this is a cache hit, about 1 ns.
+          lines: [2, 3]
+          vars: { reads: 2, misses: 1 }
+          parts:
+            - kind: kv
+              id: cache
+              label: "Cache (holds whole lines)"
+              slots: 3
+              rows:
+                - { name: line A, value: "grid[0][0] … grid[0][15]", tone: found }
+            - kind: cells
+              id: reads
+              label: "reads, in order (red = miss, green = hit)"
+              slots: 6
+              width: 90
+              items: [{ v: "[0][0]", tone: bad }, { v: "[0][1]", tone: found }]
+        - title: 15 hits for every miss
+          text: Reads up to grid[0][15] all come from line A. One miss paid for 16 values, because 64 bytes ÷ 4 bytes is 16 ints.
+          lines: [2, 3]
+          vars: { reads: 16, misses: 1 }
+          parts:
+            - kind: cells
+              id: reads
+              label: "reads, in order (red = miss, green = hit)"
+              slots: 6
+              width: 90
+              items: [{ v: "[0][0]", tone: bad }, { v: "[0][1]", tone: found }, { v: "[0][2]", tone: found }, { k: gap, v: "…", tone: dim }, { v: "[0][15]", tone: found }]
+        - title: The prefetcher loads ahead
+          text: grid[0][16] is in the next line. The CPU has seen the steady pattern and prefetches lines before they are asked for, so the waiting is largely hidden.
+          lines: [2, 3]
+          vars: { reads: 17 }
+          parts:
+            - kind: kv
+              id: cache
+              label: "Cache (holds whole lines)"
+              slots: 3
+              rows:
+                - { name: line A, value: "grid[0][0] … grid[0][15]", tone: dim }
+                - { name: line B, value: "grid[0][16] … grid[0][31]", tone: found }
+                - { name: "line C (prefetched)", value: "grid[0][32] … grid[0][47]", tone: compare }
+            - kind: cells
+              id: reads
+              label: "reads, in order (red = miss, green = hit)"
+              slots: 6
+              width: 90
+              items: [{ v: "[0][0]", tone: bad }, { v: "[0][1]", tone: found }, { v: "[0][2]", tone: found }, { k: gap, v: "…", tone: dim }, { v: "[0][15]", tone: found }, { v: "[0][16]", tone: found }]
+        - title: 8 ms for the whole grid
+          text: "All 16,777,216 reads follow the same pattern: memory in order, whole lines used. On the machine the chapter was checked on, this took 8 ms."
+          lines: [1, 2, 3]
+          vars: { reads: "16,777,216", time: "8 ms" }
+    - label: Column by column
+      code: |
+        for (int c = 0; c < N; c++)
+            for (int r = 0; r < N; r++)
+                sum2 += grid[r][c];
+      steps:
+        - title: The first read misses
+          text: Same start. grid[0][0] is a miss, and its 64-byte line, holding grid[0][0] to grid[0][15], is loaded into the cache.
+          lines: [3]
+          vars: { reads: 1, misses: 1 }
+          parts:
+            - kind: kv
+              id: cache
+              label: "Cache (holds whole lines)"
+              slots: 3
+              rows:
+                - { name: line A, value: "grid[0][0] … grid[0][15]", tone: active }
+            - kind: cells
+              id: reads
+              label: "reads, in order (red = miss, green = hit)"
+              slots: 6
+              width: 90
+              items: [{ v: "[0][0]", tone: bad }]
+        - title: The next read jumps 16 KB
+          text: The inner loop now moves down the column to grid[1][0]. Rows are stored one after another, so this is 4,096 ints (16 KB) further on, in a different line. Another miss.
+          lines: [2, 3]
+          vars: { reads: 2, misses: 2 }
+          parts:
+            - kind: kv
+              id: cache
+              label: "Cache (holds whole lines)"
+              slots: 3
+              rows:
+                - { name: line A, value: "grid[0][0] … grid[0][15]", tone: dim }
+                - { name: line B, value: "grid[1][0] … grid[1][15]", tone: active }
+            - kind: cells
+              id: reads
+              label: "reads, in order (red = miss, green = hit)"
+              slots: 6
+              width: 90
+              items: [{ v: "[0][0]", tone: bad }, { v: "[1][0]", tone: bad }]
+        - title: Every read misses
+          text: grid[2][0], grid[3][0] and so on each land in a new line. Each line brings 16 ints, but only one of them is used now.
+          lines: [2, 3]
+          vars: { reads: 4, misses: 4 }
+          parts:
+            - kind: kv
+              id: cache
+              label: "Cache (holds whole lines)"
+              slots: 3
+              rows:
+                - { name: line B, value: "grid[1][0] … grid[1][15]", tone: dim }
+                - { name: line C, value: "grid[2][0] … grid[2][15]", tone: dim }
+                - { name: line D, value: "grid[3][0] … grid[3][15]", tone: active }
+            - kind: cells
+              id: reads
+              label: "reads, in order (red = miss, green = hit)"
+              slots: 6
+              width: 90
+              items: [{ v: "[0][0]", tone: bad }, { v: "[1][0]", tone: bad }, { v: "[2][0]", tone: bad }, { v: "[3][0]", tone: bad }]
+        - title: Back to the top, too late
+          text: After 4,096 reads, the loop returns to grid[0][1]. Its line was loaded at the very start, but 4,096 lines (256 KB) have arrived since, so it has been pushed out. Miss again.
+          lines: [1, 2, 3]
+          vars: { reads: 4097, misses: 4097 }
+          parts:
+            - kind: kv
+              id: cache
+              label: "Cache (holds whole lines)"
+              slots: 3
+              rows:
+                - { name: line A, value: "pushed out long ago", tone: bad }
+                - { name: line X, value: "grid[4095][0] … grid[4095][15]", tone: dim }
+            - kind: cells
+              id: reads
+              label: "reads, in order (red = miss, green = hit)"
+              slots: 6
+              width: 90
+              items: [{ v: "[0][0]", tone: bad }, { v: "[1][0]", tone: bad }, { v: "[2][0]", tone: bad }, { k: gap, v: "…", tone: dim }, { v: "[4095][0]", tone: bad }, { v: "[0][1]", tone: bad }]
+        - title: 204 ms for the same sum
+          text: Same additions, same answer, but almost every read waits for main memory. On the machine the chapter was checked on, this took 204 ms, about 25 times slower.
+          lines: [1, 2, 3]
+          vars: { reads: "16,777,216", time: "204 ms" }

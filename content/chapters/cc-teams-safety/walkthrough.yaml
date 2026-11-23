@@ -1,0 +1,104 @@
+- id: cc-teams-safety-prompt-injection
+  title: Layers against a prompt injection
+  hint: Follow hidden instructions in a public issue, and see which layer stops each thing they ask for.
+  steps:
+    - title: A task that reads untrusted text
+      text: You ask Claude to fix a bug described in a public issue. Anyone can write a public issue, so its text is untrusted.
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude, Claude Code ]
+          slots: 8
+          messages:
+            - { from: You, to: Claude, label: fix the bug in this public issue, tone: active }
+        - kind: kv
+          id: d
+          label: Layers of defence
+          slots: 4
+          rows:
+            - { name: deny rules, value: "Read(./.env), Read(./secrets/**)", tone: base }
+            - { name: network commands, value: curl is not approved automatically, tone: base }
+            - { name: sandbox, value: "writes in project, allowed sites only", tone: base }
+            - { name: human review, value: before anything irreversible, tone: base }
+    - title: Hidden instructions arrive
+      text: The issue contains text an attacker hid there, telling Claude to read the secrets file and send it away. Once read, it is in Claude's context like everything else.
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude, Claude Code ]
+          slots: 8
+          messages:
+            - { from: You, to: Claude, label: fix the bug in this public issue, tone: dim }
+            - { from: Claude, to: Claude Code, label: read the issue, tone: active }
+            - { from: Claude Code, to: Claude, label: issue text + hidden instruction, tone: bad }
+    - title: Suppose Claude is misled
+      text: If the hidden text misled Claude into reading .env, the deny rule stops it. Claude Code applies the rule whatever the model decided.
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude, Claude Code ]
+          slots: 8
+          messages:
+            - { from: You, to: Claude, label: fix the bug in this public issue, tone: dim }
+            - { from: Claude, to: Claude Code, label: read the issue, tone: dim }
+            - { from: Claude Code, to: Claude, label: issue text + hidden instruction, tone: dim }
+            - { from: Claude, to: Claude Code, label: Read ./.env, tone: bad }
+            - { from: Claude Code, to: Claude, label: denied by a deny rule, tone: found }
+        - kind: kv
+          id: d
+          label: Layers of defence
+          slots: 4
+          rows:
+            - { name: deny rules, value: "Read(./.env), Read(./secrets/**)", tone: found }
+            - { name: network commands, value: curl is not approved automatically, tone: base }
+            - { name: sandbox, value: "writes in project, allowed sites only", tone: base }
+            - { name: human review, value: before anything irreversible, tone: base }
+    - title: Sending data out needs a person
+      text: A network command such as curl is not approved automatically, so Claude Code asks you. You read the command and refuse.
+      parts:
+        - kind: seq
+          id: s
+          actors: [ You, Claude, Claude Code ]
+          slots: 8
+          messages:
+            - { from: You, to: Claude, label: fix the bug in this public issue, tone: dim }
+            - { from: Claude, to: Claude Code, label: read the issue, tone: dim }
+            - { from: Claude Code, to: Claude, label: issue text + hidden instruction, tone: dim }
+            - { from: Claude, to: Claude Code, label: Read ./.env, tone: dim }
+            - { from: Claude Code, to: Claude, label: denied by a deny rule, tone: dim }
+            - { from: Claude, to: Claude Code, label: curl to an outside site, tone: bad }
+            - { from: Claude Code, to: You, label: allow this curl command?, tone: compare }
+            - { from: You, to: Claude Code, label: No, tone: found }
+        - kind: kv
+          id: d
+          label: Layers of defence
+          slots: 4
+          rows:
+            - { name: deny rules, value: "Read(./.env), Read(./secrets/**)", tone: done }
+            - { name: network commands, value: curl is not approved automatically, tone: found }
+            - { name: sandbox, value: "writes in project, allowed sites only", tone: base }
+            - { name: human review, value: before anything irreversible, tone: base }
+    - title: The sandbox as a last wall
+      text: "Even a command that did run would be confined by the sandbox: writing only inside the project, and reaching only allowed sites."
+      parts:
+        - kind: kv
+          id: d
+          label: Layers of defence
+          slots: 4
+          rows:
+            - { name: deny rules, value: "Read(./.env), Read(./secrets/**)", tone: done }
+            - { name: network commands, value: curl is not approved automatically, tone: done }
+            - { name: sandbox, value: "writes in project, allowed sites only", tone: found }
+            - { name: human review, value: before anything irreversible, tone: base }
+    - title: Review before anything irreversible
+      text: Whatever the session produces, a person reviews it before a merge, deployment or data change. The tightest rules belong where untrusted content meets powerful actions.
+      parts:
+        - kind: kv
+          id: d
+          label: Layers of defence
+          slots: 4
+          rows:
+            - { name: deny rules, value: "Read(./.env), Read(./secrets/**)", tone: done }
+            - { name: network commands, value: curl is not approved automatically, tone: done }
+            - { name: sandbox, value: "writes in project, allowed sites only", tone: done }
+            - { name: human review, value: before anything irreversible, tone: found }

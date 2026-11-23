@@ -1,0 +1,54 @@
+- id: ai-setup-venv
+  title: One environment per project
+  hint: Watch the project folder fill up as each command runs, and notice where the packages end up.
+  language: Shell
+  code: |
+    mkdir ai-course && cd ai-course
+    python -m venv .venv
+    source .venv/bin/activate        # Windows: .venv\Scripts\activate
+    pip install numpy pandas matplotlib scikit-learn jupyter
+  steps:
+    - title: A folder for the project
+      text: mkdir makes a new, empty folder called ai-course, and cd moves you into it. Everything for this project will live here.
+      lines: [1]
+      parts:
+        - { kind: terminal, id: t, slots: 4, lines: ["$ mkdir ai-course && cd ai-course"] }
+        - { kind: kv, id: f, label: "Inside ai-course", slots: 2, rows: [] }
+    - title: Make the environment
+      text: python -m venv .venv creates a folder called .venv. It is this project's own isolated environment, ready to hold its packages.
+      lines: [2]
+      parts:
+        - { kind: terminal, id: t, slots: 4, lines: ["$ mkdir ai-course && cd ai-course", "$ python -m venv .venv"] }
+        - kind: kv
+          id: f
+          label: "Inside ai-course"
+          slots: 2
+          rows: [{ name: .venv/, value: "empty environment", tone: active }]
+    - title: Switch it on
+      text: Activating the environment tells this terminal to use it. On Windows the command is .venv\Scripts\activate instead.
+      lines: [3]
+      parts:
+        - { kind: terminal, id: t, slots: 4, lines: ["$ mkdir ai-course && cd ai-course", "$ python -m venv .venv", "$ source .venv/bin/activate"] }
+        - kind: kv
+          id: f
+          label: "Inside ai-course"
+          slots: 2
+          rows: [{ name: .venv/, value: "empty environment (active)", tone: compare }]
+    - title: Install the packages
+      text: pip installs numpy, pandas and the rest. Because the environment is active, they go into .venv, not into one shared place for every project.
+      lines: [4]
+      parts:
+        - { kind: terminal, id: t, slots: 4, lines: ["$ mkdir ai-course && cd ai-course", "$ python -m venv .venv", "$ source .venv/bin/activate", "$ pip install numpy pandas matplotlib scikit-learn jupyter"] }
+        - kind: kv
+          id: f
+          label: "Inside ai-course"
+          slots: 2
+          rows: [{ name: .venv/, value: "numpy, pandas, matplotlib, …", tone: found }]
+    - title: No clashes
+      text: Python packages clash across projects, so each project gets its own .venv. It is like node_modules, except you create it yourself.
+      parts:
+        - kind: kv
+          id: f
+          label: "Inside ai-course"
+          slots: 2
+          rows: [{ name: .venv/, value: "this project's packages only", tone: done }]

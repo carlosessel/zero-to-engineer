@@ -277,6 +277,8 @@ console.log(passOriginal(boundaryTests), killedBy(boundaryTests));
 
 It prints `true false` and then `true true`. Both test sets pass on the real code and give full coverage, but only the set with the boundary case (£30 exactly) notices the mutant. Mutation testing is slow, so run it on the most important modules, or on changed code only.
 
+<Walkthrough name="m-testing-mutation-kill" />
+
 ## Flaky tests
 
 A **flaky** test sometimes passes and sometimes fails without any code change. Flaky tests destroy trust: people start re-running failures and ignoring real ones. The usual causes are the same as for intermittent bugs (<Ref to="m-debugging" />): timing (sleeping instead of waiting for a condition), shared state between tests, test order, the real clock and time zone, randomness, and real network calls. Fix them promptly, or quarantine them with an owner and a deadline; never let a suite stay red-sometimes.

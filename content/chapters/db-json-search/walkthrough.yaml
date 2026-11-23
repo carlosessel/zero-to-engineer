@@ -1,0 +1,162 @@
+- id: db-json-search-tsvector
+  title: From a sentence to a match
+  hint: Watch a product description become a list of numbered stems, and a search become a query that matches them.
+  language: SQL
+  code: |
+    SELECT to_tsvector('english', 'Buttery flaky croissants, baked every morning') AS document,
+           to_tsquery('english', 'croissant & bake') AS query;
+  steps:
+    - title: Plain text
+      text: Full-text search starts from ordinary text. LIKE would only find these exact letters; full-text search works on words.
+      lines: [ 1 ]
+      parts:
+        - { kind: cells, id: d, label: words, items: [], slots: 6, width: 96, indices: false, empty: not split yet }
+        - kind: note
+          id: n
+          text: "'Buttery flaky croissants, baked every morning'"
+    - title: Split into words
+      text: "to_tsvector splits the text into words and remembers where each one was: Buttery is word 1, morning is word 6. Punctuation is dropped."
+      lines: [ 1 ]
+      parts:
+        - kind: cells
+          id: d
+          label: words, in order
+          items:
+            - { k: w0, v: Buttery, tone: active }
+            - { k: w1, v: flaky, tone: active }
+            - { k: w2, v: croissants, tone: active }
+            - { k: w3, v: baked, tone: active }
+            - { k: w4, v: every, tone: active }
+            - { k: w5, v: morning, tone: active }
+          slots: 6
+          width: 96
+          indices: false
+        - kind: note
+          id: n
+          text: positions 1 to 6
+    - title: Reduce each word to a stem
+      text: Each word becomes a lexeme, a stem, using the 'english' rules. croissants becomes croissant and baked becomes bake, so different forms of a word will match.
+      lines: [ 1 ]
+      parts:
+        - kind: cells
+          id: d
+          label: stems, in order
+          items:
+            - { k: w0, v: butteri, tone: active }
+            - { k: w1, v: flaki, tone: active }
+            - { k: w2, v: croissant, tone: found }
+            - { k: w3, v: bake, tone: found }
+            - { k: w4, v: everi, tone: active }
+            - { k: w5, v: morn, tone: active }
+          slots: 6
+          width: 96
+          indices: false
+    - title: Stems need not be real words
+      text: buttery became butteri and morning became morn. Nobody reads these; they only have to come out the same for every form of the word.
+      lines: [ 1 ]
+      parts:
+        - kind: cells
+          id: d
+          label: stems, in order
+          items:
+            - { k: w0, v: butteri, tone: compare }
+            - { k: w1, v: flaki }
+            - { k: w2, v: croissant }
+            - { k: w3, v: bake }
+            - { k: w4, v: everi }
+            - { k: w5, v: morn, tone: compare }
+          slots: 6
+          width: 96
+          indices: false
+    - title: The tsvector
+      text: "The result is the tsvector: the stems in alphabetical order, each with its position. This is what gets stored and indexed."
+      lines: [ 1 ]
+      parts:
+        - kind: cells
+          id: d
+          label: tsvector
+          items:
+            - { k: w3, v: bake:4, tone: done }
+            - { k: w0, v: butteri:1, tone: done }
+            - { k: w2, v: croissant:3, tone: done }
+            - { k: w4, v: everi:5, tone: done }
+            - { k: w1, v: flaki:2, tone: done }
+            - { k: w5, v: morn:6, tone: done }
+          slots: 6
+          width: 96
+          indices: false
+        - kind: note
+          id: n
+          text: "'bake':4 'butteri':1 'croissant':3 'everi':5 'flaki':2 'morn':6"
+    - title: The query is stemmed too
+      text: to_tsquery turns the search into stems joined by operators. & means both words are required.
+      lines: [ 2 ]
+      parts:
+        - kind: cells
+          id: q
+          label: query
+          items:
+            - { k: a, v: croissant, tone: active }
+            - { k: op, v: "&" }
+            - { k: b, v: bake, tone: active }
+          slots: 3
+          width: 96
+        - kind: note
+          id: n
+          text: "query: 'croissant' & 'bake'"
+    - title: A match
+      text: The @@ operator tests whether the document has every stem the query needs. Both croissant and bake are there, so it matches.
+      parts:
+        - kind: cells
+          id: d
+          label: tsvector
+          items:
+            - { k: w3, v: bake:4, tone: found }
+            - { k: w0, v: butteri:1, tone: dim }
+            - { k: w2, v: croissant:3, tone: found }
+            - { k: w4, v: everi:5, tone: dim }
+            - { k: w1, v: flaki:2, tone: dim }
+            - { k: w5, v: morn:6, tone: dim }
+          slots: 6
+          width: 96
+          indices: false
+        - kind: cells
+          id: q
+          label: query
+          items:
+            - { k: a, v: croissant, tone: found }
+            - { k: op, v: "&" }
+            - { k: b, v: bake, tone: found }
+          slots: 3
+          width: 96
+        - kind: note
+          id: n
+          text: document @@ query is true
+          tone: found
+    - title: Stems are not synonyms
+      text: A search for butter does not match butteri, so this description would not be found. Stemming joins forms of one word, not related words.
+      parts:
+        - kind: cells
+          id: d
+          label: tsvector
+          items:
+            - { k: w3, v: bake:4, tone: dim }
+            - { k: w0, v: butteri:1, tone: bad }
+            - { k: w2, v: croissant:3, tone: dim }
+            - { k: w4, v: everi:5, tone: dim }
+            - { k: w1, v: flaki:2, tone: dim }
+            - { k: w5, v: morn:6, tone: dim }
+          slots: 6
+          width: 96
+          indices: false
+        - kind: cells
+          id: q
+          label: query
+          items:
+            - { k: a, v: butter, tone: bad }
+          slots: 3
+          width: 96
+        - kind: note
+          id: n
+          text: "'butter' is not in the tsvector"
+          tone: bad

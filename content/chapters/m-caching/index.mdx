@@ -96,6 +96,8 @@ main();
 
 It prints `after price change, cached: 450` (the cache still serves the old price: staleness), then `after invalidation: 480`, then `{ hits: 5, misses: 3, queries: 3 }`: eight reads cost three queries. The third miss came from **expiry**: after 61 seconds the entry was too old. Passing the clock in makes the expiry testable (<Ref to="m-functional" />).
 
+<Walkthrough name="m-caching-cache-aside" />
+
 ### Other patterns
 
 - **Read-through**: the cache itself knows how to load missing entries (a loader function configured on the cache, as in Caffeine's `LoadingCache`). The same idea as cache-aside, with the logic in the cache library.

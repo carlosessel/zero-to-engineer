@@ -57,6 +57,8 @@ deploying
 
 New files start as `rw-r--r--` (644) and directories as `rwxr-xr-x` (755), because the **umask** 022 removes write permission for group and others. Then `600` makes the file of secrets readable only by its owner, `u+x` lets the owner run the script, and `750` lets the group into the directory while shutting everyone else out. The digits add up per class: 7 = rwx, 6 = rw-, 5 = r-x, 4 = r--, 0 = nothing.
 
+<Walkthrough name="m-linux-permissions" />
+
 Principles that matter on servers:
 
 - **Run services as their own unprivileged user**, never as `root`. If the service is compromised, the attacker gets only what that user can touch.

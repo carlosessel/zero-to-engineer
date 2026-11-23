@@ -1,0 +1,131 @@
+- id: be-data-node-sql-injection
+  title: One value, two ways to send it
+  hint: "The same strange email goes to PostgreSQL twice: once as a parameter, once pasted into the SQL text. Watch what the database actually receives."
+  language: TypeScript
+  examples:
+    - label: As a parameter
+      code: |
+        const email = "ama@example.com' OR '1'='1";
+        const safe = await client.query("SELECT name FROM customers WHERE email = $1", [email]);
+        console.log("parameterised:", safe.rows.length, "rows");
+      steps:
+        - title: A value with a quote in it
+          text: The email contains a single quote followed by OR '1'='1. Anyone can type this into a form.
+          lines: [ 1 ]
+          vars: { email: ama@example.com' OR '1'='1 }
+          parts:
+            - kind: tables
+              id: c
+              slots: 1
+              tables:
+                - id: ct
+                  title: customers
+                  columns: [ name, email ]
+                  rows:
+                    - { k: ama, cells: [ Ama, ama@example.com ] }
+            - { kind: terminal, id: sent, slots: 3, lines: [] }
+            - kind: note
+              id: r
+              text: "result: not run yet"
+        - title: The SQL text has a placeholder
+          text: The query text says $1 where the value goes. The value itself is sent to PostgreSQL separately, alongside the text.
+          lines: [ 2 ]
+          parts:
+            - { kind: terminal, id: sent, slots: 3, lines: [ "SQL: SELECT name FROM customers WHERE email = $1", "$1:  ama@example.com' OR '1'='1" ] }
+        - title: The value is only ever a value
+          text: PostgreSQL compares the whole string, quote and all, with each email. Nothing inside it can change the meaning of the query.
+          lines: [ 2 ]
+          parts:
+            - kind: tables
+              id: c
+              slots: 1
+              tables:
+                - id: ct
+                  title: customers
+                  columns: [ name, email ]
+                  rows:
+                    - { k: ama, cells: [ Ama, ama@example.com ], tone: compare }
+            - kind: note
+              id: r
+              text: "email = the whole odd string? Ama: no"
+              tone: compare
+        - title: It matches nobody
+          text: No customer has that odd email, so no rows come back.
+          lines: [ 3 ]
+          parts:
+            - kind: tables
+              id: c
+              slots: 1
+              tables:
+                - id: ct
+                  title: customers
+                  columns: [ name, email ]
+                  rows:
+                    - { k: ama, cells: [ Ama, ama@example.com ], tone: dim }
+            - kind: note
+              id: r
+              text: "parameterised: 0 rows"
+              tone: found
+    - label: Pasted into the SQL
+      code: |
+        const email = "ama@example.com' OR '1'='1";
+        const unsafe = await client.query(`SELECT name FROM customers WHERE email = '${email}'`);
+        console.log("concatenated:", unsafe.rows.length, "rows");
+      steps:
+        - title: The same value
+          text: The same email as before, this time put straight into the query text with a template literal.
+          lines: [ 1 ]
+          vars: { email: ama@example.com' OR '1'='1 }
+          parts:
+            - kind: tables
+              id: c
+              slots: 1
+              tables:
+                - id: ct
+                  title: customers
+                  columns: [ name, email ]
+                  rows:
+                    - { k: ama, cells: [ Ama, ama@example.com ] }
+            - { kind: terminal, id: sent, slots: 3, lines: [] }
+            - kind: note
+              id: r
+              text: "result: not run yet"
+        - title: The value becomes part of the SQL
+          text: The template literal pastes the email between the quotes. PostgreSQL receives one piece of text and cannot tell where the value was meant to end.
+          lines: [ 2 ]
+          parts:
+            - { kind: terminal, id: sent, slots: 3, lines: [ "SQL: SELECT name FROM customers WHERE email = 'ama@example.com' OR '1'='1'" ] }
+        - title: The quote ends the string early
+          text: The quote inside the value closes the email string, so OR '1'='1' is read as SQL. '1'='1' is true for every row.
+          lines: [ 2 ]
+          parts:
+            - kind: tables
+              id: c
+              slots: 1
+              tables:
+                - id: ct
+                  title: customers
+                  columns: [ name, email ]
+                  rows:
+                    - { k: ama, cells: [ Ama, ama@example.com ], tone: bad }
+            - kind: note
+              id: r
+              text: "email = 'ama@example.com' OR true: every row"
+              tone: bad
+        - title: Every customer comes back
+          text: "The query now returns every customer; here that is Ama, the only one. Never build SQL by pasting in values: use parameters, as Drizzle's builder always does."
+          lines: [ 3 ]
+          parts:
+            - kind: tables
+              id: c
+              slots: 1
+              tables:
+                - id: ct
+                  title: customers
+                  columns: [ name, email ]
+                  rows:
+                    - { k: ama, cells: [ Ama, ama@example.com ], tone: bad }
+            - kind: note
+              id: r
+              text: "concatenated: 1 rows"
+              tone: bad

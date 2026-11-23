@@ -1,0 +1,178 @@
+- id: career-first-job
+  title: From foundation to first job, and beyond
+  hint: Watch the route light up, from the base you have now to a first job, then the levels after it.
+  steps:
+    - title: The foundation
+      text: You now have the base for any direction. Everything after this builds on it.
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: foundation, x: 0.06, y: 0.2, tone: found }
+            - { label: specialise, x: 0.06, y: 0.75 }
+            - { label: portfolio, x: 0.45, y: 0.0 }
+            - { label: CV, x: 0.45, y: 0.45 }
+            - { label: network, x: 0.45, y: 0.9 }
+            - { label: interviews, x: 0.85, y: 0.45 }
+          edges:
+            - { a: foundation, b: specialise, directed: true }
+            - { a: specialise, b: portfolio, directed: true }
+            - { a: specialise, b: CV, directed: true }
+            - { a: specialise, b: network, directed: true }
+            - { a: portfolio, b: interviews, directed: true }
+            - { a: CV, b: interviews, directed: true }
+            - { a: network, b: interviews, directed: true }
+    - title: Specialise
+      text: Pick the direction whose problems you enjoy, such as front end, back end, security or AI, and go deep. Stay able to work across the stack.
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: foundation, x: 0.06, y: 0.2, tone: done }
+            - { label: specialise, x: 0.06, y: 0.75, tone: active, note: "go deep" }
+            - { label: portfolio, x: 0.45, y: 0.0 }
+            - { label: CV, x: 0.45, y: 0.45 }
+            - { label: network, x: 0.45, y: 0.9 }
+            - { label: interviews, x: 0.85, y: 0.45 }
+          edges:
+            - { a: foundation, b: specialise, directed: true, tone: active }
+            - { a: specialise, b: portfolio, directed: true }
+            - { a: specialise, b: CV, directed: true }
+            - { a: specialise, b: network, directed: true }
+            - { a: portfolio, b: interviews, directed: true }
+            - { a: CV, b: interviews, directed: true }
+            - { a: network, b: interviews, directed: true }
+    - title: A portfolio
+      text: Two or three deployed projects with clean code, tests and good READMEs beat twenty tutorials. They show what you can actually build.
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: foundation, x: 0.06, y: 0.2, tone: done }
+            - { label: specialise, x: 0.06, y: 0.75, tone: done }
+            - { label: portfolio, x: 0.45, y: 0.0, tone: active, note: "2 or 3 projects" }
+            - { label: CV, x: 0.45, y: 0.45 }
+            - { label: network, x: 0.45, y: 0.9 }
+            - { label: interviews, x: 0.85, y: 0.45 }
+          edges:
+            - { a: foundation, b: specialise, directed: true, tone: done }
+            - { a: specialise, b: portfolio, directed: true, tone: active }
+            - { a: specialise, b: CV, directed: true }
+            - { a: specialise, b: network, directed: true }
+            - { a: portfolio, b: interviews, directed: true }
+            - { a: CV, b: interviews, directed: true }
+            - { a: network, b: interviews, directed: true }
+    - title: A one-page CV
+      text: Keep it to one page and lead with what you built and what it achieved.
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: foundation, x: 0.06, y: 0.2, tone: done }
+            - { label: specialise, x: 0.06, y: 0.75, tone: done }
+            - { label: portfolio, x: 0.45, y: 0.0, tone: done, note: "2 or 3 projects" }
+            - { label: CV, x: 0.45, y: 0.45, tone: active, note: "one page" }
+            - { label: network, x: 0.45, y: 0.9 }
+            - { label: interviews, x: 0.85, y: 0.45 }
+          edges:
+            - { a: foundation, b: specialise, directed: true, tone: done }
+            - { a: specialise, b: portfolio, directed: true, tone: done }
+            - { a: specialise, b: CV, directed: true, tone: active }
+            - { a: specialise, b: network, directed: true }
+            - { a: portfolio, b: interviews, directed: true }
+            - { a: CV, b: interviews, directed: true }
+            - { a: network, b: interviews, directed: true }
+    - title: A network
+      text: Meet-ups, open source and writing about what you learn put your work in front of people. Many jobs are filled through people who have seen it.
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: foundation, x: 0.06, y: 0.2, tone: done }
+            - { label: specialise, x: 0.06, y: 0.75, tone: done }
+            - { label: portfolio, x: 0.45, y: 0.0, tone: done, note: "2 or 3 projects" }
+            - { label: CV, x: 0.45, y: 0.45, tone: done, note: "one page" }
+            - { label: network, x: 0.45, y: 0.9, tone: active, note: "people see your work" }
+            - { label: interviews, x: 0.85, y: 0.45 }
+          edges:
+            - { a: foundation, b: specialise, directed: true, tone: done }
+            - { a: specialise, b: portfolio, directed: true, tone: done }
+            - { a: specialise, b: CV, directed: true, tone: done }
+            - { a: specialise, b: network, directed: true, tone: active }
+            - { a: portfolio, b: interviews, directed: true }
+            - { a: CV, b: interviews, directed: true }
+            - { a: network, b: interviews, directed: true }
+    - title: Interviews
+      text: "All three lead to interviews. Expect a coding problem (think aloud, start simple, test your answer), a design discussion, and questions about how you work with others."
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: foundation, x: 0.06, y: 0.2, tone: done }
+            - { label: specialise, x: 0.06, y: 0.75, tone: done }
+            - { label: portfolio, x: 0.45, y: 0.0, tone: done, note: "2 or 3 projects" }
+            - { label: CV, x: 0.45, y: 0.45, tone: done, note: "one page" }
+            - { label: network, x: 0.45, y: 0.9, tone: done, note: "people see your work" }
+            - { label: interviews, x: 0.85, y: 0.45, tone: active, note: "code, design, people" }
+          edges:
+            - { a: foundation, b: specialise, directed: true, tone: done }
+            - { a: specialise, b: portfolio, directed: true, tone: done }
+            - { a: specialise, b: CV, directed: true, tone: done }
+            - { a: specialise, b: network, directed: true, tone: done }
+            - { a: portfolio, b: interviews, directed: true, tone: active }
+            - { a: CV, b: interviews, directed: true, tone: active }
+            - { a: network, b: interviews, directed: true, tone: active }
+    - title: The first job
+      text: A first job usually starts at junior level. A junior engineer completes well-defined tasks with guidance.
+      parts:
+        - kind: graph
+          id: g
+          height: 300
+          nodes:
+            - { label: foundation, x: 0.06, y: 0.2, tone: dim }
+            - { label: specialise, x: 0.06, y: 0.75, tone: dim }
+            - { label: portfolio, x: 0.45, y: 0.0, tone: dim, note: "2 or 3 projects" }
+            - { label: CV, x: 0.45, y: 0.45, tone: dim, note: "one page" }
+            - { label: network, x: 0.45, y: 0.9, tone: dim, note: "people see your work" }
+            - { label: interviews, x: 0.85, y: 0.45, tone: found, note: "hired" }
+          edges:
+            - { a: foundation, b: specialise, directed: true, tone: dim }
+            - { a: specialise, b: portfolio, directed: true, tone: dim }
+            - { a: specialise, b: CV, directed: true, tone: dim }
+            - { a: specialise, b: network, directed: true, tone: dim }
+            - { a: portfolio, b: interviews, directed: true, tone: dim }
+            - { a: CV, b: interviews, directed: true, tone: dim }
+            - { a: network, b: interviews, directed: true, tone: dim }
+        - kind: kv
+          id: lv
+          label: "Levels: what each one is trusted with"
+          slots: 3
+          rows:
+            - { name: junior, value: "well-defined tasks, with guidance", tone: active }
+    - title: Mid-level
+      text: A mid-level engineer delivers whole features independently. The task got bigger, and so did the trust.
+      parts:
+        - kind: kv
+          id: lv
+          label: "Levels: what each one is trusted with"
+          slots: 3
+          rows:
+            - { name: junior, value: "well-defined tasks, with guidance", tone: done }
+            - { name: mid-level, value: "whole features, independently", tone: active }
+    - title: Senior
+      text: A senior engineer shapes what gets built, handles ambiguity and raises the level of the team. Each step is about scope and judgement more than typing speed.
+      parts:
+        - kind: kv
+          id: lv
+          label: "Levels: what each one is trusted with"
+          slots: 3
+          rows:
+            - { name: junior, value: "well-defined tasks, with guidance", tone: done }
+            - { name: mid-level, value: "whole features, independently", tone: done }
+            - { name: senior, value: "shapes what gets built", tone: found }

@@ -1,0 +1,123 @@
+- id: m-kafka-offsets-replay
+  title: Committed offsets, redelivery and replay
+  hint: The arrow is the consumer group's committed offset, where it will resume. Watch what a crash before committing does, and what resetting it does.
+  language: TypeScript
+  code: |
+    type Record_ = { offset: number; value: string };
+    const partition: Record_[] = ["placed o-7", "paid o-7", "placed o-8", "shipped o-7", "paid o-8"].map((value, offset) => ({ offset, value }));
+
+    let committed = 0;
+    function poll(max: number, crashBeforeCommit = false) {
+      const batch = partition.slice(committed, committed + max);
+      const processed = batch.map((r) => `${r.offset}:${r.value}`);
+      if (!crashBeforeCommit) committed += batch.length;
+      return { processed, committed };
+    }
+
+    console.log(poll(2));
+    console.log(poll(2, true));
+    console.log(poll(2));
+    committed = 0;
+    console.log("after resetting to the beginning:", poll(5).processed.length, "records replayed");
+  steps:
+    - title: A partition and a position
+      text: One partition holds five records at offsets 0 to 4. The consumer group has committed offset 0, the next record it will read.
+      lines: [2, 4]
+      vars: { committed: 0 }
+      parts:
+        - kind: cells
+          id: p
+          label: "partition (offset under each record)"
+          indices: true
+          slots: 6
+          width: 96
+          items: [{ k: r0, v: placed o-7 }, { k: r1, v: paid o-7 }, { k: r2, v: placed o-8 }, { k: r3, v: shipped o-7 }, { k: r4, v: paid o-8 }]
+          pointers: [{ name: committed, at: 0 }]
+        - { kind: terminal, id: out, lines: [], slots: 4 }
+    - title: Read, process, then commit
+      text: poll(2) reads the two records from the committed offset, processes them, and only then commits offset 2. Committing after processing gives at-least-once delivery.
+      lines: [6, 7, 8, 12]
+      vars: { committed: 2 }
+      parts:
+        - kind: cells
+          id: p
+          label: "partition (offset under each record)"
+          indices: true
+          slots: 6
+          width: 96
+          items: [{ k: r0, v: placed o-7, tone: done }, { k: r1, v: paid o-7, tone: done }, { k: r2, v: placed o-8 }, { k: r3, v: shipped o-7 }, { k: r4, v: paid o-8 }]
+          pointers: [{ name: committed, at: 2, tone: found }]
+        - { kind: terminal, id: out, lines: ['{ processed: ["0:placed o-7", "1:paid o-7"], committed: 2 }'], slots: 4 }
+    - title: A crash before the commit
+      text: The next poll processes offsets 2 and 3, then the consumer crashes before committing. The committed offset is still 2.
+      lines: [8, 13]
+      vars: { committed: 2 }
+      parts:
+        - kind: cells
+          id: p
+          label: "partition (offset under each record)"
+          indices: true
+          slots: 6
+          width: 96
+          items: [{ k: r0, v: placed o-7, tone: done }, { k: r1, v: paid o-7, tone: done }, { k: r2, v: placed o-8, tone: active }, { k: r3, v: shipped o-7, tone: active }, { k: r4, v: paid o-8 }]
+          pointers: [{ name: committed, at: 2, tone: bad }]
+        - kind: terminal
+          id: out
+          slots: 4
+          lines:
+            - '{ processed: ["0:placed o-7", "1:paid o-7"], committed: 2 }'
+            - '{ processed: ["2:placed o-8", "3:shipped o-7"], committed: 2 }'
+    - title: The same records again
+      text: After the restart, consumption resumes from the committed offset, so offsets 2 and 3 are processed a second time, and then the committed offset moves to 4. This is at-least-once redelivery, which is why processing must be idempotent.
+      lines: [14]
+      vars: { committed: 4 }
+      parts:
+        - kind: cells
+          id: p
+          label: "partition (offset under each record)"
+          indices: true
+          slots: 6
+          width: 96
+          items: [{ k: r0, v: placed o-7, tone: done }, { k: r1, v: paid o-7, tone: done }, { k: r2, v: placed o-8, tone: compare }, { k: r3, v: shipped o-7, tone: compare }, { k: r4, v: paid o-8 }]
+          pointers: [{ name: committed, at: 4, tone: found }]
+        - kind: terminal
+          id: out
+          slots: 4
+          lines:
+            - '{ processed: ["0:placed o-7", "1:paid o-7"], committed: 2 }'
+            - '{ processed: ["2:placed o-8", "3:shipped o-7"], committed: 2 }'
+            - '{ processed: ["2:placed o-8", "3:shipped o-7"], committed: 4 }'
+    - title: Reset to the beginning
+      text: The records were not deleted when they were read; the log keeps them. Moving the committed offset back to 0 is all it takes to read them again.
+      lines: [15]
+      vars: { committed: 0 }
+      parts:
+        - kind: cells
+          id: p
+          label: "partition (offset under each record)"
+          indices: true
+          slots: 6
+          width: 96
+          items: [{ k: r0, v: placed o-7 }, { k: r1, v: paid o-7 }, { k: r2, v: placed o-8 }, { k: r3, v: shipped o-7 }, { k: r4, v: paid o-8 }]
+          pointers: [{ name: committed, at: 0, tone: active }]
+    - title: Replay
+      text: poll(5) reads all five records from the start. This is how a new service backfills from history, or how records are reprocessed after a bug is fixed.
+      lines: [16]
+      vars: { committed: 5 }
+      parts:
+        - kind: cells
+          id: p
+          label: "partition (offset under each record)"
+          indices: true
+          slots: 6
+          width: 96
+          items: [{ k: r0, v: placed o-7, tone: found }, { k: r1, v: paid o-7, tone: found }, { k: r2, v: placed o-8, tone: found }, { k: r3, v: shipped o-7, tone: found }, { k: r4, v: paid o-8, tone: found }]
+          pointers: [{ name: committed, at: 5, tone: found }]
+        - kind: terminal
+          id: out
+          slots: 4
+          lines:
+            - '{ processed: ["0:placed o-7", "1:paid o-7"], committed: 2 }'
+            - '{ processed: ["2:placed o-8", "3:shipped o-7"], committed: 2 }'
+            - '{ processed: ["2:placed o-8", "3:shipped o-7"], committed: 4 }'
+            - "after resetting to the beginning: 5 records replayed"

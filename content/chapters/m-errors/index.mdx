@@ -81,6 +81,8 @@ public class Main {
 
 It prints `open database`, `open file`, `working`, `close file`, `close database` and then `caught: disk full`: both resources are closed, in reverse order, *before* the catch block runs. C# does the same with `using var file = File.OpenRead(path);`, which disposes the file at the end of the enclosing block, and TypeScript 5.2 added `using` for the same purpose.
 
+<Walkthrough name="m-errors-try-with-resources" />
+
 ## Result values
 
 The alternative to throwing is to **return** the failure as a value. A **result type** is either a success holding the value or a failure holding the error, and the type system makes the caller handle both. Rust (`Result`), Go (multiple return values) and functional languages work this way; in TypeScript a discriminated union does it (<Ref to="m-types" />):

@@ -1,0 +1,127 @@
+- id: db-interview-sql-duplicates
+  title: Finding and deleting duplicates
+  hint: Watch the sign-ups fall into groups by lower-case email, get numbered within each group, and lose every row after the first.
+  language: SQL
+  code: |
+    SELECT lower(email) AS email, count(*) AS copies
+    FROM signups
+    GROUP BY lower(email)
+    HAVING count(*) > 1
+    ORDER BY email;
+
+    DELETE FROM signups
+    WHERE id IN (
+      SELECT id FROM (
+        SELECT id, row_number() OVER (PARTITION BY lower(email) ORDER BY signed_up_at, id) AS n
+        FROM signups
+      ) AS numbered
+      WHERE n > 1
+    )
+    RETURNING id, email;
+  steps:
+    - title: Five sign-ups
+      text: "Ama signed up twice, once in capitals, and Kofi twice with the same email. The first question to ask: do AMA@ and ama@ count as the same? Here, yes."
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: s
+              title: signups
+              columns: [ id, email, signed_up_at, n ]
+              rows:
+                - { k: r1, cells: [ 1, ama@example.com, 2026-01-01 09:00, "" ] }
+                - { k: r2, cells: [ 2, kofi@example.com, 2026-01-02 10:00, "" ] }
+                - { k: r3, cells: [ 3, AMA@example.com, 2026-01-05 11:00, "" ] }
+                - { k: r4, cells: [ 4, kofi@example.com, 2026-01-06 12:00, "" ] }
+                - { k: r5, cells: [ 5, esi@example.com, 2026-01-07 13:00, "" ] }
+        - kind: tables
+          id: r
+          slots: 2
+          tables:
+            - { id: res, title: result, columns: [ email, copies ], rows: [] }
+    - title: Group by the lower-case email
+      text: lower(email) makes both of Ama's rows read ama@example.com, so they land in one group. Kofi's two rows form another; Esi is alone.
+      lines: [ 1, 2, 3 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: s
+              title: signups
+              columns: [ id, email, signed_up_at, n ]
+              rows:
+                - { k: r1, cells: [ 1, ama@example.com, 2026-01-01 09:00, "" ], tone: compare }
+                - { k: r3, cells: [ 3, AMA@example.com, 2026-01-05 11:00, "" ], tone: compare }
+                - { k: r5, cells: [ 5, esi@example.com, 2026-01-07 13:00, "" ], tone: dim }
+                - { k: r2, cells: [ 2, kofi@example.com, 2026-01-02 10:00, "" ], tone: compare }
+                - { k: r4, cells: [ 4, kofi@example.com, 2026-01-06 12:00, "" ], tone: compare }
+    - title: Keep groups with more than one row
+      text: HAVING filters whole groups after counting. Two emails appear twice.
+      lines: [ 4, 5 ]
+      parts:
+        - kind: tables
+          id: r
+          slots: 2
+          tables:
+            - id: res
+              title: result
+              columns: [ email, copies ]
+              rows:
+                - { cells: [ ama@example.com, 2 ], tone: found }
+                - { cells: [ kofi@example.com, 2 ], tone: found }
+    - title: Number the rows in each group
+      text: row_number() starts again at 1 in every group (PARTITION BY) and counts in sign-up order. The earliest row of each email gets 1.
+      lines: [ 10 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: s
+              title: signups
+              columns: [ id, email, signed_up_at, n ]
+              rows:
+                - { k: r1, cells: [ 1, ama@example.com, 2026-01-01 09:00, 1 ], tone: found }
+                - { k: r3, cells: [ 3, AMA@example.com, 2026-01-05 11:00, 2 ], tone: compare }
+                - { k: r5, cells: [ 5, esi@example.com, 2026-01-07 13:00, 1 ], tone: found }
+                - { k: r2, cells: [ 2, kofi@example.com, 2026-01-02 10:00, 1 ], tone: found }
+                - { k: r4, cells: [ 4, kofi@example.com, 2026-01-06 12:00, 2 ], tone: compare }
+        - { id: r, remove: true }
+    - title: Everything after the first goes
+      text: "The DELETE removes every row whose number is above 1: rows 3 and 4. RETURNING shows what was deleted."
+      lines: [ 7, 8, 13, 15 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: s
+              title: signups
+              columns: [ id, email, signed_up_at, n ]
+              rows:
+                - { k: r1, cells: [ 1, ama@example.com, 2026-01-01 09:00, 1 ], tone: done }
+                - { k: r3, cells: [ 3, AMA@example.com, 2026-01-05 11:00, 2 ], tone: bad }
+                - { k: r5, cells: [ 5, esi@example.com, 2026-01-07 13:00, 1 ], tone: done }
+                - { k: r2, cells: [ 2, kofi@example.com, 2026-01-02 10:00, 1 ], tone: done }
+                - { k: r4, cells: [ 4, kofi@example.com, 2026-01-06 12:00, 2 ], tone: bad }
+        - { kind: terminal, id: out, slots: 2, lines: [ "  3 | AMA@example.com", "  4 | kofi@example.com" ] }
+    - title: One row per email, and keep it so
+      text: The earliest sign-up of each email remains. Then stop it happening again with a unique index on lower(email).
+      parts:
+        - kind: tables
+          id: t
+          slots: 5
+          tables:
+            - id: s
+              title: signups
+              columns: [ id, email, signed_up_at, n ]
+              rows:
+                - { k: r1, cells: [ 1, ama@example.com, 2026-01-01 09:00, 1 ], tone: done }
+                - { k: r2, cells: [ 2, kofi@example.com, 2026-01-02 10:00, 1 ], tone: done }
+                - { k: r5, cells: [ 5, esi@example.com, 2026-01-07 13:00, 1 ], tone: done }
+        - kind: note
+          id: n
+          text: CREATE UNIQUE INDEX ON signups (lower(email))
+          tone: active

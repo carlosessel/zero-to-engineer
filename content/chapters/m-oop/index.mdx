@@ -61,6 +61,8 @@ public class Main {
 
 It prints `Balance: 3750`, `Refused: Insufficient funds`, `Balance: 3750`. The balance is `private`: no other code can set it to −£1,000,000. Every change goes through `deposit` or `withdraw`, which enforce the rules, so the invariant holds no matter who uses the class. When a rule changes (an overdraft limit), there is one place to change it.
 
+<Walkthrough name="m-oop-encapsulation" />
+
 The common way to break encapsulation is the class with a getter and setter for every field, often generated automatically. `account.setBalance(account.getBalance() - amount)` scatters the rules across every caller, and nothing stops a caller forgetting them. Expose **behaviour** (`withdraw`) rather than raw state (`setBalance`), and expose state only as read-only where it is needed. "Tell, don't ask" is the slogan (<Ref to="m-design-principles" />).
 
 ### Value objects and entities

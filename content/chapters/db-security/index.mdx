@@ -89,6 +89,8 @@ ERROR:  new row violates row-level security policy for table "notes"
 
 The application sets `app.shop_id` for each request (or transaction, with `SET LOCAL`), and every query sees only that shop's rows, even one where a developer forgot the `WHERE`. `WITH CHECK` also stops rows being written for another shop. Table owners and superusers bypass RLS unless the table is set to `FORCE ROW LEVEL SECURITY`, which is one more reason applications must not connect as the owner.
 
+<Walkthrough name="db-security-row-level-security" />
+
 ## SQL injection inside the database
 
 <Ref to="m-appsec" /> covers SQL injection from application code: always use parameters. The same bug can hide in database code that builds SQL with **dynamic SQL** (`EXECUTE`):

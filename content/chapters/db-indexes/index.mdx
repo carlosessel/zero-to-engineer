@@ -161,6 +161,8 @@ SELECT id FROM big_orders WHERE status = 'placed';
 
 The first query uses all three columns of the index to find its few rows; with so few, PostgreSQL chose a bitmap scan followed by a quick sort (with a `LIMIT`, it can read an index in order instead and skip the sort, as the partial index example below shows). The second query filters only on `status`, the index's second column. PostgreSQL still used the index here, scanning all of it, which is cheap on a small table; on a large one that is far slower than an index whose **first** column is `status`. The rule of thumb for ordering columns: **equality conditions first, then the range or sort column**. An index on `(a, b)` makes a separate index on `(a)` redundant.
 
+<Walkthrough name="db-indexes-multi-column" />
+
 ## Partial indexes
 
 A **partial index** covers only rows matching a condition. Open orders are a tiny share of all orders but are queried constantly:

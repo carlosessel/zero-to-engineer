@@ -1,0 +1,110 @@
+- id: m-realtime-sse-resume
+  title: A server-sent event stream that survives a drop
+  hint: Watch one long HTTP response carry several events, break, and pick up again where it stopped.
+  language: JavaScript
+  code: |
+    const events = new EventSource("/orders/o-7/events");
+    events.addEventListener("status", (e) => {
+      const { status } = JSON.parse(e.data);
+      document.querySelector("#status").textContent = status;
+    });
+    events.onerror = () => console.log("connection lost; the browser will retry");
+  steps:
+    - title: Open the stream
+      text: The page creates an EventSource. The browser sends one ordinary GET request for the order's events.
+      lines: [1]
+      vars: { "last id seen": none }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: Server, label: "GET /orders/o-7/events", tone: active }
+        - { kind: kv, id: page, label: "On the page", slots: 1, rows: [{ name: "#status", value: "(empty)" }] }
+    - title: The response stays open
+      text: "The server answers 200 with the type text/event-stream, but does not finish the response. It can keep writing into it for as long as it likes."
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: Server, label: "GET /orders/o-7/events", tone: dim }
+            - { from: Server, to: Browser, label: "200, Content-Type: text/event-stream", tone: active }
+    - title: "Event 1: paid"
+      text: Each event is a few field lines (id, event, data) and a blank line. The status listener runs and the page shows the new status.
+      lines: [2, 3, 4]
+      vars: { "last id seen": 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: Server, label: "GET /orders/o-7/events", tone: dim }
+            - { from: Server, to: Browser, label: "200, Content-Type: text/event-stream", tone: dim }
+            - { from: Server, to: Browser, label: "id 1, status: paid", tone: found }
+        - { kind: kv, id: page, label: "On the page", slots: 1, rows: [{ name: "#status", value: paid, tone: active }] }
+    - title: "Event 2: baking"
+      text: The same response carries the next event. No new request was needed; the server spoke first.
+      lines: [2, 3, 4]
+      vars: { "last id seen": 2 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: Server, label: "GET /orders/o-7/events", tone: dim }
+            - { from: Server, to: Browser, label: "200, Content-Type: text/event-stream", tone: dim }
+            - { from: Server, to: Browser, label: "id 1, status: paid", tone: dim }
+            - { from: Server, to: Browser, label: "id 2, status: baking", tone: found }
+        - { kind: kv, id: page, label: "On the page", slots: 1, rows: [{ name: "#status", value: baking, tone: active }] }
+    - title: The connection breaks
+      text: The phone changes network and the connection drops. The error handler runs, but there is nothing to rebuild by hand.
+      lines: [6]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: Server, label: "GET /orders/o-7/events", tone: dim }
+            - { from: Server, to: Browser, label: "200, Content-Type: text/event-stream", tone: dim }
+            - { from: Server, to: Browser, label: "id 1, status: paid", tone: dim }
+            - { from: Server, to: Browser, label: "id 2, status: baking", tone: dim }
+            - { from: Server, to: Browser, label: "connection lost", tone: bad }
+        - { kind: kv, id: page, label: "On the page", slots: 1, rows: [{ name: "#status", value: baking }] }
+    - title: The browser reconnects by itself
+      text: EventSource reconnects automatically and sends the last id it received in a Last-Event-ID header.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: Server, label: "GET /orders/o-7/events", tone: dim }
+            - { from: Server, to: Browser, label: "200, Content-Type: text/event-stream", tone: dim }
+            - { from: Server, to: Browser, label: "id 1, status: paid", tone: dim }
+            - { from: Server, to: Browser, label: "id 2, status: baking", tone: dim }
+            - { from: Server, to: Browser, label: "connection lost", tone: dim }
+            - { from: Browser, to: Server, label: "GET again, Last-Event-ID: 2", tone: active }
+    - title: Resume, don't restart
+      text: Knowing the client has seen event 2, the server carries on from event 3. Nothing was missed and nothing was sent twice.
+      lines: [2, 3, 4]
+      vars: { "last id seen": 3 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: Server, label: "GET /orders/o-7/events", tone: dim }
+            - { from: Server, to: Browser, label: "200, Content-Type: text/event-stream", tone: dim }
+            - { from: Server, to: Browser, label: "id 1, status: paid", tone: dim }
+            - { from: Server, to: Browser, label: "id 2, status: baking", tone: dim }
+            - { from: Server, to: Browser, label: "connection lost", tone: dim }
+            - { from: Browser, to: Server, label: "GET again, Last-Event-ID: 2", tone: dim }
+            - { from: Server, to: Browser, label: "id 3, status: out for delivery", tone: found }
+        - { kind: kv, id: page, label: "On the page", slots: 1, rows: [{ name: "#status", value: out for delivery, tone: found }] }

@@ -1,0 +1,111 @@
+- id: m-enterprise-patterns-optimistic-concurrency
+  title: Two edits, one version number
+  hint: Ama and Kofi both edit order 7. Watch the version number decide whose save wins and who is told about the conflict.
+  language: TypeScript
+  code: |
+    type Row = { id: number; notes: string; version: number };
+    const table = new Map<number, Row>([[7, { id: 7, notes: "", version: 1 }]]);
+
+    function update(id: number, notes: string, expectedVersion: number): string {
+      const row = table.get(id)!;
+      if (row.version !== expectedVersion) return `conflict: order ${id} was changed by someone else`;
+      table.set(id, { id, notes, version: row.version + 1 });
+      return `saved version ${row.version + 1}`;
+    }
+
+    const readByAma = table.get(7)!.version;
+    const readByKofi = table.get(7)!.version;
+    console.log(update(7, "Leave with neighbour", readByAma));
+    console.log(update(7, "Ring twice", readByKofi));
+  steps:
+    - title: One row with a version
+      text: Order 7 has empty notes and a version number, 1. Every successful update will raise the version by one.
+      lines: [1, 2]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, "orders table", Kofi]
+          slots: 6
+          messages: []
+        - kind: tables
+          id: t
+          slots: 1
+          tables:
+            - id: o
+              title: orders
+              columns: [id, notes, version]
+              rows: [[7, "", 1]]
+    - title: Ama reads the order
+      text: Ama opens order 7 to edit it. Her screen remembers the version she read, 1.
+      lines: [11]
+      vars: { readByAma: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, "orders table", Kofi]
+          slots: 6
+          messages:
+            - { from: Ama, to: "orders table", label: "read order 7", tone: active }
+            - { from: "orders table", to: Ama, label: "version 1", tone: active }
+    - title: Kofi reads it too
+      text: At the same time Kofi opens the same order. He also sees version 1. Neither knows about the other.
+      lines: [12]
+      vars: { readByAma: 1, readByKofi: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, "orders table", Kofi]
+          slots: 6
+          messages:
+            - { from: Ama, to: "orders table", label: "read order 7", tone: dim }
+            - { from: "orders table", to: Ama, label: "version 1", tone: dim }
+            - { from: Kofi, to: "orders table", label: "read order 7", tone: active }
+            - { from: "orders table", to: Kofi, label: "version 1", tone: active }
+    - title: Ama saves first
+      text: "Ama saves with expected version 1. The row is still at version 1, so the update goes ahead: her notes are stored and the version becomes 2."
+      lines: [13, 6, 7, 8]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, "orders table", Kofi]
+          slots: 6
+          messages:
+            - { from: Ama, to: "orders table", label: "read order 7", tone: dim }
+            - { from: "orders table", to: Ama, label: "version 1", tone: dim }
+            - { from: Kofi, to: "orders table", label: "read order 7", tone: dim }
+            - { from: "orders table", to: Kofi, label: "version 1", tone: dim }
+            - { from: Ama, to: "orders table", label: "update, expect version 1", tone: active }
+            - { from: "orders table", to: Ama, label: "saved version 2", tone: found }
+        - kind: tables
+          id: t
+          slots: 1
+          tables:
+            - id: o
+              title: orders
+              columns: [id, notes, version]
+              rows: [{ cells: [7, "Leave with neighbour", 2], tone: active }]
+    - title: Kofi's save is refused
+      text: Kofi saves with expected version 1, but the row is now at version 2. Someone changed it since he read it, so nothing is written and he is told.
+      lines: [14, 6]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, "orders table", Kofi]
+          slots: 6
+          messages:
+            - { from: Ama, to: "orders table", label: "read order 7", tone: dim }
+            - { from: "orders table", to: Ama, label: "version 1", tone: dim }
+            - { from: Kofi, to: "orders table", label: "read order 7", tone: dim }
+            - { from: "orders table", to: Kofi, label: "version 1", tone: dim }
+            - { from: Kofi, to: "orders table", label: "update, expect version 1", tone: active }
+            - { from: "orders table", to: Kofi, label: "conflict", tone: bad }
+        - kind: tables
+          id: t
+          slots: 1
+          tables:
+            - id: o
+              title: orders
+              columns: [id, notes, version]
+              rows: [{ cells: [7, "Leave with neighbour", 2], tone: found }]
+    - title: No lost update
+      text: Without the version check, Kofi's "Ring twice" would have silently overwritten Ama's notes. Instead the application can reload the order and ask Kofi, or retry.

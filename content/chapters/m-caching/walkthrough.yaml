@@ -1,0 +1,173 @@
+- id: m-caching-cache-aside
+  title: "Cache-aside: miss, hit, stale, expire"
+  hint: Eight reads of one price. Watch which ones reach the database, and when the cache serves a price that is no longer true.
+  language: TypeScript
+  code: |
+    async function main() {
+      const prices = new TtlCache<number>(60_000, () => clock);
+      for (let i = 0; i < 5; i++) await prices.getOrLoad("RYE-400", loadPrice("RYE-400"));
+      db.set("RYE-400", 480);
+      console.log("after price change, cached:", await prices.getOrLoad("RYE-400", loadPrice("RYE-400")));
+      prices.invalidate("RYE-400");
+      console.log("after invalidation:", await prices.getOrLoad("RYE-400", loadPrice("RYE-400")));
+      clock += 61_000;
+      await prices.getOrLoad("RYE-400", loadPrice("RYE-400"));
+      console.log({ hits: prices.hits, misses: prices.misses, queries });
+    }
+  steps:
+    - title: An empty cache
+      text: The cache keeps each entry for 60 seconds (60,000 ms). The clock is passed in, so the example can move time forward itself.
+      lines: [ 2 ]
+      vars: { clock: 0 ms, hits: 0, misses: 0, queries: 0 }
+      parts:
+        - { kind: seq, id: s, actors: [ App, Cache, Database ], slots: 5, messages: [] }
+        - { kind: kv, id: c, label: In the cache, slots: 1, rows: [] }
+        - kind: kv
+          id: d
+          label: In the database
+          slots: 1
+          rows:
+            - { name: RYE-400, value: "450" }
+        - { kind: terminal, id: out, slots: 3, lines: [] }
+    - title: The first read misses
+      text: Nothing is cached yet, so the app loads the price from the database and stores it with an expiry time of 60,000 ms.
+      lines: [ 3 ]
+      vars: { clock: 0 ms, hits: 0, misses: 1, queries: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Cache, Database ]
+          slots: 5
+          messages:
+            - { from: App, to: Cache, label: get RYE-400, tone: active }
+            - { from: Cache, to: App, label: miss, tone: compare }
+            - { from: App, to: Database, label: load price (query), tone: active }
+            - { from: Database, to: App, label: "450", tone: found }
+            - { from: App, to: Cache, label: store 450 with expiry, tone: active }
+        - kind: kv
+          id: c
+          label: In the cache
+          slots: 1
+          rows:
+            - { name: RYE-400, value: "450, expires at 60000", tone: active }
+    - title: The next four reads hit
+      text: The loop reads the same price four more times. Each finds a fresh entry in the cache, so the database is not asked again.
+      lines: [ 3 ]
+      vars: { clock: 0 ms, hits: 4, misses: 1, queries: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Cache, Database ]
+          slots: 5
+          messages:
+            - { from: App, to: Cache, label: get RYE-400, tone: active }
+            - { from: Cache, to: App, label: "hit: 450", tone: found }
+        - kind: kv
+          id: c
+          label: In the cache
+          slots: 1
+          rows:
+            - { name: RYE-400, value: "450, expires at 60000", tone: found }
+    - title: The price changes underneath
+      text: The database price becomes 480. Nobody tells the cache, which still holds 450.
+      lines: [ 4 ]
+      parts:
+        - { kind: seq, id: s, actors: [ App, Cache, Database ], slots: 5, messages: [] }
+        - kind: kv
+          id: c
+          label: In the cache
+          slots: 1
+          rows:
+            - { name: RYE-400, value: "450, expires at 60000", tone: bad }
+        - kind: kv
+          id: d
+          label: In the database
+          slots: 1
+          rows:
+            - { name: RYE-400, value: "480", tone: active }
+    - title: A stale hit
+      text: "The next read is a hit and returns 450, the old price. This is the price of caching: almost every cache serves stale data some of the time."
+      lines: [ 5 ]
+      vars: { clock: 0 ms, hits: 5, misses: 1, queries: 1 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Cache, Database ]
+          slots: 5
+          messages:
+            - { from: App, to: Cache, label: get RYE-400, tone: active }
+            - { from: Cache, to: App, label: "hit: 450", tone: bad }
+        - { kind: terminal, id: out, slots: 3, lines: [ "after price change, cached: 450" ] }
+    - title: Invalidate on write
+      text: Deleting the entry, rather than writing the new value into it, means the next read must reload from the database.
+      lines: [ 6 ]
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Cache, Database ]
+          slots: 5
+          messages:
+            - { from: App, to: Cache, label: delete RYE-400, tone: active }
+        - { kind: kv, id: c, label: In the cache, slots: 1, rows: [] }
+        - kind: kv
+          id: d
+          label: In the database
+          slots: 1
+          rows:
+            - { name: RYE-400, value: "480" }
+    - title: Miss, then the fresh price
+      text: The read misses, loads 480 and caches it. It was loaded at clock 0, so it expires at 60,000 ms.
+      lines: [ 7 ]
+      vars: { clock: 0 ms, hits: 5, misses: 2, queries: 2 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Cache, Database ]
+          slots: 5
+          messages:
+            - { from: App, to: Cache, label: get RYE-400, tone: active }
+            - { from: Cache, to: App, label: miss, tone: compare }
+            - { from: App, to: Database, label: load price (query), tone: active }
+            - { from: Database, to: App, label: "480", tone: found }
+            - { from: App, to: Cache, label: store 480 with expiry, tone: active }
+        - kind: kv
+          id: c
+          label: In the cache
+          slots: 1
+          rows:
+            - { name: RYE-400, value: "480, expires at 60000", tone: active }
+        - { kind: terminal, id: out, slots: 3, lines: [ "after price change, cached: 450", "after invalidation: 480" ] }
+    - title: Time passes
+      text: The clock moves on 61 seconds, past the entry's expiry time. The entry is still there, but it is too old to use.
+      lines: [ 8 ]
+      vars: { clock: 61000 ms, hits: 5, misses: 2, queries: 2 }
+      parts:
+        - { kind: seq, id: s, actors: [ App, Cache, Database ], slots: 5, messages: [] }
+        - kind: kv
+          id: c
+          label: In the cache
+          slots: 1
+          rows:
+            - { name: RYE-400, value: "480, expired", tone: dim }
+    - title: Expired, so a third miss
+      text: The last read misses and reloads. Eight reads cost three queries; the TTL limits how stale an entry can get, even if invalidation is forgotten.
+      lines: [ 9, 10 ]
+      vars: { clock: 61000 ms, hits: 5, misses: 3, queries: 3 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [ App, Cache, Database ]
+          slots: 5
+          messages:
+            - { from: App, to: Cache, label: get RYE-400, tone: active }
+            - { from: Cache, to: App, label: miss, tone: compare }
+            - { from: App, to: Database, label: load price (query), tone: active }
+            - { from: Database, to: App, label: "480", tone: found }
+            - { from: App, to: Cache, label: store 480 with expiry, tone: active }
+        - kind: kv
+          id: c
+          label: In the cache
+          slots: 1
+          rows:
+            - { name: RYE-400, value: "480, expires at 121000", tone: active }
+        - { kind: terminal, id: out, slots: 3, lines: [ "after price change, cached: 450", "after invalidation: 480", "{ hits: 5, misses: 3, queries: 3 }" ] }

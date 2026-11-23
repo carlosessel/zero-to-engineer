@@ -1,0 +1,141 @@
+- id: design-basics-tokens
+  title: Name a choice once, use it everywhere
+  hint: Watch the button look up each CSS variable, then change one token and see the button follow.
+  language: CSS
+  code: |
+    :root {
+      --color-text: #1f1f1f;
+      --color-muted: #595959;
+      --color-accent: #7a3e00;
+      --color-surface: #fffaf0;
+      --space-2: 8px;
+      --space-4: 16px;
+      --space-6: 24px;
+      --radius: 8px;
+    }
+
+    .button {
+      background-color: var(--color-accent);
+      color: white;
+      padding: var(--space-2) var(--space-4);
+      border-radius: var(--radius);
+    }
+  steps:
+    - title: Choose the colours once
+      text: CSS variables are defined on :root, the html element, with names starting --. These four are the page's colours.
+      lines: [2, 3, 4, 5]
+      parts:
+        - kind: kv
+          id: tok
+          label: "Variables on :root"
+          slots: 8
+          rows:
+            - { name: "--color-text", value: "#1f1f1f", tone: active }
+            - { name: "--color-muted", value: "#595959", tone: active }
+            - { name: "--color-accent", value: "#7a3e00", tone: active }
+            - { name: "--color-surface", value: "#fffaf0", tone: active }
+        - kind: kv
+          id: btn
+          label: ".button gets"
+          slots: 4
+          rows: []
+    - title: Then the spacing scale
+      text: Spacing comes from a small scale, 8, 16 and 24 pixels, plus one corner radius. Only these sizes will be used.
+      lines: [6, 7, 8, 9]
+      parts:
+        - kind: kv
+          id: tok
+          label: "Variables on :root"
+          slots: 8
+          rows:
+            - { name: "--color-text", value: "#1f1f1f" }
+            - { name: "--color-muted", value: "#595959" }
+            - { name: "--color-accent", value: "#7a3e00" }
+            - { name: "--color-surface", value: "#fffaf0" }
+            - { name: "--space-2", value: "8px", tone: active }
+            - { name: "--space-4", value: "16px", tone: active }
+            - { name: "--space-6", value: "24px", tone: active }
+            - { name: "--radius", value: "8px", tone: active }
+    - title: var() looks a name up
+      text: The button does not repeat the colour; it asks for var(--color-accent), and the browser fills in the value stored under that name.
+      lines: [13]
+      parts:
+        - kind: kv
+          id: tok
+          label: "Variables on :root"
+          slots: 8
+          rows:
+            - { name: "--color-text", value: "#1f1f1f" }
+            - { name: "--color-muted", value: "#595959" }
+            - { name: "--color-accent", value: "#7a3e00", tone: compare }
+            - { name: "--color-surface", value: "#fffaf0" }
+            - { name: "--space-2", value: "8px" }
+            - { name: "--space-4", value: "16px" }
+            - { name: "--space-6", value: "24px" }
+            - { name: "--radius", value: "8px" }
+        - kind: kv
+          id: btn
+          label: ".button gets"
+          slots: 4
+          rows:
+            - { name: "background-color", value: "#7a3e00", tone: active }
+    - title: Spacing from the scale
+      text: The padding is two lookups, 8 pixels top and bottom and 16 left and right. The radius is one more.
+      lines: [14, 15, 16]
+      parts:
+        - kind: kv
+          id: tok
+          label: "Variables on :root"
+          slots: 8
+          rows:
+            - { name: "--color-text", value: "#1f1f1f" }
+            - { name: "--color-muted", value: "#595959" }
+            - { name: "--color-accent", value: "#7a3e00" }
+            - { name: "--color-surface", value: "#fffaf0" }
+            - { name: "--space-2", value: "8px", tone: compare }
+            - { name: "--space-4", value: "16px", tone: compare }
+            - { name: "--space-6", value: "24px" }
+            - { name: "--radius", value: "8px", tone: compare }
+        - kind: kv
+          id: btn
+          label: ".button gets"
+          slots: 4
+          rows:
+            - { name: "background-color", value: "#7a3e00" }
+            - { name: "color", value: "white" }
+            - { name: "padding", value: "8px 16px", tone: active }
+            - { name: "border-radius", value: "8px", tone: active }
+    - title: Change the accent once
+      text: "Suppose you change one line: --color-accent becomes #0b6e4f. Nothing in the .button rule is edited."
+      lines: [4]
+      vars: { "--color-accent": "#7a3e00 → #0b6e4f" }
+      parts:
+        - kind: kv
+          id: tok
+          label: "Variables on :root"
+          slots: 8
+          rows:
+            - { name: "--color-text", value: "#1f1f1f" }
+            - { name: "--color-muted", value: "#595959" }
+            - { name: "--color-accent", value: "#0b6e4f", tone: active }
+            - { name: "--color-surface", value: "#fffaf0" }
+            - { name: "--space-2", value: "8px" }
+            - { name: "--space-4", value: "16px" }
+            - { name: "--space-6", value: "24px" }
+            - { name: "--radius", value: "8px" }
+    - title: The button follows
+      text: The button still asks for var(--color-accent), so it now gets the new colour. So would every other rule that uses that name.
+      lines: [13]
+      parts:
+        - kind: kv
+          id: btn
+          label: ".button gets"
+          slots: 4
+          rows:
+            - { name: "background-color", value: "#0b6e4f", tone: found }
+            - { name: "color", value: "white" }
+            - { name: "padding", value: "8px 16px" }
+            - { name: "border-radius", value: "8px" }
+    - title: Design tokens
+      text: These named choices are often called design tokens, the fixed vocabulary of a design. Using only them keeps every page consistent.
+      vars: {}

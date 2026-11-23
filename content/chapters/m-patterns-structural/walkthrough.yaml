@@ -1,0 +1,158 @@
+- id: m-patterns-structural-decorator
+  title: Stacked decorators on a price lookup
+  hint: Follow four lookups through the logging and caching wrappers, and see which ones reach the database.
+  language: TypeScript
+  code: |
+    class DatabasePriceService implements PriceService {
+      lookups = 0;
+      priceOf(product: string) {
+        this.lookups++;
+        return ({ "rye loaf": 450, croissant: 275 } as Record<string, number>)[product] ?? 0;
+      }
+    }
+
+    class CachingPriceService implements PriceService {
+      priceOf(product: string) {
+        if (!this.cache.has(product)) this.cache.set(product, this.inner.priceOf(product));
+        return this.cache.get(product)!;
+      }
+    }
+
+    class LoggingPriceService implements PriceService {
+      priceOf(product: string) {
+        const price = this.inner.priceOf(product);
+        this.log.push(`${product} = ${price}`);
+        return price;
+      }
+    }
+
+    const prices: PriceService = new LoggingPriceService(new CachingPriceService(db), log);
+    for (const p of ["rye loaf", "croissant", "rye loaf", "rye loaf"]) prices.priceOf(p);
+    console.log(db.lookups, log.length);
+  steps:
+    - title: "Three objects, one interface"
+      text: "The caller holds a PriceService. Behind it, logging wraps caching, which wraps the database service. All three have the same priceOf method."
+      lines: [24]
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 170
+          nodes: [{ label: caller, x: 0.00, y: 0.4, tone: found }, { label: Logging, x: 0.33, y: 0.4, tone: dim }, { label: Caching, x: 0.67, y: 0.4, tone: dim }, { label: Database, x: 1.00, y: 0.4, tone: dim }]
+          edges: [{ a: caller, b: Logging, directed: true, tone: dim }, { a: Logging, b: Caching, directed: true, tone: dim }, { a: Caching, b: Database, directed: true, tone: dim }]
+        - kind: kv
+          id: st
+          label: "State"
+          slots: 3
+          rows:
+            - { name: "cache", value: "empty" }
+            - { name: "db.lookups", value: "0" }
+            - { name: "log entries", value: "0" }
+    - title: "rye loaf: a cache miss"
+      text: "The call passes through logging to caching. The cache has no rye loaf, so it asks the database, which counts a lookup and returns 450."
+      lines: [11, 3, 4, 5, 25]
+      vars: { product: "rye loaf", price: 450 }
+      parts:
+        - kind: graph
+          id: g
+          height: 170
+          nodes: [{ label: caller, x: 0.00, y: 0.4, tone: active }, { label: Logging, x: 0.33, y: 0.4, tone: active }, { label: Caching, x: 0.67, y: 0.4, tone: active, note: "miss" }, { label: Database, x: 1.00, y: 0.4, tone: found, note: "450" }]
+          edges: [{ a: caller, b: Logging, directed: true, tone: active }, { a: Logging, b: Caching, directed: true, tone: active }, { a: Caching, b: Database, directed: true, tone: active }]
+        - kind: kv
+          id: st
+          label: "State"
+          slots: 3
+          rows:
+            - { name: "cache", value: "rye loaf = 450", tone: active }
+            - { name: "db.lookups", value: "1", tone: active }
+            - { name: "log entries", value: "0" }
+    - title: "Logged on the way back"
+      text: "The price travels back out. The logging decorator records it after its inner service answers, then returns it to the caller."
+      lines: [18, 19, 20]
+      vars: { product: "rye loaf", price: 450 }
+      parts:
+        - kind: graph
+          id: g
+          height: 170
+          nodes: [{ label: caller, x: 0.00, y: 0.4, tone: found }, { label: Logging, x: 0.33, y: 0.4, tone: found, note: "logged" }, { label: Caching, x: 0.67, y: 0.4, tone: dim }, { label: Database, x: 1.00, y: 0.4, tone: dim }]
+          edges: [{ a: caller, b: Logging, directed: true, tone: found }, { a: Logging, b: Caching, directed: true, tone: dim }, { a: Caching, b: Database, directed: true, tone: dim }]
+        - kind: kv
+          id: st
+          label: "State"
+          slots: 3
+          rows:
+            - { name: "cache", value: "rye loaf = 450" }
+            - { name: "db.lookups", value: "1" }
+            - { name: "log entries", value: "1", tone: active }
+    - title: "croissant: another miss"
+      text: "croissant is not cached either, so this call also reaches the database: lookup 2, price 275, logged."
+      lines: [11, 4, 5, 19]
+      vars: { product: "croissant", price: 275 }
+      parts:
+        - kind: graph
+          id: g
+          height: 170
+          nodes: [{ label: caller, x: 0.00, y: 0.4, tone: active }, { label: Logging, x: 0.33, y: 0.4, tone: active }, { label: Caching, x: 0.67, y: 0.4, tone: active, note: "miss" }, { label: Database, x: 1.00, y: 0.4, tone: found, note: "275" }]
+          edges: [{ a: caller, b: Logging, directed: true, tone: active }, { a: Logging, b: Caching, directed: true, tone: active }, { a: Caching, b: Database, directed: true, tone: active }]
+        - kind: kv
+          id: st
+          label: "State"
+          slots: 3
+          rows:
+            - { name: "cache", value: "rye loaf = 450, croissant = 275", tone: active }
+            - { name: "db.lookups", value: "2", tone: active }
+            - { name: "log entries", value: "2", tone: active }
+    - title: "rye loaf again: a hit"
+      text: "This time the cache already has rye loaf, so it answers 450 itself. The database is not called, but the call is still logged."
+      lines: [11, 12, 19]
+      vars: { product: "rye loaf", price: 450 }
+      parts:
+        - kind: graph
+          id: g
+          height: 170
+          nodes: [{ label: caller, x: 0.00, y: 0.4, tone: active }, { label: Logging, x: 0.33, y: 0.4, tone: active }, { label: Caching, x: 0.67, y: 0.4, tone: found, note: "hit" }, { label: Database, x: 1.00, y: 0.4, tone: dim }]
+          edges: [{ a: caller, b: Logging, directed: true, tone: active }, { a: Logging, b: Caching, directed: true, tone: active }, { a: Caching, b: Database, directed: true, tone: dim }]
+        - kind: kv
+          id: st
+          label: "State"
+          slots: 3
+          rows:
+            - { name: "cache", value: "rye loaf = 450, croissant = 275" }
+            - { name: "db.lookups", value: "2" }
+            - { name: "log entries", value: "3", tone: active }
+    - title: "And once more"
+      text: "The fourth lookup is another hit. The database count stays at 2."
+      lines: [11, 12, 19]
+      vars: { product: "rye loaf", price: 450 }
+      parts:
+        - kind: graph
+          id: g
+          height: 170
+          nodes: [{ label: caller, x: 0.00, y: 0.4, tone: active }, { label: Logging, x: 0.33, y: 0.4, tone: active }, { label: Caching, x: 0.67, y: 0.4, tone: found, note: "hit" }, { label: Database, x: 1.00, y: 0.4, tone: dim }]
+          edges: [{ a: caller, b: Logging, directed: true, tone: active }, { a: Logging, b: Caching, directed: true, tone: active }, { a: Caching, b: Database, directed: true, tone: dim }]
+        - kind: kv
+          id: st
+          label: "State"
+          slots: 3
+          rows:
+            - { name: "cache", value: "rye loaf = 450, croissant = 275" }
+            - { name: "db.lookups", value: "2" }
+            - { name: "log entries", value: "4", tone: active }
+    - title: "2 lookups, 4 log entries"
+      text: "It prints 2 4. Each decorator did one job without changing the others. With logging inside caching instead, only the 2 misses would be logged: the order is a design decision."
+      lines: [25, 26]
+      vars: { "db.lookups": 2, "log.length": 4 }
+      parts:
+        - kind: graph
+          id: g
+          height: 170
+          nodes: [{ label: caller, x: 0.00, y: 0.4, tone: found }, { label: Logging, x: 0.33, y: 0.4, tone: dim }, { label: Caching, x: 0.67, y: 0.4, tone: dim }, { label: Database, x: 1.00, y: 0.4, tone: dim }]
+          edges: [{ a: caller, b: Logging, directed: true, tone: dim }, { a: Logging, b: Caching, directed: true, tone: dim }, { a: Caching, b: Database, directed: true, tone: dim }]
+        - kind: kv
+          id: st
+          label: "State"
+          slots: 3
+          rows:
+            - { name: "cache", value: "rye loaf = 450, croissant = 275" }
+            - { name: "db.lookups", value: "2", tone: active }
+            - { name: "log entries", value: "4", tone: active }

@@ -1,0 +1,152 @@
+- id: m-resilience-circuit-breaker
+  title: A circuit breaker opens, waits and closes
+  hint: Watch the breaker's state as the recommendations service fails, then recovers. Count how many real calls reach it.
+  language: TypeScript
+  code: |
+    async call<T>(action: () => Promise<T>, fallback: () => T): Promise<T> {
+      if (this.state === "open") {
+        if (this.now() - this.openedAt < this.coolDownMs) return fallback();
+        this.state = "half-open";
+      }
+      try {
+        const result = await action();
+        this.state = "closed";
+        this.failures = 0;
+        return result;
+      } catch {
+        this.failures++;
+        if (this.state === "half-open" || this.failures >= this.threshold) {
+          this.state = "open";
+          this.openedAt = this.now();
+        }
+        return fallback();
+      }
+    }
+  steps:
+    - title: Closed, calls go through
+      text: The breaker starts closed, with a threshold of 3 failures and a cool-down of 30 seconds. While closed, every call really reaches the recommendations service.
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: closed, label: closed, x: 0.05, y: 0.85, tone: active }
+            - { k: open, label: open, x: 0.95, y: 0.85 }
+            - { k: half, label: half-open, x: 0.5, y: 0.1 }
+          edges:
+            - { a: closed, b: open, directed: true, label: "3 failures" }
+            - { a: open, b: half, directed: true, label: "after 30 s" }
+            - { a: half, b: closed, directed: true, label: "trial works" }
+        - kind: kv
+          id: kv
+          label: Inside the breaker
+          slots: 4
+          rows:
+            - { name: state, value: closed }
+            - { name: failures, value: "0" }
+            - { name: real attempts, value: "0" }
+            - { name: clock, value: "0 s" }
+    - title: The first call fails
+      text: The service is down, so the call throws a timeout. The breaker counts one failure and returns the fallback, the popular items, instead of an error.
+      lines: [7, 12, 17]
+      vars: { result: "croissant (popular)" }
+      parts:
+        - kind: kv
+          id: kv
+          label: Inside the breaker
+          slots: 4
+          rows:
+            - { name: state, value: closed }
+            - { name: failures, value: "1", tone: bad }
+            - { name: real attempts, value: "1", tone: active }
+            - { name: clock, value: "0 s" }
+    - title: Three failures open it
+      text: Two more calls fail. The count reaches the threshold of 3, so the breaker opens and remembers when.
+      lines: [13, 14, 15]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: closed, label: closed, x: 0.05, y: 0.85, tone: dim }
+            - { k: open, label: open, x: 0.95, y: 0.85, tone: bad }
+            - { k: half, label: half-open, x: 0.5, y: 0.1 }
+          edges:
+            - { a: closed, b: open, directed: true, label: "3 failures", tone: active }
+            - { a: open, b: half, directed: true, label: "after 30 s" }
+            - { a: half, b: closed, directed: true, label: "trial works" }
+        - kind: kv
+          id: kv
+          label: Inside the breaker
+          slots: 4
+          rows:
+            - { name: state, value: open, tone: bad }
+            - { name: failures, value: "3", tone: bad }
+            - { name: real attempts, value: "3" }
+            - { name: clock, value: "0 s" }
+    - title: Open fails fast
+      text: Calls 4, 5 and 6 find the breaker open and the cool-down not over. They get the fallback at once, and the struggling service is not called at all.
+      lines: [2, 3]
+      parts:
+        - kind: kv
+          id: kv
+          label: Inside the breaker
+          slots: 4
+          rows:
+            - { name: state, value: open, tone: bad }
+            - { name: failures, value: "3" }
+            - { name: real attempts, value: "3", tone: found }
+            - { name: clock, value: "0 s" }
+    - title: The cool-down ends
+      text: The clock moves on 31 seconds and the service comes back. The next call finds 31 s is not less than 30 s, so the breaker moves to half-open and lets one trial call through.
+      lines: [3, 4]
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: closed, label: closed, x: 0.05, y: 0.85, tone: dim }
+            - { k: open, label: open, x: 0.95, y: 0.85, tone: dim }
+            - { k: half, label: half-open, x: 0.5, y: 0.1, tone: compare }
+          edges:
+            - { a: closed, b: open, directed: true, label: "3 failures" }
+            - { a: open, b: half, directed: true, label: "after 30 s", tone: active }
+            - { a: half, b: closed, directed: true, label: "trial works" }
+        - kind: kv
+          id: kv
+          label: Inside the breaker
+          slots: 4
+          rows:
+            - { name: state, value: half-open, tone: compare }
+            - { name: failures, value: "3" }
+            - { name: real attempts, value: "3" }
+            - { name: clock, value: "31 s", tone: active }
+    - title: The trial works, so it closes
+      text: The trial call succeeds. The breaker closes, resets its failure count and returns the real recommendations.
+      lines: [7, 8, 9, 10]
+      vars: { result: '["rye loaf", "jam"]' }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: closed, label: closed, x: 0.05, y: 0.85, tone: found }
+            - { k: open, label: open, x: 0.95, y: 0.85, tone: dim }
+            - { k: half, label: half-open, x: 0.5, y: 0.1, tone: dim }
+          edges:
+            - { a: closed, b: open, directed: true, label: "3 failures" }
+            - { a: open, b: half, directed: true, label: "after 30 s" }
+            - { a: half, b: closed, directed: true, label: "trial works", tone: found }
+        - kind: kv
+          id: kv
+          label: Inside the breaker
+          slots: 4
+          rows:
+            - { name: state, value: closed, tone: found }
+            - { name: failures, value: "0", tone: active }
+            - { name: real attempts, value: "4" }
+            - { name: clock, value: "31 s" }
+    - title: What was gained
+      text: Had the trial failed, line 13 would have opened the breaker again for another cool-down. Six requests were answered quickly, and the failing service received three calls instead of six.
+      lines: [13]

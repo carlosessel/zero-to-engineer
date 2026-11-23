@@ -1,0 +1,107 @@
+- id: m-operating-systems-virtual-memory
+  title: Page tables and page faults
+  hint: Watch two processes' page tables. Each maps the process's own page numbers to pages of real RAM, and RAM is handed out only when a page is first touched.
+  steps:
+    - title: Two processes, two tables
+      text: Memory is managed in pages, commonly 4 KB. Each process has a page table that maps its own virtual pages to physical pages of RAM.
+      vars: { "api virtual pages": 2, "api resident pages": 2 }
+      parts:
+        - kind: tables
+          id: pt
+          slots: 5
+          tables:
+            - id: a
+              title: api page table
+              columns: [virtual page, RAM page]
+              rows: [[0, "RAM 2"], [1, "RAM 0"]]
+            - id: w
+              title: worker page table
+              columns: [virtual page, RAM page]
+              rows: [[0, "RAM 5"], [1, "RAM 0"]]
+        - { kind: note, id: n, text: "Each process sees its own private addresses, starting from zero" }
+    - title: Same address, different RAM
+      text: Both processes use virtual page 0, but the tables send them to different RAM pages. The CPU translates every address through the table, so neither process can name the other's memory.
+      parts:
+        - kind: tables
+          id: pt
+          slots: 5
+          tables:
+            - id: a
+              title: api page table
+              columns: [virtual page, RAM page]
+              rows: [{ cells: [0, "RAM 2"], tone: active }, [1, "RAM 0"]]
+            - id: w
+              title: worker page table
+              columns: [virtual page, RAM page]
+              rows: [{ cells: [0, "RAM 5"], tone: active }, [1, "RAM 0"]]
+        - { kind: note, id: n, text: "api page 0 → RAM 2;  worker page 0 → RAM 5", tone: active }
+    - title: Shared pages
+      text: Pages can be shared. Here page 1 holds the code of a library both processes use, so it is in RAM once and mapped into both.
+      parts:
+        - kind: tables
+          id: pt
+          slots: 5
+          tables:
+            - id: a
+              title: api page table
+              columns: [virtual page, RAM page]
+              rows: [[0, "RAM 2"], { cells: [1, "RAM 0 (library)"], tone: compare }]
+            - id: w
+              title: worker page table
+              columns: [virtual page, RAM page]
+              rows: [[0, "RAM 5"], { cells: [1, "RAM 0 (library)"], tone: compare }]
+        - { kind: note, id: n, text: "One copy of the library in RAM, used by both", tone: compare }
+    - title: Asking for more memory
+      text: The api process asks for three more pages. The kernel reserves the addresses but gives no RAM yet; memory is handed out lazily.
+      vars: { "api virtual pages": 5, "api resident pages": 2 }
+      parts:
+        - kind: tables
+          id: pt
+          slots: 5
+          tables:
+            - id: a
+              title: api page table
+              columns: [virtual page, RAM page]
+              rows: [[0, "RAM 2"], [1, "RAM 0 (library)"], { cells: [2, "none yet"], tone: dim }, { cells: [3, "none yet"], tone: dim }, { cells: [4, "none yet"], tone: dim }]
+            - id: w
+              title: worker page table
+              columns: [virtual page, RAM page]
+              rows: [[0, "RAM 5"], [1, "RAM 0 (library)"]]
+        - { kind: note, id: n, text: "Reserved addresses cost no RAM until they are used" }
+    - title: A page fault
+      text: The api process writes to page 2 for the first time. It has no RAM yet, so the CPU raises a page fault and the kernel quietly supplies a page. The program never notices.
+      vars: { "api virtual pages": 5, "api resident pages": 3 }
+      parts:
+        - kind: tables
+          id: pt
+          slots: 5
+          tables:
+            - id: a
+              title: api page table
+              columns: [virtual page, RAM page]
+              rows: [[0, "RAM 2"], [1, "RAM 0 (library)"], { cells: [2, "RAM 6"], tone: found }, { cells: [3, "none yet"], tone: dim }, { cells: [4, "none yet"], tone: dim }]
+            - id: w
+              title: worker page table
+              columns: [virtual page, RAM page]
+              rows: [[0, "RAM 5"], [1, "RAM 0 (library)"]]
+        - { kind: note, id: n, text: "touch page 2 → page fault → kernel gives RAM 6", tone: active }
+    - title: When RAM runs short
+      text: If RAM runs short, the kernel can move a little-used page to disk. Reading it back is thousands of times slower than RAM, so a machine that swaps a lot crawls.
+      parts:
+        - kind: tables
+          id: pt
+          slots: 5
+          tables:
+            - id: a
+              title: api page table
+              columns: [virtual page, RAM page]
+              rows: [[0, "RAM 2"], [1, "RAM 0 (library)"], [2, "RAM 6"], { cells: [3, "none yet"], tone: dim }, { cells: [4, "none yet"], tone: dim }]
+            - id: w
+              title: worker page table
+              columns: [virtual page, RAM page]
+              rows: [{ cells: [0, "on disk"], tone: bad }, [1, "RAM 0 (library)"]]
+        - { kind: note, id: n, text: "Out of memory entirely? The OOM killer sends SIGKILL: exit 137", tone: bad }
+    - title: Two sizes
+      text: The api process has 5 pages of addresses (its virtual size) but uses only 3 pages of RAM (its resident set size, RSS). When chasing a memory problem, look at RSS.
+      parts:
+        - { kind: note, id: n, text: "virtual size: 5 pages reserved;  RSS: 3 pages in RAM", tone: found }

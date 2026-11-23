@@ -138,6 +138,8 @@ console.log("2: end of script");
 
 It prints the lines in the numbered order. The script runs to the end first; then promise callbacks and microtasks; then timers and finished I/O, round after round. This is the same model as in the browser (<Ref to="js-async-fetch" />, <Ref to="m-async" />).
 
+<Walkthrough name="node-server-basics-event-loop" />
+
 The catch: **never block the event loop**. While your code computes something slow, nothing else runs, so every other request waits:
 
 ```ts

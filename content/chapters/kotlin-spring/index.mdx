@@ -263,6 +263,8 @@ The same API as in <Ref to="be-api-spring" />, in about two-thirds of the code:
 - `service.find(id)?.let { ResponseEntity.ok(it) } ?: ResponseEntity.notFound().build()` turns a nullable result into 200 or 404 in one expression; Kotlin code uses nullable types where Java uses `Optional`.
 - The compiler option `-Xannotation-default-target=param-property` makes annotations such as `@NotBlank` apply to both the constructor parameter and the property, which validation needs.
 
+<Walkthrough name="kotlin-spring-orders-api" />
+
 ## When to choose Kotlin
 
 Kotlin suits new JVM services and Android: it is safer (null safety), shorter, and fully interoperable, so a Java codebase can adopt it one file at a time. Java has caught up in many ways (records, sealed types, pattern matching, virtual threads), has more developers and simpler tooling, and remains the safer default in many large organisations. Follow your team's choice; knowing both is common for JVM engineers.

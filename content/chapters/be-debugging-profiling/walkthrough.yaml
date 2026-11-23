@@ -1,0 +1,133 @@
+- id: be-debugging-profiling-deadlock
+  title: Two threads, two locks, no way out
+  hint: Watch which thread holds which lock, and which it is waiting for, until the waits form a circle.
+  language: Java
+  code: |
+    public class Deadlock {
+        static final Object stock = new Object();
+        static final Object orders = new Object();
+
+        public static void main(String[] args) {
+            Thread.ofPlatform().name("place-order").start(() -> {
+                synchronized (orders) {
+                    pause();
+                    synchronized (stock) { System.out.println("order placed"); }
+                }
+            });
+            Thread.ofPlatform().name("restock").start(() -> {
+                synchronized (stock) {
+                    pause();
+                    synchronized (orders) { System.out.println("restocked"); }
+                }
+            });
+            System.out.println("started; both threads now wait for ever");
+        }
+    }
+  steps:
+    - title: Two locks
+      text: stock and orders are plain objects used as locks. Only one thread at a time can hold a lock; any other thread that wants it must wait.
+      lines: [2, 3]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: place-order, x: 0, y: 0.5, tone: dim, note: thread }
+            - { label: orders, x: 0.5, y: 0, note: lock }
+            - { label: stock, x: 0.5, y: 1, note: lock }
+            - { label: restock, x: 1, y: 0.5, tone: dim, note: thread }
+          edges: []
+    - title: place-order takes orders
+      text: The first thread starts and enters synchronized (orders), so it now holds the orders lock.
+      lines: [6, 7]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: place-order, x: 0, y: 0.5, tone: active, note: thread }
+            - { label: orders, x: 0.5, y: 0, tone: active, note: lock }
+            - { label: stock, x: 0.5, y: 1, note: lock }
+            - { label: restock, x: 1, y: 0.5, tone: dim, note: thread }
+          edges:
+            - { a: place-order, b: orders, directed: true, label: holds, tone: active }
+    - title: restock takes stock
+      text: The second thread starts and takes the other lock, stock. So far nothing is wrong; each thread holds a different lock.
+      lines: [12, 13]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: place-order, x: 0, y: 0.5, note: thread }
+            - { label: orders, x: 0.5, y: 0, note: lock }
+            - { label: stock, x: 0.5, y: 1, tone: active, note: lock }
+            - { label: restock, x: 1, y: 0.5, tone: active, note: thread }
+          edges:
+            - { a: place-order, b: orders, directed: true, label: holds }
+            - { a: restock, b: stock, directed: true, label: holds, tone: active }
+    - title: Both pause while holding
+      text: Each thread sleeps for 200 milliseconds still holding its lock. The pause makes sure both have taken their first lock before either asks for its second.
+      lines: [8, 14]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: place-order, x: 0, y: 0.5, tone: compare, note: thread }
+            - { label: orders, x: 0.5, y: 0, note: lock }
+            - { label: stock, x: 0.5, y: 1, note: lock }
+            - { label: restock, x: 1, y: 0.5, tone: compare, note: thread }
+          edges:
+            - { a: place-order, b: orders, directed: true, label: holds }
+            - { a: restock, b: stock, directed: true, label: holds }
+    - title: place-order wants stock
+      text: place-order now asks for stock, but restock holds it. place-order must wait, still holding orders.
+      lines: [9]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: place-order, x: 0, y: 0.5, tone: compare, note: waiting }
+            - { label: orders, x: 0.5, y: 0, note: lock }
+            - { label: stock, x: 0.5, y: 1, note: lock }
+            - { label: restock, x: 1, y: 0.5, note: thread }
+          edges:
+            - { a: place-order, b: orders, directed: true, label: holds }
+            - { a: restock, b: stock, directed: true, label: holds }
+            - { a: place-order, b: stock, directed: true, label: waits for, tone: compare }
+    - title: restock wants orders. Deadlock.
+      text: restock asks for orders, which place-order holds. Each waits for a lock the other will never release, so neither prints anything, for ever.
+      lines: [15, 18]
+      parts:
+        - kind: graph
+          id: g
+          height: 260
+          nodes:
+            - { label: place-order, x: 0, y: 0.5, tone: bad, note: waiting }
+            - { label: orders, x: 0.5, y: 0, tone: bad, note: lock }
+            - { label: stock, x: 0.5, y: 1, tone: bad, note: lock }
+            - { label: restock, x: 1, y: 0.5, tone: bad, note: waiting }
+          edges:
+            - { a: place-order, b: orders, directed: true, label: holds, tone: bad }
+            - { a: restock, b: stock, directed: true, label: holds, tone: bad }
+            - { a: place-order, b: stock, directed: true, label: waits for, tone: bad }
+            - { a: restock, b: orders, directed: true, label: waits for, tone: bad }
+    - title: A thread dump names the circle
+      text: The process is still running, but stuck. jcmd asks the JVM what every thread is doing, and the JVM spots the cycle itself.
+      parts:
+        - kind: terminal
+          id: t
+          slots: 6
+          lines:
+            - "$ jcmd $PID Thread.print"
+            - "Found one Java-level deadlock:"
+            - "\"place-order\":"
+            - "  waiting to lock monitor ..., which is held by \"restock\""
+            - "\"restock\":"
+            - "  waiting to lock monitor ..., which is held by \"place-order\""
+    - title: The fix
+      text: Always take the locks in the same order, or avoid holding one lock while taking another. If both threads took orders first, one would simply wait its turn.
+      parts:
+        - { kind: note, id: fix, text: "Fix: every thread takes orders, then stock", tone: found }

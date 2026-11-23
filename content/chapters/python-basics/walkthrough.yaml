@@ -1,0 +1,85 @@
+- id: python-variables
+  title: Variables are labels for values
+  hint: Watch each line run. A name points at a value, and can be moved to point at a new one.
+  language: Python
+  code: |
+    price = 50
+    quantity = 3
+    total = price * quantity
+    print(total)
+    price = 60
+    print(price * quantity)
+  steps:
+    - title: Nothing stored yet
+      text: Python runs a program one line at a time, from the top. Before the first line, no names exist.
+      parts:
+        - { kind: kv, id: mem, label: "Names Python knows", rows: [], slots: 3 }
+        - { kind: terminal, id: out, lines: [], slots: 2 }
+    - title: price = 50
+      text: The = sign means "store", not "equals". Python makes the value 50 and attaches the name price to it.
+      lines: [1]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 3
+          rows: [{ name: price, value: "50", tone: active }]
+    - title: quantity = 3
+      text: A second name, pointing at a second value.
+      lines: [2]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 3
+          rows: [{ name: price, value: "50" }, { name: quantity, value: "3", tone: active }]
+    - title: The right-hand side first
+      text: "Python works out the right of the = before storing anything: price * quantity is 50 * 3, which is 150."
+      lines: [3]
+      vars: { "price * quantity": "50 * 3 = 150" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 3
+          rows: [{ name: price, value: "50", tone: compare }, { name: quantity, value: "3", tone: compare }]
+    - title: total = 150
+      text: Only now is the result stored, under the name total. total holds the number 150, not the sum; it will not change if price changes later.
+      lines: [3]
+      vars: {}
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 3
+          rows: [{ name: price, value: "50" }, { name: quantity, value: "3" }, { name: total, value: "150", tone: active }]
+    - title: print shows a value
+      text: print looks up total and writes its value on the screen.
+      lines: [4]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 3
+          rows: [{ name: price, value: "50" }, { name: quantity, value: "3" }, { name: total, value: "150", tone: compare }]
+        - { kind: terminal, id: out, lines: ["150"], slots: 2 }
+    - title: price = 60
+      text: Storing again under an existing name moves the label to a new value. The old 50 is forgotten. total still says 150, because it was worked out earlier.
+      lines: [5]
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 3
+          rows: [{ name: price, value: "60", tone: active }, { name: quantity, value: "3" }, { name: total, value: "150", tone: dim }]
+    - title: The new value is used
+      text: "This time price * quantity is 60 * 3, so 180 is printed. A variable always gives its value at the moment the line runs."
+      lines: [6]
+      vars: { "price * quantity": "60 * 3 = 180" }
+      parts:
+        - kind: kv
+          id: mem
+          label: "Names Python knows"
+          slots: 3
+          rows: [{ name: price, value: "60", tone: compare }, { name: quantity, value: "3", tone: compare }, { name: total, value: "150", tone: dim }]
+        - { kind: terminal, id: out, lines: ["150", "180"], slots: 2 }

@@ -231,6 +231,8 @@ ORDER BY path;
 
 Recursive CTEs also generate sequences, walk category trees, find routes in graphs and expand bills of materials. Guard against cycles in data that might contain them, with a depth limit (`WHERE depth < 20`) or PostgreSQL's `CYCLE` clause, or the query never ends.
 
+<Walkthrough name="db-subqueries-ctes-recursive-chain" />
+
 For simple sequences, PostgreSQL's **`generate_series`** is easier: every day in a range, for example, which lets a report show days with no orders:
 
 ```sql

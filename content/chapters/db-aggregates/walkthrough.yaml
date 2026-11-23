@@ -1,0 +1,246 @@
+- id: db-aggregates-where-group-having
+  title: WHERE, then GROUP BY, then HAVING
+  hint: Watch rows being removed, then grouped and counted, then whole groups being removed.
+  language: SQL
+  code: |
+    SELECT customer_id, count(*) AS orders
+    FROM orders
+    WHERE status <> 'cancelled'
+    GROUP BY customer_id
+    HAVING count(*) >= 3
+    ORDER BY orders DESC;
+  steps:
+    - title: FROM orders
+      text: "The question: which customers have placed at least three orders that were not cancelled? It starts from all 20 orders."
+      lines: [ 2 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 20
+          tables:
+            - id: o
+              title: orders
+              columns: [ id, customer_id, status ]
+              rows:
+                - { k: "1", cells: [ 1, 1, delivered ], tone: base }
+                - { k: "2", cells: [ 2, 2, delivered ], tone: base }
+                - { k: "3", cells: [ 3, 1, delivered ], tone: base }
+                - { k: "4", cells: [ 4, 3, cancelled ], tone: base }
+                - { k: "5", cells: [ 5, 4, delivered ], tone: base }
+                - { k: "6", cells: [ 6, 5, delivered ], tone: base }
+                - { k: "7", cells: [ 7, 2, delivered ], tone: base }
+                - { k: "8", cells: [ 8, 6, delivered ], tone: base }
+                - { k: "9", cells: [ 9, 1, delivered ], tone: base }
+                - { k: "10", cells: [ 10, 7, delivered ], tone: base }
+                - { k: "11", cells: [ 11, 3, delivered ], tone: base }
+                - { k: "12", cells: [ 12, 5, paid ], tone: base }
+                - { k: "13", cells: [ 13, 6, delivered ], tone: base }
+                - { k: "14", cells: [ 14, 1, delivered ], tone: base }
+                - { k: "15", cells: [ 15, 2, cancelled ], tone: base }
+                - { k: "16", cells: [ 16, 8, delivered ], tone: base }
+                - { k: "17", cells: [ 17, 4, paid ], tone: base }
+                - { k: "18", cells: [ 18, 7, paid ], tone: base }
+                - { k: "19", cells: [ 19, 1, placed ], tone: base }
+                - { k: "20", cells: [ 20, 6, placed ], tone: base }
+    - title: WHERE removes rows
+      text: WHERE runs first, on single rows. Orders 4 and 15 were cancelled, so they are removed before any counting happens. 18 rows are left.
+      lines: [ 3 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 20
+          tables:
+            - id: o
+              title: orders
+              columns: [ id, customer_id, status ]
+              rows:
+                - { k: "1", cells: [ 1, 1, delivered ], tone: base }
+                - { k: "2", cells: [ 2, 2, delivered ], tone: base }
+                - { k: "3", cells: [ 3, 1, delivered ], tone: base }
+                - { k: "4", cells: [ 4, 3, cancelled ], tone: bad }
+                - { k: "5", cells: [ 5, 4, delivered ], tone: base }
+                - { k: "6", cells: [ 6, 5, delivered ], tone: base }
+                - { k: "7", cells: [ 7, 2, delivered ], tone: base }
+                - { k: "8", cells: [ 8, 6, delivered ], tone: base }
+                - { k: "9", cells: [ 9, 1, delivered ], tone: base }
+                - { k: "10", cells: [ 10, 7, delivered ], tone: base }
+                - { k: "11", cells: [ 11, 3, delivered ], tone: base }
+                - { k: "12", cells: [ 12, 5, paid ], tone: base }
+                - { k: "13", cells: [ 13, 6, delivered ], tone: base }
+                - { k: "14", cells: [ 14, 1, delivered ], tone: base }
+                - { k: "15", cells: [ 15, 2, cancelled ], tone: bad }
+                - { k: "16", cells: [ 16, 8, delivered ], tone: base }
+                - { k: "17", cells: [ 17, 4, paid ], tone: base }
+                - { k: "18", cells: [ 18, 7, paid ], tone: base }
+                - { k: "19", cells: [ 19, 1, placed ], tone: base }
+                - { k: "20", cells: [ 20, 6, placed ], tone: base }
+    - title: GROUP BY forms groups
+      text: The remaining rows are split into one group per customer_id. Customer 1's five orders form one group; customer 3 has only order 11 left.
+      lines: [ 4 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 20
+          tables:
+            - id: o
+              title: orders
+              columns: [ id, customer_id, status ]
+              rows:
+                - { k: "1", cells: [ 1, 1, delivered ], tone: active }
+                - { k: "2", cells: [ 2, 2, delivered ], tone: base }
+                - { k: "3", cells: [ 3, 1, delivered ], tone: active }
+                - { k: "4", cells: [ 4, 3, cancelled ], tone: dim }
+                - { k: "5", cells: [ 5, 4, delivered ], tone: base }
+                - { k: "6", cells: [ 6, 5, delivered ], tone: base }
+                - { k: "7", cells: [ 7, 2, delivered ], tone: base }
+                - { k: "8", cells: [ 8, 6, delivered ], tone: base }
+                - { k: "9", cells: [ 9, 1, delivered ], tone: active }
+                - { k: "10", cells: [ 10, 7, delivered ], tone: base }
+                - { k: "11", cells: [ 11, 3, delivered ], tone: base }
+                - { k: "12", cells: [ 12, 5, paid ], tone: base }
+                - { k: "13", cells: [ 13, 6, delivered ], tone: base }
+                - { k: "14", cells: [ 14, 1, delivered ], tone: active }
+                - { k: "15", cells: [ 15, 2, cancelled ], tone: dim }
+                - { k: "16", cells: [ 16, 8, delivered ], tone: base }
+                - { k: "17", cells: [ 17, 4, paid ], tone: base }
+                - { k: "18", cells: [ 18, 7, paid ], tone: base }
+                - { k: "19", cells: [ 19, 1, placed ], tone: active }
+                - { k: "20", cells: [ 20, 6, placed ], tone: base }
+            - id: g
+              title: groups
+              columns: [ customer_id, order ids, count(*) ]
+              rows:
+                - { k: "1", cells: [ 1, "1,3,9,14,19", "" ], tone: active }
+                - { k: "2", cells: [ 2, "2,7", "" ], tone: base }
+                - { k: "3", cells: [ 3, "11", "" ], tone: base }
+                - { k: "4", cells: [ 4, "5,17", "" ], tone: base }
+                - { k: "5", cells: [ 5, "6,12", "" ], tone: base }
+                - { k: "6", cells: [ 6, "8,13,20", "" ], tone: base }
+                - { k: "7", cells: [ 7, "10,18", "" ], tone: base }
+                - { k: "8", cells: [ 8, "16", "" ], tone: base }
+    - title: count(*) for each group
+      text: "The aggregate is now computed once per group: how many rows each customer's group holds."
+      lines: [ 1 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 20
+          tables:
+            - id: o
+              title: orders
+              columns: [ id, customer_id, status ]
+              rows:
+                - { k: "1", cells: [ 1, 1, delivered ], tone: base }
+                - { k: "2", cells: [ 2, 2, delivered ], tone: base }
+                - { k: "3", cells: [ 3, 1, delivered ], tone: base }
+                - { k: "4", cells: [ 4, 3, cancelled ], tone: dim }
+                - { k: "5", cells: [ 5, 4, delivered ], tone: base }
+                - { k: "6", cells: [ 6, 5, delivered ], tone: base }
+                - { k: "7", cells: [ 7, 2, delivered ], tone: base }
+                - { k: "8", cells: [ 8, 6, delivered ], tone: base }
+                - { k: "9", cells: [ 9, 1, delivered ], tone: base }
+                - { k: "10", cells: [ 10, 7, delivered ], tone: base }
+                - { k: "11", cells: [ 11, 3, delivered ], tone: base }
+                - { k: "12", cells: [ 12, 5, paid ], tone: base }
+                - { k: "13", cells: [ 13, 6, delivered ], tone: base }
+                - { k: "14", cells: [ 14, 1, delivered ], tone: base }
+                - { k: "15", cells: [ 15, 2, cancelled ], tone: dim }
+                - { k: "16", cells: [ 16, 8, delivered ], tone: base }
+                - { k: "17", cells: [ 17, 4, paid ], tone: base }
+                - { k: "18", cells: [ 18, 7, paid ], tone: base }
+                - { k: "19", cells: [ 19, 1, placed ], tone: base }
+                - { k: "20", cells: [ 20, 6, placed ], tone: base }
+            - id: g
+              title: groups
+              columns: [ customer_id, order ids, count(*) ]
+              rows:
+                - { k: "1", cells: [ 1, "1,3,9,14,19", 5 ], tone: compare }
+                - { k: "2", cells: [ 2, "2,7", 2 ], tone: compare }
+                - { k: "3", cells: [ 3, "11", 1 ], tone: compare }
+                - { k: "4", cells: [ 4, "5,17", 2 ], tone: compare }
+                - { k: "5", cells: [ 5, "6,12", 2 ], tone: compare }
+                - { k: "6", cells: [ 6, "8,13,20", 3 ], tone: compare }
+                - { k: "7", cells: [ 7, "10,18", 2 ], tone: compare }
+                - { k: "8", cells: [ 8, "16", 1 ], tone: compare }
+    - title: HAVING filters groups
+      text: HAVING runs after the counting, on whole groups. Only customers 1 and 6 have three or more. This condition could not go in WHERE, which runs before any count exists.
+      lines: [ 5 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 20
+          tables:
+            - id: o
+              title: orders
+              columns: [ id, customer_id, status ]
+              rows:
+                - { k: "1", cells: [ 1, 1, delivered ], tone: base }
+                - { k: "2", cells: [ 2, 2, delivered ], tone: base }
+                - { k: "3", cells: [ 3, 1, delivered ], tone: base }
+                - { k: "4", cells: [ 4, 3, cancelled ], tone: dim }
+                - { k: "5", cells: [ 5, 4, delivered ], tone: base }
+                - { k: "6", cells: [ 6, 5, delivered ], tone: base }
+                - { k: "7", cells: [ 7, 2, delivered ], tone: base }
+                - { k: "8", cells: [ 8, 6, delivered ], tone: base }
+                - { k: "9", cells: [ 9, 1, delivered ], tone: base }
+                - { k: "10", cells: [ 10, 7, delivered ], tone: base }
+                - { k: "11", cells: [ 11, 3, delivered ], tone: base }
+                - { k: "12", cells: [ 12, 5, paid ], tone: base }
+                - { k: "13", cells: [ 13, 6, delivered ], tone: base }
+                - { k: "14", cells: [ 14, 1, delivered ], tone: base }
+                - { k: "15", cells: [ 15, 2, cancelled ], tone: dim }
+                - { k: "16", cells: [ 16, 8, delivered ], tone: base }
+                - { k: "17", cells: [ 17, 4, paid ], tone: base }
+                - { k: "18", cells: [ 18, 7, paid ], tone: base }
+                - { k: "19", cells: [ 19, 1, placed ], tone: base }
+                - { k: "20", cells: [ 20, 6, placed ], tone: base }
+            - id: g
+              title: groups
+              columns: [ customer_id, order ids, count(*) ]
+              rows:
+                - { k: "1", cells: [ 1, "1,3,9,14,19", 5 ], tone: found }
+                - { k: "2", cells: [ 2, "2,7", 2 ], tone: dim }
+                - { k: "3", cells: [ 3, "11", 1 ], tone: dim }
+                - { k: "4", cells: [ 4, "5,17", 2 ], tone: dim }
+                - { k: "5", cells: [ 5, "6,12", 2 ], tone: dim }
+                - { k: "6", cells: [ 6, "8,13,20", 3 ], tone: found }
+                - { k: "7", cells: [ 7, "10,18", 2 ], tone: dim }
+                - { k: "8", cells: [ 8, "16", 1 ], tone: dim }
+    - title: SELECT and ORDER BY
+      text: "The surviving groups become the output, sorted by the count, largest first: customer 1 with 5 orders, customer 6 with 3. That is the chapter's two-row result."
+      lines: [ 1, 6 ]
+      parts:
+        - kind: tables
+          id: t
+          slots: 20
+          tables:
+            - id: o
+              title: orders
+              columns: [ id, customer_id, status ]
+              rows:
+                - { k: "1", cells: [ 1, 1, delivered ], tone: base }
+                - { k: "2", cells: [ 2, 2, delivered ], tone: base }
+                - { k: "3", cells: [ 3, 1, delivered ], tone: base }
+                - { k: "4", cells: [ 4, 3, cancelled ], tone: dim }
+                - { k: "5", cells: [ 5, 4, delivered ], tone: base }
+                - { k: "6", cells: [ 6, 5, delivered ], tone: base }
+                - { k: "7", cells: [ 7, 2, delivered ], tone: base }
+                - { k: "8", cells: [ 8, 6, delivered ], tone: base }
+                - { k: "9", cells: [ 9, 1, delivered ], tone: base }
+                - { k: "10", cells: [ 10, 7, delivered ], tone: base }
+                - { k: "11", cells: [ 11, 3, delivered ], tone: base }
+                - { k: "12", cells: [ 12, 5, paid ], tone: base }
+                - { k: "13", cells: [ 13, 6, delivered ], tone: base }
+                - { k: "14", cells: [ 14, 1, delivered ], tone: base }
+                - { k: "15", cells: [ 15, 2, cancelled ], tone: dim }
+                - { k: "16", cells: [ 16, 8, delivered ], tone: base }
+                - { k: "17", cells: [ 17, 4, paid ], tone: base }
+                - { k: "18", cells: [ 18, 7, paid ], tone: base }
+                - { k: "19", cells: [ 19, 1, placed ], tone: base }
+                - { k: "20", cells: [ 20, 6, placed ], tone: base }
+            - id: r
+              title: result
+              columns: [ customer_id, orders ]
+              rows:
+                - { k: "1", cells: [ 1, 5 ], tone: found }
+                - { k: "6", cells: [ 6, 3 ], tone: found }

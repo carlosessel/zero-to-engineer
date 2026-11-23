@@ -1,0 +1,114 @@
+- id: db-types-functions-time-zones
+  title: One instant, many wall clocks
+  hint: Watch the same stored instant become different local times, and see how summer time changes the answer.
+  language: SQL
+  code: |
+    SELECT placed_at,
+           placed_at AT TIME ZONE 'Europe/London' AS london_wall_clock,
+           placed_at AT TIME ZONE 'America/New_York' AS new_york_wall_clock,
+           placed_at::date AS utc_date,
+           extract(dow FROM placed_at) AS day_of_week,
+           to_char(placed_at, 'Dy DD Mon YYYY HH24:MI') AS formatted
+    FROM orders
+    WHERE id IN (1, 15);
+  steps:
+    - title: One exact instant
+      text: "Order 1's placed_at is a timestamptz: an exact instant, not a wall-clock reading. This session shows it in UTC, hence the +00."
+      lines: [ 1 ]
+      parts:
+        - kind: kv
+          id: a
+          label: order 1
+          slots: 6
+          rows:
+            - { name: placed_at, value: 2026-10-01 08:12:00+00, tone: active }
+    - title: London's wall clock
+      text: AT TIME ZONE turns the instant into the time on a clock in a named zone. On 1 October London was on summer time, UTC+1, so its clocks said 09:12.
+      lines: [ 2 ]
+      parts:
+        - kind: kv
+          id: a
+          label: order 1
+          slots: 6
+          rows:
+            - { name: placed_at, value: 2026-10-01 08:12:00+00, tone: base }
+            - { name: london_wall_clock, value: 2026-10-01 09:12:00, tone: active }
+    - title: New York's wall clock
+      text: The same instant in New York was 04:12. Nothing about the order changed; only the clock it is read on.
+      lines: [ 3 ]
+      parts:
+        - kind: kv
+          id: a
+          label: order 1
+          slots: 6
+          rows:
+            - { name: placed_at, value: 2026-10-01 08:12:00+00, tone: base }
+            - { name: london_wall_clock, value: 2026-10-01 09:12:00, tone: base }
+            - { name: new_york_wall_clock, value: 2026-10-01 04:12:00, tone: active }
+    - title: Dates and days
+      text: Casting to date gives the date in the session's zone, here UTC. extract(dow ...) gives the day of the week, 0 for Sunday, so 4 is Thursday.
+      lines: [ 4, 5, 6 ]
+      parts:
+        - kind: kv
+          id: a
+          label: order 1
+          slots: 6
+          rows:
+            - { name: placed_at, value: 2026-10-01 08:12:00+00, tone: base }
+            - { name: london_wall_clock, value: 2026-10-01 09:12:00, tone: base }
+            - { name: new_york_wall_clock, value: 2026-10-01 04:12:00, tone: base }
+            - { name: utc_date, value: 2026-10-01, tone: active }
+            - { name: day_of_week, value: "4", tone: active }
+            - { name: formatted, value: Thu 01 Oct 2026 08:12, tone: active }
+    - title: After the clocks went back
+      text: Order 15 was placed on 3 November, after London's clocks went back to UTC+0, so London shows the same time as UTC. The database knows the rules for every zone.
+      lines: [ 2, 3 ]
+      parts:
+        - kind: kv
+          id: a
+          label: order 1
+          slots: 6
+          rows:
+            - { name: placed_at, value: 2026-10-01 08:12:00+00, tone: dim }
+            - { name: london_wall_clock, value: 2026-10-01 09:12:00, tone: dim }
+            - { name: new_york_wall_clock, value: 2026-10-01 04:12:00, tone: dim }
+            - { name: utc_date, value: 2026-10-01, tone: dim }
+            - { name: day_of_week, value: "4", tone: dim }
+            - { name: formatted, value: Thu 01 Oct 2026 08:12, tone: dim }
+        - kind: kv
+          id: b
+          label: order 15
+          slots: 6
+          rows:
+            - { name: placed_at, value: 2026-11-03 17:25:00+00, tone: base }
+            - { name: london_wall_clock, value: 2026-11-03 17:25:00, tone: active }
+            - { name: new_york_wall_clock, value: 2026-11-03 12:25:00, tone: active }
+            - { name: utc_date, value: 2026-11-03, tone: base }
+            - { name: day_of_week, value: "2", tone: base }
+            - { name: formatted, value: Tue 03 Nov 2026 17:25, tone: base }
+    - title: Which day was it?
+      text: The day an order belongs to depends on the zone. A shop's daily report should group by (placed_at AT TIME ZONE 'Europe/London')::date, or late-evening orders can land on the wrong day.
+      lines: [ 2, 4 ]
+      parts:
+        - kind: kv
+          id: a
+          label: order 1
+          slots: 6
+          rows:
+            - { name: placed_at, value: 2026-10-01 08:12:00+00, tone: dim }
+            - { name: london_wall_clock, value: 2026-10-01 09:12:00, tone: compare }
+            - { name: new_york_wall_clock, value: 2026-10-01 04:12:00, tone: dim }
+            - { name: utc_date, value: 2026-10-01, tone: compare }
+            - { name: day_of_week, value: "4", tone: dim }
+            - { name: formatted, value: Thu 01 Oct 2026 08:12, tone: dim }
+        - kind: kv
+          id: b
+          label: order 15
+          slots: 6
+          rows:
+            - { name: placed_at, value: 2026-11-03 17:25:00+00, tone: dim }
+            - { name: london_wall_clock, value: 2026-11-03 17:25:00, tone: compare }
+            - { name: new_york_wall_clock, value: 2026-11-03 12:25:00, tone: dim }
+            - { name: utc_date, value: 2026-11-03, tone: compare }
+            - { name: day_of_week, value: "2", tone: dim }
+            - { name: formatted, value: Tue 03 Nov 2026 17:25, tone: dim }

@@ -120,6 +120,8 @@ console.log(simulate(burst, 60));
 
 It prints `{ totalArrived: 930, maxQueue: 690, maxWaitTicks: 11, leftAtEnd: 0 }`. A burst of 750 jobs in two ticks, against workers that handle 60 per tick, built a queue of 690 that was fully drained by the end, with nothing rejected and no extra servers; the price is that some work waited 11 ticks. That fits work the user does not wait on (sending emails, generating reports, processing uploads); for interactive requests, the wait must stay within what users accept, or the workers must **autoscale** on queue length (KEDA in Kubernetes, scaling policies on SQS queue depth).
 
+<Walkthrough name="m-cloud-patterns-load-levelling" />
+
 ## Valet key and claim check
 
 **Valet key**: instead of streaming large uploads and downloads through your servers, give the client a short-lived, narrowly scoped token to access the storage directly, like a valet key that only starts the car. Cloud storage calls these **pre-signed URLs** (Amazon S3) or **shared access signatures** (Azure Blob Storage). The server signs a URL that allows exactly one operation on one object until a time:

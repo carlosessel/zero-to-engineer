@@ -1,0 +1,126 @@
+- id: prompting-classify-request
+  title: What one classify call sends
+  hint: Watch the request get built piece by piece, each piece one of the chapter's techniques, then see the reply come back in the promised shape.
+  language: Python
+  code: |
+    SYSTEM = """You classify customer messages for a phone repair shop.
+
+    Categories: booking, pricing, complaint, other.
+
+    Reply with the category on the first line, then one sentence
+    explaining why. If the message fits no category, use "other".
+
+    <examples>
+    <example>
+    Message: How much to replace an iPhone 13 screen?
+    pricing
+    The customer asks what a repair costs.
+    </example>
+    </examples>"""
+
+    def classify(message: str) -> str:
+        msg = client.messages.create(
+            model=MODEL, max_tokens=1000, system=SYSTEM,
+            messages=[{"role": "user",
+                       "content": f"<message>{message}</message>"}])
+        return reply_text(msg)
+  steps:
+    - title: "A message arrives"
+      text: "classify is called with a new customer message: “Can I come in Saturday?” It builds one request to the model."
+      lines: [16]
+      vars: { message: "Can I come in Saturday?" }
+      parts:
+        - kind: kv
+          id: req
+          label: "The request classify builds"
+          slots: 5
+          rows: []
+        - kind: seq
+          id: s
+          actors: [classify, Model]
+          slots: 2
+          messages: []
+    - title: "Context first"
+      text: "The system prompt opens by saying who the model is working for and what the job is. Specific context beats a bare “classify this”."
+      lines: [1]
+      parts:
+        - kind: kv
+          id: req
+          label: "The request classify builds"
+          slots: 5
+          rows:
+            - { name: "system: job", value: "classify messages for a phone repair shop", tone: active }
+    - title: "Fixed choices and a format"
+      text: "It lists the only allowed categories and says exactly what the reply must look like, including what to do when nothing fits."
+      lines: [3, 5, 6]
+      parts:
+        - kind: kv
+          id: req
+          label: "The request classify builds"
+          slots: 5
+          rows:
+            - { name: "system: job", value: "classify messages for a phone repair shop" }
+            - { name: "system: categories", value: "booking, pricing, complaint, other", tone: active }
+            - { name: "system: format", value: "category on line 1, then one sentence", tone: active }
+    - title: "An example shows the way"
+      text: "One worked example teaches the format and tone more clearly than another paragraph of description would."
+      lines: [8, 9, 10, 11, 12, 13, 14]
+      parts:
+        - kind: kv
+          id: req
+          label: "The request classify builds"
+          slots: 5
+          rows:
+            - { name: "system: job", value: "classify messages for a phone repair shop" }
+            - { name: "system: categories", value: "booking, pricing, complaint, other" }
+            - { name: "system: format", value: "category on line 1, then one sentence" }
+            - { name: "system: example", value: "screen price question -> pricing", tone: active }
+    - title: "Data goes inside tags"
+      text: "The customer's words are wrapped in <message> tags, so the model can tell the data apart from your instructions."
+      lines: [19, 20]
+      parts:
+        - kind: kv
+          id: req
+          label: "The request classify builds"
+          slots: 5
+          rows:
+            - { name: "system: job", value: "classify messages for a phone repair shop" }
+            - { name: "system: categories", value: "booking, pricing, complaint, other" }
+            - { name: "system: format", value: "category on line 1, then one sentence" }
+            - { name: "system: example", value: "screen price question -> pricing" }
+            - { name: "messages: user", value: "<message>Can I come in Saturday?</message>", tone: active }
+    - title: "Send it"
+      text: "system=SYSTEM and the tagged message travel together in one call."
+      lines: [17, 18, 19, 20]
+      parts:
+        - kind: kv
+          id: req
+          label: "The request classify builds"
+          slots: 5
+          rows:
+            - { name: "system: job", value: "classify messages for a phone repair shop" }
+            - { name: "system: categories", value: "booking, pricing, complaint, other" }
+            - { name: "system: format", value: "category on line 1, then one sentence" }
+            - { name: "system: example", value: "screen price question -> pricing" }
+            - { name: "messages: user", value: "<message>Can I come in Saturday?</message>" }
+        - kind: seq
+          id: s
+          actors: [classify, Model]
+          slots: 2
+          messages:
+            - { from: classify, to: Model, label: "system + <message>…</message>", tone: active }
+    - title: "A reply in the promised shape"
+      text: "An illustrative reply: “booking” on the first line, then one sentence saying why. reply_text joins its text blocks into one string."
+      lines: [21]
+      vars: { message: "Can I come in Saturday?", "line 1": booking }
+      parts:
+        - kind: seq
+          id: s
+          actors: [classify, Model]
+          slots: 2
+          messages:
+            - { from: classify, to: Model, label: "system + <message>…</message>", tone: dim }
+            - { from: Model, to: classify, label: "booking / wants to arrange a visit", tone: found }
+    - title: "Why the format matters"
+      text: "Because the category is always on line 1, code can read it reliably. That is what lets you test the prompt against saved inputs, as the evals chapter does."
+      lines: [5, 6]

@@ -1,0 +1,127 @@
+- id: m-refactoring-shipping
+  title: Refactoring behind a safety net
+  hint: Watch the six recorded cases after every small step. The structure changes; the outputs never do.
+  language: TypeScript
+  code: |
+    type Zone = { base: number; perKg: number; express: (cost: number) => number };
+
+    const ZONES: Record<"UK" | "INTERNATIONAL", Zone> = {
+      UK: { base: 350, perKg: 100, express: (c) => c + 400 },
+      INTERNATIONAL: { base: 900, perKg: 250, express: (c) => c * 2 },
+    };
+
+    const FREE_KG = 2;
+
+    function weightCost(zone: Zone, weightKg: number): number {
+      return zone.base + Math.max(0, Math.ceil(weightKg - FREE_KG)) * zone.perKg;
+    }
+
+    function shipping(country: string, weightKg: number, express: boolean): number {
+      const zone = country === "UK" ? ZONES.UK : ZONES.INTERNATIONAL;
+      const cost = weightCost(zone, weightKg);
+      return express ? zone.express(cost) : cost;
+    }
+  steps:
+    - title: Record what the code does now
+      text: legacyShipping has no tests, so first we write characterisation tests. We run six representative cases and note each output exactly. The code shown is where we will end up.
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: c
+              title: characterisation cases
+              columns: [case, legacy, refactored]
+              rows:
+                - ["UK 1 false", 350, "-"]
+                - ["UK 2.5 false", 450, "-"]
+                - ["UK 5 true", 1050, "-"]
+                - ["FR 1 false", 900, "-"]
+                - ["FR 3.2 true", 2800, "-"]
+                - ["uk 1 false", 900, "-"]
+        - { kind: note, id: n, text: "Tests record current behaviour, not what it should be" }
+    - title: An odd result, recorded anyway
+      text: A lowercase "uk" is charged the international rate. It looks like a bug, but a characterisation test records it as it is. Whether to fix it is a separate decision.
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: c
+              title: characterisation cases
+              columns: [case, legacy, refactored]
+              rows:
+                - ["UK 1 false", 350, "-"]
+                - ["UK 2.5 false", 450, "-"]
+                - ["UK 5 true", 1050, "-"]
+                - ["FR 1 false", 900, "-"]
+                - ["FR 3.2 true", 2800, "-"]
+                - { cells: ["uk 1 false", 900, "-"], tone: compare }
+    - title: "Step 1: extract the weight rule"
+      text: Both branches repeated the same rule, a base price plus a charge per kilogram over 2. It moves into one function, weightCost. Run the cases; all six outputs are the same.
+      lines: [8, 10, 11, 12]
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: c
+              title: characterisation cases
+              columns: [case, legacy, refactored]
+              rows:
+                - { cells: ["UK 1 false", 350, 350], tone: found }
+                - { cells: ["UK 2.5 false", 450, 450], tone: found }
+                - { cells: ["UK 5 true", 1050, 1050], tone: found }
+                - { cells: ["FR 1 false", 900, 900], tone: found }
+                - { cells: ["FR 3.2 true", 2800, 2800], tone: found }
+                - { cells: ["uk 1 false", 900, 900], tone: found }
+        - { kind: note, id: n, text: "After step 1: 6 of 6 cases match", tone: found }
+    - title: "Step 2: rules become data"
+      text: The nested if is replaced by a lookup. Each zone's base, per-kilogram rate and express rule now sit side by side in ZONES. Run again; the outputs are unchanged.
+      lines: [1, 3, 4, 5, 6, 15]
+      parts:
+        - { kind: note, id: n, text: "After step 2: 6 of 6 cases match", tone: found }
+    - title: "Step 3: return directly"
+      text: cost is no longer reassigned in several places; shipping returns its result directly. Each step was small, so if a case had failed we would know which step broke it.
+      lines: [16, 17]
+      parts:
+        - { kind: note, id: n, text: "After step 3: 6 of 6 cases match", tone: found }
+    - title: "One case through the new code"
+      text: "FR is not \"UK\", so the zone is INTERNATIONAL. 3.2 kg is 1.2 over the free 2 kg, rounded up to 2, so the cost is 900 + 2 × 250 = 1400. Express doubles it to 2800, as before."
+      lines: [15, 16, 17, 11]
+      vars: { zone: INTERNATIONAL, cost: 1400, result: 2800 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: c
+              title: characterisation cases
+              columns: [case, legacy, refactored]
+              rows:
+                - ["UK 1 false", 350, 350]
+                - ["UK 2.5 false", 450, 450]
+                - ["UK 5 true", 1050, 1050]
+                - ["FR 1 false", 900, 900]
+                - { cells: ["FR 3.2 true", 2800, 2800], tone: active }
+                - ["uk 1 false", 900, 900]
+    - title: Behaviour preserved, odd case and all
+      text: "\"uk\" is not equal to \"UK\", so it still gets the international 900. Fixing that with country.toUpperCase() is a behaviour change: it gets its own test and its own commit."
+      lines: [15]
+      vars: { zone: INTERNATIONAL, cost: 900, result: 900 }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: c
+              title: characterisation cases
+              columns: [case, legacy, refactored]
+              rows:
+                - ["UK 1 false", 350, 350]
+                - ["UK 2.5 false", 450, 450]
+                - ["UK 5 true", 1050, 1050]
+                - ["FR 1 false", 900, 900]
+                - ["FR 3.2 true", 2800, 2800]
+                - { cells: ["uk 1 false", 900, 900], tone: compare }
+        - { kind: note, id: n, text: "Refactoring done. Fixing \"uk\" comes next, separately", tone: done }

@@ -1,0 +1,69 @@
+- id: m-computability-subset-sum
+  title: Trying every subset
+  hint: Watch the mask count upwards, its bits choosing which numbers to add, until a subset makes 9.
+  language: TypeScript
+  code: |
+    function subsetSum(values: number[], target: number): { found: boolean; tried: number } {
+      let tried = 0;
+      for (let mask = 0; mask < 2 ** values.length; mask++) {
+        tried++;
+        let total = 0;
+        for (let i = 0; i < values.length; i++) {
+          if (mask & (1 << i)) total += values[i];
+        }
+        if (total === target) return { found: true, tried };
+      }
+      return { found: false, tried };
+    }
+
+    console.log(subsetSum([3, 34, 4, 12, 5, 2], 9));
+  steps:
+    - title: "Mask 0: the empty subset"
+      text: "Each mask is a number whose bits say which values are in the subset. Mask 0 has no bits set, so the subset is empty and the total is 0, not 9."
+      lines: [3, 4, 5, 6, 7, 9]
+      vars: { mask: "0 = 000000 in binary", tried: 1, total: 0 }
+      parts:
+        - { kind: cells, id: vals, label: "values", indices: true, slots: 6, width: 56, items: [{ k: "v0", v: 3 }, { k: "v1", v: 34 }, { k: "v2", v: 4 }, { k: "v3", v: 12 }, { k: "v4", v: 5 }, { k: "v5", v: 2 }] }
+        - { kind: cells, id: bits, label: "bit i of mask: 1 means values[i] is in the subset", slots: 6, width: 56, items: [{ k: "b0", v: 0, tone: dim }, { k: "b1", v: 0, tone: dim }, { k: "b2", v: 0, tone: dim }, { k: "b3", v: 0, tone: dim }, { k: "b4", v: 0, tone: dim }, { k: "b5", v: 0, tone: dim }] }
+    - title: "Mask 1: just 3"
+      text: "Bit 0 is set, so only values[0], which is 3, is in. Total 3: no."
+      lines: [3, 5, 6, 7, 9]
+      vars: { mask: "1 = 000001 in binary", tried: 2, total: 3 }
+      parts:
+        - { kind: cells, id: vals, label: "values", indices: true, slots: 6, width: 56, items: [{ k: "v0", v: 3, tone: active }, { k: "v1", v: 34 }, { k: "v2", v: 4 }, { k: "v3", v: 12 }, { k: "v4", v: 5 }, { k: "v5", v: 2 }] }
+        - { kind: cells, id: bits, label: "bit i of mask: 1 means values[i] is in the subset", slots: 6, width: 56, items: [{ k: "b0", v: 1, tone: active }, { k: "b1", v: 0, tone: dim }, { k: "b2", v: 0, tone: dim }, { k: "b3", v: 0, tone: dim }, { k: "b4", v: 0, tone: dim }, { k: "b5", v: 0, tone: dim }] }
+    - title: "Mask 2: just 34"
+      text: "Counting up moves the bits on: now only bit 1 is set, so the subset is just 34. No."
+      lines: [3, 5, 6, 7, 9]
+      vars: { mask: "2 = 000010 in binary", tried: 3, total: 34 }
+      parts:
+        - { kind: cells, id: vals, label: "values", indices: true, slots: 6, width: 56, items: [{ k: "v0", v: 3 }, { k: "v1", v: 34, tone: active }, { k: "v2", v: 4 }, { k: "v3", v: 12 }, { k: "v4", v: 5 }, { k: "v5", v: 2 }] }
+        - { kind: cells, id: bits, label: "bit i of mask: 1 means values[i] is in the subset", slots: 6, width: 56, items: [{ k: "b0", v: 0, tone: dim }, { k: "b1", v: 1, tone: active }, { k: "b2", v: 0, tone: dim }, { k: "b3", v: 0, tone: dim }, { k: "b4", v: 0, tone: dim }, { k: "b5", v: 0, tone: dim }] }
+    - title: "Mask 3: 3 and 34"
+      text: "Bits 0 and 1 are both set, giving 3 + 34 = 37. Counting from 0 to 63 visits every one of the 2⁶ = 64 subsets exactly once."
+      lines: [3, 5, 6, 7, 9]
+      vars: { mask: "3 = 000011 in binary", tried: 4, total: 37 }
+      parts:
+        - { kind: cells, id: vals, label: "values", indices: true, slots: 6, width: 56, items: [{ k: "v0", v: 3, tone: active }, { k: "v1", v: 34, tone: active }, { k: "v2", v: 4 }, { k: "v3", v: 12 }, { k: "v4", v: 5 }, { k: "v5", v: 2 }] }
+        - { kind: cells, id: bits, label: "bit i of mask: 1 means values[i] is in the subset", slots: 6, width: 56, items: [{ k: "b0", v: 1, tone: active }, { k: "b1", v: 1, tone: active }, { k: "b2", v: 0, tone: dim }, { k: "b3", v: 0, tone: dim }, { k: "b4", v: 0, tone: dim }, { k: "b5", v: 0, tone: dim }] }
+    - title: "Mask 19: 3, 34 and 5"
+      text: "Many masks later, bits 0, 1 and 4 give 3 + 34 + 5 = 42. Still no. Nothing guides the search; it simply tries everything in turn."
+      lines: [3, 5, 6, 7, 9]
+      vars: { mask: "19 = 010011 in binary", tried: 20, total: 42 }
+      parts:
+        - { kind: cells, id: vals, label: "values", indices: true, slots: 6, width: 56, items: [{ k: "v0", v: 3, tone: active }, { k: "v1", v: 34, tone: active }, { k: "v2", v: 4 }, { k: "v3", v: 12 }, { k: "v4", v: 5, tone: active }, { k: "v5", v: 2 }] }
+        - { kind: cells, id: bits, label: "bit i of mask: 1 means values[i] is in the subset", slots: 6, width: 56, items: [{ k: "b0", v: 1, tone: active }, { k: "b1", v: 1, tone: active }, { k: "b2", v: 0, tone: dim }, { k: "b3", v: 0, tone: dim }, { k: "b4", v: 1, tone: active }, { k: "b5", v: 0, tone: dim }] }
+    - title: "Mask 20: found it"
+      text: "Bits 2 and 4 select 4 and 5, and 4 + 5 = 9. Found, after trying 21 subsets."
+      lines: [9]
+      vars: { mask: "20 = 010100 in binary", tried: 21, total: 9 }
+      parts:
+        - { kind: cells, id: vals, label: "values", indices: true, slots: 6, width: 56, items: [{ k: "v0", v: 3 }, { k: "v1", v: 34 }, { k: "v2", v: 4, tone: found }, { k: "v3", v: 12 }, { k: "v4", v: 5, tone: found }, { k: "v5", v: 2 }] }
+        - { kind: cells, id: bits, label: "bit i of mask: 1 means values[i] is in the subset", slots: 6, width: 56, items: [{ k: "b0", v: 0, tone: dim }, { k: "b1", v: 0, tone: dim }, { k: "b2", v: 1, tone: found }, { k: "b3", v: 0, tone: dim }, { k: "b4", v: 1, tone: found }, { k: "b5", v: 0, tone: dim }] }
+    - title: "When there is no answer"
+      text: "With target 100, no subset matches, so all 64 masks are tried, up to 63 (every bit set). Each extra number doubles that: 20 numbers mean 1,048,576 subsets, and 60 numbers about 10¹⁸, over 30 years at a billion a second."
+      lines: [3, 11]
+      vars: { target: 100, "6 numbers": "64 subsets", "20 numbers": "1,048,576 subsets", "60 numbers": "about 10¹⁸ subsets" }
+      parts:
+        - { kind: cells, id: vals, label: "values", indices: true, slots: 6, width: 56, items: [{ k: "v0", v: 3, tone: dim }, { k: "v1", v: 34, tone: dim }, { k: "v2", v: 4, tone: dim }, { k: "v3", v: 12, tone: dim }, { k: "v4", v: 5, tone: dim }, { k: "v5", v: 2, tone: dim }] }
+        - { kind: cells, id: bits, label: "bit i of mask: 1 means values[i] is in the subset", slots: 6, width: 56, items: [{ k: "b0", v: 1, tone: dim }, { k: "b1", v: 1, tone: dim }, { k: "b2", v: 1, tone: dim }, { k: "b3", v: 1, tone: dim }, { k: "b4", v: 1, tone: dim }, { k: "b5", v: 1, tone: dim }] }

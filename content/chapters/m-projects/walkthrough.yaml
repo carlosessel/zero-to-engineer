@@ -1,0 +1,131 @@
+- id: m-projects-write-ahead-log
+  title: A key-value store that survives a crash
+  hint: Watch every change go to the log on disk before memory, then see memory rebuilt from the log after a crash.
+  language: Python
+  code: |
+    class LogStore:
+        def __init__(self, path):
+            self.path = path
+            self.data = {}
+            if os.path.exists(path):
+                with open(path) as log:
+                    for line in log:
+                        entry = json.loads(line)
+                        if entry["op"] == "set":
+                            self.data[entry["key"]] = entry["value"]
+                        else:
+                            self.data.pop(entry["key"], None)
+            self.log = open(path, "a")
+
+        def _append(self, entry):
+            self.log.write(json.dumps(entry) + "\n")
+            self.log.flush()
+            os.fsync(self.log.fileno())
+
+        def set(self, key, value):
+            self._append({"op": "set", "key": key, "value": value})
+            self.data[key] = value
+
+        def delete(self, key):
+            self._append({"op": "delete", "key": key})
+            self.data.pop(key, None)
+
+    store = LogStore(path)
+    store.set("price:RYE-400", 450)
+    store.set("price:JAM-STR", 380)
+    store.set("price:RYE-400", 480)
+    store.delete("price:JAM-STR")
+    del store
+
+    recovered = LogStore(path)
+    print("after restart:", recovered.data)
+  steps:
+    - title: "An empty store"
+      text: "There is no log file yet, so the store starts with nothing in memory and opens a new log for appending."
+      lines: [2, 3, 4, 5, 13, 28]
+      parts:
+        - { kind: terminal, id: log, slots: 4, lines: [] }
+        - { kind: kv, id: mem, label: "self.data (in memory)", slots: 2, rows: [] }
+    - title: "set: the log first"
+      text: "Setting RYE-400 to 450 first appends a line to the log, flushes it and calls fsync, so it is really on disk. Only then is memory updated."
+      lines: [15, 16, 17, 18, 20, 21, 22, 29]
+      parts:
+        - { kind: terminal, id: log, slots: 4, lines: ["{\"op\": \"set\", \"key\": \"price:RYE-400\", \"value\": 450}"] }
+        - kind: kv
+          id: mem
+          label: "self.data (in memory)"
+          slots: 2
+          rows:
+            - { name: "price:RYE-400", value: "450", tone: active }
+    - title: "A second key"
+      text: "JAM-STR is set to 380 the same way: disk first, then memory."
+      lines: [21, 22, 30]
+      parts:
+        - { kind: terminal, id: log, slots: 4, lines: ["{\"op\": \"set\", \"key\": \"price:RYE-400\", \"value\": 450}", "{\"op\": \"set\", \"key\": \"price:JAM-STR\", \"value\": 380}"] }
+        - kind: kv
+          id: mem
+          label: "self.data (in memory)"
+          slots: 2
+          rows:
+            - { name: "price:RYE-400", value: "450" }
+            - { name: "price:JAM-STR", value: "380", tone: active }
+    - title: "Overwrite a value"
+      text: "RYE-400 changes to 480. Memory holds one value per key, but the log keeps every change, so it now has two lines for RYE-400."
+      lines: [21, 22, 31]
+      parts:
+        - { kind: terminal, id: log, slots: 4, lines: ["{\"op\": \"set\", \"key\": \"price:RYE-400\", \"value\": 450}", "{\"op\": \"set\", \"key\": \"price:JAM-STR\", \"value\": 380}", "{\"op\": \"set\", \"key\": \"price:RYE-400\", \"value\": 480}"] }
+        - kind: kv
+          id: mem
+          label: "self.data (in memory)"
+          slots: 2
+          rows:
+            - { name: "price:RYE-400", value: "480", tone: active }
+            - { name: "price:JAM-STR", value: "380" }
+    - title: "Delete is logged too"
+      text: "Deleting JAM-STR appends a delete entry, then removes the key from memory."
+      lines: [24, 25, 26, 32]
+      parts:
+        - { kind: terminal, id: log, slots: 4, lines: ["{\"op\": \"set\", \"key\": \"price:RYE-400\", \"value\": 450}", "{\"op\": \"set\", \"key\": \"price:JAM-STR\", \"value\": 380}", "{\"op\": \"set\", \"key\": \"price:RYE-400\", \"value\": 480}", "{\"op\": \"delete\", \"key\": \"price:JAM-STR\"}"] }
+        - kind: kv
+          id: mem
+          label: "self.data (in memory)"
+          slots: 2
+          rows:
+            - { name: "price:RYE-400", value: "480" }
+    - title: "A simulated crash"
+      text: "del store throws away the object and everything in memory. Only the log file on disk survives."
+      lines: [33]
+      parts:
+        - { kind: kv, id: mem, label: "memory: lost", slots: 2, rows: [] }
+    - title: "Replay: the first two sets"
+      text: "A new LogStore finds the log and reads it line by line. The first two lines set RYE-400 to 450 and JAM-STR to 380."
+      lines: [35, 5, 6, 7, 8, 9, 10]
+      parts:
+        - kind: kv
+          id: mem
+          label: "self.data (rebuilding)"
+          slots: 2
+          rows:
+            - { name: "price:RYE-400", value: "450", tone: active }
+            - { name: "price:JAM-STR", value: "380", tone: active }
+    - title: "Replay: the update and the delete"
+      text: "The third line sets RYE-400 to 480; the fourth removes JAM-STR. Applying the changes in order rebuilds exactly the state before the crash."
+      lines: [7, 8, 9, 10, 11, 12]
+      parts:
+        - kind: kv
+          id: mem
+          label: "self.data (rebuilt)"
+          slots: 2
+          rows:
+            - { name: "price:RYE-400", value: "480", tone: found }
+    - title: "Four lines for one key"
+      text: "It prints after restart: {'price:RYE-400': 480}. Every acknowledged write survived, but the log holds 4 entries for 1 live key and grows forever, which is why stage 3 adds compaction."
+      lines: [36]
+      parts:
+        - { kind: terminal, id: log, slots: 4, lines: ["{\"op\": \"set\", \"key\": \"price:RYE-400\", \"value\": 450}", "{\"op\": \"set\", \"key\": \"price:JAM-STR\", \"value\": 380}", "{\"op\": \"set\", \"key\": \"price:RYE-400\", \"value\": 480}", "{\"op\": \"delete\", \"key\": \"price:JAM-STR\"}"] }
+        - kind: kv
+          id: mem
+          label: "self.data (rebuilt)"
+          slots: 2
+          rows:
+            - { name: "price:RYE-400", value: "480", tone: found }

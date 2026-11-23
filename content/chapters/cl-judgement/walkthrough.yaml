@@ -1,0 +1,128 @@
+- id: cl-judgement-trust-grid
+  title: Deciding how much to check
+  hint: Place pieces of work in the grid by answering the two questions, and see how the checking changes.
+  steps:
+    - title: Two questions
+      text: Trusting Claude is not a feeling. For each piece of work, ask how bad it is if it is wrong, and how easily you can check it. The answers place it in this grid.
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: grid
+              title: How much checking?
+              columns: [ Cost if wrong, Easy to check, Hard to check ]
+              rows:
+                - { k: low, cells: [ Low, Use freely; glance at it, "Use, but treat as a draft" ], tone: base }
+                - { k: high, cells: [ High, Run the checks every time, Your starting point only ], tone: base }
+        - kind: kv
+          id: q
+          label: The two questions
+          slots: 4
+          rows:
+            - { name: task, value: "", tone: base }
+            - { name: how bad if wrong?, value: "", tone: base }
+            - { name: easy to check?, value: "", tone: base }
+            - { name: decision, value: "", tone: base }
+    - title: A draft email
+      text: A typo in a draft email costs little, and you can check it by reading it. Use Claude freely and glance at the result.
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: grid
+              title: How much checking?
+              columns: [ Cost if wrong, Easy to check, Hard to check ]
+              rows:
+                - { k: low, cells: [ Low, Use freely; glance at it, "Use, but treat as a draft" ], tone: active }
+                - { k: high, cells: [ High, Run the checks every time, Your starting point only ], tone: base }
+        - kind: kv
+          id: q
+          label: The two questions
+          slots: 4
+          rows:
+            - { name: task, value: a draft email, tone: active }
+            - { name: how bad if wrong?, value: "low: a typo", tone: active }
+            - { name: easy to check?, value: "yes: read it", tone: active }
+            - { name: decision, value: Use freely; glance at it, tone: found }
+    - title: Code in the payment system
+      text: A bug in the payment code is costly, but code with tests can be checked mechanically. Use it, and run the checks every time.
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: grid
+              title: How much checking?
+              columns: [ Cost if wrong, Easy to check, Hard to check ]
+              rows:
+                - { k: low, cells: [ Low, Use freely; glance at it, "Use, but treat as a draft" ], tone: base }
+                - { k: high, cells: [ High, Run the checks every time, Your starting point only ], tone: active }
+        - kind: kv
+          id: q
+          label: The two questions
+          slots: 4
+          rows:
+            - { name: task, value: payment code, tone: active }
+            - { name: how bad if wrong?, value: "high: customers' money", tone: active }
+            - { name: easy to check?, value: "yes: tests, review", tone: active }
+            - { name: decision, value: Run the checks every time, tone: found }
+    - title: A statement in a legal letter
+      text: "A false statement in a legal letter is costly and hard to check without an expert. This corner needs the most care: use Claude only as a starting point for your own work, or not at all."
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: grid
+              title: How much checking?
+              columns: [ Cost if wrong, Easy to check, Hard to check ]
+              rows:
+                - { k: low, cells: [ Low, Use freely; glance at it, "Use, but treat as a draft" ], tone: base }
+                - { k: high, cells: [ High, Run the checks every time, Your starting point only ], tone: bad }
+        - kind: kv
+          id: q
+          label: The two questions
+          slots: 4
+          rows:
+            - { name: task, value: a legal letter, tone: active }
+            - { name: how bad if wrong?, value: "high: a false statement", tone: active }
+            - { name: easy to check?, value: "no: needs an expert", tone: active }
+            - { name: decision, value: Your starting point only, tone: found }
+    - title: Low stakes, hard to check
+      text: When a mistake would cost little but you cannot check it cheaply, use the result, but treat it as a draft rather than a fact.
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: grid
+              title: How much checking?
+              columns: [ Cost if wrong, Easy to check, Hard to check ]
+              rows:
+                - { k: low, cells: [ Low, Use freely; glance at it, "Use, but treat as a draft" ], tone: compare }
+                - { k: high, cells: [ High, Run the checks every time, Your starting point only ], tone: base }
+        - kind: kv
+          id: q
+          label: The two questions
+          slots: 4
+          rows:
+            - { name: task, value: a claim you cannot see, tone: active }
+            - { name: how bad if wrong?, value: low, tone: active }
+            - { name: easy to check?, value: no, tone: active }
+            - { name: decision, value: "Use, but treat as a draft", tone: found }
+    - title: A decision about checking
+      text: The same tool gets four different levels of trust. You cannot tell from how an answer sounds whether it is right, so decide how to check it instead.
+      parts:
+        - kind: tables
+          id: t
+          slots: 2
+          tables:
+            - id: grid
+              title: How much checking?
+              columns: [ Cost if wrong, Easy to check, Hard to check ]
+              rows:
+                - { k: low, cells: [ Low, Use freely; glance at it, "Use, but treat as a draft" ], tone: done }
+                - { k: high, cells: [ High, Run the checks every time, Your starting point only ], tone: done }
+        - { kind: note, id: n, text: Cost of being wrong × ease of checking = how much to rely on it, tone: found }

@@ -1,0 +1,94 @@
+- id: internet-visit-a-page
+  title: From pressing Enter to seeing a page
+  hint: Follow the messages between your browser, DNS and the server, in the order the chapter lists them.
+  steps:
+    - title: A name, not an address
+      text: You type example.com and press Enter. Computers find each other by numeric IP address, so the browser first asks DNS, the internet's phone book.
+      vars: { typed: example.com }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, DNS, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: DNS, label: "IP address of example.com?", tone: active }
+    - title: DNS answers
+      text: DNS replies with the address. The browser now knows where to go.
+      vars: { typed: example.com, "IP address": 203.0.113.10 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, DNS, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: DNS, label: "IP address of example.com?", tone: dim }
+            - { from: DNS, to: Browser, label: "203.0.113.10", tone: found }
+    - title: Connect to the server
+      text: The browser, the client, opens a connection to that address. The server is a computer whose job is answering requests.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, DNS, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: DNS, label: "IP address of example.com?", tone: dim }
+            - { from: DNS, to: Browser, label: "203.0.113.10", tone: dim }
+            - { from: Browser, to: Server, label: "open a connection", tone: active }
+    - title: The HTTP request
+      text: "The browser asks for the page at the path /. GET is the method for reading something."
+      vars: { typed: example.com, "IP address": 203.0.113.10, method: GET, path: / }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, DNS, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: DNS, label: "IP address of example.com?", tone: dim }
+            - { from: DNS, to: Browser, label: "203.0.113.10", tone: dim }
+            - { from: Browser, to: Server, label: "open a connection", tone: dim }
+            - { from: Browser, to: Server, label: "GET /", tone: active }
+    - title: The HTTP response
+      text: The server answers with a status code and the content. 200 means OK, and the content is the page's HTML.
+      vars: { typed: example.com, "IP address": 203.0.113.10, status: 200 OK }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, DNS, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: DNS, label: "IP address of example.com?", tone: dim }
+            - { from: DNS, to: Browser, label: "203.0.113.10", tone: dim }
+            - { from: Browser, to: Server, label: "open a connection", tone: dim }
+            - { from: Browser, to: Server, label: "GET /", tone: dim }
+            - { from: Server, to: Browser, label: "200 OK + the HTML", tone: found }
+    - title: More requests
+      text: The HTML mentions other files, such as CSS, JavaScript and images. The browser requests each of them the same way.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, DNS, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: DNS, label: "IP address of example.com?", tone: dim }
+            - { from: DNS, to: Browser, label: "203.0.113.10", tone: dim }
+            - { from: Browser, to: Server, label: "open a connection", tone: dim }
+            - { from: Browser, to: Server, label: "GET /", tone: dim }
+            - { from: Server, to: Browser, label: "200 OK + the HTML", tone: dim }
+            - { from: Browser, to: Server, label: "GET the CSS, JS and images", tone: active }
+            - { from: Server, to: Browser, label: "200 OK + each file", tone: found }
+    - title: The page is drawn
+      text: With the HTML, CSS, JavaScript and images in hand, the browser draws the page. Every page you visit starts with this same exchange.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Browser, DNS, Server]
+          slots: 7
+          messages:
+            - { from: Browser, to: DNS, label: "IP address of example.com?", tone: dim }
+            - { from: DNS, to: Browser, label: "203.0.113.10", tone: dim }
+            - { from: Browser, to: Server, label: "open a connection", tone: dim }
+            - { from: Browser, to: Server, label: "GET /", tone: dim }
+            - { from: Server, to: Browser, label: "200 OK + the HTML", tone: dim }
+            - { from: Browser, to: Server, label: "GET the CSS, JS and images", tone: dim }
+            - { from: Server, to: Browser, label: "200 OK + each file", tone: dim }
+        - { kind: note, id: n, text: "The browser draws the page", tone: found }

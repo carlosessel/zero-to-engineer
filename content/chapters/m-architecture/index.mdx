@@ -174,6 +174,8 @@ console.log(eventLog.slice(0, 2).reduce(apply, initial));
 
 It prints `{ balancePence: 7500, frozen: true, version: 4 }` for the current state and `{ balancePence: 10000, frozen: false, version: 2 }` for the state after the second event: **time travel** comes free. Event sourcing gives a complete audit trail, the ability to rebuild state and to create new read models from old events, and a natural fit with CQRS. Its costs are real: querying current state needs projections, long histories need snapshots (saved states to replay from), events are stored forever so their formats must be versioned carefully, and deleting personal data (as privacy law can require) needs special techniques such as encrypting each person's data with a key that can be destroyed. Use it where history is the business (finance, auditing, logistics tracking), not as a default.
 
+<Walkthrough name="m-architecture-event-sourcing" />
+
 ## Serverless, briefly
 
 **Serverless** platforms (AWS Lambda, Azure Functions, Google Cloud Run functions) run your code per request or per event, scaling to zero and billing by use. They suit spiky or event-driven workloads and remove server management, at the cost of cold-start latency, execution limits and tighter coupling to one cloud provider. They are a deployment model rather than an architecture, and the same structural ideas (ports and adapters, bounded contexts) still apply inside them.

@@ -85,6 +85,8 @@ for (const [name, pick] of [["round robin", roundRobin], ["random", randomPick],
 
 It prints peaks of `9` for round robin, `11` for random, `4` for least connections and `7` for power of two choices, against an average of about 2.5 requests per server. Round robin and random keep sending new requests to a server that is stuck with several slow ones; least connections notices, and two random choices get much of the benefit with no shared state. In real systems the busiest server sets the tail latency (<Ref to="m-performance" />), so this matters.
 
+<Walkthrough name="m-load-balancing-least-connections" />
+
 ## Health checks and draining
 
 A balancer must know which servers can take traffic:

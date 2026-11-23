@@ -1,0 +1,143 @@
+- id: cc-settings-rule-order
+  title: How a permission rule is chosen
+  hint: "Watch each action Claude tries being checked against the rules: deny first, then ask, then allow."
+  language: JSON
+  code: |
+    {
+      "permissions": {
+        "allow": ["Bash(npm run *)", "Bash(npm test *)", "Bash(git status)", "Bash(git diff *)"],
+        "ask": ["Bash(git push *)"],
+        "deny": ["Read(./.env)", "Read(./secrets/**)", "Bash(git push --force *)"]
+      }
+    }
+  steps:
+    - title: Three lists of rules
+      text: These project settings allow safe commands, ask before pushing, and deny reading secrets. Claude Code checks deny rules first, then ask, then allow, and the first match wins.
+      lines: [ 3, 4, 5 ]
+      parts:
+        - kind: kv
+          id: rules
+          label: Rules, in the order they are checked
+          slots: 8
+          rows:
+            - { k: d1, name: deny, value: Read(./.env), tone: base }
+            - { k: d2, name: deny, value: Read(./secrets/**), tone: base }
+            - { k: d3, name: deny, value: Bash(git push --force *), tone: base }
+            - { k: a1, name: ask, value: Bash(git push *), tone: base }
+            - { k: l1, name: allow, value: Bash(npm run *), tone: base }
+            - { k: l2, name: allow, value: Bash(npm test *), tone: base }
+            - { k: l3, name: allow, value: Bash(git status), tone: base }
+            - { k: l4, name: allow, value: Bash(git diff *), tone: base }
+        - { kind: note, id: n, text: Waiting for Claude to try something }
+    - title: Claude wants to run npm run build
+      text: No deny rule matches, and no ask rule. Then Bash(npm run *) matches, because the command starts with npm run. It runs without asking.
+      lines: [ 3 ]
+      vars: { action: "Bash: npm run build", result: allowed }
+      parts:
+        - kind: kv
+          id: rules
+          label: Rules, in the order they are checked
+          slots: 8
+          rows:
+            - { k: d1, name: deny, value: Read(./.env), tone: compare }
+            - { k: d2, name: deny, value: Read(./secrets/**), tone: compare }
+            - { k: d3, name: deny, value: Bash(git push --force *), tone: compare }
+            - { k: a1, name: ask, value: Bash(git push *), tone: compare }
+            - { k: l1, name: allow, value: Bash(npm run *), tone: found }
+            - { k: l2, name: allow, value: Bash(npm test *), tone: base }
+            - { k: l3, name: allow, value: Bash(git status), tone: base }
+            - { k: l4, name: allow, value: Bash(git diff *), tone: base }
+        - { kind: note, id: n, text: "npm run build: allowed by Bash(npm run *)", tone: found }
+    - title: A push
+      text: git push origin fix/session-refresh matches no deny rule, but it does match the ask rule. Claude Code stops and asks you first.
+      lines: [ 4 ]
+      vars: { action: "Bash: git push origin fix/session-refresh", result: ask you }
+      parts:
+        - kind: kv
+          id: rules
+          label: Rules, in the order they are checked
+          slots: 8
+          rows:
+            - { k: d1, name: deny, value: Read(./.env), tone: compare }
+            - { k: d2, name: deny, value: Read(./secrets/**), tone: compare }
+            - { k: d3, name: deny, value: Bash(git push --force *), tone: compare }
+            - { k: a1, name: ask, value: Bash(git push *), tone: compare }
+            - { k: l1, name: allow, value: Bash(npm run *), tone: base }
+            - { k: l2, name: allow, value: Bash(npm test *), tone: base }
+            - { k: l3, name: allow, value: Bash(git status), tone: base }
+            - { k: l4, name: allow, value: Bash(git diff *), tone: base }
+        - { kind: note, id: n, text: "git push origin fix/session-refresh: asks you first", tone: compare }
+    - title: A force-push
+      text: git push --force origin main matches the ask rule too, but deny is checked first and matches, so the ask rule is never reached. It is blocked.
+      lines: [ 5 ]
+      vars: { action: "Bash: git push --force origin main", result: denied }
+      parts:
+        - kind: kv
+          id: rules
+          label: Rules, in the order they are checked
+          slots: 8
+          rows:
+            - { k: d1, name: deny, value: Read(./.env), tone: compare }
+            - { k: d2, name: deny, value: Read(./secrets/**), tone: compare }
+            - { k: d3, name: deny, value: Bash(git push --force *), tone: bad }
+            - { k: a1, name: ask, value: Bash(git push *), tone: dim }
+            - { k: l1, name: allow, value: Bash(npm run *), tone: dim }
+            - { k: l2, name: allow, value: Bash(npm test *), tone: dim }
+            - { k: l3, name: allow, value: Bash(git status), tone: dim }
+            - { k: l4, name: allow, value: Bash(git diff *), tone: dim }
+        - { kind: note, id: n, text: "git push --force origin main: denied", tone: bad }
+    - title: Reading the .env file
+      text: Read(./.env) is the first rule checked, and it matches. The file stays unread, whatever any allow rule says; an allow rule cannot override a deny.
+      lines: [ 5 ]
+      vars: { action: "Read: ./.env", result: denied }
+      parts:
+        - kind: kv
+          id: rules
+          label: Rules, in the order they are checked
+          slots: 8
+          rows:
+            - { k: d1, name: deny, value: Read(./.env), tone: bad }
+            - { k: d2, name: deny, value: Read(./secrets/**), tone: dim }
+            - { k: d3, name: deny, value: Bash(git push --force *), tone: dim }
+            - { k: a1, name: ask, value: Bash(git push *), tone: dim }
+            - { k: l1, name: allow, value: Bash(npm run *), tone: dim }
+            - { k: l2, name: allow, value: Bash(npm test *), tone: dim }
+            - { k: l3, name: allow, value: Bash(git status), tone: dim }
+            - { k: l4, name: allow, value: Bash(git diff *), tone: dim }
+        - { kind: note, id: n, text: "Read ./.env: denied", tone: bad }
+    - title: Nothing matches
+      text: "npm install matches no rule: npm run * covers only commands starting npm run. With no match, the permission mode decides; in Manual mode it asks."
+      vars: { action: "Bash: npm install", result: the mode decides }
+      parts:
+        - kind: kv
+          id: rules
+          label: Rules, in the order they are checked
+          slots: 8
+          rows:
+            - { k: d1, name: deny, value: Read(./.env), tone: compare }
+            - { k: d2, name: deny, value: Read(./secrets/**), tone: compare }
+            - { k: d3, name: deny, value: Bash(git push --force *), tone: compare }
+            - { k: a1, name: ask, value: Bash(git push *), tone: compare }
+            - { k: l1, name: allow, value: Bash(npm run *), tone: compare }
+            - { k: l2, name: allow, value: Bash(npm test *), tone: compare }
+            - { k: l3, name: allow, value: Bash(git status), tone: compare }
+            - { k: l4, name: allow, value: Bash(git diff *), tone: compare }
+        - { kind: note, id: n, text: "npm install: no rule matches, so the permission mode decides" }
+    - title: Enforcement, not instructions
+      text: Claude Code applies these rules every time, whatever the model decided. Deny rules apply in every mode, even the most permissive.
+      vars: {}
+      parts:
+        - kind: kv
+          id: rules
+          label: Rules, in the order they are checked
+          slots: 8
+          rows:
+            - { k: d1, name: deny, value: Read(./.env), tone: found }
+            - { k: d2, name: deny, value: Read(./secrets/**), tone: found }
+            - { k: d3, name: deny, value: Bash(git push --force *), tone: found }
+            - { k: a1, name: ask, value: Bash(git push *), tone: base }
+            - { k: l1, name: allow, value: Bash(npm run *), tone: base }
+            - { k: l2, name: allow, value: Bash(npm test *), tone: base }
+            - { k: l3, name: allow, value: Bash(git status), tone: base }
+            - { k: l4, name: allow, value: Bash(git diff *), tone: base }
+        - { kind: note, id: n, text: "Deny first, then ask, then allow; otherwise the mode decides", tone: found }

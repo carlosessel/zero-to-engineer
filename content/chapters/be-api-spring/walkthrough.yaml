@@ -1,0 +1,104 @@
+- id: be-api-spring-exception-to-problem
+  title: From exception to problem details
+  hint: Follow one cancel request for an order that does not exist, from the controller to the service and out through the advice.
+  language: Java
+  code: |
+    // OrderController
+    @PostMapping("/{id}/cancel")
+    OrderService.Order cancel(@PathVariable String id) {
+        return orders.cancel(id);
+    }
+
+    // OrderService
+    public Order cancel(String id) {
+        Order order = find(id).orElseThrow(() -> new OrderNotFoundException(id));
+        if (order.status().equals("shipped")) throw new OrderAlreadyShippedException(id);
+        ...
+    }
+
+    // ApiErrors
+    @RestControllerAdvice
+    class ApiErrors {
+        @ExceptionHandler(OrderNotFoundException.class)
+        ProblemDetail notFound(OrderNotFoundException e) {
+            return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        }
+    }
+  steps:
+    - title: The request arrives
+      text: "curl sends POST /orders/o-404/cancel. Spring matches the route to the controller's cancel method and binds o-404 to id."
+      lines: [2, 3]
+      vars: { id: o-404 }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Controller, OrderService, ApiErrors]
+          slots: 6
+          messages:
+            - { from: Client, to: Controller, label: "POST /orders/o-404/cancel", tone: active }
+    - title: The controller calls the service
+      text: The controller does no work itself. It hands the id to the OrderService that Spring injected into its constructor.
+      lines: [4]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Controller, OrderService, ApiErrors]
+          slots: 6
+          messages:
+            - { from: Client, to: Controller, label: "POST /orders/o-404/cancel", tone: dim }
+            - { from: Controller, to: OrderService, label: "cancel(\"o-404\")", tone: active }
+    - title: No such order, so it throws
+      text: find returns an empty Optional, so orElseThrow throws OrderNotFoundException. The rest of the method never runs.
+      lines: [9]
+      vars: { id: o-404, "find(id)": "Optional.empty", thrown: OrderNotFoundException }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Controller, OrderService, ApiErrors]
+          slots: 6
+          messages:
+            - { from: Client, to: Controller, label: "POST /orders/o-404/cancel", tone: dim }
+            - { from: Controller, to: OrderService, label: "cancel(\"o-404\")", tone: dim }
+            - { from: OrderService, to: OrderService, label: "orElseThrow", tone: bad }
+    - title: The exception passes through the controller
+      text: The controller has no try or catch. The exception leaves the controller method and goes back to Spring.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Controller, OrderService, ApiErrors]
+          slots: 6
+          messages:
+            - { from: Client, to: Controller, label: "POST /orders/o-404/cancel", tone: dim }
+            - { from: Controller, to: OrderService, label: "cancel(\"o-404\")", tone: dim }
+            - { from: OrderService, to: OrderService, label: "orElseThrow", tone: dim }
+            - { from: OrderService, to: Controller, label: "OrderNotFoundException", tone: bad }
+    - title: The advice picks a handler
+      text: "Spring looks for an @ExceptionHandler for this exception type and finds one in the @RestControllerAdvice. Every controller shares this one place."
+      lines: [15, 17, 18]
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Controller, OrderService, ApiErrors]
+          slots: 6
+          messages:
+            - { from: Client, to: Controller, label: "POST /orders/o-404/cancel", tone: dim }
+            - { from: Controller, to: OrderService, label: "cancel(\"o-404\")", tone: dim }
+            - { from: OrderService, to: OrderService, label: "orElseThrow", tone: dim }
+            - { from: OrderService, to: Controller, label: "OrderNotFoundException", tone: dim }
+            - { from: Controller, to: ApiErrors, label: "notFound(e)", tone: active }
+    - title: A 404 problem detail goes back
+      text: The handler turns the exception into a ProblemDetail with status 404 and the exception's message as the detail. Spring writes it as JSON.
+      lines: [19]
+      vars: { status: 404, title: Not Found, detail: "No order o-404" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Client, Controller, OrderService, ApiErrors]
+          slots: 6
+          messages:
+            - { from: Client, to: Controller, label: "POST /orders/o-404/cancel", tone: dim }
+            - { from: Controller, to: OrderService, label: "cancel(\"o-404\")", tone: dim }
+            - { from: OrderService, to: OrderService, label: "orElseThrow", tone: dim }
+            - { from: OrderService, to: Controller, label: "OrderNotFoundException", tone: dim }
+            - { from: Controller, to: ApiErrors, label: "notFound(e)", tone: dim }
+            - { from: ApiErrors, to: Client, label: "404 No order o-404", tone: found }

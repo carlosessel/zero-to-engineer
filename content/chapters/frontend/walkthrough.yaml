@@ -1,0 +1,144 @@
+- id: frontend-state-redraw
+  title: State changes, the screen follows
+  hint: The screen is always drawn from the state. Watch a click change the state, and the component draw the screen again.
+  language: JSX
+  code: |
+    import { useState } from "react";
+
+    function Counter({ step }) {
+      const [count, setCount] = useState(0);        // a piece of state
+      return (
+        <button onClick={() => setCount(count + step)}>
+          Clicked {count} times
+        </button>
+      );
+    }
+  steps:
+    - title: An input and a piece of state
+      text: Suppose the page uses Counter with step set to 2. step is an input from outside; count is state the component manages, starting at 0.
+      lines: [3, 4]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: state, label: "state", x: 0.05, y: 0.5, tone: active, note: "count = 0" }
+            - { k: draw, label: "Counter runs", x: 0.5, y: 0 }
+            - { k: screen, label: "screen", x: 0.95, y: 0.5 }
+            - { k: click, label: "click", x: 0.5, y: 1 }
+          edges:
+            - { a: state, b: draw, directed: true }
+            - { a: draw, b: screen, directed: true, label: "draws" }
+            - { a: screen, b: click, directed: true }
+            - { a: click, b: state, directed: true, label: "setCount" }
+        - kind: kv
+          id: d
+          label: "Counter's data"
+          slots: 2
+          rows: [{ name: step (input), value: "2" }, { name: count (state), value: "0", tone: active }]
+        - { kind: note, id: screen, text: "On screen: [ Clicked 0 times ]" }
+    - title: Draw from the state
+      text: The component returns what the screen should look like, using count. The framework puts it on the page.
+      lines: [5, 6, 7, 8, 9]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: state, label: "state", x: 0.05, y: 0.5, note: "count = 0" }
+            - { k: draw, label: "Counter runs", x: 0.5, y: 0, tone: active }
+            - { k: screen, label: "screen", x: 0.95, y: 0.5, tone: found }
+            - { k: click, label: "click", x: 0.5, y: 1 }
+          edges:
+            - { a: state, b: draw, directed: true, tone: active }
+            - { a: draw, b: screen, directed: true, label: "draws", tone: active }
+            - { a: screen, b: click, directed: true }
+            - { a: click, b: state, directed: true, label: "setCount" }
+        - { kind: note, id: screen, text: "On screen: [ Clicked 0 times ]", tone: found }
+    - title: A click asks for a change
+      text: The click runs setCount(count + step), that is setCount(0 + 2). The code never edits the button's text directly.
+      lines: [6]
+      vars: { "count + step": "0 + 2 = 2" }
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: state, label: "state", x: 0.05, y: 0.5, note: "count = 0" }
+            - { k: draw, label: "Counter runs", x: 0.5, y: 0 }
+            - { k: screen, label: "screen", x: 0.95, y: 0.5 }
+            - { k: click, label: "click", x: 0.5, y: 1, tone: active }
+          edges:
+            - { a: state, b: draw, directed: true }
+            - { a: draw, b: screen, directed: true, label: "draws" }
+            - { a: screen, b: click, directed: true, tone: active }
+            - { a: click, b: state, directed: true, label: "setCount", tone: active }
+        - { kind: note, id: screen, text: "On screen: [ Clicked 0 times ]" }
+    - title: The state changes
+      text: count is now 2. For a moment the data is ahead of the screen.
+      lines: [4]
+      vars: {}
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: state, label: "state", x: 0.05, y: 0.5, tone: active, note: "count = 2" }
+            - { k: draw, label: "Counter runs", x: 0.5, y: 0 }
+            - { k: screen, label: "screen", x: 0.95, y: 0.5, tone: compare }
+            - { k: click, label: "click", x: 0.5, y: 1 }
+          edges:
+            - { a: state, b: draw, directed: true }
+            - { a: draw, b: screen, directed: true, label: "draws" }
+            - { a: screen, b: click, directed: true }
+            - { a: click, b: state, directed: true, label: "setCount" }
+        - kind: kv
+          id: d
+          label: "Counter's data"
+          slots: 2
+          rows: [{ name: step (input), value: "2" }, { name: count (state), value: "2", tone: active }]
+    - title: The framework redraws
+      text: Because state changed, the framework runs Counter again with the new count and updates the page. Screen and data agree once more.
+      lines: [5, 6, 7, 8, 9]
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: state, label: "state", x: 0.05, y: 0.5, note: "count = 2" }
+            - { k: draw, label: "Counter runs", x: 0.5, y: 0, tone: active }
+            - { k: screen, label: "screen", x: 0.95, y: 0.5, tone: found }
+            - { k: click, label: "click", x: 0.5, y: 1 }
+          edges:
+            - { a: state, b: draw, directed: true, tone: active }
+            - { a: draw, b: screen, directed: true, label: "draws", tone: active }
+            - { a: screen, b: click, directed: true }
+            - { a: click, b: state, directed: true, label: "setCount" }
+        - kind: kv
+          id: d
+          label: "Counter's data"
+          slots: 2
+          rows: [{ name: step (input), value: "2" }, { name: count (state), value: "2" }]
+        - { kind: note, id: screen, text: "On screen: [ Clicked 2 times ]", tone: found }
+    - title: Round the loop again
+      text: Another click makes count 4, and the screen follows. You only ever change the state; drawing the screen from it is the framework's job.
+      parts:
+        - kind: graph
+          id: g
+          height: 220
+          nodes:
+            - { k: state, label: "state", x: 0.05, y: 0.5, tone: done, note: "count = 4" }
+            - { k: draw, label: "Counter runs", x: 0.5, y: 0, tone: done }
+            - { k: screen, label: "screen", x: 0.95, y: 0.5, tone: found }
+            - { k: click, label: "click", x: 0.5, y: 1, tone: done }
+          edges:
+            - { a: state, b: draw, directed: true, tone: done }
+            - { a: draw, b: screen, directed: true, label: "draws", tone: done }
+            - { a: screen, b: click, directed: true, tone: done }
+            - { a: click, b: state, directed: true, label: "setCount", tone: done }
+        - kind: kv
+          id: d
+          label: "Counter's data"
+          slots: 2
+          rows: [{ name: step (input), value: "2" }, { name: count (state), value: "4", tone: active }]
+        - { kind: note, id: screen, text: "On screen: [ Clicked 4 times ]", tone: found }
