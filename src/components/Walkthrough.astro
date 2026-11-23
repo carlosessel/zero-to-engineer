@@ -1,0 +1,64 @@
+---
+// A step-by-step visual walkthrough: a picture that changes each step, a
+// sentence explaining it, the line of code being run and its variables.
+// Lessons live in src/walk/lessons/ and are listed in src/walk/index.ts.
+// The first step is drawn here, so it shows even without JavaScript.
+import { LESSONS } from '../walk/index';
+import { renderCode, renderSvg, stageHeight } from '../walk/render';
+
+interface Props { name: string }
+const { name } = Astro.props;
+const lesson = LESSONS[name];
+if (!lesson) throw new Error(`No walkthrough called "${name}". Known: ${Object.keys(LESSONS).join(', ')}.`);
+const frames = lesson.frames(0);
+const first = frames[0];
+const svg = renderSvg(first, stageHeight(frames));
+const uid = `wk-${name}`;
+---
+<section class="walk widget" data-walk={name} aria-labelledby={`${uid}-h`}>
+  <div class="wk-head">
+    <h2 id={`${uid}-h`}>{lesson.title}</h2>
+    <p class="hint">{lesson.hint}</p>
+    {lesson.examples.length > 1 && (
+      <label class="wk-pick">Example
+        <select class="wk-example">
+          {lesson.examples.map((ex, i) => <option value={i}>{ex.label}</option>)}
+        </select>
+      </label>
+    )}
+  </div>
+  <div class="wk-body">
+    <div class="wk-stage" set:html={svg} />
+    <div class="wk-side">
+      <p class="wk-count">Step 1 of {frames.length}</p>
+      <div aria-live="polite" aria-atomic="true">
+        <p class="wk-step-title">{first.title}</p>
+        <p class="wk-text">{first.text}</p>
+      </div>
+      <div class="wk-controls">
+        <button class="btn ghost" type="button" data-wk="back" disabled>Back</button>
+        <button class="btn ghost" type="button" data-wk="play" aria-pressed="false">Play</button>
+        <button class="btn" type="button" data-wk="next">Next</button>
+      </div>
+      <input class="wk-slider" type="range" min="0" max={frames.length - 1} value="0" aria-label="Step" />
+      <p class="wk-keys">Tip: once a button here has focus, the ← and → keys step too.</p>
+    </div>
+  </div>
+  <div class="wk-detail">
+    <figure class="wk-codebox">
+      <figcaption>{lesson.language}</figcaption>
+      <pre class="wk-code"><code set:html={renderCode(lesson.code(0))} /></pre>
+    </figure>
+    <div class="wk-varsbox">
+      <p class="wk-varshead">Values right now</p>
+      <dl class="wk-vars">
+        {Object.entries(first.vars ?? {}).map(([k, v]) => <><dt>{k}</dt><dd>{v}</dd></>)}
+      </dl>
+    </div>
+  </div>
+  <noscript><p class="note">Stepping through needs JavaScript switched on. The first step is shown above.</p></noscript>
+</section>
+<script>
+  import { initWalkthroughs } from '../walk/player';
+  initWalkthroughs();
+</script>

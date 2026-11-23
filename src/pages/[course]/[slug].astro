@@ -10,6 +10,7 @@ import Solution from '../../components/Solution.astro';
 import Playground from '../../components/Playground.astro';
 import Exercises from '../../components/Exercises.astro';
 import Demo from '../../components/Demo.astro';
+import Walkthrough from '../../components/Walkthrough.astro';
 import Route from '../../components/Route.astro';
 import GlossaryList from '../../components/GlossaryList.astro';
 import { getCourses, getQuiz, chapterHref, getExampleChecks } from '../../lib/load';
@@ -56,7 +57,7 @@ const codeText = codeStatus(getExampleChecks(chapterId));
     </p>
     <div class="body" data-migrated-body data-pagefind-body data-pagefind-meta={`course:${course.title}`}>
       <p class="lead">{entry.data.summary}</p>
-      <Content components={{ Ref, Only, Note, Solution, Playground, Exercises, Demo, Route, GlossaryList }} />
+      <Content components={{ Ref, Only, Note, Solution, Playground, Exercises, Demo, Walkthrough, Route, GlossaryList }} />
     </div>
     {quiz.length > 0 && <Quiz chapter={chapterId} questions={quiz} />}
     <TutorPrompt course={course.title} chapter={chapter.title} />

@@ -97,6 +97,8 @@ ORDER BY times_ordered, p.name;
 
 Note `count(l.order_id)`, not `count(*)`: for a product with no lines, the joined row has a NULL `order_id`, which `count(column)` skips, giving 0. `count(*)` would count the one NULL-filled row and give 1.
 
+<Walkthrough name="sql-join" />
+
 ### Finding what is missing: the anti-join
 
 Rows with no match are found by left joining and keeping the NULLs. Customers who have never placed an order:

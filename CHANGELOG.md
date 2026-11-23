@@ -4,6 +4,15 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-23: Step-by-step visual walkthroughs
+
+Added
+- A `<Walkthrough name="…" />` component: a picture that changes with each step, a sentence explaining the step, Back, Next, Play and a step slider (the arrow keys work too), the code with the running line highlighted, and the values of its variables. Items keep their identity between steps, so they slide to their new places rather than jump. It works in light and dark mode, on a phone, with reduced motion, and shows the first step without JavaScript.
+- Six walkthroughs, each running the real algorithm and recording what it does: binary search (three targets, one missing), insertion sort (mixed, nearly sorted, backwards), stack versus queue, a chained hash table with collisions and a failed lookup, breadth-first search over the graphs chapter's towns, and LEFT versus INNER JOIN. They appear in Algorithms, Data structures, Sorting and searching, Lists, stacks and queues, Arrays and hash tables, Graphs, and Joins.
+
+Checked
+- tests/walkthrough.test.ts runs the Python shown beside each walkthrough (and the join's SQL in SQLite) and checks it gives the same answers as the pictures; it also checks every step renders valid SVG with unique keys. An end-to-end test drives the controls.
+
 ### 2026-11-14: Zero to Database Expert, a new course, and more for Zero to Backend Engineer
 
 Added

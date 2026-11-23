@@ -16,6 +16,8 @@ Sorted data makes many other problems easy: binary search, finding duplicates (t
 
 **Insertion sort** builds a sorted section at the front, taking each next element and sliding it left into place, like sorting playing cards in your hand. O(*n*²) in general, but O(*n*) when the data is already nearly sorted, and very fast for small arrays, which is why real sorting routines use it for short runs.
 
+<Walkthrough name="insertion-sort" />
+
 **Merge sort** splits the array in half, sorts each half (recursively), and **merges** the two sorted halves by repeatedly taking the smaller front element. Always O(*n* log *n*): there are log₂ *n* levels of halving, and each level's merging touches all *n* elements. It needs O(*n*) extra space, and it is **stable** (explained below).
 
 **Quicksort** picks a **pivot** element, **partitions** the array into elements smaller than the pivot and elements larger, then sorts each side. O(*n* log *n*) on average and in place, with excellent cache behaviour, so it is often the fastest in practice; but with consistently bad pivots (for example always the first element of already-sorted data) it degrades to O(*n*²). Good implementations choose pivots carefully, or randomly, and fall back to another method if partitioning goes badly.
@@ -96,6 +98,8 @@ A comparator must be **consistent**: if it says *a* < *b* and *b* < *c*, it must
 ## Binary search
 
 **Binary search** finds a value in a **sorted** array by comparing with the middle element and discarding the half that cannot contain it. O(log *n*): about 20 steps for a million items, 30 for a billion (<Ref to="m-discrete-maths" />).
+
+<Walkthrough name="binary-search" />
 
 It is famously easy to get subtly wrong (off-by-one errors, infinite loops), so learn one careful version: the **lower bound**, which returns the first position whose value is at least the target. It answers "is it present?", "where would it go?" and "how many are smaller?" all at once.
 

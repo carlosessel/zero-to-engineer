@@ -151,6 +151,23 @@ test('demos respond to their controls', async ({ page }) => {
   await expect(page.locator('#bsRead')).toContainText(/Checked 34|Found in 1 step/);
 });
 
+test('walkthroughs step forwards, back and by keyboard, and switch examples', async ({ page }) => {
+  await page.goto('/se/algorithms/');
+  const walk = page.locator('.walk[data-walk="binary-search"]');
+  await expect(walk.locator('.wk-count')).toHaveText(/Step 1 of \d+/);
+  await walk.getByRole('button', { name: 'Next' }).click();
+  await expect(walk.locator('.wk-count')).toHaveText(/Step 2 of/);
+  await expect(walk.locator('.wk-line.on')).toContainText('low, high = 0');
+  await page.keyboard.press('ArrowRight');
+  await expect(walk.locator('.wk-count')).toHaveText(/Step 3 of/);
+  await walk.getByRole('button', { name: 'Back' }).click();
+  await expect(walk.locator('.wk-count')).toHaveText(/Step 2 of/);
+  await walk.locator('.wk-example').selectOption({ label: 'Find 5 (missing)' });
+  await expect(walk.locator('.wk-count')).toHaveText(/Step 1 of/);
+  await walk.locator('.wk-slider').fill(await walk.locator('.wk-slider').getAttribute('max') ?? '0');
+  await expect(walk.locator('.wk-step-title')).toHaveText('Not there');
+});
+
 test('keyboard: the skip link is first and moves focus to the content', async ({ page }) => {
   await page.goto('/ai/attention/');
   await page.keyboard.press('Tab');
