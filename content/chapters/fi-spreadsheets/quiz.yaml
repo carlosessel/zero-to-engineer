@@ -1,0 +1,48 @@
+- question: "You type GH₵ 1,200 (with the symbol and comma) into a cell, and later =SUM over that column gives a total that is too small. Why?"
+  options:
+    - "The cell holds text, not a number, and SUM ignores text"
+    - "SUM cannot add numbers bigger than 1,000"
+    - "The currency symbol makes SUM subtract the value"
+    - "SUM only works in Excel"
+  answer: 0
+  explanation: "The symbol and comma turn the entry into text. Type plain numbers and use formatting to display the currency."
+- question: "D2 holds =B2*$F$1. What does the formula become when copied to D6?"
+  options:
+    - "=B6*$F$1"
+    - "=B6*$F$5"
+    - "=B2*$F$1"
+    - "=B6*F5"
+  answer: 0
+  explanation: "B2 is a relative reference, so it shifts down four rows to B6. $F$1 is absolute, so it stays the same."
+- question: "A cell formatted to show two decimal places displays 2016.67. What does it hold if it contains =AVERAGE(B2:B7) of 12,100 over six months?"
+  options:
+    - "2016.666…, the full value; only the display is rounded"
+    - "Exactly 2016.67"
+    - "2017"
+    - "12100"
+  answer: 0
+  explanation: "Formatting changes the display, not the value. To store a rounded value you would need =ROUND(…, 2)."
+- question: "Why put an interest rate in its own labelled cell instead of typing it into each formula?"
+  options:
+    - "So that changing it in one place updates every result, and no formula is missed"
+    - "Because formulas cannot contain numbers"
+    - "Because spreadsheets calculate faster that way"
+    - "Because percentages can only be typed into column F"
+  answer: 0
+  explanation: "Formulas can contain numbers, but a number repeated in many formulas is easy to miss when it changes. One input cell, referenced with an absolute reference, keeps the sheet correct."
+- question: "What does =(10+5)*2^2 show?"
+  options:
+    - "60"
+    - "900"
+    - "30"
+    - "225"
+  answer: 0
+  explanation: "Brackets first (15), then the power (2^2 = 4), then multiply: 15 × 4 = 60. 900 would be ((10+5)×2) squared."
+- question: "B9 contains =SUM(B2:B9). What will happen?"
+  options:
+    - "The spreadsheet reports a circular reference, because the formula includes its own cell"
+    - "It adds B2 to B8 correctly"
+    - "It doubles the total"
+    - "It shows the number 9"
+  answer: 0
+  explanation: "A formula that depends on its own result cannot be worked out. Put totals outside the range they add up."

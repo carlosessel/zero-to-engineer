@@ -1,0 +1,257 @@
+---
+title: "Spreadsheets for money"
+summary: "Cells, formulas, totals and simple charts in a free spreadsheet, so you can do every calculation in this course yourself."
+prerequisites: [fi-numbers]
+estimated_minutes: 120
+status: code-verified
+---
+
+A spreadsheet is the one tool this course asks you to use. With it you can track a budget, see a debt shrink month by month, compare two loans, keep household accounts and test what a fee does over thirty years, and when a number changes, every result that depends on it updates by itself. By the end of this chapter you will be able to set up a sheet, write formulas that add up, average and grow amounts, copy them correctly, and draw a chart.
+
+## Getting a spreadsheet
+
+A **spreadsheet** is a grid of boxes you can type numbers, words and calculations into. You have three good choices, and every formula in this course works in all of them:
+
+- **Google Sheets**: free with a Google account, runs in a web browser and has a phone app, and saves automatically.
+- **LibreOffice Calc**: free, open-source software for Windows, Mac and Linux that works without the internet.
+- **Microsoft Excel**: the most widely used in workplaces; it needs a paid licence, though a limited free web version exists.
+
+If you are not sure, start with Google Sheets: there is nothing to install and your sheets are backed up. Open it, choose to create a blank spreadsheet, and follow along.
+
+## Cells, rows and columns
+
+The grid is made of **cells**. The **columns** are labelled with letters (A, B, C…) across the top, and the **rows** with numbers (1, 2, 3…) down the side. Each cell is named by its column then its row, its **cell address**: B3 is column B, row 3. A cell holds one thing: a number, some text, a date, or a formula.
+
+Type these into a new sheet. In A1 type `Month`, in B1 type `Spending`, then fill in Esi’s spending from <Ref to="fi-numbers" />:
+
+| | A | B |
+|---|---|---|
+| **1** | Month | Spending |
+| **2** | Jan | 1850 |
+| **3** | Feb | 2100 |
+| **4** | Mar | 1975 |
+| **5** | Apr | 2320 |
+| **6** | May | 1790 |
+| **7** | Jun | 2065 |
+
+Type the numbers on their own, without “GH₵” or commas. If you type `GH₵ 1,850`, the spreadsheet stores it as text, and text cannot be added up. To show the currency, select the cells and use the number or currency formatting options (the **Format** menu in Google Sheets and LibreOffice, the **Home** tab in Excel): the cell still holds the number 1850, but displays it however you choose.
+
+## Formulas
+
+A **formula** is a calculation in a cell. It always starts with an equals sign `=`, which tells the spreadsheet to work something out rather than store what you typed. The symbols are the ones you know, with `*` for times and `/` for divide:
+
+```text
+=2+3        gives 5
+=10-4       gives 6
+=6*7        gives 42
+=100/8      gives 12.5
+=1.1^3      gives 1.331   (^ means "to the power of")
+```
+
+The usual order applies: powers first, then times and divide, then add and subtract, with brackets to change it. `=10+5*2` gives 20, but `=(10+5)*2` gives 30.
+
+Formulas become useful when they refer to other cells. In C2, type `=B2*0.15`. The cell shows 277.5, which is 15% of January’s spending. Change B2 to 2000 and C2 changes to 300 at once. That is the whole point: write the calculation once, and it stays right when the numbers change.
+
+## Built-in functions and ranges
+
+A **built-in function** is a ready-made calculation with a name, such as `SUM` for adding up. You give it its inputs in brackets. Most take a **cell range**, usually just called a range: a block of cells written as the first and last cell with a colon between, so `B2:B7` means B2, B3, B4, B5, B6 and B7.
+
+Add these below Esi’s spending, in column A for the label and column B for the formula:
+
+```text
+A9:  Total      B9:  =SUM(B2:B7)        shows 12100
+A10: Mean       B10: =AVERAGE(B2:B7)    shows 2016.666667 (or fewer digits)
+A11: Highest    B11: =MAX(B2:B7)        shows 2320
+A12: Lowest     B12: =MIN(B2:B7)        shows 1790
+```
+
+These are the same answers you worked out by hand in the last chapter. The mean shows more decimal places than money needs. There are two ways to fix that, and the difference matters:
+
+- **Format** the cell to show two decimal places. It *displays* 2016.67 but still *holds* 2016.666…, so later calculations stay exact. Usually this is what you want.
+- Use `=ROUND(AVERAGE(B2:B7), 2)`. The cell now *holds* 2016.67. Use `ROUND` only where a real amount is rounded, such as a payment.
+
+A percentage is a number formatted as a percentage. Type `15%` into a cell and the spreadsheet stores 0.15 and shows 15%. So `=B2*15%` and `=B2*0.15` are the same.
+
+## Copying formulas: relative and absolute references
+
+You rarely type a formula into every row. You type it once and copy it down, by dragging the small square at the bottom-right corner of the cell (the fill handle), or by copying and pasting. When you do, the spreadsheet shifts the cell addresses in the formula to match the new row. Copy `=B2*0.15` from C2 down to C3 and it becomes `=B3*0.15`. An address that shifts like this is a **relative reference**, and it is usually what you want.
+
+But sometimes a formula must keep pointing at one cell, such as a cell holding an interest rate. Put a `$` before the column letter and the row number, as in `$F$1`, and the address stays fixed when copied. That is an **absolute reference**.
+
+**Worked example: a growth table.** Here is the GH₵ 1,000 growing at 10% a year from the last chapter, built so that you can change the rate in one place.
+
+1. In F1, type the rate: `10%`.
+2. In A1 to C1, type the headings `Year`, `Start`, `End`.
+3. In A2, type `1`. In B2, type `1000`.
+4. In C2, type `=B2*(1+$F$1)`. It shows 1100: the start multiplied by the multiplier.
+5. In A3, type `=A2+1`. In B3, type `=C2`, because each year starts where the last one ended.
+6. Copy C2 down to C3. It becomes `=B3*(1+$F$1)`: B2 shifted to B3, but `$F$1` stayed put.
+7. Select A3 to C3 and copy them down to row 4.
+
+```text
+     A      B        C
+1    Year   Start    End              F1: 10%
+2    1      1000     =B2*(1+$F$1)
+3    =A2+1  =C2      =B3*(1+$F$1)
+4    =A3+1  =C3      =B4*(1+$F$1)
+```
+
+Column C shows 1100, 1210 and 1331, the same as the table in <Ref to="fi-numbers" />. Now change F1 to 5% and the whole table recalculates. Copy row 4 further down and you have as many years as you like. Without the dollar signs, copying C2 down would have changed `F1` to `F2`, an empty cell, and every later year would show no growth at all.
+
+<Walkthrough name="fi-spreadsheets-copy-down" />
+
+You can also do the whole calculation in one cell, since three years of growth is the start times the multiplier to the power 3: `=1000*(1+F1)^3` gives 1331. The table is better for seeing each year; the single formula is better when you only need the end.
+
+## Charts
+
+A chart makes a pattern obvious at a glance. Select Esi’s months and spending (A1 to B7), then choose **Insert** and **Chart** (in Excel, the **Insert** tab’s charts). Google Sheets, LibreOffice and Excel all suggest a chart type; for amounts by month, a **column chart** (one bar per month) is the clearest. For the growth table, select the Year and End columns and choose a line chart: you will see the line curve upwards slightly, because each year’s growth is bigger than the last.
+
+## Keeping your sheets useful and safe
+
+- **One fact in one cell.** Put rates, prices and other inputs in their own labelled cells, and refer to them. Never type a number such as 0.15 into many formulas: when it changes, you will miss one.
+- **Label everything.** A number without a heading is a puzzle in three months’ time.
+- **Check totals another way.** Add a few numbers by hand, or check that two totals that should match do.
+- **Protect your privacy.** A sheet of your finances is sensitive. Do not share it with a link that anyone can open, never store passwords or full card numbers in it, and keep a backup.
+
+## Common mistakes
+
+- **Forgetting the equals sign.** `B2*0.15` without `=` is stored as text and just displays those characters.
+- **Numbers stored as text.** Typing `GH₵ 1,850` or `1,850 cedis` makes text, which `SUM` quietly ignores, so the total is too small. Type plain numbers and use formatting for the currency.
+- **A range that misses a row.** You add July in row 8 but the total still says `=SUM(B2:B7)`. Check the range whenever you add rows, or insert new rows inside the range so it grows.
+- **Relative references where you needed absolute ones.** Copying a formula that should always use the rate in F1 without the `$` signs makes it point at F2, F3… which are empty, so the results are wrong without any error.
+- **A formula that refers to itself.** `=SUM(B2:B9)` typed into B9 includes its own cell. The spreadsheet reports a circular reference; move the total outside the range.
+- **Confusing what a cell shows with what it holds.** A cell formatted to two decimal places may hold 2016.666…; that is usually correct, but do not be surprised when totals of displayed values differ by a pesewa.
+
+## Practice
+
+Do these in a real spreadsheet where you can; the answers say what you should see.
+
+**1. (warm-up)** In which column and row is cell D7?
+
+<Solution>
+
+Column **D** (the fourth column) and row **7**.
+
+</Solution>
+
+**2. (warm-up)** Cells A1 to A4 hold 120, 75.5, 300 and 44.5. What does `=SUM(A1:A4)` show?
+
+<Solution>
+
+120 + 75.5 + 300 + 44.5 = **540**.
+
+</Solution>
+
+**3. (warm-up)** A1 holds 10 and A2 holds 5. What do `=A1+A2*2` and `=(A1+A2)*2` show?
+
+<Solution>
+
+`=A1+A2*2` multiplies first: 10 + 10 = **20**. `=(A1+A2)*2` adds first: 15 × 2 = **30**.
+
+</Solution>
+
+**4. (warm-up)** You type `15%` into a cell. What number does the cell hold?
+
+<Solution>
+
+**0.15**. The % only changes how it is displayed.
+
+</Solution>
+
+**5. (standard)** Net pay is in B2. Write a formula for 20% of it.
+
+<Solution>
+
+`=B2*20%` or `=B2*0.2`. Better still, put 20% in its own labelled cell, say F2, and write `=B2*$F$2`.
+
+</Solution>
+
+**6. (standard)** D2 holds `=B2*C2`. You copy it down to D3. What formula is in D3?
+
+<Solution>
+
+`=B3*C3`. Both references are relative, so both shift down one row.
+
+</Solution>
+
+**7. (standard)** D2 holds `=B2*$F$1`. You copy it to D5. What formula is in D5?
+
+<Solution>
+
+`=B5*$F$1`. The relative B2 shifts down three rows to B5; the absolute `$F$1` stays.
+
+</Solution>
+
+**8. (standard)** An old price is in B2 and a new price is in C2. Write a formula for the percentage change, and say how to display it as a percentage.
+
+<Solution>
+
+`=(C2-B2)/B2`, then format the cell as a percentage. For B2 = 12 and C2 = 15 it holds 0.25 and shows **25%**.
+
+</Solution>
+
+**9. (standard)** A price including a 15% tax is in B2, and the rate 15% is in F1. Write a formula for the price before tax.
+
+<Solution>
+
+`=B2/(1+$F$1)`. For B2 = 230 it shows **200**. (Not `=B2*(1-$F$1)`, which takes 15% of the wrong amount.)
+
+</Solution>
+
+**10. (standard)** What does `=ROUND(1000/3, 2)` show, and why would you use `ROUND` here?
+
+<Solution>
+
+**333.33**. Use it when the result is a real amount to be paid, such as one share of a bill, which can only be whole pesewas.
+
+</Solution>
+
+**11. (standard)** Rows 2 to 7 hold spending, and B9 holds `=SUM(B2:B7)`. You type July’s spending into B8. What happens to the total, and how do you fix it?
+
+<Solution>
+
+The total does **not** include July, because B8 is outside the range B2:B7. Change the formula to `=SUM(B2:B8)`, or move the total down and include every row.
+
+</Solution>
+
+**12. (standard)** Someone types their spending as `GH₵ 1,850`, `GH₵ 2,100` and so on, and `=SUM` shows 0. Why?
+
+<Solution>
+
+The cells hold **text**, not numbers, because of the “GH₵” and the commas, and `SUM` ignores text. Retype them as plain numbers (1850, 2100…) and use number formatting to show the currency.
+
+</Solution>
+
+**13. (stretch)** Build a growth table for GH₵ 2,500 growing at 6% a year for 5 years, with the rate in its own cell. What are the end-of-year values?
+
+<Solution>
+
+With the rate in F1 = 6%, B2 = 2500, C2 = `=B2*(1+$F$1)`, B3 = `=C2`, copied down to row 6, column C shows **2,650.00; 2,809.00; 2,977.54; 3,156.19; 3,345.56** (displayed to two decimal places). Check the last one in one cell: `=2500*(1+6%)^5`.
+
+</Solution>
+
+**14. (stretch)** In the growth table, someone wrote `=B2*(1+F1)` in C2 without dollar signs and copied it down. Year 1 shows 1100 but every later year shows no growth. Explain.
+
+<Solution>
+
+Copying shifted `F1` to `F2`, `F3`… which are empty, and an empty cell counts as 0. So from row 3 on, the formula is start × (1 + 0) = start, with no growth. Writing `$F$1` keeps every row pointing at the rate.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **spreadsheet** is a grid of **cells**, named by their **cell address**: column letter, then row number.
+- Type numbers plainly; use formatting to show currency, decimal places and percentages.
+- A **formula** starts with `=`, uses `+ - * / ^` and brackets, and refers to other cells so results update by themselves.
+- **Built-in functions** such as `SUM`, `AVERAGE`, `MAX`, `MIN` and `ROUND` work on a **cell range** like `B2:B7`.
+- Copying a formula shifts **relative references**; `$` makes an **absolute reference** that stays fixed, essential for a rate in one cell.
+- Put each input in one labelled cell; check totals another way; keep financial sheets private and backed up.
+
+## Go deeper
+
+- [Google Sheets](https://www.learnfree.org/series/google-sheets), GCFGlobal LearnFree. A free, step-by-step beginner tutorial covering cells, formatting, simple and complex formulas, functions and charts.
+- [Add formulas & functions](https://support.google.com/docs/answer/46977), Google Docs Editors Help. Google’s own guide to writing formulas in Google Sheets.
+- [Google Sheets function list](https://support.google.com/docs/table/25273), Google Docs Editors Help. Every built-in function, for when you need one this chapter did not cover.
+- [LibreOffice documentation](https://documentation.libreoffice.org/en/english-documentation/), The Document Foundation. Free guides to LibreOffice, including the Calc spreadsheet.

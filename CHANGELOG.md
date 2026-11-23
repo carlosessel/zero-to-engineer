@@ -4,6 +4,14 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-23: Zero to Money and Investing, part 1
+
+Added
+- A new course, Zero to Money and Investing (`finance`), on personal finance, personal accounting and investing, taught from zero. The full outline (38 chapters in 10 parts) is in docs/plans/finance-outline.yaml; this adds part 1, "Start here": what personal finance is (with a plain statement that the course is education, not financial advice, and that rules vary by country), the maths of money (38 graded practice problems), and spreadsheets for money. Examples use fictional people and Ghana cedis; country-specific facts sit in dated country notes for Ghana and the UK.
+- Each chapter has a walkthrough: a month's pay split four ways, a price going up 50% and down 50%, and a formula copied down a growth table.
+- A gold line colour for the course on the map (#9C6B00 light, 4.3:1 against the background; #FCC419 dark, 11.2:1).
+- 30 glossary terms. "Rate" now has separate definitions for finance and for monitoring.
+
 ### 2026-11-23: A new look: the transit map
 
 Changed
