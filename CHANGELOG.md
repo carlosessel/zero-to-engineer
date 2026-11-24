@@ -4,6 +4,17 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-24: Zero to Money and Investing, part 4
+
+Added
+- Part 4 of Zero to Money and Investing, "Personal accounting": personal bookkeeping (accounts, transactions, categories, transfers, SUMIF totals, reconciling a statement), household accounts (a year's income statement, balance sheet and cash flow statement for one household, depreciation, why a surplus is not cash, savings rate and other measures), and double-entry bookkeeping (the accounting equation, debits and credits, journal, ledger and T-accounts, accrual accounting, the trial balance, and statements from it).
+- Walkthroughs: reconciling a month's record against a bank statement, a balance sheet staying in balance through a year, and eight business transactions posted to the ledger.
+- Optional Python checks: the household statements tie together, and a small ledger whose balances sum to zero.
+- 30 glossary terms. "Transaction", "Ledger" and "Posting" now give their finance and database meanings separately, and "Debit" and "Credit" include their bookkeeping meanings.
+
+Changed
+- Every Zero to Money and Investing chapter is now marked resources-verified. Nine chapters with code were marked code-verified, which told readers their resources had not been checked, though every resource had been opened.
+
 ### 2026-11-24: Zero to Money and Investing, part 3
 
 Added

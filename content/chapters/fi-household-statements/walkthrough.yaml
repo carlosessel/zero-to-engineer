@@ -1,0 +1,324 @@
+- id: fi-household-balance-sheet
+  title: A balance sheet through the year
+  hint: Watch both sides of Ama's balance sheet change with each kind of event, and notice they always stay equal.
+  steps:
+  - title: 1 January
+    text: Ama owns cash of 1,500 and a phone worth 1,500, and owes 3,000. Assets 3,000 = liabilities 3,000 + net worth 0. The two sides balance.
+    vars:
+      net worth: '0'
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: a
+        title: assets (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: cash
+          cells:
+          - Cash and savings
+          - 1,500
+          tone: active
+        - k: phone
+          cells:
+          - Phone
+          - 1,500
+          tone: active
+        - k: laptop
+          cells:
+          - Laptop
+          - '0'
+        - k: ta
+          cells:
+          - Total assets
+          - 3,000
+          tone: found
+      - id: l
+        title: liabilities and net worth (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: loan
+          cells:
+          - Loan
+          - 3,000
+          tone: active
+        - k: nw
+          cells:
+          - Net worth
+          - '0'
+          tone: active
+        - k: tr
+          cells:
+          - Total
+          - 3,000
+          tone: found
+  - title: A year of living within her income
+    text: Her income brought in 10,980 more cash than her cash expenses took. Cash rises by 10,980, and so does her net worth. Both sides grow together.
+    vars:
+      net worth: 10,980
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: a
+        title: assets (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: cash
+          cells:
+          - Cash and savings
+          - 12,480
+          tone: active
+        - k: phone
+          cells:
+          - Phone
+          - 1,500
+        - k: laptop
+          cells:
+          - Laptop
+          - '0'
+        - k: ta
+          cells:
+          - Total assets
+          - 13,980
+          tone: found
+      - id: l
+        title: liabilities and net worth (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: loan
+          cells:
+          - Loan
+          - 3,000
+        - k: nw
+          cells:
+          - Net worth
+          - 10,980
+          tone: active
+        - k: tr
+          cells:
+          - Total
+          - 13,980
+          tone: found
+  - title: The phone loses value
+    text: Her phone is now worth 1,000, not 1,500. No cash moves, but an asset falls by 500, so net worth falls by 500 too. This is depreciation, an expense on the income statement.
+    vars:
+      net worth: 10,480
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: a
+        title: assets (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: cash
+          cells:
+          - Cash and savings
+          - 12,480
+        - k: phone
+          cells:
+          - Phone
+          - 1,000
+          tone: bad
+        - k: laptop
+          cells:
+          - Laptop
+          - '0'
+        - k: ta
+          cells:
+          - Total assets
+          - 13,480
+          tone: found
+      - id: l
+        title: liabilities and net worth (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: loan
+          cells:
+          - Loan
+          - 3,000
+        - k: nw
+          cells:
+          - Net worth
+          - 10,480
+          tone: active
+        - k: tr
+          cells:
+          - Total
+          - 13,480
+          tone: found
+  - title: Buying the laptop
+    text: 'She pays 4,000 cash for a laptop. One asset (cash) falls by 4,000, another (the laptop) rises by 4,000. Net worth does not change: buying an asset is not an expense.'
+    vars:
+      net worth: 10,480
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: a
+        title: assets (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: cash
+          cells:
+          - Cash and savings
+          - 8,480
+          tone: compare
+        - k: phone
+          cells:
+          - Phone
+          - 1,000
+        - k: laptop
+          cells:
+          - Laptop
+          - 4,000
+          tone: active
+        - k: ta
+          cells:
+          - Total assets
+          - 13,480
+          tone: found
+      - id: l
+        title: liabilities and net worth (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: loan
+          cells:
+          - Loan
+          - 3,000
+        - k: nw
+          cells:
+          - Net worth
+          - 10,480
+        - k: tr
+          cells:
+          - Total
+          - 13,480
+          tone: found
+  - title: Clearing the loan
+    text: 'She repays the 3,000 she borrowed. Cash falls by 3,000 and the loan falls by 3,000, one on each side. Net worth does not change: repaying a debt is not an expense either.'
+    vars:
+      net worth: 10,480
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: a
+        title: assets (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: cash
+          cells:
+          - Cash and savings
+          - 5,480
+          tone: compare
+        - k: phone
+          cells:
+          - Phone
+          - 1,000
+        - k: laptop
+          cells:
+          - Laptop
+          - 4,000
+        - k: ta
+          cells:
+          - Total assets
+          - 10,480
+          tone: found
+      - id: l
+        title: liabilities and net worth (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: loan
+          cells:
+          - Loan
+          - '0'
+          tone: done
+        - k: nw
+          cells:
+          - Net worth
+          - 10,480
+        - k: tr
+          cells:
+          - Total
+          - 10,480
+          tone: found
+  - title: 31 December
+    text: Assets 10,480 = liabilities 0 + net worth 10,480. Net worth rose by 10,480, exactly her surplus for the year, while cash rose by only 3,980.
+    vars:
+      net worth: 10,480
+      cash change: 5,480 − 1,500 = 3,980
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: a
+        title: assets (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: cash
+          cells:
+          - Cash and savings
+          - 5,480
+        - k: phone
+          cells:
+          - Phone
+          - 1,000
+        - k: laptop
+          cells:
+          - Laptop
+          - 4,000
+        - k: ta
+          cells:
+          - Total assets
+          - 10,480
+          tone: found
+      - id: l
+        title: liabilities and net worth (GH₵)
+        columns:
+        - item
+        - value
+        rows:
+        - k: loan
+          cells:
+          - Loan
+          - '0'
+        - k: nw
+          cells:
+          - Net worth
+          - 10,480
+          tone: found
+        - k: tr
+          cells:
+          - Total
+          - 10,480
+          tone: found

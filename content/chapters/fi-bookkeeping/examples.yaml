@@ -1,0 +1,36 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: text
+  check: illustration
+  note: Ama's November register. The check reads the rows back out of the block, so the next block's SUMIF results are tested against exactly these rows.
+  verify: |
+    rows = []
+    for line in block.strip().splitlines()[2:]:
+        parts = line.split()
+        rows.append((parts[2], parts[-2], float(parts[-1])))
+    assert len(rows) == 11
+    assert sum(1 for r in rows if r[1] == "Transfer") == 4
+- block: 2
+  lang: text
+  check: illustration
+  note: SUMIF and SUM over the register above, recomputed in Python.
+  verify: |
+    reg = [("Bank", "Income", 4000), ("Bank", "Housing", -1200), ("Bank", "Transfer", -400), ("Savings", "Transfer", 400),
+           ("Bank", "Family", -300), ("Bank", "Food", -326.40), ("Bank", "Transfer", -500), ("Cash", "Transfer", 500),
+           ("Cash", "Food", -185), ("Cash", "Transport", -120), ("Bank", "Utilities", -180)]
+    sumif = lambda col, key: round(sum(r[2] for r in reg if r[col] == key), 2)
+    lines = block.strip().splitlines()
+    assert "gives -511.40" in lines[0] and sumif(1, "Food") == -511.40
+    assert "gives 0" in lines[1] and sumif(1, "Transfer") == 0
+    assert "gives 195" in lines[2] and sumif(0, "Cash") == 195
+    assert "gives 1688.60" in lines[3] and round(sum(r[2] for r in reg), 2) == 1688.60
+    assert sumif(0, "Bank") == 1093.60
+    # The reconciliation in the text.
+    from decimal import Decimal as Dm
+    opening = Dm("2150")
+    record = ["4000", "-1200", "-400", "-300", "-326.40", "-500", "-180", "-250", "200"]
+    statement = ["4000", "-1200", "-400", "-300", "-1.50", "-326.40", "-500", "-5", "-89.99", "89.99", "-180", "-250"]
+    r = opening + sum(Dm(x) for x in record)
+    s = opening + sum(Dm(x) for x in statement)
+    assert (r, s) == (Dm("3193.60"), Dm("2987.10"))
+    assert r - Dm("6.50") == s + 200 == Dm("3187.10")
