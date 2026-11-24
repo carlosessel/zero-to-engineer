@@ -1,0 +1,42 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: text
+  check: illustration
+  note: Spreadsheet formulas and their results. The verify recomputes each result with the same formulas the functions use.
+  verify: |
+    fv = 5000 * 1.15 ** 4
+    pv = 10000 / 1.12 ** 3
+    ann = 2000 * (1 - 1.12 ** -4) / 0.12
+    npv = sum(2000 / 1.12 ** t for t in range(1, 5))
+    save = 500 * (1.01 ** 12 - 1) / 0.01
+    pmt = 20000 * 0.01 / (1.01 ** 36 - 1)
+    rate = (10000 / 7000) ** (1 / 3) - 1
+    expected = [f"{fv:,.2f}", f"{pv:,.2f}", f"{ann:,.2f}", f"{npv:,.2f}", f"{save:,.2f}", f"{pmt:,.2f}", f"{rate * 100:.2f}%"]
+    for value in expected:
+        assert f"gives {value}" in block, value
+- block: 2
+  lang: python
+  check: python
+  output: |
+    1,074.70
+    -276.80
+  verify: |
+    # The chapter's other figures.
+    npv = ns["npv"]
+    assert round(npv(0.12, [0, 2000, 2000, 2000, 2000]), 2) == 6074.70
+    assert round(12000 / 1.1 ** 2, 2) == 9917.36
+    assert round(12000 / 1.08 ** 2, 2) == 10288.07
+    assert round(945.60 * (1 - 1.02 ** -12) / 0.02, 2) == 10000.04
+    assert round(50000 / 1.08 ** 10, 2) == 23159.67
+    assert round(1000 * (1 - 1.1 ** -5) / 0.1, 2) == 3790.79
+    assert round(300 * (1.0075 ** 120 - 1) / 0.0075, 2) == 58054.28
+    assert round(1000 * (1 - 1.008 ** -120) / 0.008, 2) == 76955.23
+    assert round(1000 * (1 - 1.01 ** -120) / 0.01, 2) == 69700.52
+    assert round(600 / 0.12, 2) == 5000 and round(600 / 0.15, 2) == 4000
+    assert [round(2000 / 1.25 ** t, 2) for t in range(1, 5)] == [1600.0, 1280.0, 1024.0, 819.2]
+- block: 3
+  lang: text
+  check: illustration
+  note: The output of the Python block above, which that block's check compares exactly.
+  verify: |
+    assert block.strip().splitlines() == ["1,074.70", "-276.80"]

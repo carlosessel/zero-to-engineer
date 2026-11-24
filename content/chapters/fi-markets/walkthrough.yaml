@@ -1,0 +1,297 @@
+- id: fi-markets-order-book
+  title: Orders meeting in the order book
+  hint: Buy orders take the cheapest asks first; sell orders take the highest bids first. Watch the spread change.
+  steps:
+  - title: The order book
+    text: Sellers' asks are above, buyers' bids below, each with a price and quantity. The gap in the middle is the spread. Nobody trades, because every buyer wants to pay less than every seller wants.
+    vars:
+      best bid: '3.95'
+      best ask: '4.00'
+      spread: '0.05'
+    parts:
+    - kind: tables
+      id: b
+      slots: 6
+      tables:
+      - id: s
+        title: 'Volta Foods order book: sellers above, buyers below'
+        columns:
+        - side
+        - price
+        - quantity
+        rows:
+        - k: a4.1
+          cells:
+          - sell
+          - '4.10'
+          - '800'
+        - k: a4.05
+          cells:
+          - sell
+          - '4.05'
+          - '500'
+        - k: a4.0
+          cells:
+          - sell
+          - '4.00'
+          - '300'
+          tone: active
+        - k: b3.95
+          cells:
+          - buy
+          - '3.95'
+          - '400'
+          tone: active
+        - k: b3.9
+          cells:
+          - buy
+          - '3.90'
+          - 1,000
+        - k: b3.85
+          cells:
+          - buy
+          - '3.85'
+          - '600'
+  - title: Ama's order
+    text: Ama places a limit order to buy 600 shares at up to 4.05. It crosses the gap, because 4.05 is at least the best ask, so it can trade.
+    vars:
+      wants: 600 at ≤ 4.05
+    parts:
+    - kind: tables
+      id: b
+      slots: 6
+      tables:
+      - id: s
+        title: 'Volta Foods order book: sellers above, buyers below'
+        columns:
+        - side
+        - price
+        - quantity
+        rows:
+        - k: a4.1
+          cells:
+          - sell
+          - '4.10'
+          - '800'
+        - k: a4.05
+          cells:
+          - sell
+          - '4.05'
+          - '500'
+        - k: a4.0
+          cells:
+          - sell
+          - '4.00'
+          - '300'
+        - k: b3.95
+          cells:
+          - buy
+          - '3.95'
+          - '400'
+        - k: b3.9
+          cells:
+          - buy
+          - '3.90'
+          - 1,000
+        - k: b3.85
+          cells:
+          - buy
+          - '3.85'
+          - '600'
+  - title: First match
+    text: The cheapest seller has 300 at 4.00. Ama buys all 300 for 1,200, and that seller leaves the book.
+    vars:
+      bought: '300'
+      paid: 1,200.00
+      still wants: '300'
+    parts:
+    - kind: tables
+      id: b
+      slots: 6
+      tables:
+      - id: s
+        title: 'Volta Foods order book: sellers above, buyers below'
+        columns:
+        - side
+        - price
+        - quantity
+        rows:
+        - k: a4.1
+          cells:
+          - sell
+          - '4.10'
+          - '800'
+        - k: a4.05
+          cells:
+          - sell
+          - '4.05'
+          - '500'
+        - k: a4.0
+          cells:
+          - sell
+          - '4.00'
+          - '300'
+          tone: found
+        - k: b3.95
+          cells:
+          - buy
+          - '3.95'
+          - '400'
+        - k: b3.9
+          cells:
+          - buy
+          - '3.90'
+          - 1,000
+        - k: b3.85
+          cells:
+          - buy
+          - '3.85'
+          - '600'
+  - title: Second match
+    text: The next seller asks 4.05, within her limit. She buys 300 of their 500 for 1,215, leaving them 200 still for sale.
+    vars:
+      bought: '600'
+      paid: 2,415.00
+      still wants: '0'
+    parts:
+    - kind: tables
+      id: b
+      slots: 6
+      tables:
+      - id: s
+        title: 'Volta Foods order book: sellers above, buyers below'
+        columns:
+        - side
+        - price
+        - quantity
+        rows:
+        - k: a4.1
+          cells:
+          - sell
+          - '4.10'
+          - '800'
+        - k: a4.05
+          cells:
+          - sell
+          - '4.05'
+          - '200'
+          tone: found
+        - k: b3.95
+          cells:
+          - buy
+          - '3.95'
+          - '400'
+        - k: b3.9
+          cells:
+          - buy
+          - '3.90'
+          - 1,000
+        - k: b3.85
+          cells:
+          - buy
+          - '3.85'
+          - '600'
+  - title: After the trade
+    text: She paid 2,415 for 600 shares, an average of 4.025. The last traded price is now 4.05, and the spread has widened to 0.10.
+    vars:
+      last price: '4.05'
+      best ask: '4.05'
+      spread: '0.10'
+    parts:
+    - kind: tables
+      id: b
+      slots: 6
+      tables:
+      - id: s
+        title: 'Volta Foods order book: sellers above, buyers below'
+        columns:
+        - side
+        - price
+        - quantity
+        rows:
+        - k: a4.1
+          cells:
+          - sell
+          - '4.10'
+          - '800'
+        - k: a4.05
+          cells:
+          - sell
+          - '4.05'
+          - '200'
+          tone: active
+        - k: b3.95
+          cells:
+          - buy
+          - '3.95'
+          - '400'
+          tone: active
+        - k: b3.9
+          cells:
+          - buy
+          - '3.90'
+          - 1,000
+        - k: b3.85
+          cells:
+          - buy
+          - '3.85'
+          - '600'
+  - title: A market sale
+    text: 'Now Kojo sends a market order to sell 500. He takes the best bids: 400 at 3.95 (1,580), then 100 at 3.90 (390).'
+    vars:
+      sold: '500'
+      received: 1,970.00
+    parts:
+    - kind: tables
+      id: b
+      slots: 6
+      tables:
+      - id: s
+        title: 'Volta Foods order book: sellers above, buyers below'
+        columns:
+        - side
+        - price
+        - quantity
+        rows:
+        - k: a4.1
+          cells:
+          - sell
+          - '4.10'
+          - '800'
+        - k: a4.05
+          cells:
+          - sell
+          - '4.05'
+          - '200'
+        - k: b3.95
+          cells:
+          - buy
+          - '3.95'
+          - '400'
+          tone: found
+        - k: b3.9
+          cells:
+          - buy
+          - '3.90'
+          - 1,000
+          tone: found
+        - k: b3.85
+          cells:
+          - buy
+          - '3.85'
+          - '600'
+  - title: The result
+    text: Kojo averaged 3.94, below the best bid he saw, because his order was bigger than the first buyer's. The price is whatever the orders on the other side allow.
+    parts:
+    - kind: kv
+      id: k
+      label: Two trades
+      slots: 3
+      rows:
+      - name: Ama bought
+        value: 600 for 2,415.00 (avg 4.025)
+      - name: Kojo sold
+        value: 500 for 1,970.00 (avg 3.94)
+      - name: book now
+        value: bid 3.90, ask 4.05
+        tone: found

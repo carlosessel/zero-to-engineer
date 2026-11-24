@@ -4,6 +4,16 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-24: Zero to Money and Investing, part 5
+
+Added
+- Part 5 of Zero to Money and Investing, "How money changes over time": inflation and real returns (price indices built from a basket, what inflation does to cash, nominal against real, comparing money across years, central banks and the policy rate), the time value of money (future and present value, discounting, NPV, annuity and perpetuity formulas, FV, PV, NPV, PMT and RATE in a spreadsheet), and how financial markets work (the main markets, primary and secondary markets, brokers, exchanges and depositories, the order book, bids, asks and spreads, market and limit orders, market capitalisation and indices, trading costs, what regulators do and do not do).
+- Walkthroughs: savings that grow but buy less, a course's payments discounted year by year at two rates, and orders matched in an order book.
+- Optional Python checks: savings against inflation year by year, and an NPV function.
+- Country notes checked on 24 November 2026: Ghana's and the UK's latest inflation (5.5% and 3.6% in October 2026) and targets; SEC Ghana's register and the GSE's licensed dealing members; the FCA Register and FSCS investment protection.
+- 54 glossary terms. "Derivative", "Exchange" and "Nominal" now give their finance meaning alongside their existing meanings in other courses.
+- The interest and numbers chapters now link to the new inflation and time value chapters.
+
 ### 2026-11-24: Zero to Money and Investing, part 4
 
 Added
