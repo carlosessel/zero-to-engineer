@@ -4,6 +4,12 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-24: Zero to Money and Investing, part 10 (course complete)
+
+Added
+- Part 10 of Zero to Money and Investing, "Practice and reference", which completes the course's 38 chapters: money projects (a year of household accounts, a budget and debt-free plan, a savings and retirement model, a model portfolio tracked for a year, and an analysis of a real company's annual report, each with a specification, a definition of done and chapters to revisit), the library (42 free courses, textbooks, regulators' guides and official sources for Ghana and the UK, all opened on 23 or 24 November 2026), and the course glossary.
+- A walkthrough showing how the five projects build on each other.
+
 ### 2026-11-24: Zero to Money and Investing, part 9
 
 Added
