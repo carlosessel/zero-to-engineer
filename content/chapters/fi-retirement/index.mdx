@@ -1,0 +1,215 @@
+---
+title: "Saving for retirement"
+summary: "Pensions and their tiers, how much to save, employer contributions, and drawing an income later."
+prerequisites: [fi-time-value, fi-diversification, fi-fees, fi-tax]
+estimated_minutes: 120
+status: resources-verified
+---
+
+Retirement is the longest financial goal most people have: decades of saving to pay for what may be decades without a salary. Because it is so far away, it is easy to put off, and because of compounding, putting it off is very expensive. By the end of this chapter you will be able to explain the main kinds of pension, work out an estimate from a formula like SSNIT’s, see what starting early is worth, estimate how much you would need to save for a given income, use employer contributions and tax relief, and understand the choices and risks when you start drawing an income. This is general education, not pension advice.
+
+## Why start early
+
+Compound growth (<Ref to="fi-interest" />) rewards time more than anything else.
+
+**Worked example.** Ama saves GH₵ 300 a month from age 25 to 60. Kojo saves the same GH₵ 300 a month, but from 40 to 60. Both earn 0.5% a month, about 6.2% a year, above inflation (so the figures are in today’s money).
+
+- Ama pays in 300 × 420 = 126,000 and reaches **GH₵ 427,413.09**.
+- Kojo pays in 300 × 240 = 72,000 and reaches **GH₵ 138,612.27**.
+
+Ama paid in less than twice as much as Kojo, but ends with more than three times as much. Her first fifteen years of saving, GH₵ 54,000 in total, grew into most of the difference. For Kojo to catch up in 20 years, he would need to save **GH₵ 925.05 a month**, more than three times as much.
+
+<Walkthrough name="fi-retirement-early-late" />
+
+The same comparison in Python (optional):
+
+```python
+def saved(monthly, months, rate=0.005):
+    return monthly * ((1 + rate) ** months - 1) / rate
+
+ama, kojo = saved(300, 35 * 12), saved(300, 20 * 12)
+print(f"{ama:,.2f} {kojo:,.2f}")
+print(f"{ama * 0.005 / (1.005 ** 240 - 1):,.2f}")
+```
+
+```text
+427,413.09 138,612.27
+925.05
+```
+
+## Kinds of pension
+
+A **pension** is a way of saving for retirement, usually with tax advantages and rules that stop you taking the money out early. There are two basic kinds:
+
+- **Defined benefit** (DB): the pension is set by a **formula**, usually based on your earnings and how long you contributed. The scheme bears the investment risk. Social security schemes such as SSNIT, and many public sector schemes, work this way.
+- **Defined contribution** (DC): you and usually your employer pay into **your own pot**, which is invested. What you get depends on how much went in, how the investments did, and the fees (<Ref to="fi-fees" />). You bear the investment risk. Ghana’s second and third tiers and most UK workplace pensions work this way.
+
+Many countries also have a **state pension**, paid by the government to people who meet its conditions.
+
+## Ghana’s three tiers
+
+Ghana’s pension system, under the National Pensions Act, 2008 (Act 766), has three tiers:
+
+1. **Tier 1**: the basic national social security scheme, run by SSNIT. It is mandatory and pays a monthly pension for life, worked out by a formula.
+2. **Tier 2**: a mandatory occupational scheme, privately managed by approved trustees, paid mainly as a lump sum at retirement.
+3. **Tier 3**: voluntary provident funds and personal pension schemes, with tax relief on contributions up to a limit.
+
+Together, workers and employers pay **18.5% of basic salary**: 13% from the employer and 5.5% from the worker. Of that, 13.5% goes to SSNIT (Tier 1) and 5% to Tier 2 (<Ref to="fi-income" />).
+
+**Worked example: an SSNIT pension.** SSNIT pays a percentage of your average salary over your **best three years**, called your **pension right**. At age 60, 180 months of contributions give 37.5%, and each extra year adds 1.125%, up to 60% after 420 months.
+
+Esi retires at 60 after 300 months (25 years) of contributions. Her best three years’ salaries average GH₵ 60,000 a year.
+
+1. Extra months: 300 − 180 = 120, which is 10 extra years.
+2. Pension right: 37.5% + 10 × 1.125% = **48.75%**.
+3. Yearly pension: 60,000 × 48.75% = 29,250, or **GH₵ 2,437.50 a month**.
+
+Her Tier 2 lump sum comes on top. Even so, her pension replaces less than half of her best salary. Tier 3 savings, or other investments, would fill the gap.
+
+## How much is enough?
+
+Start from the income you want, in today’s money, and work backwards with present value (<Ref to="fi-time-value" />).
+
+**Worked example.** Kofi wants GH₵ 3,000 a month in today’s money for 25 years of retirement, on top of his state and Tier 1 pensions. Assume his savings earn 3% a year above inflation (0.25% a month).
+
+1. Pot needed at retirement: 3,000 × (1 − 1.0025⁻³⁰⁰) ÷ 0.0025 = **GH₵ 632,629.36**.
+2. Monthly saving to reach it over 35 years: 632,629.36 × 0.0025 ÷ (1.0025⁴²⁰ − 1) = **GH₵ 853.10**.
+3. Over only 20 years: **GH₵ 1,926.97** a month.
+
+Every assumption here (the return, how long he lives, inflation) is uncertain, which is why it is worth repeating the sum every few years and adjusting. A common rule of thumb is to aim for a total income in retirement of half to two-thirds of your earnings before you retire, from all sources together.
+
+## Employer contributions and tax relief
+
+Two things make pension saving better than ordinary saving:
+
+- **Employer contributions** are extra pay that you only receive if you are in the scheme. Opting out to have more take-home pay usually means giving up a large part of your total pay.
+- **Tax relief** (<Ref to="fi-tax" />): contributions are made before tax, or topped up by the government, and the investments grow without tax.
+
+**Worked example (UK).** Kwame earns £30,000 a year and is automatically enrolled at the legal minimum. Contributions are based on earnings between £6,240 and £50,270, so on £30,000 − £6,240 = £23,760.
+
+- Total minimum, 8%: **£1,900.80** a year.
+- His employer pays 3%: £712.80.
+- He pays 5%: £1,188, of which £237.60 is basic-rate tax relief, so it costs him **£950.40** from his pay after tax.
+
+For every £950.40 he gives up, £1,900.80 goes into his pension.
+
+## Investing a pension
+
+A pension pot is long-term money, so the ideas of <Ref to="fi-risk-return" /> and <Ref to="fi-diversification" /> apply: when retirement is decades away, it can hold more shares for growth; as it gets close, many schemes move gradually into bonds and cash so a fall just before retirement does less damage. Keep the fees low, since they compound for decades. Know where all your pots are: people who change jobs often leave old pots behind and forget them.
+
+## Drawing an income
+
+At retirement, a pot can be turned into income in two main ways:
+
+- An **annuity**: you hand over the pot (or part of it) to an insurer in exchange for an income for life. It removes the risk of running out of money, but the rate you get depends on interest rates and your age, and once bought it usually cannot be undone.
+- **Pension drawdown** (or income drawdown): you leave the pot invested and take money out as you need it. It keeps flexibility and growth, but you carry the risk that markets fall or you live longer than planned.
+
+A common rule of thumb for pension drawdown is to take about **4%** of the pot in the first year, then raise it with inflation: from a pot of GH₵ 900,000, that is GH₵ 36,000 a year. The rule comes from studies of US markets, and may be too high where returns are more uncertain or costs higher; treat it as a starting point, not a promise.
+
+The biggest risks in retirement are **longevity risk** (living longer than your money lasts), **inflation** eating a fixed income, and **sequence risk**: a fall in the markets early in retirement does more damage than the same fall later, because you are selling investments at low prices to live on.
+
+<Note>
+
+**Ghana (checked November 2026).** The National Pensions Regulatory Authority (NPRA) regulates pensions and lists approved trustees, fund managers and custodians. The contribution rate is 18.5% of basic salary (13% employer, 5.5% worker). SSNIT pays a full pension from age 60 with at least 180 months of contributions (37.5% pension right), rising 1.125% for each further year to 60% at 420 months, and a reduced pension from 55. Check SSNIT and the NPRA for your own record.
+
+</Note>
+
+<Note>
+
+**United Kingdom (checked November 2026).** The full new State Pension is £241.30 a week (£12,547.60 a year) in 2026 to 2027, usually with 35 qualifying years of National Insurance; check your forecast on GOV.UK. Employers must automatically enrol eligible workers, with a legal minimum of 8% of qualifying earnings (at least 3% from the employer). Private pensions can usually be accessed from 55, rising to 57 in April 2028, and up to a quarter can normally be taken tax-free. Check GOV.UK for the current rules.
+
+</Note>
+
+## Common mistakes
+
+- **Starting late**, when the same income needs far larger contributions.
+- **Opting out of a workplace scheme** and giving up the employer’s contribution.
+- **Cashing in pension savings early**, losing decades of growth and often paying tax or penalties.
+- **Ignoring fees**, which compound for longer here than anywhere else.
+- **Being too cautious when young**, or too heavily in shares just before retirement.
+- **Losing track of old pots** after changing jobs.
+- **Assuming the state or social security pension will be enough** without checking.
+
+## Practice
+
+**1. (warm-up)** Using SSNIT’s formula, what is the pension right for 240 months of contributions at 60?
+
+<Solution>
+
+Extra years: (240 − 180) ÷ 12 = 5. Pension right: 37.5% + 5 × 1.125% = **43.125%**.
+
+</Solution>
+
+**2. (warm-up)** How many months of contributions give the maximum 60%? Check it with the formula.
+
+<Solution>
+
+**420 months.** (420 − 180) ÷ 12 = 20 extra years; 37.5% + 20 × 1.125% = 37.5% + 22.5% = **60%**.
+
+</Solution>
+
+**3. (standard)** Kojo’s best three years average GH₵ 48,000 a year, and he has 360 months of contributions at 60. What is his monthly SSNIT pension?
+
+<Solution>
+
+Pension right: 37.5% + (360 − 180) ÷ 12 × 1.125% = 37.5% + 16.875% = 54.375%. Yearly: 48,000 × 0.54375 = 26,100. Monthly: **GH₵ 2,175**.
+
+</Solution>
+
+**4. (standard)** In the early and late example, how much did Ama’s first 15 years of saving cost her, and roughly how much of her final pot do they explain?
+
+<Solution>
+
+300 × 180 = **GH₵ 54,000** paid in. Her final pot is 427,413.09 and Kojo’s, built from the same last 20 years of saving, is 138,612.27, so those first 15 years explain **GH₵ 288,800.82**, more than two-thirds of her pot.
+
+</Solution>
+
+**5. (standard)** Kwame’s employer offers to match his pension contributions up to 5% of salary. He earns GH₵ 4,000 a month and contributes nothing. What is he giving up?
+
+<Solution>
+
+Up to 5% × 4,000 = **GH₵ 200 a month** (GH₵ 2,400 a year) of free contributions from his employer, plus any tax relief on his own 200, and all the growth on both for decades.
+
+</Solution>
+
+**6. (standard)** Using the 4% rule of thumb, what first-year income would a pot of GH₵ 500,000 support? What would make you cautious about relying on it?
+
+<Solution>
+
+500,000 × 4% = **GH₵ 20,000** in the first year. Caution: the rule came from US market history; returns may be lower or more volatile elsewhere; high fees reduce it; a market fall early in retirement (**sequence risk**) or a long life could exhaust the pot.
+
+</Solution>
+
+**7. (stretch)** Esi wants GH₵ 2,000 a month in today’s money for 20 years, with 3% a year real return (0.25% a month). How big a pot does she need, and what must she save each month over 30 years?
+
+<Solution>
+
+Pot: 2,000 × (1 − 1.0025⁻²⁴⁰) ÷ 0.0025 = **GH₵ 360,621.83**. Monthly saving over 360 months: 360,621.83 × 0.0025 ÷ (1.0025³⁶⁰ − 1) = **GH₵ 618.84**.
+
+</Solution>
+
+**8. (stretch)** Explain why a 25% market fall in the first year of retirement is worse for a drawdown pensioner than the same fall in year 15.
+
+<Solution>
+
+In year 1 the pensioner must keep **selling** investments at the lower prices to pay for living costs, so more units are sold and fewer are left to recover when prices rise. The whole remaining retirement then runs on a smaller pot. In year 15 the pot is smaller and fewer years remain, so the same fall does less lasting damage. This is **sequence risk**.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Start early**: Ama’s GH₵ 300 a month from 25 grew to more than three times Kojo’s from 40.
+- **Defined benefit** pensions pay by formula; **defined contribution** pots depend on contributions, returns and fees.
+- Ghana’s **three tiers**: SSNIT (formula, for life), Tier 2 (mandatory, mostly a lump sum), Tier 3 (voluntary, tax relief); 18.5% of basic salary in total.
+- SSNIT **pension right**: 37.5% for 180 months, plus 1.125% a year, up to 60%.
+- Work out the pot needed from the income you want, with present value; then the monthly saving.
+- Never give up **employer contributions**; use **tax relief**.
+- At retirement: an **annuity** for certainty, or **pension drawdown** for flexibility; beware **longevity risk**, inflation and **sequence risk**.
+
+## Go deeper
+
+- [Old Age Benefit](https://www.ssnit.org.gh/old-age-benefit/), SSNIT. Who qualifies for a full or reduced pension, how the pension right is earned, and how to apply.
+- [Workplace pensions: what you, your employer and the government pay](https://www.gov.uk/workplace-pensions/what-you-your-employer-and-the-government-pay), GOV.UK. The UK’s minimum contributions and how tax relief works.
+- [The new State Pension: what you’ll get](https://www.gov.uk/new-state-pension/what-youll-get), GOV.UK. The full rate and how your National Insurance record affects it.

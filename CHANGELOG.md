@@ -4,6 +4,16 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-24: Zero to Money and Investing, part 7
+
+Added
+- Part 7 of Zero to Money and Investing, "Costs, tax, protection and retirement": fees and costs (every kind of charge, adding them up, percentage against flat fees, entry fees, what fees take from the real return, hidden and bundled costs), tax basics (withholding and returns, after-tax and tax-equivalent yields, capital gains and deferral, how inflation makes tax heavier, tax-advantaged accounts, avoidance and evasion), insurance and protection (pooling, why insurance costs more than it pays on average, what to insure and what to self-insure, excesses, the average clause, the main kinds, estimating life cover), and saving for retirement (the cost of starting late, defined benefit and defined contribution, Ghana's three tiers and SSNIT's pension formula, working out the pot and monthly saving needed, employer contributions and tax relief, annuities, drawdown and sequence risk).
+- Walkthroughs: a year's return with costs and inflation taken off layer by layer, a taxed account against a tax-free one, an underinsured house claim, and saving from 25 against saving from 40.
+- Optional Python check: early and late retirement saving.
+- Country notes checked on 24 November 2026: Ghana's tax exemptions on interest from banks and government securities, the National Insurance Commission and policyholders' rights, SSNIT's pension rules and the 18.5% contribution; the UK's Capital Gains Tax and dividend allowances, ISAs, the £241.30 State Pension and the 8% automatic-enrolment minimum.
+- 40 glossary terms. "Volatility" now also carries the database meaning, so the two courses no longer collide.
+- The markets chapter now links to the fees chapter.
+
 ### 2026-11-24: Zero to Money and Investing, part 6
 
 Added
