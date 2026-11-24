@@ -1,0 +1,281 @@
+- id: fi-plan-route
+  title: A household's route through the priorities
+  hint: Each pot fills in turn. When one is full, the same monthly amount moves to the next.
+  steps:
+  - title: The start
+    text: 2,000 saved, 4,000 on a card at 4% a month. From now on, 300 goes to Kwesi's matched pension and 150 to life cover each month, leaving 1,350.
+    vars:
+      each month: 1,350
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: Kwesi and Abena (GH₵)
+        columns:
+        - month
+        - emergency
+        - card
+        - school
+        - invested
+        rows:
+        - k: m0
+          cells:
+          - '0'
+          - 2,000
+          - 4,000
+          - '0'
+          - '0'
+          tone: active
+  - title: Month 3
+    text: The starter emergency fund reaches 5,000. The rest of this month's money starts paying down the card.
+    vars:
+      next: clear the card
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: Kwesi and Abena (GH₵)
+        columns:
+        - month
+        - emergency
+        - card
+        - school
+        - invested
+        rows:
+        - k: m0
+          cells:
+          - '0'
+          - 2,000
+          - 4,000
+          - '0'
+          - '0'
+          tone: dim
+        - k: m3
+          cells:
+          - '3'
+          - 5,000
+          - 2,950
+          - '0'
+          - '0'
+          tone: active
+  - title: Month 6
+    text: 'The card is paid off, after 664.73 of interest. Its 160 minimum payment is freed: 1,510 a month now goes to the next priority.'
+    vars:
+      each month: 1,510
+      next: full emergency fund
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: Kwesi and Abena (GH₵)
+        columns:
+        - month
+        - emergency
+        - card
+        - school
+        - invested
+        rows:
+        - k: m0
+          cells:
+          - '0'
+          - 2,000
+          - 4,000
+          - '0'
+          - '0'
+          tone: dim
+        - k: m3
+          cells:
+          - '3'
+          - 5,000
+          - 2,950
+          - '0'
+          - '0'
+          tone: dim
+        - k: m6
+          cells:
+          - '6'
+          - 6,395
+          - '0'
+          - '0'
+          - '0'
+          tone: active
+  - title: Month 17
+    text: The emergency fund reaches three months' spending, 21,600. Saving switches to the school fees fund.
+    vars:
+      next: school fees fund
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: Kwesi and Abena (GH₵)
+        columns:
+        - month
+        - emergency
+        - card
+        - school
+        - invested
+        rows:
+        - k: m0
+          cells:
+          - '0'
+          - 2,000
+          - 4,000
+          - '0'
+          - '0'
+          tone: dim
+        - k: m3
+          cells:
+          - '3'
+          - 5,000
+          - 2,950
+          - '0'
+          - '0'
+          tone: dim
+        - k: m6
+          cells:
+          - '6'
+          - 6,395
+          - '0'
+          - '0'
+          - '0'
+          tone: dim
+        - k: m17
+          cells:
+          - '17'
+          - 21,600
+          - '0'
+          - 1,405
+          - '0'
+          tone: active
+  - title: Month 27
+    text: The school fund reaches 15,000, in Treasury bills. From now on, 1,510 a month is invested for the long term.
+    vars:
+      next: long-term investing
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: Kwesi and Abena (GH₵)
+        columns:
+        - month
+        - emergency
+        - card
+        - school
+        - invested
+        rows:
+        - k: m0
+          cells:
+          - '0'
+          - 2,000
+          - 4,000
+          - '0'
+          - '0'
+          tone: dim
+        - k: m3
+          cells:
+          - '3'
+          - 5,000
+          - 2,950
+          - '0'
+          - '0'
+          tone: dim
+        - k: m6
+          cells:
+          - '6'
+          - 6,395
+          - '0'
+          - '0'
+          - '0'
+          tone: dim
+        - k: m17
+          cells:
+          - '17'
+          - 21,600
+          - '0'
+          - 1,405
+          - '0'
+          tone: dim
+        - k: m27
+          cells:
+          - '27'
+          - 21,600
+          - '0'
+          - 15,000
+          - 1,505
+          tone: active
+  - title: Month 40
+    text: 'After 40 months: an emergency fund, school fees ready, no consumer debt, 21,135 invested, and 24,000 paid into Kwesi''s pension.'
+    vars:
+      pension so far: 24,000
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: Kwesi and Abena (GH₵)
+        columns:
+        - month
+        - emergency
+        - card
+        - school
+        - invested
+        rows:
+        - k: m0
+          cells:
+          - '0'
+          - 2,000
+          - 4,000
+          - '0'
+          - '0'
+          tone: dim
+        - k: m3
+          cells:
+          - '3'
+          - 5,000
+          - 2,950
+          - '0'
+          - '0'
+          tone: dim
+        - k: m6
+          cells:
+          - '6'
+          - 6,395
+          - '0'
+          - '0'
+          - '0'
+          tone: dim
+        - k: m17
+          cells:
+          - '17'
+          - 21,600
+          - '0'
+          - 1,405
+          - '0'
+          tone: dim
+        - k: m27
+          cells:
+          - '27'
+          - 21,600
+          - '0'
+          - 15,000
+          - 1,505
+          tone: dim
+        - k: m40
+          cells:
+          - '40'
+          - 21,600
+          - '0'
+          - 15,000
+          - 21,135
+          tone: found

@@ -4,6 +4,15 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-24: Zero to Money and Investing, part 9
+
+Added
+- Part 9 of Zero to Money and Investing, "Judgement": behavioural mistakes (loss aversion, chasing returns and the behaviour gap, overconfidence and trading costs, herding and hype, market timing, mental accounting and other biases, rules that protect you), scams and fraud (why scams work, a Ponzi scheme month by month, pyramid arithmetic, investment, impersonation and payment scams, the warning signs, how to check a firm, what to do if it happens), how to evaluate an investment (ten questions applied to a Treasury bill, a licensed share fund, a farming "investment" and land bought in instalments), and putting it together (the order of priorities, a household's month-by-month route through them, a one-page plan, reviewing it, and when to get help).
+- Walkthroughs: holding against chasing in the same fund, a Ponzi scheme's collapse, four offers through the checklist, and a household's route through its priorities.
+- Country notes checked on 24 November 2026: SEC Ghana's warnings on fraudulent schemes; the FCA Firm Checker and the UK's Report Fraud service, which replaced Action Fraud in December 2025.
+- 22 glossary terms. "Worst case" now gives its finance meaning alongside its algorithms meaning.
+- The map, banking, markets and crypto chapters now link to the scams chapter.
+
 ### 2026-11-24: Zero to Money and Investing, part 8
 
 Added

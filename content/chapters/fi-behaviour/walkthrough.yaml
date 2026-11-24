@@ -1,0 +1,269 @@
+- id: fi-behaviour-chasing
+  title: Holding against chasing
+  hint: Esi and Kojo own the same fund. Only the timing of their decisions differs.
+  steps:
+  - title: The start
+    text: Both have GH₵ 10,000. Esi invests in the fund at once. Kojo waits to see how it does.
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: GH₵ 10,000, same fund
+        columns:
+        - year
+        - fund
+        - Esi
+        - Kojo
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - ''
+          - 10,000.00
+          - 10,000.00 cash
+          tone: active
+  - title: Year 1
+    text: The fund rises 30%. Esi has 13,000. Kojo, still in cash, starts to feel he is missing out.
+    vars:
+      Esi: 13,000.00
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: GH₵ 10,000, same fund
+        columns:
+        - year
+        - fund
+        - Esi
+        - Kojo
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - ''
+          - 10,000.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - +30%
+          - 13,000.00
+          - 10,000.00 cash
+          tone: active
+  - title: Year 2
+    text: Another 25%. Esi has 16,250. Two great years convince Kojo, and he invests all 10,000.
+    vars:
+      Esi: 16,250.00
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: GH₵ 10,000, same fund
+        columns:
+        - year
+        - fund
+        - Esi
+        - Kojo
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - ''
+          - 10,000.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - +30%
+          - 13,000.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - +25%
+          - 16,250.00
+          - 10,000.00 cash
+          tone: active
+  - title: Year 3
+    text: The fund falls 30%. Esi is down to 11,375, still well ahead. Kojo is down to 7,000 and sells in fear, putting it in a savings account.
+    vars:
+      Esi: 11,375.00
+      Kojo: 7,000.00
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: GH₵ 10,000, same fund
+        columns:
+        - year
+        - fund
+        - Esi
+        - Kojo
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - ''
+          - 10,000.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - +30%
+          - 13,000.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - +25%
+          - 16,250.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - −30%
+          - 11,375.00
+          - 7,000.00
+          tone: active
+  - title: Year 4
+    text: 'The fund recovers 20%. Esi has 13,650. Kojo''s cash earns 5%: 7,350. He missed the rebound.'
+    vars:
+      Esi: 13,650.00
+      Kojo: 7,350.00
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: GH₵ 10,000, same fund
+        columns:
+        - year
+        - fund
+        - Esi
+        - Kojo
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - ''
+          - 10,000.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - +30%
+          - 13,000.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - +25%
+          - 16,250.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - −30%
+          - 11,375.00
+          - 7,000.00
+          tone: dim
+        - k: y4
+          cells:
+          - '4'
+          - +20%
+          - 13,650.00
+          - 7,350.00 cash
+          tone: active
+  - title: Year 5
+    text: Seeing the recovery, Kojo buys back in. Both gain 15%. Esi ends at 15,697.50; Kojo at 8,452.50.
+    vars:
+      Esi: 15,697.50
+      Kojo: 8,452.50
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: GH₵ 10,000, same fund
+        columns:
+        - year
+        - fund
+        - Esi
+        - Kojo
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - ''
+          - 10,000.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - +30%
+          - 13,000.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - +25%
+          - 16,250.00
+          - 10,000.00 cash
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - −30%
+          - 11,375.00
+          - 7,000.00
+          tone: dim
+        - k: y4
+          cells:
+          - '4'
+          - +20%
+          - 13,650.00
+          - 7,350.00 cash
+          tone: dim
+        - k: y5
+          cells:
+          - '5'
+          - +15%
+          - 15,697.50
+          - 8,452.50
+          tone: found
+  - title: The behaviour gap
+    text: The fund earned about 9.4% a year. Esi, who did nothing, got all of it. Kojo bought high, sold low and lost 15%.
+    parts:
+    - kind: kv
+      id: k
+      label: After five years
+      slots: 3
+      rows:
+      - name: Esi, held
+        value: +57%
+      - name: Kojo, chased
+        value: −15%
+      - name: the fund
+        value: about +9.4% a year
+        tone: found
