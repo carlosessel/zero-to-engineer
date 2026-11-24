@@ -4,6 +4,14 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-24: Zero to Money and Investing, part 3
+
+Added
+- Part 3 of Zero to Money and Investing, "Interest, debt and credit": simple and compound interest (compounding frequency, nominal and effective rates, APR and AER, the rule of 72, saving regularly), how loans work (repayment formula and schedule, longer terms, paying extra, flat-rate loans and upfront fees, PMT and RATE in a spreadsheet), getting out of debt (debt-to-income ratio, predatory lending, the minimum-payment trap, avalanche and snowball, consolidation, getting help), and credit scores and reports (what bureaus hold, utilisation, how lenders decide, building and protecting a record).
+- Walkthroughs: simple against compound interest year by year, a loan's repayment schedule, avalanche and snowball side by side on the same three debts, and a credit application from lender to bureau and back.
+- Country notes checked on 24 November 2026: Ghana's licensed credit bureaus (Bank of Ghana list) and digital lender licensing; UK representative APR, the 14-day cooling-off period, statutory credit reports and free debt advice.
+- 33 glossary terms. "Principal" and "Term" now have separate definitions for finance and for the courses that already used them, and "Credit" gives both of its finance meanings.
+
 ### 2026-11-23: Zero to Money and Investing, part 2
 
 Added

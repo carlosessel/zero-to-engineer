@@ -1,0 +1,77 @@
+- id: fi-credit-application
+  title: What happens when you apply for credit
+  hint: Follow Ama's loan application from her to the lender, to the credit bureau and back, and see what is checked at each stage.
+  steps:
+    - title: Ama applies
+      text: Ama asks a licensed lender for GH₵ 8,000 over 24 months. She gives her income, GH₵ 4,000 a month, and says she already repays GH₵ 750 a month on other debts.
+      vars: { asked for: "8,000 over 24 months", income: "4,000 a month" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, Lender, Credit bureau]
+          slots: 6
+          messages:
+            - { from: Ama, to: Lender, label: "apply: GH₵ 8,000, 24 months", tone: active }
+    - title: The lender asks the bureau
+      text: With her permission, the lender asks a credit bureau for her report. The bureau records the request as a search, which later lenders will see.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, Lender, Credit bureau]
+          slots: 6
+          messages:
+            - { from: Ama, to: Lender, label: "apply: GH₵ 8,000, 24 months", tone: dim }
+            - { from: Lender, to: Credit bureau, label: "request Ama's report", tone: active }
+            - { from: Credit bureau, to: Credit bureau, label: "record it", tone: compare }
+    - title: The report comes back
+      text: Two cards, 42.5% of her limits used, and one payment 30 days late two years ago. Everything else was paid on time.
+      vars: { utilisation: "42.5%", "late payments": "1, two years ago" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, Lender, Credit bureau]
+          slots: 6
+          messages:
+            - { from: Ama, to: Lender, label: "apply: GH₵ 8,000, 24 months", tone: dim }
+            - { from: Lender, to: Credit bureau, label: "request Ama's report", tone: dim }
+            - { from: Credit bureau, to: Credit bureau, label: "record it", tone: dim }
+            - { from: Credit bureau, to: Lender, label: "2 cards, 42.5% used, 1 late", tone: active }
+    - title: Can she afford it?
+      text: At this lender's 2.5% a month, 8,000 over 24 months costs about 447.30 a month. With her 750 of existing repayments, that is about 30% of her income, more than this lender accepts with her history.
+      vars: { "new repayment": "about 447.30", "debt-to-income": "(750 + 447.30) ÷ 4,000 ≈ 30%" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, Lender, Credit bureau]
+          slots: 6
+          messages:
+            - { from: Ama, to: Lender, label: "apply: GH₵ 8,000, 24 months", tone: dim }
+            - { from: Lender, to: Credit bureau, label: "request Ama's report", tone: dim }
+            - { from: Credit bureau, to: Credit bureau, label: "record it", tone: dim }
+            - { from: Credit bureau, to: Lender, label: "2 cards, 42.5% used, 1 late", tone: dim }
+            - { from: Lender, to: Lender, label: "check affordability", tone: active }
+    - title: The decision
+      text: The lender offers GH₵ 6,000 instead, about 335.48 a month, which brings her debt-to-income ratio to about 27%. Each lender has its own limits; another might decide differently.
+      vars: { offered: "6,000 over 24 months", "debt-to-income": "(750 + 335.48) ÷ 4,000 ≈ 27%" }
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, Lender, Credit bureau]
+          slots: 6
+          messages:
+            - { from: Ama, to: Lender, label: "apply: GH₵ 8,000, 24 months", tone: dim }
+            - { from: Lender, to: Credit bureau, label: "request Ama's report", tone: dim }
+            - { from: Credit bureau, to: Credit bureau, label: "record it", tone: dim }
+            - { from: Credit bureau, to: Lender, label: "2 cards, 42.5% used, 1 late", tone: dim }
+            - { from: Lender, to: Lender, label: "check affordability", tone: dim }
+            - { from: Lender, to: Ama, label: "offer: GH₵ 6,000, 24 months", tone: found }
+    - title: Every payment is reported
+      text: If she accepts, the lender reports each month's payment to the bureau. Paying on time, every month, is what builds a strong record for next time.
+      parts:
+        - kind: seq
+          id: s
+          actors: [Ama, Lender, Credit bureau]
+          slots: 6
+          messages:
+            - { from: Ama, to: Lender, label: "accept, repay monthly", tone: active }
+            - { from: Lender, to: Credit bureau, label: "each month: paid on time", tone: found }

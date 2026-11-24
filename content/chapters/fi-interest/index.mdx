@@ -1,0 +1,271 @@
+---
+title: "Simple and compound interest"
+summary: "Interest from zero, compounding year by year, compounding frequency, APR and AER, and the rule of 72."
+prerequisites: [fi-numbers, fi-saving]
+estimated_minutes: 150
+status: code-verified
+---
+
+Interest is the price of money over time. It is what your savings earn and what your debts cost, and the way it is calculated decides whether a sum grows slowly or explodes. By the end of this chapter you will be able to calculate simple and compound interest, see why compounding makes such a large difference over long periods, compare rates quoted per month, per year and with different compounding, read an APR and an AER, and estimate doubling times in your head.
+
+## Interest from zero
+
+When you lend money, whether to a bank by depositing it or to a friend, the borrower usually pays you for the use of it. That payment is **interest**. When you borrow, you pay it. Four words describe any interest arrangement:
+
+- the **principal**: the amount lent or borrowed to begin with;
+- the **interest rate**: the percentage charged or paid per period, usually per year;
+- the **term**: how long the money is lent for;
+- the **balance**: what is owed (or saved) at any moment, principal plus any interest added so far.
+
+## Simple interest
+
+With **simple interest**, interest is worked out on the original principal only, the same amount every period:
+
+interest = principal × rate × number of periods
+
+**Worked example.** Kofi lends GH₵ 2,000 at 12% a year simple interest for 3 years.
+
+1. Interest each year: 0.12 × 2,000 = GH₵ 240.
+2. Over 3 years: 3 × 240 = **GH₵ 720**.
+3. He gets back 2,000 + 720 = **GH₵ 2,720**.
+
+Simple interest is used for some short loans, some bonds that pay interest out rather than adding it, and, as <Ref to="fi-loans" /> shows, as a misleading way of advertising some loans.
+
+## Compound interest
+
+With **compound interest**, each period’s interest is added to the balance, and the next period’s interest is worked out on that bigger balance. You earn (or pay) interest on interest. This is the **compounding** you met in <Ref to="fi-numbers" />, and it uses the same multiplier:
+
+balance after n periods = principal × (1 + rate)ⁿ
+
+**Worked example.** The same GH₵ 2,000 at 12% a year, compounded yearly, for 3 years:
+
+| Year | Start (GH₵) | Interest at 12% (GH₵) | End (GH₵) |
+|---|---|---|---|
+| 1 | 2,000.00 | 240.00 | 2,240.00 |
+| 2 | 2,240.00 | 268.80 | 2,508.80 |
+| 3 | 2,508.80 | 301.06 | 2,809.86 |
+
+Check with the formula: 2,000 × 1.12³ = 2,000 × 1.404928 = **GH₵ 2,809.86** (to the nearest pesewa). Compound interest paid GH₵ 809.86, against GH₵ 720 simple. The difference, GH₵ 89.86, is interest earned on interest.
+
+### Why compounding matters so much over time
+
+Over a few years the difference is modest. Over decades it is enormous, because each year’s growth is bigger than the last. Here is GH₵ 1,000 at 10% a year:
+
+| After | Simple (GH₵) | Compound (GH₵) |
+|---|---|---|
+| 1 year | 1,100.00 | 1,100.00 |
+| 3 years | 1,300.00 | 1,331.00 |
+| 6 years | 1,600.00 | 1,771.56 |
+| 30 years | 4,000.00 | 17,449.40 |
+
+After 30 years, simple interest has quadrupled the money; compound interest has multiplied it more than seventeen times. This is why starting to save early matters more than saving a lot later, and why a debt left to compound can grow out of control.
+
+<Walkthrough name="fi-interest-simple-vs-compound" />
+
+### Compounding works against you on debt
+
+The same arithmetic applies to what you owe. Suppose Yaw borrows GH₵ 2,000 from a lender charging 5% a month, and makes no payments for a year. The balance grows to 2,000 × 1.05¹² = **GH₵ 3,591.71**. He now owes almost twice what he borrowed. Monthly rates that sound small are very large yearly rates, as the next section shows.
+
+## Rates per month, per year, and compounding frequency
+
+Interest can be added (compounded) yearly, quarterly, monthly or even daily. A rate is usually quoted per year, then divided by the number of periods. A yearly rate of 12% compounded monthly means 12% ÷ 12 = 1% a month, added each month.
+
+Because each addition earns interest in later periods, more frequent compounding gives a slightly bigger result. For 12% a year:
+
+| Compounded | Rate per period | Growth over a year | Effective yearly rate |
+|---|---|---|---|
+| Yearly | 12% | 1.12 | 12.00% |
+| Quarterly | 3% | 1.03⁴ = 1.1255 | 12.55% |
+| Monthly | 1% | 1.01¹² = 1.1268 | 12.68% |
+| Daily | 12% ÷ 365 | 1.1275 | 12.75% |
+
+The **nominal rate** is the headline yearly rate before compounding (12% here). The **effective annual rate** is what you actually earn or pay over a year once compounding is included:
+
+effective annual rate = (1 + nominal rate ÷ periods per year)^(periods per year) − 1
+
+To compare two products fairly, compare their effective annual rates.
+
+## APR and AER
+
+Two standard figures exist so that you can compare like with like:
+
+- The **APR** (annual percentage rate) is the yearly cost of borrowing, including interest *and* compulsory fees such as an arrangement fee, expressed as one yearly percentage. Use it to compare loans and credit cards: the lower the APR, the cheaper the borrowing, for the same amount and term.
+- The **AER** (annual equivalent rate, called APY, annual percentage yield, in some countries) is the effective yearly rate on savings, including compounding. Use it to compare savings accounts: the higher the better.
+
+A loan quoted at “3% a month” is far more than 36% a year once compounded: 1.03¹² − 1 = 42.58%. And if there is a fee as well, the APR is higher still. When a lender quotes only a monthly rate, or only a fee, ask for the APR. A lender that will not tell you is a lender to avoid.
+
+<Note>
+
+**Country notes (checked November 2026).** **United Kingdom:** credit adverts that give an interest rate or cost must show a representative APR, and savings accounts quote the AER. **Ghana:** short loans from mobile apps and some microfinance lenders are often priced per month or as a flat fee. Ask for the yearly rate and the total amount you will repay, and check that a digital lender is licensed: the Bank of Ghana publishes notices naming unlicensed digital credit providers.
+
+</Note>
+
+## The rule of 72
+
+How long does money take to double? There is a quick estimate:
+
+years to double ≈ 72 ÷ yearly interest rate (as a number, not a decimal)
+
+- At 8%: 72 ÷ 8 = **about 9 years**. (Exactly: 1.08⁹ = 1.999, so 9 years.)
+- At 12%: 72 ÷ 12 = **about 6 years**. (Exactly 6.12 years.)
+- At 36%, a common credit card or loan rate: 72 ÷ 36 = **about 2 years**. An unpaid debt at 36% doubles in roughly two years (exactly 2.25).
+
+It is an approximation that works best for rates between about 5% and 15%, and is close enough for a decision at the table.
+
+## Saving regularly
+
+Most people save a little each month rather than one lump. Each payment then compounds for a different length of time. If you add GH₵ 1,000 at the end of each year to an account earning 10% a year:
+
+- End of year 1: 1,000.
+- End of year 2: 1,000 × 1.10 + 1,000 = 2,100.
+- End of year 3: 2,100 × 1.10 + 1,000 = **3,310**.
+
+You paid in 3,000 and earned 310 of interest. Saving GH₵ 500 at the end of each month at 1% a month for a year in the same way gives GH₵ 6,341.25, of which 6,000 is your money and 341.25 interest. The chapter on the time value of money gives a single formula for this; a spreadsheet does it in a column, as in <Ref to="fi-spreadsheets" />.
+
+## Checking with Python (optional)
+
+This prints GH₵ 1,000 at 10% a year under simple and compound interest, year by year.
+
+```python
+principal = 1000
+rate = 0.10
+for year in range(0, 7):
+    simple = principal + principal * rate * year
+    compound = principal * (1 + rate) ** year
+    print(year, f"{simple:,.2f}", f"{compound:,.2f}")
+```
+
+```text
+0 1,000.00 1,000.00
+1 1,100.00 1,100.00
+2 1,200.00 1,210.00
+3 1,300.00 1,331.00
+4 1,400.00 1,464.10
+5 1,500.00 1,610.51
+6 1,600.00 1,771.56
+```
+
+## Common mistakes
+
+- **Multiplying a monthly rate by 12.** 3% a month is 42.58% a year compounded, not 36%.
+- **Comparing loans on the interest rate alone.** Fees change the true cost; compare APRs, and the total you will repay.
+- **Comparing savings on the nominal rate.** Compare AERs, which include compounding.
+- **Waiting to start saving.** The early years compound for longest; GH₵ 1,000 at 10% is 17,449 after 30 years but only 6,727 after 20 (1.1²⁰ = 6.7275).
+- **Ignoring a small debt.** At high monthly rates an unpaid balance doubles quickly; the rule of 72 tells you how quickly.
+- **Using the rule of 72 for precise answers.** It is an estimate; use the formula when the exact figure matters.
+
+## Practice
+
+**1. (warm-up)** What is the simple interest on GH₵ 5,000 at 15% a year for 2 years?
+
+<Solution>
+
+5,000 × 0.15 × 2 = **GH₵ 1,500**.
+
+</Solution>
+
+**2. (warm-up)** What is GH₵ 5,000 worth after 2 years at 15% a year compounded yearly?
+
+<Solution>
+
+5,000 × 1.15² = 5,000 × 1.3225 = **GH₵ 6,612.50**. That is GH₵ 112.50 more than simple interest (6,500), the interest on the first year’s interest: 0.15 × 750 = 112.50.
+
+</Solution>
+
+**3. (standard)** GH₵ 3,000 is saved at 8% a year compounded yearly for 5 years. What is it worth?
+
+<Solution>
+
+3,000 × 1.08⁵ = 3,000 × 1.4693281 = **GH₵ 4,407.98** (to the nearest pesewa).
+
+</Solution>
+
+**4. (standard)** Make the year-by-year table for GH₵ 2,000 at 12% compounded yearly for 3 years, and check it against the formula.
+
+<Solution>
+
+Year 1: 2,000 + 240 = 2,240. Year 2: 2,240 + 268.80 = 2,508.80. Year 3: 2,508.80 + 301.056 = 2,809.856, which is **GH₵ 2,809.86**. Formula: 2,000 × 1.12³ = 2,809.856. ✓
+
+</Solution>
+
+**5. (standard)** A savings account pays 18% a year compounded monthly. What is its effective annual rate (its AER)?
+
+<Solution>
+
+Monthly rate 18% ÷ 12 = 1.5%. 1.015¹² = 1.1956 (to four decimal places), so the AER is **19.56%**.
+
+</Solution>
+
+**6. (standard)** A lender charges 4% a month, compounded monthly. What is that as an effective yearly rate?
+
+<Solution>
+
+1.04¹² = 1.6010 (to four decimal places), so **60.10%** a year, far more than 4 × 12 = 48%.
+
+</Solution>
+
+**7. (standard)** Use the rule of 72 to estimate how long money takes to double at 6% a year. How close is it?
+
+<Solution>
+
+72 ÷ 6 = **12 years**. Check: 1.06¹² = 2.0122, so after 12 years it has just over doubled. Very close.
+
+</Solution>
+
+**8. (standard)** Compare GH₵ 10,000 at 20% a year for 10 years under simple and compound interest.
+
+<Solution>
+
+Simple: 10,000 + 10,000 × 0.20 × 10 = **GH₵ 30,000**. Compound: 10,000 × 1.2¹⁰ = 10,000 × 6.1917364 = **GH₵ 61,917.36**. Compounding more than doubles the result.
+
+</Solution>
+
+**9. (standard)** Yaw owes GH₵ 1,500 to a lender charging 3% a month and pays nothing for 6 months. What does he owe?
+
+<Solution>
+
+1,500 × 1.03⁶ = 1,500 × 1.1940523 = **GH₵ 1,791.08** (to the nearest pesewa).
+
+</Solution>
+
+**10. (stretch)** You save GH₵ 1,000 at the end of each year at 10% a year. Work out the balance at the end of years 1, 2 and 3. How much of the final balance is interest?
+
+<Solution>
+
+Year 1: 1,000. Year 2: 1,000 × 1.1 + 1,000 = 2,100. Year 3: 2,100 × 1.1 + 1,000 = **3,310**. You paid in 3,000, so **GH₵ 310** is interest.
+
+</Solution>
+
+**11. (stretch)** Two loans of GH₵ 5,000 for one year: Loan A at 30% a year with no fee; Loan B at 28% a year with a GH₵ 200 arrangement fee. Both charge interest once, at the end of the year. Which costs less in total?
+
+<Solution>
+
+A: 0.30 × 5,000 = **GH₵ 1,500**. B: 0.28 × 5,000 + 200 = 1,400 + 200 = **GH₵ 1,600**. Loan A is cheaper, despite the higher interest rate. Its APR is 30%; B’s is 1,600 ÷ 5,000 = 32%.
+
+</Solution>
+
+**12. (stretch)** Ama saves GH₵ 100 at the end of each month at 1% a month for two years. A spreadsheet gives GH₵ 2,697.35. How much of that is interest?
+
+<Solution>
+
+She paid in 24 × 100 = 2,400, so the interest is 2,697.35 − 2,400 = **GH₵ 297.35**.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Interest** is the payment for using money; the **principal**, **interest rate**, **term** and **balance** describe any loan or deposit.
+- **Simple interest** = principal × rate × periods, on the original principal only.
+- **Compound interest** adds interest to the balance: principal × (1 + rate)ⁿ. Over decades the difference from simple interest is enormous.
+- More frequent compounding raises the **effective annual rate** above the **nominal rate**.
+- Compare loans by **APR** (interest plus fees) and savings by **AER** (including compounding).
+- The **rule of 72**: years to double ≈ 72 ÷ the yearly rate. It works for debts too.
+- Saving regularly means each payment compounds for a different time; a spreadsheet column handles it.
+
+## Go deeper
+
+- [Compound Interest](https://www.mathsisfun.com/money/compound-interest.html), Math is Fun. A year-by-year table, the formula, and compounding periods.
+- [Compound Interest Calculator](https://www.investor.gov/financial-tools-calculators/calculators/compound-interest-calculator), Investor.gov. Try your own amounts, rates and monthly additions.
+- [Types of borrowing](https://www.citizensadvice.org.uk/debt-and-money/borrowing-money/types-of-borrowing/), Citizens Advice. The main kinds of credit and what they cost; written for the UK.

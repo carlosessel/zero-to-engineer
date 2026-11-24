@@ -1,0 +1,44 @@
+- id: fi-interest-simple-vs-compound
+  title: Simple and compound interest, year by year
+  hint: Watch the two rows of bars pull apart. Simple interest adds the same 100 every year; compound interest adds a little more each year.
+  steps:
+    - title: The same start
+      text: GH₵ 1,000 at 10% a year, once with simple interest and once with compound interest. At the start they are identical.
+      vars: { "simple adds": "100 a year", "compound adds": "10% of the balance" }
+      parts:
+        - { kind: cells, id: s, label: "simple interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: active }] }
+        - { kind: cells, id: c, label: "compound interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: active }] }
+    - title: Year 1
+      text: Both add 10% of 1,000, which is 100. After one year they are still the same, 1,100.
+      vars: { "simple adds": "100", "compound adds": "100" }
+      parts:
+        - { kind: cells, id: s, label: "simple interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: dim }, { k: y1, v: 1100, tone: active }] }
+        - { kind: cells, id: c, label: "compound interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: dim }, { k: y1, v: 1100, tone: active }] }
+    - title: Year 2
+      text: Simple interest adds 100 again, on the original 1,000. Compound interest adds 10% of 1,100, which is 110, because last year's interest now earns interest too.
+      vars: { "simple adds": "100 → 1,200", "compound adds": "110 → 1,210" }
+      parts:
+        - { kind: cells, id: s, label: "simple interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: dim }, { k: y1, v: 1100, tone: dim }, { k: y2, v: 1200, tone: active }] }
+        - { kind: cells, id: c, label: "compound interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: dim }, { k: y1, v: 1100, tone: dim }, { k: y2, v: 1210, tone: active }] }
+    - title: Year 3
+      text: Simple adds 100 to reach 1,300. Compound adds 10% of 1,210, which is 121, to reach 1,331.
+      vars: { "simple adds": "100 → 1,300", "compound adds": "121 → 1,331" }
+      parts:
+        - { kind: cells, id: s, label: "simple interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: dim }, { k: y1, v: 1100, tone: dim }, { k: y2, v: 1200, tone: dim }, { k: y3, v: 1300, tone: active }] }
+        - { kind: cells, id: c, label: "compound interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: dim }, { k: y1, v: 1100, tone: dim }, { k: y2, v: 1210, tone: dim }, { k: y3, v: 1331, tone: active }] }
+    - title: Years 4 to 6
+      text: Each year compound interest adds more than the year before (133.10, 146.41, 161.05), while simple interest keeps adding 100. After six years, 1,600 against 1,771.56.
+      vars: { "simple": "1,600.00", "compound": "1,771.56" }
+      parts:
+        - { kind: cells, id: s, label: "simple interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: dim }, { k: y1, v: 1100, tone: dim }, { k: y2, v: 1200, tone: dim }, { k: y3, v: 1300, tone: dim }, { k: y4, v: 1400, tone: active }, { k: y5, v: 1500, tone: active }, { k: y6, v: 1600, tone: active }] }
+        - { kind: cells, id: c, label: "compound interest (GH₵)", slots: 7, width: 76, bars: true, items: [{ k: y0, v: 1000, tone: dim }, { k: y1, v: 1100, tone: dim }, { k: y2, v: 1210, tone: dim }, { k: y3, v: 1331, tone: dim }, { k: y4, v: 1464.1, tone: active }, { k: y5, v: 1610.51, tone: active }, { k: y6, v: 1771.56, tone: found }] }
+    - title: Thirty years on
+      text: Keep going for 30 years and simple interest reaches 4,000, while compound interest reaches 17,449.40. The gap is interest earned on interest, which is why starting early matters, and why unpaid debt grows so fast.
+      parts:
+        - kind: kv
+          id: thirty
+          label: "GH₵ 1,000 at 10% a year, after 30 years"
+          slots: 2
+          rows:
+            - { name: simple, value: "1,000 + 30 × 100 = 4,000.00" }
+            - { name: compound, value: "1,000 × 1.1^30 = 17,449.40", tone: found }
