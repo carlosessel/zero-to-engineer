@@ -1,0 +1,146 @@
+- id: fi-property-leverage
+  title: How borrowing magnifies a price change
+  hint: The loan stays fixed while the price moves, so all of the change lands on Esi's equity. Compare a rise with a fall.
+  examples:
+  - label: Prices rise 10%
+    steps:
+    - title: Buying
+      text: Esi buys a house for 600,000, paying a 120,000 deposit and borrowing 480,000. Her equity, what she owns outright, is her deposit.
+      vars:
+        equity: 120,000
+      parts:
+      - kind: kv
+        id: k
+        label: Esi's house (GH₵)
+        slots: 4
+        rows:
+        - name: house
+          value: 600,000
+        - name: loan
+          value: 480,000
+        - name: equity
+          value: 120,000
+          tone: active
+    - title: The price changes
+      text: 'House prices rise 10%, so the house is now worth 660,000. The loan does not change: she still owes 480,000.'
+      parts:
+      - kind: kv
+        id: k
+        label: Esi's house (GH₵)
+        slots: 4
+        rows:
+        - name: house
+          value: 660,000
+          tone: active
+        - name: loan
+          value: 480,000
+        - name: equity
+          value: '?'
+    - title: Her equity
+      text: 'Equity is value minus loan: 660,000 − 480,000 = 180,000.'
+      vars:
+        equity: 180,000
+      parts:
+      - kind: kv
+        id: k
+        label: Esi's house (GH₵)
+        slots: 4
+        rows:
+        - name: house
+          value: 660,000
+        - name: loan
+          value: 480,000
+        - name: equity
+          value: 180,000
+          tone: found
+    - title: Magnified
+      text: A 10% rise in the price has raised her equity by 50%. With 80% borrowed, every price change is multiplied by five.
+      vars:
+        price change: +10%
+        equity change: +50%
+      parts:
+      - kind: kv
+        id: k
+        label: Esi's house (GH₵)
+        slots: 4
+        rows:
+        - name: price change
+          value: +10%
+        - name: equity before
+          value: 120,000
+        - name: equity after
+          value: 180,000
+        - name: equity change
+          value: +50%
+          tone: found
+  - label: Prices fall 25%
+    steps:
+    - title: Buying
+      text: Esi buys a house for 600,000, paying a 120,000 deposit and borrowing 480,000. Her equity, what she owns outright, is her deposit.
+      vars:
+        equity: 120,000
+      parts:
+      - kind: kv
+        id: k
+        label: Esi's house (GH₵)
+        slots: 4
+        rows:
+        - name: house
+          value: 600,000
+        - name: loan
+          value: 480,000
+        - name: equity
+          value: 120,000
+          tone: active
+    - title: The price changes
+      text: 'House prices fall 25%, so the house is now worth 450,000. The loan does not change: she still owes 480,000.'
+      parts:
+      - kind: kv
+        id: k
+        label: Esi's house (GH₵)
+        slots: 4
+        rows:
+        - name: house
+          value: 450,000
+          tone: active
+        - name: loan
+          value: 480,000
+        - name: equity
+          value: '?'
+    - title: Her equity
+      text: 'Equity is value minus loan: 450,000 − 480,000 = −30,000. She owes more than the house is worth: negative equity.'
+      vars:
+        equity: −30,000
+      parts:
+      - kind: kv
+        id: k
+        label: Esi's house (GH₵)
+        slots: 4
+        rows:
+        - name: house
+          value: 450,000
+        - name: loan
+          value: 480,000
+        - name: equity
+          value: −30,000
+          tone: found
+    - title: Magnified
+      text: A 25% fall in the price has cut her equity by 125%. With 80% borrowed, every price change is multiplied by five. Selling would not even repay the loan.
+      vars:
+        price change: −25%
+        equity change: −125%
+      parts:
+      - kind: kv
+        id: k
+        label: Esi's house (GH₵)
+        slots: 4
+        rows:
+        - name: price change
+          value: −25%
+        - name: equity before
+          value: 120,000
+        - name: equity after
+          value: −30,000
+        - name: equity change
+          value: −125%
+          tone: found

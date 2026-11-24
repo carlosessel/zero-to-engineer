@@ -1,0 +1,260 @@
+- id: fi-cash-bonds-price
+  title: Pricing a bond after rates change
+  hint: The bond's payments never change. Only the yield used to discount them does. Switch between a rise and a fall in rates.
+  examples:
+  - label: Yields rise to 25%
+    steps:
+    - title: The bond
+      text: The bond pays 200 a year for 3 years, then repays its 1,000 face value. New bonds now yield 25%, so its payments are discounted at 25%.
+      vars:
+        yield: 25%
+        price so far: '0.00'
+      parts:
+      - kind: tables
+        id: t
+        slots: 3
+        tables:
+        - id: s
+          title: 3-year, 20% coupon bond at a 25% yield
+          columns:
+          - year
+          - payment
+          - factor
+          - today
+          rows: []
+    - title: Year 1
+      text: 200.00 arrives in 1 year. Discounted at 25% it is worth 160.00 today.
+      vars:
+        price so far: '160.00'
+      parts:
+      - kind: tables
+        id: t
+        slots: 3
+        tables:
+        - id: s
+          title: 3-year, 20% coupon bond at a 25% yield
+          columns:
+          - year
+          - payment
+          - factor
+          - today
+          rows:
+          - k: y1
+            cells:
+            - '1'
+            - '200.00'
+            - '0.8000'
+            - '160.00'
+            tone: active
+    - title: Year 2
+      text: 200.00 arrives in 2 years. Discounted at 25% it is worth 128.00 today.
+      vars:
+        price so far: '288.00'
+      parts:
+      - kind: tables
+        id: t
+        slots: 3
+        tables:
+        - id: s
+          title: 3-year, 20% coupon bond at a 25% yield
+          columns:
+          - year
+          - payment
+          - factor
+          - today
+          rows:
+          - k: y1
+            cells:
+            - '1'
+            - '200.00'
+            - '0.8000'
+            - '160.00'
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - '200.00'
+            - '0.6400'
+            - '128.00'
+            tone: active
+    - title: Year 3
+      text: 1,200.00 arrives in 3 years. Discounted at 25% it is worth 614.40 today. It includes the face value, so it is by far the largest.
+      vars:
+        price so far: '902.40'
+      parts:
+      - kind: tables
+        id: t
+        slots: 3
+        tables:
+        - id: s
+          title: 3-year, 20% coupon bond at a 25% yield
+          columns:
+          - year
+          - payment
+          - factor
+          - today
+          rows:
+          - k: y1
+            cells:
+            - '1'
+            - '200.00'
+            - '0.8000'
+            - '160.00'
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - '200.00'
+            - '0.6400'
+            - '128.00'
+            tone: dim
+          - k: y3
+            cells:
+            - '3'
+            - 1,200.00
+            - '0.5120'
+            - '614.40'
+            tone: active
+    - title: The price
+      text: 'The price is 902.40, below the 1,000 face value: with yields above its 20% coupon, the bond must sell at a discount.'
+      parts:
+      - kind: kv
+        id: k
+        label: At a 25% yield
+        slots: 3
+        rows:
+        - name: face value
+          value: 1,000.00
+        - name: coupon
+          value: 20%, 200 a year
+        - name: price
+          value: '902.40'
+          tone: found
+  - label: Yields fall to 15%
+    steps:
+    - title: The bond
+      text: The bond pays 200 a year for 3 years, then repays its 1,000 face value. New bonds now yield 15%, so its payments are discounted at 15%.
+      vars:
+        yield: 15%
+        price so far: '0.00'
+      parts:
+      - kind: tables
+        id: t
+        slots: 3
+        tables:
+        - id: s
+          title: 3-year, 20% coupon bond at a 15% yield
+          columns:
+          - year
+          - payment
+          - factor
+          - today
+          rows: []
+    - title: Year 1
+      text: 200.00 arrives in 1 year. Discounted at 15% it is worth 173.91 today.
+      vars:
+        price so far: '173.91'
+      parts:
+      - kind: tables
+        id: t
+        slots: 3
+        tables:
+        - id: s
+          title: 3-year, 20% coupon bond at a 15% yield
+          columns:
+          - year
+          - payment
+          - factor
+          - today
+          rows:
+          - k: y1
+            cells:
+            - '1'
+            - '200.00'
+            - '0.8696'
+            - '173.91'
+            tone: active
+    - title: Year 2
+      text: 200.00 arrives in 2 years. Discounted at 15% it is worth 151.23 today.
+      vars:
+        price so far: '325.14'
+      parts:
+      - kind: tables
+        id: t
+        slots: 3
+        tables:
+        - id: s
+          title: 3-year, 20% coupon bond at a 15% yield
+          columns:
+          - year
+          - payment
+          - factor
+          - today
+          rows:
+          - k: y1
+            cells:
+            - '1'
+            - '200.00'
+            - '0.8696'
+            - '173.91'
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - '200.00'
+            - '0.7561'
+            - '151.23'
+            tone: active
+    - title: Year 3
+      text: 1,200.00 arrives in 3 years. Discounted at 15% it is worth 789.02 today. It includes the face value, so it is by far the largest.
+      vars:
+        price so far: 1,114.16
+      parts:
+      - kind: tables
+        id: t
+        slots: 3
+        tables:
+        - id: s
+          title: 3-year, 20% coupon bond at a 15% yield
+          columns:
+          - year
+          - payment
+          - factor
+          - today
+          rows:
+          - k: y1
+            cells:
+            - '1'
+            - '200.00'
+            - '0.8696'
+            - '173.91'
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - '200.00'
+            - '0.7561'
+            - '151.23'
+            tone: dim
+          - k: y3
+            cells:
+            - '3'
+            - 1,200.00
+            - '0.6575'
+            - '789.02'
+            tone: active
+    - title: The price
+      text: 'The price is 1,114.16, above the 1,000 face value: with yields below its 20% coupon, buyers pay a premium for it.'
+      parts:
+      - kind: kv
+        id: k
+        label: At a 15% yield
+        slots: 3
+        rows:
+        - name: face value
+          value: 1,000.00
+        - name: coupon
+          value: 20%, 200 a year
+        - name: price
+          value: 1,114.16
+          tone: found

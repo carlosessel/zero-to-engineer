@@ -1,0 +1,213 @@
+---
+title: "Cash, treasury bills and bonds"
+summary: "Lending as an investment: yields, why bond prices fall when rates rise, credit risk and maturity."
+prerequisites: [fi-time-value, fi-risk-return]
+estimated_minutes: 150
+status: resources-verified
+---
+
+When you put money in a savings account, buy a Treasury bill or buy a bond, you are lending: to a bank, a government or a company. In return you are paid interest and, if all goes well, your money back. Lending is usually the steadier part of a portfolio, but it is not free of risk, as bondholders in Ghana learned in 2023. By the end of this chapter you will be able to compare cash-like savings, work out what a Treasury bill costs and earns, read a bond’s coupon, price and yield, explain why bond prices fall when interest rates rise, and judge the two big risks of lending: inflation and default. This is general education, not advice.
+
+## Cash and near-cash
+
+“Cash” in investing means money you can reach quickly with little risk of its value falling in cedis:
+
+- **Savings accounts** at licensed banks (<Ref to="fi-saving" /> and <Ref to="fi-banking" />).
+- **Fixed deposits**: you agree to leave money with a bank for a set term, such as 6 or 12 months, for a higher rate, with a penalty or no access if you withdraw early.
+- **Money market funds**: funds that invest in short-term loans such as Treasury bills, paying a rate that moves with short-term interest rates (<Ref to="fi-funds" /> covers funds).
+
+Cash is right for an emergency fund and for money needed soon. Its main risk over long periods is **inflation**: as <Ref to="fi-inflation" /> showed, a rate below inflation means losing purchasing power.
+
+## Treasury bills
+
+A **Treasury bill** is a short-term loan to the government, usually for 91, 182 or 364 days. Bills do not pay interest along the way. Instead they are sold at a **discount**: you pay less than the **face value** now and receive the face value when the bill **matures**. Your interest is the difference.
+
+In Ghana, results are quoted in two ways: a **discount rate** and an **interest rate**. The price per GH₵ 100 of face value is:
+
+price = 100 × (1 − discount rate × days ÷ 364)
+
+and the interest rate, the yearly return on what you actually pay, is:
+
+interest rate = (100 ÷ price − 1) × 364 ÷ days
+
+**Worked example (Bank of Ghana results for the bills issued on 23 November 2026).** The 91-day bill had a discount rate of 4.4688%.
+
+1. Price per GH₵ 100: 100 × (1 − 0.044688 × 91 ÷ 364) = 100 × (1 − 0.011172) = **GH₵ 98.8828**.
+2. Interest rate: (100 ÷ 98.8828 − 1) × 364 ÷ 91 = 0.011298 × 4 = **4.5193%**, exactly the interest rate the Bank of Ghana published.
+3. To receive GH₵ 10,000 in 91 days, you would pay 10,000 × 0.988828 = **GH₵ 9,888.28** and earn GH₵ 111.72.
+
+The interest rate is always higher than the discount rate, because the discount is a share of the face value but you only paid the lower price. Compare investments using the **interest rate**.
+
+The 364-day bill at the same auction had an interest rate of 9.4470%. With October’s inflation of 5.5%, its real return was about 1.09447 ÷ 1.055 − 1 = **3.74%**, if inflation stayed there.
+
+## Bonds
+
+A **bond** is a longer-term loan, usually from 2 to 30 years, to a government or a company, divided into units that investors can buy and sell. Its terms:
+
+- **Face value** (or par value): the amount repaid at the end, often GH₵ 100 or GH₵ 1,000 per unit.
+- **Coupon**: the interest, a fixed percentage of face value, paid each year or every six months.
+- **Maturity**: the date the face value is repaid.
+- **Issuer**: who borrowed, which decides how likely you are to be paid.
+
+**Worked example.** A 3-year bond with face value GH₵ 1,000 and a 20% coupon paid yearly pays GH₵ 200 at the end of years 1 and 2, and GH₵ 200 + 1,000 = GH₵ 1,200 at the end of year 3.
+
+If you buy a bond when it is first issued and hold it to maturity, and the issuer pays, you get exactly what was promised. But if you sell before maturity, you get whatever the market will pay, which may be more or less than you paid.
+
+## Why bond prices fall when interest rates rise
+
+A bond’s price is the present value of its payments, discounted at the return investors currently demand for similar bonds (<Ref to="fi-time-value" />). That return is the bond’s **yield** (strictly, its **yield to maturity**).
+
+When the bond above was issued, similar bonds yielded 20%, so it was worth exactly its face value: 200 ÷ 1.20 + 200 ÷ 1.20² + 1,200 ÷ 1.20³ = **GH₵ 1,000.00**.
+
+Now suppose, straight after it is issued, interest rates rise and new 3-year bonds yield 25%. Nobody will pay GH₵ 1,000 for a bond paying 20% when new ones pay 25%. Its price falls until it too yields 25%:
+
+200 ÷ 1.25 + 200 ÷ 1.25² + 1,200 ÷ 1.25³ = 160.00 + 128.00 + 614.40 = **GH₵ 902.40**
+
+If rates instead fell to 15%, its fixed 20% coupon would be attractive and its price would rise to **GH₵ 1,114.16**.
+
+<Walkthrough name="fi-cash-bonds-price" />
+
+So **bond prices and yields move in opposite directions**. A buyer at 902.40 who holds to maturity earns 25% a year: 20% from the coupons, plus the gain from 902.40 back to 1,000.
+
+**Longer bonds move more.** If yields rise from 20% to 25%, a 1-year bond with a 20% coupon falls to 1,200 ÷ 1.25 = 960.00, down 4%, but a 5-year one falls to GH₵ 865.54, down 13.45%. The further away the payments, the more a change in the discount rate affects their value. This sensitivity is called **interest rate risk**, and it is why long bonds can be volatile even when the issuer is perfectly safe.
+
+The **current yield**, coupon ÷ price, is a quick but rough measure: the bond at 900 has a current yield of 200 ÷ 900 = 22.2%, but its yield to maturity is about 25.1%, because it also gains 100 at maturity. In a spreadsheet, `=RATE(3, 200, -900, 1000)` gives the yield to maturity.
+
+The same pricing in Python (optional):
+
+```python
+def bond_price(coupon, face, years, yield_rate):
+    coupons = sum(coupon / (1 + yield_rate) ** t for t in range(1, years + 1))
+    return coupons + face / (1 + yield_rate) ** years
+
+for y in (0.15, 0.20, 0.25):
+    print(f"{y:.0%}", f"{bond_price(200, 1000, 3, y):,.2f}")
+```
+
+```text
+15% 1,114.16
+20% 1,000.00
+25% 902.40
+```
+
+## Credit risk
+
+**Credit risk** (or default risk) is the risk that the issuer does not pay the interest or the face value in full and on time. Lenders demand a higher yield from riskier borrowers; the extra over a safe government bond of the same maturity is the **credit spread**. **Credit rating agencies** grade issuers, from the safest (AAA) down through BBB (still “investment grade”) to BB and below (“high yield” or “junk”) and D for default. Ratings are opinions, and they can be wrong or late.
+
+A government borrowing in its **own currency** is usually the safest borrower in that country, because it can raise taxes and its central bank issues the currency. Usually is not always.
+
+**Ghana’s Domestic Debt Exchange.** In 2022 Ghana’s government could no longer afford its debts on the terms it had agreed. In 2023, under the Domestic Debt Exchange Programme, it swapped most of its cedi bonds for new bonds with **lower coupons and later maturities**. The face values of most domestic bonds were not cut, so in that narrow sense nobody lost their principal. But being paid less interest, later, cuts the present value of what you are owed.
+
+**Worked example (fictional figures in the spirit of the exchange).** A bond worth GH₵ 1,000 when similar bonds yield 20% is swapped for a 5-year bond with the same GH₵ 1,000 face value but a 10% coupon. At a 20% yield the new bond is worth 100 ÷ 1.2 + 100 ÷ 1.2² + … + 1,100 ÷ 1.2⁵ = **GH₵ 700.94**. The face value is unchanged, but about 30% of the value has gone.
+
+The government also restructured its dollar bonds held abroad. The lessons: even government bonds carry credit risk; “no cut to the principal” can still mean a large loss; and when inflation and interest rates are very high, a government’s ability to pay deserves as much attention as the rate it offers.
+
+## Inflation and currency risk
+
+A bond’s payments are fixed in cedis (or another currency), so inflation reduces their real value, and long bonds suffer most if inflation rises unexpectedly. Some governments issue **inflation-linked bonds**, whose payments rise with a price index; the UK’s are called index-linked gilts.
+
+Bonds in a foreign currency, such as dollar bonds, add **currency risk**: their value in cedis moves with the exchange rate, which may help or hurt.
+
+<Note>
+
+**Ghana (checked November 2026).** The Bank of Ghana publishes Treasury bill results weekly on its website. At the auction whose bills were issued on 23 November 2026, the interest rates were 4.5193% (91-day), 6.1210% (182-day) and 9.4470% (364-day). Treasury bills and government bonds can be bought through banks and licensed dealers, and bonds trade on the Ghana Fixed Income Market. The Domestic Debt Exchange Programme ran from December 2022 into 2023.
+
+</Note>
+
+<Note>
+
+**United Kingdom (checked November 2026).** UK government bonds are called **gilts**, and inflation-linked ones **index-linked gilts**. They can be bought through investment platforms and brokers. Interest on most gilts is taxable, but the gain when a gilt is sold or matures is free of Capital Gains Tax. Check GOV.UK for current tax rules.
+
+</Note>
+
+## Common mistakes
+
+- **Comparing a Treasury bill’s discount rate** with a savings account’s interest rate; compare interest rates.
+- **Thinking a bond cannot lose value** because it is “fixed income”: prices fall when yields rise, and issuers can default.
+- **Chasing the highest yield** without asking why it is high. A high yield usually means high risk.
+- **Buying long bonds with money needed soon**, then having to sell after rates rise.
+- **Ignoring inflation**: a 15% coupon when inflation is 25% loses purchasing power.
+- **Treating “no principal haircut” as “no loss”**, as the exchange showed.
+
+## Practice
+
+**1. (warm-up)** A 364-day bill has a discount rate of 8.6316%. What is its price per GH₵ 100, and what do you pay for GH₵ 5,000 of face value?
+
+<Solution>
+
+100 × (1 − 0.086316 × 364 ÷ 364) = **GH₵ 91.3684**. For 5,000: 5,000 × 0.913684 = **GH₵ 4,568.42**, earning 431.58.
+
+</Solution>
+
+**2. (warm-up)** A bond has face value GH₵ 100 and a 12% coupon paid yearly. How much interest does it pay each year?
+
+<Solution>
+
+12% of 100 = **GH₵ 12**.
+
+</Solution>
+
+**3. (standard)** Check the Bank of Ghana’s 182-day result: a discount rate of 5.9392% should give an interest rate of 6.1210%.
+
+<Solution>
+
+Price = 100 × (1 − 0.059392 × 182 ÷ 364) = 100 × (1 − 0.029696) = 97.0304. Interest rate = (100 ÷ 97.0304 − 1) × 364 ÷ 182 = 0.030605 × 2 = **6.121%**. It matches.
+
+</Solution>
+
+**4. (standard)** What is the 3-year, 20% coupon bond worth if yields are 20%? Explain why without calculating.
+
+<Solution>
+
+**GH₵ 1,000**, its face value. When a bond’s coupon rate equals the yield investors demand, it pays exactly the going rate, so it is worth its face value.
+
+</Solution>
+
+**5. (standard)** Two government bonds both have 20% coupons. One matures in 1 year, the other in 5. Yields rise to 25%. Which falls more, and why?
+
+<Solution>
+
+The **5-year bond** (to 865.54, down 13.45%, against 960.00, down 4%, for the 1-year). Its payments are further away, so a higher discount rate reduces their present value more.
+
+</Solution>
+
+**6. (standard)** A company bond yields 28% while a government bond of the same maturity yields 20%. What is the credit spread, and what does it tell you?
+
+<Solution>
+
+28 − 20 = **8 percentage points**. Investors demand much more to lend to the company, because they think there is a real chance it will not pay in full.
+
+</Solution>
+
+**7. (stretch)** Kojo buys the 3-year bond at GH₵ 902.40 just after yields rise to 25%, and holds it to maturity. Show that he earns 25% a year.
+
+<Solution>
+
+At 25%, the present value of 200, 200 and 1,200 is exactly 902.40, so 25% is the rate that makes the price equal the payments’ value: his return. Year by year: 902.40 × 1.25 = 1,128.00, minus 200 paid out leaves 928.00; × 1.25 = 1,160.00, minus 200 leaves 960.00; × 1.25 = **1,200.00**, exactly the final payment.
+
+</Solution>
+
+**8. (stretch)** A bond paying 20% is exchanged for one with the same face value of GH₵ 1,000 but paying 10% for 5 years. Investors demand 20%. What is the new bond worth, and why did the government say there was “no haircut”?
+
+<Solution>
+
+Present value at 20% = **GH₵ 700.94**. The **face value** stayed GH₵ 1,000, so the principal was not cut; the loss came from lower and later payments, which only a present-value calculation shows.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Cash** (savings, fixed deposits, money market funds) is for safety and short-term needs; its main risk is inflation.
+- **Treasury bills** are sold at a **discount** and repay **face value**; compare them by **interest rate**, not discount rate.
+- A **bond** pays a fixed **coupon** and repays face value at **maturity**; its price is the present value of its payments at the current **yield**.
+- **Bond prices and yields move in opposite directions**, and longer bonds move more (**interest rate risk**).
+- **Credit risk**: issuers can fail to pay; riskier ones pay a **credit spread**. Ghana’s 2023 debt exchange cut bondholders’ present value without cutting face value.
+- Fixed payments lose real value to inflation; foreign-currency bonds add currency risk.
+
+## Go deeper
+
+- [Treasury bill rates](https://www.bog.gov.gh/treasury-and-the-markets/treasury-bill-rates/), Bank of Ghana. Weekly results for the 91-, 182- and 364-day bills, with discount and interest rates.
+- [Bonds](https://www.investor.gov/introduction-investing/investing-basics/investment-products/bonds-or-fixed-income-products/bonds), Investor.gov (US SEC). Bond basics and their risks, including why rising rates lower the value of existing bonds.
+- [Stocks and bonds](https://www.khanacademy.org/economics-finance-domain/core-finance/stock-and-bonds), Khan Academy. Videos on debt against equity, coupons and par value, and why bond prices move opposite to interest rates.

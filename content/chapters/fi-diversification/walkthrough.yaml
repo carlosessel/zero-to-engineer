@@ -1,0 +1,210 @@
+- id: fi-diversification-mix
+  title: Two investments, and the mix
+  hint: Watch the X and Y columns swing while the half-and-half column grows steadily.
+  steps:
+  - title: The start
+    text: 'GH₵ 1,000 goes into X, into Y, or half into each. X and Y always move in opposite directions: their correlation is −1.'
+    vars:
+      correlation: −1
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 1,000 in X, in Y, or half in each
+        columns:
+        - year
+        - X
+        - Y
+        - mix
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 1,000.00
+          - 1,000.00
+          - 1,000.00
+          tone: active
+  - title: Year 1
+    text: 'X rises 20% and Y falls 10%. The half-and-half portfolio gains 5%: 600 + 450 = 1,050. Then it is rebalanced to 525 in each.'
+    vars:
+      half each: 1,050.00
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 1,000 in X, in Y, or half in each
+        columns:
+        - year
+        - X
+        - Y
+        - mix
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 1,000.00
+          - 1,000.00
+          - 1,000.00
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - 1,200.00
+          - '900.00'
+          - 1,050.00
+          tone: active
+  - title: Year 2
+    text: 'Now X falls 10% and Y rises 20%. X and Y are back to 1,080. The mix gains 5% again: 472.50 + 630 = 1,102.50.'
+    vars:
+      half each: 1,102.50
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 1,000 in X, in Y, or half in each
+        columns:
+        - year
+        - X
+        - Y
+        - mix
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 1,000.00
+          - 1,000.00
+          - 1,000.00
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - 1,200.00
+          - '900.00'
+          - 1,050.00
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - 1,080.00
+          - 1,080.00
+          - 1,102.50
+          tone: active
+  - title: Year 3
+    text: The pattern repeats. X alone has swung from 1,000 to 1,200, down to 1,080 and up to 1,296; the mix has simply grown 5% a year.
+    vars:
+      half each: 1,157.63
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 1,000 in X, in Y, or half in each
+        columns:
+        - year
+        - X
+        - Y
+        - mix
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 1,000.00
+          - 1,000.00
+          - 1,000.00
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - 1,200.00
+          - '900.00'
+          - 1,050.00
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - 1,080.00
+          - 1,080.00
+          - 1,102.50
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - 1,296.00
+          - '972.00'
+          - 1,157.63
+          tone: active
+  - title: Year 4
+    text: X and Y both end at 1,166.40, after a bumpy ride. The rebalanced mix ends at 1,215.51, with no bumps at all.
+    vars:
+      X or Y: 1,166.40
+      half each: 1,215.51
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 1,000 in X, in Y, or half in each
+        columns:
+        - year
+        - X
+        - Y
+        - mix
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 1,000.00
+          - 1,000.00
+          - 1,000.00
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - 1,200.00
+          - '900.00'
+          - 1,050.00
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - 1,080.00
+          - 1,080.00
+          - 1,102.50
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - 1,296.00
+          - '972.00'
+          - 1,157.63
+          tone: dim
+        - k: y4
+          cells:
+          - '4'
+          - 1,166.40
+          - 1,166.40
+          - 1,215.51
+          tone: found
+  - title: Why it worked
+    text: The two moved in opposite directions, so each loss was offset by a gain, and yearly rebalancing kept the mix at 50:50. Without rebalancing, it would end at 1,166.40 too.
+    parts:
+    - kind: kv
+      id: k
+      label: After four years
+      slots: 3
+      rows:
+      - name: X alone
+        value: 1,166.40, swinging every year
+      - name: Y alone
+        value: 1,166.40, swinging every year
+      - name: half each
+        value: 1,215.51, +5% every year
+        tone: found

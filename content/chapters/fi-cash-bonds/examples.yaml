@@ -1,0 +1,32 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    15% 1,114.16
+    20% 1,000.00
+    25% 902.40
+  verify: |
+    price = ns["bond_price"]
+    assert round(price(200, 1000, 1, 0.25), 2) == 960.00
+    assert round(price(200, 1000, 5, 0.25), 2) == 865.54
+    assert round(price(100, 1000, 5, 0.20), 2) == 700.94
+    tb = lambda d, days: 100 * (1 - d / 100 * days / 364)
+    assert round(tb(4.4688, 91), 4) == 98.8828
+    assert round((100 / tb(4.4688, 91) - 1) * 364 / 91 * 100, 4) == 4.5193
+    assert round((100 / tb(5.9392, 182) - 1) * 364 / 182 * 100, 3) == 6.121
+    assert round((100 / tb(8.6316, 364) - 1) * 100, 3) == 9.447
+    assert round(10000 * 0.988828, 2) == 9888.28
+    assert round(5000 * 0.913684, 2) == 4568.42
+    assert round((1.09447 / 1.055 - 1) * 100, 2) == 3.74
+    lo, hi = 0.0, 1.0
+    for _ in range(100):
+        m = (lo + hi) / 2
+        lo, hi = (m, hi) if price(200, 1000, 3, m) > 900 else (lo, m)
+    assert round(m * 100, 1) == 25.1
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the Python block above, which that block's check compares exactly.
+  verify: |
+    assert block.strip().splitlines() == ["15% 1,114.16", "20% 1,000.00", "25% 902.40"]

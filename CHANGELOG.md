@@ -4,6 +4,16 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-24: Zero to Money and Investing, part 6
+
+Added
+- Part 6 of Zero to Money and Investing, "Investing fundamentals": risk and return (measuring returns, kinds of risk, volatility and its cost, recovering from losses, drawdowns, the risk premium, time horizon, risk tolerance and capacity), diversification and asset allocation (correlation, specific and market risk, concentration, weighted expected return, rebalancing), cash, Treasury bills and bonds (discount pricing from the Bank of Ghana's published rates, coupons, yields and prices, interest rate risk, credit risk and Ghana's 2023 domestic debt exchange), shares (rights, total return, EPS, P/E and dividend yield, the dividend growth model, splits and rights issues), funds and index funds (NAV, kinds of fund, active against passive and the SPIVA evidence, what fees cost over 30 years), property (renting against buying, mortgages, leverage and negative equity, buy to let, land titles, REITs), and crypto (blockchains and keys, why there is no cash flow, volatility and leverage, stablecoins, custody, and the scams that use it).
+- Walkthroughs: a drawdown tracked year by year, two opposite investments and their rebalanced mix, a bond repriced after rates rise or fall, a share's total return over three years, a fee's cost over 30 years, leverage on a house price rise or fall, and a fake trading platform from first message to final demand.
+- Optional Python checks: volatility and compound growth, bond prices and Treasury bill rates, the dividend growth model, and fee drag.
+- Country notes checked on 24 November 2026: Bank of Ghana Treasury bill rates, Ghana's 8% dividend withholding tax, SEC Ghana's register of funds, the Virtual Asset Service Providers Act 2025; UK gilts, dividend allowance, ISAs, FCA crypto warnings.
+- 75 glossary terms. "Rebalancing", "Issuer" and "Portfolio" now give their finance meaning alongside their existing meanings, and "Volatility" is a separate term from the database "Function volatility".
+- Earlier chapters now link to the new risk and return, bonds, shares and funds chapters.
+
 ### 2026-11-24: Zero to Money and Investing, part 5
 
 Added
