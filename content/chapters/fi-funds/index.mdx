@@ -1,0 +1,208 @@
+---
+title: "Funds and index funds"
+summary: "Unit trusts, mutual funds and ETFs; active and passive investing; what the evidence says about each."
+prerequisites: [fi-diversification, fi-shares, fi-cash-bonds]
+estimated_minutes: 120
+status: resources-verified
+---
+
+Most people do not have the money, time or knowledge to build a diversified portfolio of dozens of shares and bonds themselves. Funds solve that: you pool your money with thousands of others and a manager invests the whole pot. The choice between kinds of fund, and between paying a manager to pick investments or simply copying an index, can make a difference of tens of thousands of cedis over a working life. By the end of this chapter you will be able to say how a fund works and what you own, read a fund’s price, compare unit trusts, mutual funds and exchange-traded funds, explain active and passive investing and what the evidence says, and work out what fees cost over time. This is general education, not advice on any fund.
+
+## How a fund works
+
+A **fund** (or collective investment scheme) pools money from many investors and invests it according to a stated aim, such as “Ghanaian shares” or “short-term government securities”. Each investor owns **units** (or shares) of the fund, in proportion to what they put in. Three parties keep it honest:
+
+- the **fund manager**, who decides what to buy and sell;
+- the **custodian** or **trustee**, a separate firm that holds the fund’s investments so the manager cannot take them (<Ref to="fi-markets" />);
+- the **regulator**, which licenses the fund and its manager.
+
+Funds give small investors diversification, professional management, and the ability to start with small amounts and add regularly.
+
+## What a unit is worth
+
+A fund’s **net asset value** (NAV) is the value of everything it owns minus anything it owes. Divided by the number of units, it gives the **NAV per unit**, the fund’s price.
+
+**Worked example.** A fund owns investments worth GH₵ 50,000,000 and owes GH₵ 200,000 in fees and other bills. It has 20,000,000 units. NAV per unit = (50,000,000 − 200,000) ÷ 20,000,000 = **GH₵ 2.49**. If you invest GH₵ 1,000, you get 1,000 ÷ 2.49 = 401.61 units (before any charges). If the fund’s investments rise 10%, so does your unit price, roughly.
+
+The NAV is usually calculated once a day, after markets close. Some funds have a slightly higher price to buy (the **offer price**) than to sell (the **bid price**), to cover dealing costs.
+
+## Kinds of fund
+
+By **structure**:
+
+- A **unit trust** or **mutual fund** (open-ended fund) creates new units when you invest and cancels them when you sell, at the NAV. You deal with the fund manager, not on an exchange.
+- An **exchange-traded fund** (ETF) is a fund whose units are listed and traded on a stock exchange like shares, through a broker, at a market price close to its NAV.
+- An **investment trust** (in the UK) is a listed company that invests in other companies; its share price can differ quite a lot from its NAV.
+
+By **what they hold**:
+
+- **Money market funds**: short-term government bills and bank deposits. Low risk, returns close to Treasury bill rates. Common in Ghana as an alternative to savings accounts.
+- **Bond (fixed income) funds**: government and company bonds.
+- **Equity funds**: shares.
+- **Balanced funds**: a mix of shares and bonds, often rebalanced to a target (<Ref to="fi-diversification" />).
+- **Property funds**: buildings or property companies (<Ref to="fi-property" />).
+
+## Active and passive
+
+An **active fund** has a manager who picks investments, trying to beat a **benchmark**, usually an index. A **passive fund**, or **index fund**, simply buys everything in an index, in the same proportions, aiming to match it.
+
+The arithmetic behind the choice is simple. Before costs, all investors in a market together *are* the market, so their average return must equal the index. Some active managers beat it and others trail it, by the same amounts. After costs, the average active investor must trail the index by the average active fee, and since index funds charge far less, the average index fund comes out ahead of the average active fund.
+
+**The evidence.** S&P Dow Jones Indices publishes regular scorecards (called SPIVA) comparing active funds with their benchmarks. Its mid-2026 report for funds based in Europe found that over the **10 years to June 2026, 94% of active equity funds underperformed** their benchmarks, as did 76% of bond funds. Results in other regions are similar over long periods. Some managers do beat the index, but it is hard to tell in advance which, and past winners rarely keep winning.
+
+Index funds are not free of risk: an index fund of shares falls when the market falls. What they remove is the extra risk and cost of a manager’s choices. In smaller markets, such as Ghana’s, there may be few or no index funds, and the choice is among active funds, so fees and the manager’s record matter even more.
+
+## What fees cost
+
+Funds charge a yearly fee as a percentage of your money, usually taken from the fund each day, so you never see a bill. It is often called the **ongoing charge** or **expense ratio**, and some funds add entry or exit fees and performance fees. Small percentages compound into large sums.
+
+**Worked example.** Two funds hold the same investments, which return 10% a year before fees. Fund L charges 0.2% a year; Fund H charges 2%. Ama invests GH₵ 10,000 in each and leaves it for 30 years.
+
+| Year | Fund L (0.2%) | Fund H (2%) | Difference |
+|---|---|---|---|
+| 1 | 10,978.00 | 10,780.00 | 198.00 |
+| 10 | 25,423.32 | 21,192.76 | 4,230.56 |
+| 20 | 64,634.52 | 44,913.33 | 19,721.19 |
+| 30 | 164,322.41 | 95,183.75 | **69,138.66** |
+
+Each year, each fund grows 10% and then takes its fee from the total. After 30 years the 2% fund has cost Ama **GH₵ 69,138.66**, more than four-tenths of what the cheap one would have given her, and almost seven times what she invested.
+
+<Walkthrough name="fi-funds-fees" />
+
+The same calculation in Python (optional):
+
+```python
+def grow(amount, years, gross, fee):
+    for _ in range(years):
+        amount *= (1 + gross) * (1 - fee)
+    return amount
+
+for years in (10, 20, 30):
+    low, high = grow(10000, years, 0.10, 0.002), grow(10000, years, 0.10, 0.02)
+    print(years, f"{low:,.2f}", f"{high:,.2f}", f"{low - high:,.2f}")
+```
+
+```text
+10 25,423.32 21,192.76 4,230.56
+20 64,634.52 44,913.33 19,721.19
+30 164,322.41 95,183.75 69,138.66
+```
+
+A fee is certain; extra performance is not. When two funds do the same job, the cheaper one starts ahead.
+
+## Choosing a fund
+
+Questions to ask of any fund:
+
+1. **Is it licensed**, and is its manager? Check the regulator’s register (<Ref to="fi-markets" />).
+2. **What does it hold?** Read the factsheet: asset classes, countries, largest holdings. Does it fit the place you intended for it in your asset allocation?
+3. **What does it cost?** The ongoing charge, plus any entry, exit and performance fees.
+4. **How has it done against its benchmark** over five years or more, after fees? Not just “it returned 20%”, but 20% compared with what?
+5. **How easily can you get your money out**, and how long does it take?
+6. **Who holds the assets?** There should be an independent custodian or trustee.
+
+Be wary of funds sold with promises of fixed returns: a genuine fund’s returns rise and fall with what it holds.
+
+<Note>
+
+**Ghana (checked November 2026).** Collective investment schemes are licensed by the Securities and Exchange Commission. Its online register listed 54 mutual funds, 33 unit trusts and 1 exchange-traded fund in November 2026, along with 86 licensed fund managers. Money market funds are among the most widely held. Check that both the fund and its manager are on the register, and ask for the fund’s factsheet and fees.
+
+</Note>
+
+<Note>
+
+**United Kingdom (checked November 2026).** Funds are authorised by the Financial Conduct Authority, and index funds and ETFs tracking UK and global indices are widely available through investment platforms. Holding them in a stocks and shares ISA keeps dividends and gains free of tax (up to £20,000 can be paid into ISAs in the 2026 to 2027 tax year). The ongoing charges figure (OCF) is shown on each fund’s key information document.
+
+</Note>
+
+## Common mistakes
+
+- **Ignoring fees** because they are small percentages taken out of sight.
+- **Choosing last year’s top fund**; past winners rarely stay on top.
+- **Owning several funds that hold the same things**, which adds cost without diversification.
+- **Comparing a fund’s return with nothing**, instead of with its benchmark.
+- **Mistaking a money market fund for a bank deposit**: it is not covered by deposit protection, and its value can fall, if rarely.
+- **Buying from unlicensed “fund managers”** offering fixed high returns.
+
+## Practice
+
+**1. (warm-up)** A fund owns GH₵ 12,000,000 of investments, owes GH₵ 50,000 and has 8,000,000 units. What is its NAV per unit?
+
+<Solution>
+
+(12,000,000 − 50,000) ÷ 8,000,000 = **GH₵ 1.49375**, usually shown as 1.4938.
+
+</Solution>
+
+**2. (warm-up)** You invest GH₵ 2,000 in a unit trust at a NAV of GH₵ 1.25 per unit. How many units do you get, before charges?
+
+<Solution>
+
+2,000 ÷ 1.25 = **1,600 units**.
+
+</Solution>
+
+**3. (standard)** An active fund returned 14% last year. Its benchmark index returned 16%. Did it do well?
+
+<Solution>
+
+**No.** It trailed its benchmark by 2 percentage points; an index fund tracking the benchmark, with a small fee, would have returned close to 16%.
+
+</Solution>
+
+**4. (standard)** Explain in two sentences why the average active fund must trail the index after costs.
+
+<Solution>
+
+Before costs, all investors together hold the whole market, so their average return equals the index. Active funds charge more than index funds, so after costs their average must be lower.
+
+</Solution>
+
+**5. (standard)** Using the table, how much of the 30-year difference between the funds had built up by year 10? Why is most of it later?
+
+<Solution>
+
+4,230.56 of 69,138.66, about **6%**. Fees take a percentage of a growing balance, and money lost to fees also loses all its future growth, so the gap compounds: most of it appears in the last decade.
+
+</Solution>
+
+**6. (standard)** Esi holds three funds: a Ghana equity fund, a “Ghana growth” fund and a “Ghana blue-chip” fund. Their factsheets list the same ten largest holdings. Is she diversified?
+
+<Solution>
+
+**Barely.** All three hold mostly the same Ghanaian shares, so they rise and fall together. She pays three sets of fees for what is close to one portfolio, and has no bonds, cash or foreign assets.
+
+</Solution>
+
+**7. (stretch)** A fund charges 2.5% a year and claims it will beat the index “by 3% a year”. If the index returns 15% before costs, what would the fund need to achieve before fees to keep that promise, and how likely is that given the evidence?
+
+<Solution>
+
+It must return 15% + 3% = 18% **after** fees, so roughly 18% + 2.5% = **20.5% before fees**: beating the index by about 5.5 points a year, consistently. The SPIVA evidence shows that most active funds do not beat their index at all over ten years, so this is very unlikely to be achieved reliably.
+
+</Solution>
+
+**8. (stretch)** Why might an investor in Ghana choose an active fund even after reading this chapter?
+
+<Solution>
+
+There may be **no index fund** for the market or asset class they want, or only a thin one; in a small market with few listed companies, an index may be dominated by a handful of shares. Money market and bond funds, where fees can be modest and an index is hard to copy, may also make sense. The chapter’s lessons still apply: compare fees, check the record against a benchmark, and check the licence.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **fund** pools money; investors own **units**; a separate **custodian** or **trustee** holds the assets.
+- **NAV per unit** = (assets − liabilities) ÷ units: the fund’s price.
+- **Unit trusts and mutual funds** deal at NAV with the manager; **ETFs** trade on exchanges.
+- **Active** funds try to beat a **benchmark**; **index funds** copy it. After costs the average active fund must trail the index, and SPIVA found 94% of European active equity funds did over 10 years.
+- **Fees compound**: 2% against 0.2% a year cost GH₵ 69,138.66 on GH₵ 10,000 over 30 years at 10%.
+- Check the licence, holdings, fees, record against a benchmark, access and custody.
+
+## Go deeper
+
+- [SPIVA Europe Mid-Year 2026](https://www.spglobal.com/spdji/en/spiva/article/spiva-europe/), S&P Dow Jones Indices. How active funds based in Europe compared with their benchmarks over periods up to 10 years and more.
+- [Mutual Funds](https://www.investor.gov/introduction-investing/investing-basics/investment-products/mutual-funds-and-exchange-traded-funds-etfs/mutual-funds), Investor.gov (US SEC). How mutual funds work, their fees and risks, with links to ETFs and index funds.
+- [SEC Ghana licensees](https://licensees.sec.gov.gh/), Securities and Exchange Commission, Ghana. The register of licensed mutual funds, unit trusts, ETFs and fund managers.

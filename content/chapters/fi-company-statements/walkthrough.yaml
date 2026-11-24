@@ -1,0 +1,366 @@
+- id: fi-company-statements-cash
+  title: From profit to cash
+  hint: Each line either adds cash or uses it. The running total ends at the change in cash on the balance sheet.
+  steps:
+  - title: Start from profit
+    text: Volta made a profit of 24.0. The cash flow statement starts here and adjusts for everything that was not cash.
+    vars:
+      section: operating
+    parts:
+    - kind: tables
+      id: t
+      slots: 8
+      tables:
+      - id: s
+        title: Volta Foods, 2026 (GH₵ million)
+        columns:
+        - item
+        - cash
+        - running
+        rows:
+        - k: r0
+          cells:
+          - profit
+          - '+24.0'
+          - '24.0'
+          tone: active
+  - title: Depreciation
+    text: Depreciation of 15.0 reduced profit, but no cash left for it this year, so it is added back.
+    vars:
+      section: operating
+    parts:
+    - kind: tables
+      id: t
+      slots: 8
+      tables:
+      - id: s
+        title: Volta Foods, 2026 (GH₵ million)
+        columns:
+        - item
+        - cash
+        - running
+        rows:
+        - k: r0
+          cells:
+          - profit
+          - '+24.0'
+          - '24.0'
+          tone: dim
+        - k: r1
+          cells:
+          - depreciation
+          - '+15.0'
+          - '39.0'
+          tone: active
+  - title: Inventory
+    text: 'Inventory rose from 35 to 40: 5.0 of cash is tied up in food not yet sold.'
+    vars:
+      section: operating
+    parts:
+    - kind: tables
+      id: t
+      slots: 8
+      tables:
+      - id: s
+        title: Volta Foods, 2026 (GH₵ million)
+        columns:
+        - item
+        - cash
+        - running
+        rows:
+        - k: r0
+          cells:
+          - profit
+          - '+24.0'
+          - '24.0'
+          tone: dim
+        - k: r1
+          cells:
+          - depreciation
+          - '+15.0'
+          - '39.0'
+          tone: dim
+        - k: r2
+          cells:
+          - more inventory
+          - −5.0
+          - '34.0'
+          tone: active
+  - title: Receivables
+    text: 'Receivables rose from 30 to 35: 5.0 of the year''s sales has not yet been paid for.'
+    vars:
+      section: operating
+    parts:
+    - kind: tables
+      id: t
+      slots: 8
+      tables:
+      - id: s
+        title: Volta Foods, 2026 (GH₵ million)
+        columns:
+        - item
+        - cash
+        - running
+        rows:
+        - k: r0
+          cells:
+          - profit
+          - '+24.0'
+          - '24.0'
+          tone: dim
+        - k: r1
+          cells:
+          - depreciation
+          - '+15.0'
+          - '39.0'
+          tone: dim
+        - k: r2
+          cells:
+          - more inventory
+          - −5.0
+          - '34.0'
+          tone: dim
+        - k: r3
+          cells:
+          - more receivables
+          - −5.0
+          - '29.0'
+          tone: active
+  - title: Payables
+    text: 'Payables rose from 28 to 30: Volta has not yet paid 2.0 to suppliers, which keeps cash in. Operating cash flow: 31.0.'
+    vars:
+      operating cash flow: '31.0'
+    parts:
+    - kind: tables
+      id: t
+      slots: 8
+      tables:
+      - id: s
+        title: Volta Foods, 2026 (GH₵ million)
+        columns:
+        - item
+        - cash
+        - running
+        rows:
+        - k: r0
+          cells:
+          - profit
+          - '+24.0'
+          - '24.0'
+          tone: dim
+        - k: r1
+          cells:
+          - depreciation
+          - '+15.0'
+          - '39.0'
+          tone: dim
+        - k: r2
+          cells:
+          - more inventory
+          - −5.0
+          - '34.0'
+          tone: dim
+        - k: r3
+          cells:
+          - more receivables
+          - −5.0
+          - '29.0'
+          tone: dim
+        - k: r4
+          cells:
+          - more payables
+          - '+2.0'
+          - '31.0'
+          tone: active
+  - title: Investing
+    text: 'It spent 25.0 on new equipment. Operating cash minus this is free cash flow: just 6.0.'
+    vars:
+      free cash flow: '6.0'
+    parts:
+    - kind: tables
+      id: t
+      slots: 8
+      tables:
+      - id: s
+        title: Volta Foods, 2026 (GH₵ million)
+        columns:
+        - item
+        - cash
+        - running
+        rows:
+        - k: r0
+          cells:
+          - profit
+          - '+24.0'
+          - '24.0'
+          tone: dim
+        - k: r1
+          cells:
+          - depreciation
+          - '+15.0'
+          - '39.0'
+          tone: dim
+        - k: r2
+          cells:
+          - more inventory
+          - −5.0
+          - '34.0'
+          tone: dim
+        - k: r3
+          cells:
+          - more receivables
+          - −5.0
+          - '29.0'
+          tone: dim
+        - k: r4
+          cells:
+          - more payables
+          - '+2.0'
+          - '31.0'
+          tone: dim
+        - k: r5
+          cells:
+          - new equipment
+          - −25.0
+          - '6.0'
+          tone: active
+  - title: 'Financing: loans'
+    text: It repaid 5.0 of its borrowings, leaving 1.0.
+    vars:
+      section: financing
+    parts:
+    - kind: tables
+      id: t
+      slots: 8
+      tables:
+      - id: s
+        title: Volta Foods, 2026 (GH₵ million)
+        columns:
+        - item
+        - cash
+        - running
+        rows:
+        - k: r0
+          cells:
+          - profit
+          - '+24.0'
+          - '24.0'
+          tone: dim
+        - k: r1
+          cells:
+          - depreciation
+          - '+15.0'
+          - '39.0'
+          tone: dim
+        - k: r2
+          cells:
+          - more inventory
+          - −5.0
+          - '34.0'
+          tone: dim
+        - k: r3
+          cells:
+          - more receivables
+          - −5.0
+          - '29.0'
+          tone: dim
+        - k: r4
+          cells:
+          - more payables
+          - '+2.0'
+          - '31.0'
+          tone: dim
+        - k: r5
+          cells:
+          - new equipment
+          - −25.0
+          - '6.0'
+          tone: dim
+        - k: r6
+          cells:
+          - loan repaid
+          - −5.0
+          - '1.0'
+          tone: active
+  - title: 'Financing: dividends'
+    text: Dividends of 0.12 × 120 million shares = 14.4 take the total to −13.4. Cash falls from 18.0 to 4.6.
+    vars:
+      change in cash: −13.4
+      cash now: '4.6'
+    parts:
+    - kind: tables
+      id: t
+      slots: 8
+      tables:
+      - id: s
+        title: Volta Foods, 2026 (GH₵ million)
+        columns:
+        - item
+        - cash
+        - running
+        rows:
+        - k: r0
+          cells:
+          - profit
+          - '+24.0'
+          - '24.0'
+          tone: dim
+        - k: r1
+          cells:
+          - depreciation
+          - '+15.0'
+          - '39.0'
+          tone: dim
+        - k: r2
+          cells:
+          - more inventory
+          - −5.0
+          - '34.0'
+          tone: dim
+        - k: r3
+          cells:
+          - more receivables
+          - −5.0
+          - '29.0'
+          tone: dim
+        - k: r4
+          cells:
+          - more payables
+          - '+2.0'
+          - '31.0'
+          tone: dim
+        - k: r5
+          cells:
+          - new equipment
+          - −25.0
+          - '6.0'
+          tone: dim
+        - k: r6
+          cells:
+          - loan repaid
+          - −5.0
+          - '1.0'
+          tone: dim
+        - k: r7
+          cells:
+          - dividends
+          - −14.4
+          - −13.4
+          tone: found
+  - title: What it shows
+    text: A profitable company with healthy operating cash, whose spending on equipment and dividends together outran its cash. Dividends were more than twice free cash flow.
+    parts:
+    - kind: kv
+      id: k
+      label: 2026 (GH₵ million)
+      slots: 4
+      rows:
+      - name: profit
+        value: '24.0'
+      - name: operating cash
+        value: '31.0'
+      - name: free cash flow
+        value: '6.0'
+      - name: dividends
+        value: '14.4'
+        tone: found

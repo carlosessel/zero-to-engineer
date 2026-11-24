@@ -1,0 +1,213 @@
+---
+title: "Valuing a share"
+summary: "Earnings and cash flow, a first discounted cash flow, and why valuations are uncertain."
+prerequisites: [fi-ratios, fi-time-value, fi-shares]
+estimated_minutes: 120
+status: resources-verified
+---
+
+A share’s **price** is what you pay; its **value** is what it is worth to you, given the cash it is likely to produce. Investors who pay far more than value tend to be disappointed, however good the company. By the end of this chapter you will be able to value a share in three ways (by comparison with similar companies, from its dividends, and from its free cash flow), build a simple discounted cash flow, test how much the answer depends on its assumptions, and turn the question around to ask what today’s price assumes. The company is Volta Foods PLC from the last two chapters; everything about it is fictional, and this is general education, not advice on any share.
+
+## Price and value
+
+Volta’s shares trade at GH₵ 4.05, a P/E of 20.25 (<Ref to="fi-ratios" />). Is that cheap or expensive? A price alone cannot say. What a share is worth depends on:
+
+- the **cash** the business will produce for its owners in future;
+- **when** it will produce it;
+- how **certain** that is, which sets the return investors should require (<Ref to="fi-risk-return" />).
+
+Those three are exactly the ingredients of present value (<Ref to="fi-time-value" />). Every method in this chapter is a way of estimating them, more or less directly.
+
+## Method 1: comparing with similar companies
+
+The quickest method uses **multiples**: apply the ratios at which similar companies trade.
+
+**Worked example.** Suppose other listed food producers trade at an average P/E of 16 and an average EV to EBITDA of 8.
+
+- By P/E: 16 × Volta’s EPS of 0.20 = **GH₵ 3.20** a share.
+- By EV to EBITDA: 8 × EBITDA of 60 = an enterprise value of 480. Subtract net debt of 85.4 to leave 394.6 for shareholders, or 394.6 ÷ 120 = **GH₵ 3.29** a share.
+
+Both suggest Volta is priced above its peers. That might be justified, if it grows faster or is better run, or the whole sector might be over- or under-priced. Multiples tell you what a share is worth **relative to others**, not what it is worth in itself.
+
+## Method 2: dividends
+
+<Ref to="fi-shares" /> valued a share as next year’s dividend ÷ (required return − growth). With a dividend of GH₵ 0.12, a 15% required return and 10% growth for ever, it gave **GH₵ 2.40**. The model is simple but only suits companies with steady dividends, and it is very sensitive to the growth rate. A more general method values all the cash the business produces, whether or not it is paid out.
+
+## Method 3: a discounted cash flow
+
+A **discounted cash flow** (DCF) valuation estimates the business’s future **free cash flow**, the cash left after running and investing in it (<Ref to="fi-company-statements" />), and discounts it to today. It has five steps.
+
+**1. Forecast free cash flow** for a few years. Volta’s free cash flow was only GH₵ 6 million in 2026 because it spent heavily on equipment. Suppose, as a careful analyst might conclude after reading its plans, that free cash flow before interest will be 24, 28, 32, 36 and 40 over the next five years as the new equipment pays off. These are **assumptions**, and the rest of the calculation is only as good as they are.
+
+**2. Choose a discount rate**: the return investors require from a business this risky. A 364-day Treasury bill pays about 9.45% (<Ref to="fi-cash-bonds" />); shares are riskier, so add a risk premium. Use **15%**.
+
+**3. Discount each year’s cash flow**:
+
+| Year | Free cash flow | Discount factor at 15% | Present value |
+|---|---|---|---|
+| 1 | 24 | 0.8696 | 20.87 |
+| 2 | 28 | 0.7561 | 21.17 |
+| 3 | 32 | 0.6575 | 21.04 |
+| 4 | 36 | 0.5718 | 20.58 |
+| 5 | 40 | 0.4972 | 19.89 |
+| **Total** | | | **103.55** |
+
+**4. Add a terminal value** for everything after year 5. Assume free cash flow then grows at 6% a year for ever, roughly in line with inflation and long-run growth. This is the growing perpetuity from <Ref to="fi-time-value" />:
+
+terminal value at year 5 = 40 × 1.06 ÷ (0.15 − 0.06) = 42.4 ÷ 0.09 = **471.11**
+
+Discounted to today: 471.11 × 0.4972 = **234.23**.
+
+**5. From the business to one share.** The value of the whole business (its **enterprise value**) is 103.55 + 234.23 = **337.78**. Lenders are owed net debt of 85.4, so shareholders’ equity is worth 337.78 − 85.4 = **252.38**, or 252.38 ÷ 120 = **GH₵ 2.10 a share**.
+
+<Walkthrough name="fi-valuation-dcf" />
+
+Notice that the terminal value is **69%** of the enterprise value. Most of what a DCF says a company is worth comes from years beyond any forecast, resting on two numbers: the growth rate and the discount rate.
+
+The same valuation in Python (optional):
+
+```python
+def dcf_per_share(cash_flows, rate, growth, net_debt, shares):
+    pv = sum(cf / (1 + rate) ** t for t, cf in enumerate(cash_flows, start=1))
+    terminal = cash_flows[-1] * (1 + growth) / (rate - growth)
+    pv += terminal / (1 + rate) ** len(cash_flows)
+    return (pv - net_debt) / shares
+
+flows = [24, 28, 32, 36, 40]
+for rate in (0.14, 0.15, 0.16):
+    print(f"{rate:.0%}", [round(dcf_per_share(flows, rate, g, 85.4, 120), 2) for g in (0.05, 0.06, 0.07)])
+```
+
+```text
+14% [2.19, 2.47, 2.82]
+15% [1.89, 2.1, 2.37]
+16% [1.64, 1.81, 2.02]
+```
+
+## How sensitive is it?
+
+The output above is a **sensitivity table**: the value per share for discount rates from 14% to 16% and growth rates from 5% to 7%.
+
+| Discount rate | Growth 5% | Growth 6% | Growth 7% |
+|---|---|---|---|
+| 14% | 2.19 | 2.47 | 2.82 |
+| 15% | 1.89 | **2.10** | 2.37 |
+| 16% | 1.64 | 1.81 | 2.02 |
+
+One percentage point either way on each assumption gives values from GH₵ 1.64 to GH₵ 2.82, a range of more than 70% from bottom to top. A DCF gives a **range**, not a number, and anyone who quotes a value to the pesewa is claiming more than they know.
+
+## What does the price assume?
+
+Instead of asking what a share is worth, ask what has to be true for **today’s price** to be fair. This is called a **reverse DCF**.
+
+For Volta to be worth GH₵ 4.05 with the same five-year forecast:
+
+- at a 15% discount rate, free cash flow after year 5 would have to grow at about **10.3% a year for ever**, far faster than inflation plus normal growth, for ever; or
+- at 6% growth, investors would have to be content with a return of about **11.4% a year**, barely two points more than a Treasury bill, for a single company’s shares.
+
+Either assumption is possible, but both are demanding. That is useful knowledge: it tells you what you are betting on when you buy at GH₵ 4.05.
+
+## Margin of safety
+
+Because every valuation is uncertain, careful investors buy only when the price is well below their estimate of value, leaving a **margin of safety** for mistakes. If your central estimate is GH₵ 2.10 and you want a 30% margin, you would only buy below about GH₵ 1.47. For most people, the better conclusion is the one from <Ref to="fi-funds" />: valuing individual companies well is hard and time-consuming, and a diversified, low-cost fund avoids having to.
+
+## Why valuations go wrong
+
+- **Forecasts are guesses.** Customers, costs, competitors and governments change.
+- **Small changes in the discount or growth rate** change the answer a lot.
+- **Terminal values dominate**, and they rest on the longest-range assumptions.
+- **Accounts can mislead**, through one-offs, aggressive accounting or fraud.
+- **Anchoring**: analysts tend to adjust assumptions until the answer is close to the current price, or to what they hoped.
+- **Markets can stay “wrong” for years**, so a share below its value can fall further.
+
+## Common mistakes
+
+- **Treating a DCF output as a fact**, not a range built on assumptions.
+- **Using a discount rate that is too low**, which can justify almost any price.
+- **Letting the terminal growth rate exceed long-run economic growth.**
+- **Valuing on multiples alone**, when the whole sector may be mispriced.
+- **Forgetting to subtract net debt** when going from enterprise value to the value of shares.
+- **Buying without a margin of safety.**
+
+## Practice
+
+**1. (warm-up)** A company’s EPS is GH₵ 0.35 and similar companies trade on a P/E of 12. What value does that suggest per share?
+
+<Solution>
+
+12 × 0.35 = **GH₵ 4.20**.
+
+</Solution>
+
+**2. (warm-up)** An enterprise value is GH₵ 600 million, net debt is GH₵ 150 million and there are 90 million shares. What is the value per share?
+
+<Solution>
+
+(600 − 150) ÷ 90 = **GH₵ 5.00**.
+
+</Solution>
+
+**3. (standard)** Free cash flow in year 5 is GH₵ 50 million, the discount rate 14% and long-run growth 5%. What is the terminal value at year 5?
+
+<Solution>
+
+50 × 1.05 ÷ (0.14 − 0.05) = 52.5 ÷ 0.09 = **GH₵ 583.33 million**.
+
+</Solution>
+
+**4. (standard)** In Volta’s DCF, what share of the enterprise value comes from the first five years, and what does that tell you?
+
+<Solution>
+
+103.55 ÷ 337.78 = **about 31%**. The other 69% comes from the terminal value, so the valuation depends mostly on the long-run growth and discount rate, not the detailed forecast.
+
+</Solution>
+
+**5. (standard)** Using the sensitivity table, what is Volta worth at 14% and 7%, and at 16% and 5%? What does the gap show?
+
+<Solution>
+
+**GH₵ 2.82** and **GH₵ 1.64**. A change of one point in each assumption moves the value by over 70% from low to high: a valuation is a range, not a point.
+
+</Solution>
+
+**6. (standard)** Your central estimate of a share’s value is GH₵ 8.00 and you want a 25% margin of safety. Below what price would you consider buying?
+
+<Solution>
+
+8.00 × (1 − 0.25) = **GH₵ 6.00**.
+
+</Solution>
+
+**7. (stretch)** Why does valuing Volta by EV to EBITDA require subtracting net debt, but valuing it by P/E does not?
+
+<Solution>
+
+**EBITDA** is earned by the whole business before interest, so a multiple of it values the business for lenders and shareholders together (enterprise value); the lenders’ share (net debt) must be taken off. **EPS** is profit after interest, already belonging to shareholders alone, so P/E × EPS gives a value per share directly.
+
+</Solution>
+
+**8. (stretch)** A friend’s DCF says a share is worth GH₵ 12 against a price of GH₵ 6, using a 9% discount rate and 8% growth for ever. What would you question?
+
+<Solution>
+
+The **gap between discount rate and growth** is only 1 point, so the terminal value is 1.08 ÷ 0.01 = 108 times the final cash flow, and tiny changes swing it enormously. A **9% discount rate** is below a Treasury bill’s 9.45%, far too low for a share. And **8% growth for ever** is demanding. Re-run it with a sensible rate and growth, and the “bargain” is likely to disappear.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Price** is what you pay; **value** depends on future cash, its timing and its risk.
+- **Multiples** (P/E, EV to EBITDA) value a share relative to peers; they cannot tell if the whole sector is mispriced.
+- A **DCF** forecasts free cash flow, discounts it, adds a **terminal value**, subtracts **net debt**, and divides by shares. Volta: GH₵ 2.10 against a price of GH₵ 4.05.
+- The terminal value often dominates, so results are very sensitive to the discount and growth rates: use a **sensitivity table** and think in **ranges**.
+- A **reverse DCF** asks what the price assumes.
+- Leave a **margin of safety**, or prefer diversified funds to picking shares.
+
+## Go deeper
+
+- [Present value 4 (and discounted cash flow)](https://www.khanacademy.org/economics-finance-domain/core-finance/interest-tutorial/present-value/v/present-value-4-and-discounted-cash-flow), Khan Academy. A short video discounting a stream of cash flows, the core of a DCF.
+- [Beginners’ Guide to Financial Statements](https://www.sec.gov/about/reports-publications/beginners-guide-financial-statements), US Securities and Exchange Commission. Where the cash flows and ratios behind a valuation come from.
+- [SPIVA Europe Mid-Year 2026](https://www.spglobal.com/spdji/en/spiva/article/spiva-europe/), S&P Dow Jones Indices. How rarely even professional share-pickers beat the market after costs.

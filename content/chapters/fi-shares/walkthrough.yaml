@@ -1,0 +1,171 @@
+- id: fi-shares-total-return
+  title: Total return over three years
+  hint: Track both the shares' value and the dividends received. The total is what counts.
+  steps:
+  - title: Buying
+    text: 'Kojo buys 1,000 shares at GH₵ 2.00 each: GH₵ 2,000. He has received no dividends yet.'
+    vars:
+      total return: 0%
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: s
+        title: Kojo's 1,000 shares (GH₵)
+        columns:
+        - year
+        - price
+        - dividends
+        - shares
+        - total
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '2.00'
+          - '0'
+          - 2,000
+          - 2,000
+          tone: active
+  - title: Year 1
+    text: 'The price rises to 2.20 and a dividend of 0.10 a share pays him 100 in cash. Shares worth 2,200 plus 100 received: 2,300.'
+    vars:
+      total return: +15%
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: s
+        title: Kojo's 1,000 shares (GH₵)
+        columns:
+        - year
+        - price
+        - dividends
+        - shares
+        - total
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '2.00'
+          - '0'
+          - 2,000
+          - 2,000
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - '2.20'
+          - '100'
+          - 2,200
+          - 2,300
+          tone: active
+  - title: Year 2
+    text: 'The price falls to 1.90, below what he paid. A 0.12 dividend brings cash received to 220. Total 2,120: still up, thanks to dividends.'
+    vars:
+      total return: +6%
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: s
+        title: Kojo's 1,000 shares (GH₵)
+        columns:
+        - year
+        - price
+        - dividends
+        - shares
+        - total
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '2.00'
+          - '0'
+          - 2,000
+          - 2,000
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - '2.20'
+          - '100'
+          - 2,200
+          - 2,300
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - '1.90'
+          - '220'
+          - 1,900
+          - 2,120
+          tone: active
+  - title: Year 3
+    text: 'The price recovers to 2.50 and a 0.14 dividend brings cash received to 360. Total: 2,500 + 360 = 2,860.'
+    vars:
+      total return: +43%
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: s
+        title: Kojo's 1,000 shares (GH₵)
+        columns:
+        - year
+        - price
+        - dividends
+        - shares
+        - total
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '2.00'
+          - '0'
+          - 2,000
+          - 2,000
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - '2.20'
+          - '100'
+          - 2,200
+          - 2,300
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - '1.90'
+          - '220'
+          - 1,900
+          - 2,120
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - '2.50'
+          - '360'
+          - 2,500
+          - 2,860
+          tone: found
+  - title: Where it came from
+    text: Of the 860 gained, 500 came from the price and 360 from dividends. Measuring only the price would have missed over 40% of the return.
+    parts:
+    - kind: kv
+      id: k
+      label: Over three years
+      slots: 3
+      rows:
+      - name: price gain
+        value: 500 (25%)
+      - name: dividends
+        value: 360 (18%)
+      - name: total return
+        value: 860 (43%), about 12.7% a year
+        tone: found

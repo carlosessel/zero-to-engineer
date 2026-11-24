@@ -1,0 +1,254 @@
+- id: fi-risk-return-drawdown
+  title: Tracking a drawdown
+  hint: Keep track of the highest value so far. The drawdown is how far the current value sits below it.
+  steps:
+  - title: The start
+    text: The fund starts at 100. The peak so far is the start itself, so there is no drawdown.
+    vars:
+      worst so far: 0%
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: A fund's value at the end of each year
+        columns:
+        - year
+        - value
+        - peak so far
+        - drawdown
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '100'
+          - '100'
+          - 0%
+          tone: active
+  - title: Year 1
+    text: It rises to 120, a new peak. A rise to a new high always means a drawdown of zero.
+    vars:
+      worst so far: 0%
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: A fund's value at the end of each year
+        columns:
+        - year
+        - value
+        - peak so far
+        - drawdown
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '100'
+          - '100'
+          - 0%
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - '120'
+          - '120'
+          - 0%
+          tone: active
+  - title: Year 2
+    text: It falls to 90. The peak is still 120, so the drawdown is 90 ÷ 120 − 1 = −25%, although the fund is only 10% below where it started.
+    vars:
+      worst so far: −25%
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: A fund's value at the end of each year
+        columns:
+        - year
+        - value
+        - peak so far
+        - drawdown
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '100'
+          - '100'
+          - 0%
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - '120'
+          - '120'
+          - 0%
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - '90'
+          - '120'
+          - −25%
+          tone: active
+  - title: Year 3
+    text: 'It falls again, to 84: 84 ÷ 120 − 1 = −30%. Someone who bought at the top has lost 30% on paper.'
+    vars:
+      worst so far: −30%
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: A fund's value at the end of each year
+        columns:
+        - year
+        - value
+        - peak so far
+        - drawdown
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '100'
+          - '100'
+          - 0%
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - '120'
+          - '120'
+          - 0%
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - '90'
+          - '120'
+          - −25%
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - '84'
+          - '120'
+          - −30%
+          tone: active
+  - title: Year 4
+    text: It recovers to 110. That is a 31% gain from 84, but it is still 8.3% below the peak of 120.
+    vars:
+      worst so far: −30%
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: A fund's value at the end of each year
+        columns:
+        - year
+        - value
+        - peak so far
+        - drawdown
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '100'
+          - '100'
+          - 0%
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - '120'
+          - '120'
+          - 0%
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - '90'
+          - '120'
+          - −25%
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - '84'
+          - '120'
+          - −30%
+          tone: dim
+        - k: y4
+          cells:
+          - '4'
+          - '110'
+          - '120'
+          - −8.3%
+          tone: active
+  - title: Year 5
+    text: At 130 it passes the old peak, so the drawdown is over. The fund is up 30% overall, but its maximum drawdown was −30%.
+    vars:
+      maximum drawdown: −30%
+      overall: +30%
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: A fund's value at the end of each year
+        columns:
+        - year
+        - value
+        - peak so far
+        - drawdown
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - '100'
+          - '100'
+          - 0%
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - '120'
+          - '120'
+          - 0%
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - '90'
+          - '120'
+          - −25%
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - '84'
+          - '120'
+          - −30%
+          tone: found
+        - k: y4
+          cells:
+          - '4'
+          - '110'
+          - '120'
+          - −8.3%
+          tone: dim
+        - k: y5
+          cells:
+          - '5'
+          - '130'
+          - '130'
+          - 0%
+          tone: active

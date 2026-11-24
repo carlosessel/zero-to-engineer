@@ -1,0 +1,27 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    A 8 0.71 1,469.20 8.0
+    B 8 18.23 1,389.38 6.8
+  verify: |
+    # The chapter's other figures.
+    assert round((2.30 - 2.00 + 0.10) / 2.00, 10) == 0.2
+    assert [round(1 / (1 - l) - 1, 3) for l in (0.1, 0.2, 0.5, 0.75, 0.9)] == [0.111, 0.25, 1.0, 3.0, 9.0]
+    values = [100, 120, 90, 84, 110, 130]
+    peak, worst = 0, 0
+    for v in values:
+        peak = max(peak, v); worst = min(worst, v / peak - 1)
+    assert round(worst, 2) == -0.30
+    assert round(1000 * 1.12 ** 3, 2) == 1404.93
+    assert round(1000 * 1.30 * 0.90 * 1.16, 2) == 1357.20
+    assert round((180 / 260 - 1) * 100, 1) == -30.8
+    assert round((1.05 ** 12 - 1) * 100, 1) == 79.6
+    assert round((1.04 ** 12 - 1) * 100, 1) == 60.1
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the Python block above, which that block's check compares exactly.
+  verify: |
+    assert block.strip().splitlines() == ["A 8 0.71 1,469.20 8.0", "B 8 18.23 1,389.38 6.8"]

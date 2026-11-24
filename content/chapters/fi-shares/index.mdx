@@ -1,0 +1,205 @@
+---
+title: "Shares"
+summary: "Owning part of a company: dividends, capital gains, how prices are set, and what an index is."
+prerequisites: [fi-markets, fi-risk-return, fi-time-value]
+estimated_minutes: 120
+status: resources-verified
+---
+
+A share makes you a part-owner of a business. Over long periods, shares as a group have been one of the best ways to grow money faster than inflation, and individual shares have also been one of the quickest ways to lose it. By the end of this chapter you will be able to say what owning a share gives you, measure its total return from dividends and price changes, read the common ratios (earnings per share, price to earnings, dividend yield), explain what drives a share price using present value, and see why picking individual shares is harder than it looks. This is general education, not advice to buy or sell anything.
+
+## What a share is
+
+A company is owned by its **shareholders**. Its ownership is divided into **shares**, also called stock or equity. If a company has 120 million shares and you own 1,200, you own one hundred-thousandth of it. An ordinary share usually gives you:
+
+- **A share of the profits**, when the directors decide to pay them out as **dividends**.
+- **A vote** at the annual general meeting, on matters such as electing directors.
+- **A claim on what is left** if the company is wound up, after everyone it owes, including lenders and bondholders, has been paid. Shareholders are paid **last**, which is why shares are riskier than the same company’s bonds.
+- **Limited liability**: you cannot lose more than you paid for the shares. If the company fails with debts, its lenders cannot come after you.
+
+Companies issue shares to raise money for growth, as in the primary market of <Ref to="fi-markets" />. After that, you buy and sell them from other investors through a broker.
+
+## Total return: dividends and price
+
+You make or lose money on a share in two ways:
+
+1. **Dividends**: cash paid per share, usually once or twice a year. They are not guaranteed; a company can cut or stop them.
+2. **Capital gain or loss**: the change in the share’s price between buying and selling.
+
+Together they make the **total return**.
+
+**Worked example.** Kojo buys 1,000 shares at GH₵ 2.00 each, GH₵ 2,000 in all, and holds them for three years:
+
+| Year | Price at year end | Dividend per share | Dividends so far | Shares worth | Total |
+|---|---|---|---|---|---|
+| 0 | 2.00 | | | 2,000 | 2,000 |
+| 1 | 2.20 | 0.10 | 100 | 2,200 | 2,300 |
+| 2 | 1.90 | 0.12 | 220 | 1,900 | 2,120 |
+| 3 | 2.50 | 0.14 | 360 | 2,500 | 2,860 |
+
+His total return is (2,860 − 2,000) ÷ 2,000 = **43%** over three years: 25% from the price and 18% from dividends. That is roughly 1.43^(1/3) − 1 = **12.7% a year**, ignoring when exactly the dividends arrived. Notice year 2: the price fell below what he paid, and a nervous seller would have locked in a loss.
+
+<Walkthrough name="fi-shares-total-return" />
+
+**Reinvesting dividends**, using them to buy more shares, makes the return compound. Over decades, reinvested dividends have made up a large part of the total return from shares.
+
+## Reading the numbers
+
+Three ratios appear in every share price table. Take Volta Foods, the fictional company from <Ref to="fi-markets" />: 120 million shares at GH₵ 4.05, a yearly profit of GH₵ 24 million, and a dividend of GH₵ 0.12 a share.
+
+- **Earnings per share (EPS)** = profit ÷ number of shares = 24,000,000 ÷ 120,000,000 = **GH₵ 0.20**.
+- **Price to earnings ratio (P/E)** = price ÷ EPS = 4.05 ÷ 0.20 = **20.25**. Investors are paying about 20 cedis for each cedi of yearly profit. A high P/E usually means investors expect profits to grow fast, or that the share is expensive; a low P/E means slow growth is expected, the company is seen as risky, or the share is cheap. The ratio alone cannot tell you which.
+- **Dividend yield** = dividend ÷ price = 0.12 ÷ 4.05 = **2.96%**. The company pays out 0.12 ÷ 0.20 = 60% of its profit (its **payout ratio**) and keeps the rest to invest.
+
+These ratios compare companies only roughly. Profits can be one-off, accounting choices differ, and a high dividend yield is sometimes a warning that the market expects the dividend to be cut. <Ref to="fi-company-statements" /> and <Ref to="fi-ratios" /> go further.
+
+## What sets a share price
+
+In the short run, a share price is whatever buyers and sellers agree in the order book, moved by news, rumours and mood. In the long run, it is tied to what the share is worth: the **present value of all the cash it will pay its owners** (<Ref to="fi-time-value" />).
+
+A simple version, for a company whose dividend is expected to grow at a steady rate for ever, is the **dividend growth model**:
+
+value = next year’s dividend ÷ (required return − growth rate)
+
+**Worked example.** A share is expected to pay GH₵ 0.12 next year, with dividends growing 10% a year. Investors want 15% a year from a share this risky. Value = 0.12 ÷ (0.15 − 0.10) = 0.12 ÷ 0.05 = **GH₵ 2.40**.
+
+Now change the assumptions slightly:
+
+- Required return 16% instead of 15%: 0.12 ÷ 0.06 = **GH₵ 2.00**, a fall of 17%.
+- Growth 11% instead of 10%: 0.12 ÷ 0.04 = **GH₵ 3.00**, a rise of 25%.
+
+A one-point change in either assumption moves the value by a fifth or more. That is why share prices swing so much on news about interest rates (which change required returns) and about a company’s prospects (which change expected growth), even when today’s profits are unchanged. It is also why rising interest rates tend to push share prices down.
+
+The same calculation in Python (optional):
+
+```python
+def share_value(next_dividend, required, growth):
+    return next_dividend / (required - growth)
+
+for required, growth in ((0.15, 0.10), (0.16, 0.10), (0.15, 0.11)):
+    print(f"{required:.0%} {growth:.0%} {share_value(0.12, required, growth):.2f}")
+```
+
+```text
+15% 10% 2.40
+16% 10% 2.00
+15% 11% 3.00
+```
+
+## Other things companies do
+
+- A **share split** turns each share into several. After a 2-for-1 split, you have twice as many shares at half the price (4.05 becomes 2.025); your holding is worth the same.
+- A **rights issue** offers existing shareholders new shares, usually at a discount, to raise money. If you don’t take them up, your share of the company shrinks.
+- A **takeover** is when another company buys enough shares to control it, usually offering more than the current price.
+
+## Indices, and why picking shares is hard
+
+A **market index** tracks a group of shares, as in <Ref to="fi-markets" />: the GSE Composite Index in Ghana, the FTSE 100 in the UK. An index’s return is what investors in that market got on average.
+
+To beat the index by picking shares, you need to know something the other buyers and sellers don’t, or judge it better. The price already reflects what thousands of investors, many of them professionals, think. And single companies can fail completely: a share’s price can go to zero, while a broad index of many companies would need nearly all of them to fail at once. The evidence on professional fund managers, in <Ref to="fi-funds" />, shows how rarely even they beat the index after costs.
+
+If you do buy individual shares, the previous chapter applies with extra force: hold many, in different sectors, and never so much of one that its failure would hurt your life.
+
+<Note>
+
+**Ghana (checked November 2026).** Shares listed on the Ghana Stock Exchange are bought through licensed dealing members (<Ref to="fi-markets" />) and held at the Central Securities Depository. Dividends are subject to a final withholding tax of 8%, taken before you receive them. Many GSE shares trade only occasionally, so check how often a share trades before buying. Check other tax rules with the Ghana Revenue Authority.
+
+</Note>
+
+<Note>
+
+**United Kingdom (checked November 2026).** In the 2026 to 2027 tax year the first £500 of dividends is tax-free (the dividend allowance); dividends above it are taxed at rates that depend on your income tax band. Shares held in a stocks and shares ISA are free of tax on dividends and gains. Check GOV.UK for the current rates.
+
+</Note>
+
+## Common mistakes
+
+- **Buying on a tip or a story** without asking what is already in the price.
+- **Owning a handful of shares** in one sector and calling it a portfolio.
+- **Judging by price alone**: a GH₵ 0.50 share is not “cheaper” than a GH₵ 50 one; compare P/E, yields and prospects.
+- **Chasing a high dividend yield** that the market already expects to be cut.
+- **Selling after a fall and buying after a rise**, the reverse of what long-term investors need.
+- **Forgetting dividends** when measuring return, or forgetting costs and tax.
+
+## Practice
+
+**1. (warm-up)** You own 3,000 shares and the company pays a dividend of GH₵ 0.15 a share. How much do you receive before tax? After Ghana’s 8% withholding tax?
+
+<Solution>
+
+3,000 × 0.15 = **GH₵ 450** before tax. After 8% withholding: 450 × 0.92 = **GH₵ 414**.
+
+</Solution>
+
+**2. (warm-up)** A company earns GH₵ 50 million and has 200 million shares priced at GH₵ 3.00. What are its EPS and P/E?
+
+<Solution>
+
+EPS = 50 ÷ 200 = **GH₵ 0.25**. P/E = 3.00 ÷ 0.25 = **12**.
+
+</Solution>
+
+**3. (standard)** The same company pays a dividend of GH₵ 0.15. What are its dividend yield and payout ratio?
+
+<Solution>
+
+Yield = 0.15 ÷ 3.00 = **5%**. Payout ratio = 0.15 ÷ 0.25 = **60%**.
+
+</Solution>
+
+**4. (standard)** Ama buys a share at GH₵ 5.00. After a year it is GH₵ 4.60 and has paid GH₵ 0.30 in dividends. What is her total return?
+
+<Solution>
+
+(4.60 − 5.00 + 0.30) ÷ 5.00 = −0.10 ÷ 5.00 = **−2%**. The dividend softened, but did not cover, the fall in price.
+
+</Solution>
+
+**5. (standard)** Using the dividend growth model, value a share expected to pay GH₵ 0.20 next year, growing 8% a year, when investors require 18%.
+
+<Solution>
+
+0.20 ÷ (0.18 − 0.08) = 0.20 ÷ 0.10 = **GH₵ 2.00**.
+
+</Solution>
+
+**6. (standard)** A company does a 5-for-1 share split. You held 200 shares at GH₵ 25. What do you hold afterwards, and what is it worth?
+
+<Solution>
+
+**1,000 shares at GH₵ 5.00**, worth 200 × 25 = 1,000 × 5 = **GH₵ 5,000** either way. A split changes nothing about what you own.
+
+</Solution>
+
+**7. (stretch)** Why might a share’s price fall when the central bank raises interest rates, even if the company’s profits are unchanged?
+
+<Solution>
+
+Investors’ **required return** rises when safe investments pay more, so the present value of the company’s future dividends falls. In the dividend growth model, raising the required return from 15% to 16% cut the value from 2.40 to 2.00. Higher rates can also slow the economy and the company’s future growth.
+
+</Solution>
+
+**8. (stretch)** Esi says: “Bank shares in Ghana have a dividend yield of 12%, much more than the 9.45% on a 364-day bill, so they are a better deal.” What is she leaving out?
+
+<Solution>
+
+The dividend is **not guaranteed** and can be cut; the **price** can fall, and a fall of a few per cent wipes out the extra yield; the share carries far more **risk** than a Treasury bill, so it should offer a higher expected return; a high yield may mean the market **expects** a cut; and the 8% withholding tax reduces it. The comparison is of a risky expected return with a near-certain one.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- A **share** is part-ownership: a share of dividends, a vote, a claim after creditors, and **limited liability**.
+- **Total return** = dividends + capital gain or loss; reinvested dividends compound.
+- **EPS** = profit ÷ shares; **P/E** = price ÷ EPS; **dividend yield** = dividend ÷ price; **payout ratio** = dividend ÷ EPS.
+- A share is worth the present value of the cash it will pay; small changes in required return or growth move that value a lot, which is why prices swing and why rising rates tend to lower them.
+- Splits change the number of shares, not their total value.
+- Individual shares can go to zero; beating the index is hard, so diversify.
+
+## Go deeper
+
+- [Stocks](https://www.investor.gov/introduction-investing/investing-basics/investment-products/stocks), Investor.gov (US SEC). What owning stock gives you, why companies issue it, and the risks.
+- [Stocks and bonds](https://www.khanacademy.org/economics-finance-domain/core-finance/stock-and-bonds), Khan Academy. Videos on what buying a company’s stock means and how stocks differ from bonds.
+- [Licensed Dealing Members](https://gse.com.gh/licensed-dealing-members/), Ghana Stock Exchange. The brokers through whom GSE shares are bought and sold.

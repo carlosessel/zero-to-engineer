@@ -1,0 +1,192 @@
+- id: fi-retirement-early-late
+  title: Starting at 25 against starting at 40
+  hint: Both save the same each month. Watch how much of Ama's pot comes from her first fifteen years.
+  steps:
+  - title: Age 25
+    text: Ama starts saving GH₵ 300 a month. Kojo, the same age, decides to wait.
+    vars:
+      Ama paid in: '0'
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 300 a month at 0.5% a month
+        columns:
+        - age
+        - Ama, from 25
+        - Kojo, from 40
+        rows:
+        - k: a25
+          cells:
+          - '25'
+          - '0.00'
+          - '0.00'
+          tone: active
+  - title: Age 30
+    text: After five years Ama has 20,931.01, of which 18,000 is her money and the rest growth. Kojo has nothing.
+    vars:
+      Ama paid in: 18,000
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 300 a month at 0.5% a month
+        columns:
+        - age
+        - Ama, from 25
+        - Kojo, from 40
+        rows:
+        - k: a25
+          cells:
+          - '25'
+          - '0.00'
+          - '0.00'
+          tone: dim
+        - k: a30
+          cells:
+          - '30'
+          - 20,931.01
+          - '0.00'
+          tone: active
+  - title: Age 40
+    text: Ama has 87,245.61 from 54,000 paid in. Now Kojo starts, saving the same 300 a month.
+    vars:
+      Ama paid in: 54,000
+      Kojo paid in: '0'
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 300 a month at 0.5% a month
+        columns:
+        - age
+        - Ama, from 25
+        - Kojo, from 40
+        rows:
+        - k: a25
+          cells:
+          - '25'
+          - '0.00'
+          - '0.00'
+          tone: dim
+        - k: a30
+          cells:
+          - '30'
+          - 20,931.01
+          - '0.00'
+          tone: dim
+        - k: a40
+          cells:
+          - '40'
+          - 87,245.61
+          - '0.00'
+          tone: active
+  - title: Age 50
+    text: Ama's pot grows by over 120,000 in ten years, more than three times what she adds. Kojo has 49,163.80.
+    vars:
+      Ama paid in: 90,000
+      Kojo paid in: 36,000
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 300 a month at 0.5% a month
+        columns:
+        - age
+        - Ama, from 25
+        - Kojo, from 40
+        rows:
+        - k: a25
+          cells:
+          - '25'
+          - '0.00'
+          - '0.00'
+          tone: dim
+        - k: a30
+          cells:
+          - '30'
+          - 20,931.01
+          - '0.00'
+          tone: dim
+        - k: a40
+          cells:
+          - '40'
+          - 87,245.61
+          - '0.00'
+          tone: dim
+        - k: a50
+          cells:
+          - '50'
+          - 207,898.19
+          - 49,163.80
+          tone: active
+  - title: Age 60
+    text: Ama has 427,413.09; Kojo 138,612.27. She paid in 126,000 and he 72,000.
+    vars:
+      Ama paid in: 126,000
+      Kojo paid in: 72,000
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: GH₵ 300 a month at 0.5% a month
+        columns:
+        - age
+        - Ama, from 25
+        - Kojo, from 40
+        rows:
+        - k: a25
+          cells:
+          - '25'
+          - '0.00'
+          - '0.00'
+          tone: dim
+        - k: a30
+          cells:
+          - '30'
+          - 20,931.01
+          - '0.00'
+          tone: dim
+        - k: a40
+          cells:
+          - '40'
+          - 87,245.61
+          - '0.00'
+          tone: dim
+        - k: a50
+          cells:
+          - '50'
+          - 207,898.19
+          - 49,163.80
+          tone: dim
+        - k: a60
+          cells:
+          - '60'
+          - 427,413.09
+          - 138,612.27
+          tone: found
+  - title: The cost of waiting
+    text: Fifteen years of waiting cost Kojo about 288,800. To catch up from 40 he would need 925.05 a month, more than three times as much.
+    parts:
+    - kind: kv
+      id: k
+      label: At 60
+      slots: 3
+      rows:
+      - name: Ama
+        value: 427,413.09
+      - name: Kojo
+        value: 138,612.27
+      - name: to catch up
+        value: 925.05 a month
+        tone: found

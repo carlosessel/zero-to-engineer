@@ -1,0 +1,30 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    Bank             Dr  4,100
+    Owner's capital  Cr  5,000
+    Equipment        Dr  3,200
+    Materials        Dr    800
+    Payables         Cr    300
+    Sales            Cr  3,500
+    Receivables      Dr    300
+    Rent             Dr    400
+    Total: 0
+  verify: |
+    b = ns["balances"]
+    debits = sum(v for v in b.values() if v > 0)
+    credits = -sum(v for v in b.values() if v < 0)
+    assert debits == credits == 8800          # the trial balance totals
+    profit = -b["Sales"] - b["Materials"] - b["Rent"]
+    assert profit == 2300
+    assets = b["Bank"] + b["Equipment"] + b["Receivables"]
+    assert assets == 7600 == -b["Payables"] + (-b["Owner's capital"]) + profit
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the Python block above, which that block's check compares exactly.
+  verify: |
+    assert block.strip().splitlines()[-1] == "Total: 0"
+    assert "Bank             Dr  4,100" in block

@@ -1,0 +1,530 @@
+- id: fi-double-entry-ledger
+  title: Eight transactions into the ledger
+  hint: Watch each transaction add a debit to one account and an equal credit to another, so the two totals stay equal all the way through.
+  steps:
+  - title: 1. Akosua puts in her savings
+    text: Bank (an asset) goes up, so it is debited. Owner's capital (equity) goes up, so it is credited. Debits 5,000 = credits 5,000.
+    vars:
+      debit: Bank 5,000
+      credit: Owner's capital 5,000
+    parts:
+    - kind: note
+      id: n
+      text: Dr Bank 5,000   /   Cr Owner's capital 5,000
+      tone: active
+    - kind: tables
+      id: t
+      slots: 9
+      tables:
+      - id: l
+        title: ledger balances (GH₵)
+        columns:
+        - account
+        - debit
+        - credit
+        rows:
+        - k: Bank
+          cells:
+          - Bank
+          - 5,000
+          - ''
+          tone: active
+        - k: Owner's capital
+          cells:
+          - Owner's capital
+          - ''
+          - 5,000
+          tone: active
+        - k: tot
+          cells:
+          - Total
+          - 5,000
+          - 5,000
+          tone: found
+  - title: 2. Buys a sewing machine
+    text: One asset up (equipment, debit), one asset down (bank, credit). The bank's debit balance falls to 1,800. Totals still agree.
+    vars:
+      debit: Equipment 3,200
+      credit: Bank 3,200
+    parts:
+    - kind: note
+      id: n
+      text: Dr Equipment 3,200   /   Cr Bank 3,200
+      tone: active
+    - kind: tables
+      id: t
+      slots: 9
+      tables:
+      - id: l
+        title: ledger balances (GH₵)
+        columns:
+        - account
+        - debit
+        - credit
+        rows:
+        - k: Bank
+          cells:
+          - Bank
+          - 1,800
+          - ''
+          tone: active
+        - k: Equipment
+          cells:
+          - Equipment
+          - 3,200
+          - ''
+          tone: active
+        - k: Owner's capital
+          cells:
+          - Owner's capital
+          - ''
+          - 5,000
+        - k: tot
+          cells:
+          - Total
+          - 5,000
+          - 5,000
+          tone: found
+  - title: 3. Fabric, to pay later
+    text: 'An expense goes up (debit materials) and a liability goes up (credit payables): she owes the supplier 800.'
+    vars:
+      debit: Materials 800
+      credit: Payables 800
+    parts:
+    - kind: note
+      id: n
+      text: Dr Materials 800   /   Cr Payables 800
+      tone: active
+    - kind: tables
+      id: t
+      slots: 9
+      tables:
+      - id: l
+        title: ledger balances (GH₵)
+        columns:
+        - account
+        - debit
+        - credit
+        rows:
+        - k: Bank
+          cells:
+          - Bank
+          - 1,800
+          - ''
+        - k: Equipment
+          cells:
+          - Equipment
+          - 3,200
+          - ''
+        - k: Materials
+          cells:
+          - Materials
+          - '800'
+          - ''
+          tone: active
+        - k: Payables
+          cells:
+          - Payables
+          - ''
+          - '800'
+          tone: active
+        - k: Owner's capital
+          cells:
+          - Owner's capital
+          - ''
+          - 5,000
+        - k: tot
+          cells:
+          - Total
+          - 5,800
+          - 5,800
+          tone: found
+  - title: 4. Dresses sold for cash
+    text: Cash comes in (debit bank) and income goes up (credit sales).
+    vars:
+      debit: Bank 2,600
+      credit: Sales 2,600
+    parts:
+    - kind: note
+      id: n
+      text: Dr Bank 2,600   /   Cr Sales 2,600
+      tone: active
+    - kind: tables
+      id: t
+      slots: 9
+      tables:
+      - id: l
+        title: ledger balances (GH₵)
+        columns:
+        - account
+        - debit
+        - credit
+        rows:
+        - k: Bank
+          cells:
+          - Bank
+          - 4,400
+          - ''
+          tone: active
+        - k: Equipment
+          cells:
+          - Equipment
+          - 3,200
+          - ''
+        - k: Materials
+          cells:
+          - Materials
+          - '800'
+          - ''
+        - k: Payables
+          cells:
+          - Payables
+          - ''
+          - '800'
+        - k: Owner's capital
+          cells:
+          - Owner's capital
+          - ''
+          - 5,000
+        - k: Sales
+          cells:
+          - Sales
+          - ''
+          - 2,600
+          tone: active
+        - k: tot
+          cells:
+          - Total
+          - 8,400
+          - 8,400
+          tone: found
+  - title: 5. Uniforms, paid later
+    text: 'The school owes her 900: an asset, receivables, is debited, and sales are credited. The sale counts now, though no cash has arrived. This is accrual accounting.'
+    vars:
+      debit: Receivables 900
+      credit: Sales 900
+    parts:
+    - kind: note
+      id: n
+      text: Dr Receivables 900   /   Cr Sales 900
+      tone: active
+    - kind: tables
+      id: t
+      slots: 9
+      tables:
+      - id: l
+        title: ledger balances (GH₵)
+        columns:
+        - account
+        - debit
+        - credit
+        rows:
+        - k: Bank
+          cells:
+          - Bank
+          - 4,400
+          - ''
+        - k: Equipment
+          cells:
+          - Equipment
+          - 3,200
+          - ''
+        - k: Receivables
+          cells:
+          - Receivables
+          - '900'
+          - ''
+          tone: active
+        - k: Materials
+          cells:
+          - Materials
+          - '800'
+          - ''
+        - k: Payables
+          cells:
+          - Payables
+          - ''
+          - '800'
+        - k: Owner's capital
+          cells:
+          - Owner's capital
+          - ''
+          - 5,000
+        - k: Sales
+          cells:
+          - Sales
+          - ''
+          - 3,500
+          tone: active
+        - k: tot
+          cells:
+          - Total
+          - 9,300
+          - 9,300
+          tone: found
+  - title: 6. Pays the supplier 500
+    text: 'Paying the supplier: the liability goes down (debit payables) and so does the bank (credit).'
+    vars:
+      debit: Payables 500
+      credit: Bank 500
+    parts:
+    - kind: note
+      id: n
+      text: Dr Payables 500   /   Cr Bank 500
+      tone: active
+    - kind: tables
+      id: t
+      slots: 9
+      tables:
+      - id: l
+        title: ledger balances (GH₵)
+        columns:
+        - account
+        - debit
+        - credit
+        rows:
+        - k: Bank
+          cells:
+          - Bank
+          - 3,900
+          - ''
+          tone: active
+        - k: Equipment
+          cells:
+          - Equipment
+          - 3,200
+          - ''
+        - k: Receivables
+          cells:
+          - Receivables
+          - '900'
+          - ''
+        - k: Materials
+          cells:
+          - Materials
+          - '800'
+          - ''
+        - k: Payables
+          cells:
+          - Payables
+          - ''
+          - '300'
+          tone: active
+        - k: Owner's capital
+          cells:
+          - Owner's capital
+          - ''
+          - 5,000
+        - k: Sales
+          cells:
+          - Sales
+          - ''
+          - 3,500
+        - k: tot
+          cells:
+          - Total
+          - 8,800
+          - 8,800
+          tone: found
+  - title: 7. Pays the stall rent
+    text: An expense goes up (debit rent) and the bank goes down (credit).
+    vars:
+      debit: Rent 400
+      credit: Bank 400
+    parts:
+    - kind: note
+      id: n
+      text: Dr Rent 400   /   Cr Bank 400
+      tone: active
+    - kind: tables
+      id: t
+      slots: 9
+      tables:
+      - id: l
+        title: ledger balances (GH₵)
+        columns:
+        - account
+        - debit
+        - credit
+        rows:
+        - k: Bank
+          cells:
+          - Bank
+          - 3,500
+          - ''
+          tone: active
+        - k: Equipment
+          cells:
+          - Equipment
+          - 3,200
+          - ''
+        - k: Receivables
+          cells:
+          - Receivables
+          - '900'
+          - ''
+        - k: Materials
+          cells:
+          - Materials
+          - '800'
+          - ''
+        - k: Rent
+          cells:
+          - Rent
+          - '400'
+          - ''
+          tone: active
+        - k: Payables
+          cells:
+          - Payables
+          - ''
+          - '300'
+        - k: Owner's capital
+          cells:
+          - Owner's capital
+          - ''
+          - 5,000
+        - k: Sales
+          cells:
+          - Sales
+          - ''
+          - 3,500
+        - k: tot
+          cells:
+          - Total
+          - 8,800
+          - 8,800
+          tone: found
+  - title: 8. School pays 600
+    text: 'One asset turns into another: bank up (debit), receivables down (credit). No new income, because the sale was already recorded.'
+    vars:
+      debit: Bank 600
+      credit: Receivables 600
+    parts:
+    - kind: note
+      id: n
+      text: Dr Bank 600   /   Cr Receivables 600
+      tone: active
+    - kind: tables
+      id: t
+      slots: 9
+      tables:
+      - id: l
+        title: ledger balances (GH₵)
+        columns:
+        - account
+        - debit
+        - credit
+        rows:
+        - k: Bank
+          cells:
+          - Bank
+          - 4,100
+          - ''
+          tone: active
+        - k: Equipment
+          cells:
+          - Equipment
+          - 3,200
+          - ''
+        - k: Receivables
+          cells:
+          - Receivables
+          - '300'
+          - ''
+          tone: active
+        - k: Materials
+          cells:
+          - Materials
+          - '800'
+          - ''
+        - k: Rent
+          cells:
+          - Rent
+          - '400'
+          - ''
+        - k: Payables
+          cells:
+          - Payables
+          - ''
+          - '300'
+        - k: Owner's capital
+          cells:
+          - Owner's capital
+          - ''
+          - 5,000
+        - k: Sales
+          cells:
+          - Sales
+          - ''
+          - 3,500
+        - k: tot
+          cells:
+          - Total
+          - 8,800
+          - 8,800
+          tone: found
+  - title: The trial balance
+    text: Every transaction put equal amounts on each side, so the debit and credit columns both total 8,800. The books balance, and are ready to sort into an income statement and balance sheet.
+    parts:
+    - kind: note
+      id: n
+      text: debits 8,800 = credits 8,800
+      tone: found
+    - kind: tables
+      id: t
+      slots: 9
+      tables:
+      - id: l
+        title: ledger balances (GH₵)
+        columns:
+        - account
+        - debit
+        - credit
+        rows:
+        - k: Bank
+          cells:
+          - Bank
+          - 4,100
+          - ''
+        - k: Equipment
+          cells:
+          - Equipment
+          - 3,200
+          - ''
+        - k: Receivables
+          cells:
+          - Receivables
+          - '300'
+          - ''
+        - k: Materials
+          cells:
+          - Materials
+          - '800'
+          - ''
+        - k: Rent
+          cells:
+          - Rent
+          - '400'
+          - ''
+        - k: Payables
+          cells:
+          - Payables
+          - ''
+          - '300'
+        - k: Owner's capital
+          cells:
+          - Owner's capital
+          - ''
+          - 5,000
+        - k: Sales
+          cells:
+          - Sales
+          - ''
+          - 3,500
+        - k: tot
+          cells:
+          - Total
+          - 8,800
+          - 8,800
+          tone: found

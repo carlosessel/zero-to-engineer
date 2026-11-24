@@ -1,0 +1,221 @@
+---
+title: "The time value of money"
+summary: "Future and present value, discounting, and regular payments, the tool behind loans, pensions and valuation."
+prerequisites: [fi-interest, fi-inflation, fi-spreadsheets]
+estimated_minutes: 120
+status: resources-verified
+---
+
+Would you rather have GH₵ 10,000 today or GH₵ 12,000 in two years? The answer is not obvious, and the method for answering it is one of the most useful ideas in finance. It is how loan repayments are set, how pensions are compared, how a business decides whether a project is worth it, and how investors value shares and bonds. By the end of this chapter you will be able to move any amount forward or backward in time, value a series of payments, compare offers that pay at different times, and do all of it with a handful of spreadsheet functions.
+
+## Why money now is worth more than money later
+
+The **time value of money** is the idea that an amount of money today is worth more than the same amount in the future. There are three reasons:
+
+1. **It can earn interest.** GH₵ 1,000 today, saved at 8% a year, becomes GH₵ 1,080 in a year. So GH₵ 1,000 in a year is worth less than GH₵ 1,000 now.
+2. **Inflation.** As <Ref to="fi-inflation" /> showed, money in the future usually buys less.
+3. **Risk.** A promise of money later might not be kept. Money in your hand is certain.
+
+To compare amounts at different times, you move them all to the same date, usually today, using an interest rate.
+
+## Future value
+
+The **future value** (FV) of an amount is what it grows to by a later date at a given interest rate. You met it in <Ref to="fi-interest" /> as compound interest:
+
+FV = PV × (1 + r)ⁿ
+
+where **PV** is the amount today, **r** the interest rate per period and **n** the number of periods.
+
+**Worked example.** GH₵ 5,000 at 15% a year for 4 years: 5,000 × 1.15⁴ = 5,000 × 1.7490 = **GH₵ 8,745.03**.
+
+## Present value and discounting
+
+The **present value** (PV) of a future amount is what it is worth today: the amount you would need to invest now, at the given rate, to have that sum later. Working backwards like this is called **discounting**, and the rate used is the **discount rate**. It is the same formula turned around:
+
+PV = FV ÷ (1 + r)ⁿ
+
+**Worked example.** What is GH₵ 10,000 in 3 years worth today at 12% a year? 10,000 ÷ 1.12³ = 10,000 ÷ 1.404928 = **GH₵ 7,117.80**. Check it forwards: 7,117.80 × 1.404928 = 10,000.
+
+The number 1 ÷ (1 + r)ⁿ is the **discount factor**: at 12%, 0.8929 for one year, 0.7972 for two, 0.7118 for three. Multiplying a future amount by its discount factor gives its present value.
+
+**Worked example: today or later?** You are offered GH₵ 10,000 now or GH₵ 12,000 in two years, and you could earn 10% a year on your savings.
+
+- Bring the later amount to today: 12,000 ÷ 1.10² = 12,000 ÷ 1.21 = **GH₵ 9,917.36**.
+- Or take the first amount forward: 10,000 × 1.21 = GH₵ 12,100 in two years.
+
+Either way, GH₵ 10,000 now is worth slightly more, by GH₵ 82.64 in today’s money or GH₵ 100 in two years’ time. At a lower rate the answer flips: at 8%, 12,000 ÷ 1.08² = GH₵ 10,288.07, so waiting would be better.
+
+**Choosing the discount rate.** The rate should be what you could earn elsewhere on money of similar risk, sometimes called the **opportunity cost**. If the future payment is uncertain, use a higher rate to allow for that risk. The higher the discount rate, the less a future amount is worth today, and the further away the payment, the stronger the effect.
+
+## A series of payments
+
+Many decisions involve money spread over several years. To value them, discount each payment separately and add them up. Adding the present values of all money in and out, with money paid out counted as negative, gives the **net present value** (NPV). A positive NPV means the choice is worth more than it costs, at that discount rate.
+
+**Worked example.** Kofi can take a course that costs GH₵ 5,000 now. He expects it to raise his income by GH₵ 2,000 a year for 4 years, paid at the end of each year. His discount rate is 12%.
+
+| Year | Money | Discount factor | Present value |
+|---|---|---|---|
+| 0 | −5,000 | 1.0000 | −5,000.00 |
+| 1 | 2,000 | 0.8929 | 1,785.71 |
+| 2 | 2,000 | 0.7972 | 1,594.39 |
+| 3 | 2,000 | 0.7118 | 1,423.56 |
+| 4 | 2,000 | 0.6355 | 1,271.04 |
+
+The four payments are worth **GH₵ 6,074.70** today, and the NPV is 6,074.70 − 5,000 = **GH₵ 1,074.70**. Positive, so at 12% the course pays for itself. Notice that he receives GH₵ 8,000 in total, but its value today is much less.
+
+<Walkthrough name="fi-time-value-npv" />
+
+At a 25% discount rate, which might suit a very uncertain income gain, the same payments are worth only GH₵ 4,723.20 today and the NPV is **−GH₵ 276.80**. The decision depends on the rate.
+
+## Formulas for regular payments
+
+A series of equal payments at regular intervals is called an **annuity** (the same word is used for a pension product that pays an income, which works on this idea). There are shortcuts for both directions, with P the payment per period:
+
+- **Future value of regular payments:** FV = P × ((1 + r)ⁿ − 1) ÷ r
+- **Present value of regular payments:** PV = P × (1 − (1 + r)⁻ⁿ) ÷ r
+
+**Worked example: saving.** GH₵ 500 at the end of each month for 12 months at 1% a month: 500 × (1.01¹² − 1) ÷ 0.01 = **GH₵ 6,341.25**, the same answer <Ref to="fi-interest" /> got month by month.
+
+**Worked example: the loan formula.** In <Ref to="fi-loans" />, Kwame borrowed GH₵ 10,000 at 2% a month and repaid GH₵ 945.60 a month for 12 months. The present value of those payments is 945.60 × (1 − 1.02⁻¹²) ÷ 0.02 = GH₵ 10,000.04: the amount borrowed, apart from 4 pesewas because the payment was rounded. A loan’s repayment is the payment whose present value equals the loan.
+
+**Worked example: a saving goal.** Esi wants GH₵ 20,000 in 3 years and can earn 1% a month. Solving the future value formula for P: 20,000 × 0.01 ÷ (1.01³⁶ − 1) = **GH₵ 464.29 a month**. She pays in about GH₵ 16,714; interest supplies the rest.
+
+**Payments forever.** A **perpetuity** is a payment that continues for ever. Its present value is simply P ÷ r. A plot of land that can be rented for GH₵ 600 a year, at a 12% discount rate, is worth 600 ÷ 0.12 = **GH₵ 5,000** on this basis. Investors use this idea, with growth added, to value shares, as <Ref to="fi-shares" /> shows.
+
+## In a spreadsheet
+
+Spreadsheets have built-in functions for all of this. They follow a **sign convention**: money you pay out is negative and money you receive is positive, so you will often type a minus sign to get a positive answer.
+
+```text
+=FV(15%, 4, 0, -5000)          gives 8,745.03    5,000 left for 4 years
+=PV(12%, 3, 0, -10000)         gives 7,117.80    10,000 in 3 years
+=PV(12%, 4, -2000)             gives 6,074.70    2,000 a year for 4 years
+=NPV(12%, 2000, 2000, 2000, 2000)  gives 6,074.70  the same, payment by payment
+=FV(1%, 12, -500)              gives 6,341.25    saving 500 a month
+=PMT(1%, 36, 0, -20000)        gives 464.29      the monthly saving for 20,000
+=RATE(3, 0, -7000, 10000)      gives 12.62%      the rate that turns 7,000 into 10,000
+```
+
+The arguments are always in the same order: rate, number of periods, payment, present value, future value. Keep the units consistent: a monthly rate with a number of months.
+
+`NPV` has one trap: it treats its first amount as arriving one period from now. Money paid today, such as the course fee, is added separately: `=NPV(12%, 2000, 2000, 2000, 2000) - 5000` gives 1,074.70.
+
+The same NPV in Python (optional):
+
+```python
+def npv(rate, flows):
+    # flows[0] is today, flows[1] one period from now, and so on
+    return sum(cf / (1 + rate) ** t for t, cf in enumerate(flows))
+
+course = [-5000, 2000, 2000, 2000, 2000]
+print(f"{npv(0.12, course):,.2f}")
+print(f"{npv(0.25, course):,.2f}")
+```
+
+```text
+1,074.70
+-276.80
+```
+
+## Where you will meet this
+
+- **Loans and mortgages**: the repayment is set so the payments’ present value equals the loan.
+- **Pensions**: comparing a lump sum with an income for life, or working out how much to save each month.
+- **Bonds**: a bond’s price is the present value of its interest payments and final repayment, which is why bond prices fall when interest rates rise.
+- **Shares and businesses**: their value is the present value of the cash they are expected to produce.
+- **Everyday offers**: “pay now at a discount or in instalments”, “a prize of GH₵ 1,000 a year for 5 years or GH₵ 3,500 now”.
+
+Every one of these answers depends on the discount rate and on how reliable the future payments are. A present value is only as good as its assumptions.
+
+## Common mistakes
+
+- **Adding money from different years as if it were the same**: GH₵ 8,000 over four years is not worth GH₵ 8,000 today.
+- **Mixing periods**: a yearly rate with a number of months, or a monthly payment with a yearly rate.
+- **Getting the sign wrong in a spreadsheet**, so the answer comes out negative or the function returns an error.
+- **Using `NPV` on today’s payment**, which discounts it by a period when it should not be discounted at all.
+- **Choosing a convenient discount rate.** Too low a rate makes almost anything look worth it.
+- **Ignoring risk**: a promised payment from a scheme with no track record is not worth the same as one from the government.
+
+## Practice
+
+**1. (warm-up)** What is GH₵ 50,000 received in 10 years worth today at 8% a year?
+
+<Solution>
+
+50,000 ÷ 1.08¹⁰ = 50,000 ÷ 2.1589 = **GH₵ 23,159.67**.
+
+</Solution>
+
+**2. (warm-up)** At 12%, what are the discount factors for 1 and 2 years, and what is GH₵ 2,000 in each year worth today?
+
+<Solution>
+
+1 ÷ 1.12 = 0.8929 and 1 ÷ 1.12² = 0.7972. So 2,000 in a year is worth **GH₵ 1,785.71** and 2,000 in two years **GH₵ 1,594.39**.
+
+</Solution>
+
+**3. (standard)** A competition offers GH₵ 1,000 a year for 5 years (first payment in a year) or GH₵ 3,500 now. At 10%, which is worth more?
+
+<Solution>
+
+PV = 1,000 × (1 − 1.10⁻⁵) ÷ 0.10 = **GH₵ 3,790.79**, more than 3,500, so the yearly payments are worth more at 10%. At a high enough rate (about 13.2%) the lump sum would win.
+
+</Solution>
+
+**4. (standard)** Ama saves GH₵ 300 at the end of each month for 10 years at 0.75% a month. How much will she have, and how much of it is interest?
+
+<Solution>
+
+FV = 300 × (1.0075¹²⁰ − 1) ÷ 0.0075 = **GH₵ 58,054.28**. She paid in 300 × 120 = 36,000, so **GH₵ 22,054.28** is interest.
+
+</Solution>
+
+**5. (standard)** An investment turns GH₵ 7,000 into GH₵ 10,000 in 3 years. What yearly rate is that?
+
+<Solution>
+
+(10,000 ÷ 7,000)^(1/3) − 1 = **12.62%** a year. In a spreadsheet: `=RATE(3, 0, -7000, 10000)`.
+
+</Solution>
+
+**6. (standard)** Why does the NPV of Kofi’s course fall from GH₵ 1,074.70 at 12% to −GH₵ 276.80 at 25%?
+
+<Solution>
+
+The cost is paid today and is not discounted, but the income comes later. A higher discount rate shrinks every later payment, and the furthest ones most (year 4’s 2,000 is worth 1,271.04 at 12% but only 819.20 at 25%), so the benefits fall below the cost.
+
+</Solution>
+
+**7. (stretch)** A retiring worker is offered GH₵ 75,000 now or GH₵ 1,000 a month for 10 years. Compare them at 0.8% a month and at 1% a month, and name one thing the calculation leaves out.
+
+<Solution>
+
+At 0.8%: PV = 1,000 × (1 − 1.008⁻¹²⁰) ÷ 0.008 = **GH₵ 76,955.23**, more than 75,000, so the monthly income is worth more. At 1%: PV = **GH₵ 69,700.52**, so the lump sum is worth more. The calculation leaves out, among other things, **inflation** (1,000 a month buys less each year), the **risk** that the payer cannot pay, **tax**, and the worker’s own needs.
+
+</Solution>
+
+**8. (stretch)** Land rents for GH₵ 600 a year for ever. What is it worth at 12%, and at 15%? What does that tell you about values when interest rates rise?
+
+<Solution>
+
+600 ÷ 0.12 = **GH₵ 5,000**; 600 ÷ 0.15 = **GH₵ 4,000**. A rise in the discount rate from 12% to 15% cuts the value by a fifth. When interest rates rise, the present value of future income falls, which is why prices of bonds, property and shares tend to fall when rates rise.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- Money now is worth more than money later because it can earn interest, prices rise, and the future is uncertain.
+- **Future value**: FV = PV × (1 + r)ⁿ. **Present value**: PV = FV ÷ (1 + r)ⁿ; finding it is **discounting**.
+- To compare money at different times, move it all to one date with a **discount rate** reflecting what you could earn elsewhere and the risk.
+- **NPV** adds the present values of all money in and out; positive means worth doing at that rate.
+- Regular payments (an **annuity**) have shortcut formulas; a loan repayment is the payment whose present value equals the loan.
+- A **perpetuity** is worth P ÷ r; higher rates mean lower present values.
+- Spreadsheets: `FV`, `PV`, `NPV`, `PMT`, `RATE`, with money paid out entered as negative.
+
+## Go deeper
+
+- [Introduction to present value](https://www.khanacademy.org/economics-finance-domain/core-finance/interest-tutorial/present-value/v/introduction-to-present-value), Khan Academy. A short video building present value from a choice between money now and later, followed by more examples.
+- [PV](https://support.google.com/docs/answer/3093243), Google Docs Editors Help. The `PV` function’s arguments, with links to `FV`, `PMT`, `NPER` and `RATE`.
+- [Compound Interest Calculator](https://www.investor.gov/financial-tools-calculators/calculators/compound-interest-calculator), Investor.gov. Check future values of savings with regular additions.

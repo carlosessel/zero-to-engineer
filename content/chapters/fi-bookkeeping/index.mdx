@@ -1,0 +1,193 @@
+---
+title: "Personal bookkeeping"
+summary: "Accounts, transactions and categories; recording a month of money and reconciling it with your statements."
+prerequisites: [fi-budgeting, fi-banking, fi-spreadsheets]
+estimated_minutes: 120
+status: resources-verified
+---
+
+A budget says what you plan to do with money; your books say what actually happened. By the end of this chapter you will be able to set up a simple record of all your money across bank, mobile money and cash, record transactions so that totals by category come out right, handle transfers between your own accounts, and reconcile your record with a statement to find missing entries, timing differences and errors.
+
+## Why keep books
+
+**Bookkeeping** is keeping an orderly record of money coming in and going out. For a household it gives you:
+
+- the “actual” column for your budget (<Ref to="fi-budgeting" />);
+- evidence for tax, benefits or a loan application;
+- a way to catch bank errors, wrong fees and fraud;
+- the figures for the household accounts in <Ref to="fi-household-statements" />.
+
+It takes a few minutes a week once it is set up.
+
+## Accounts, transactions and categories
+
+In bookkeeping, an **account** is a named record of one pot of money or one kind of item, not only a bank account. For a household the main ones are the places money is kept:
+
+- each bank account (current, savings);
+- each mobile money wallet;
+- cash;
+- each credit card or loan, which records what you owe.
+
+A **transaction** is a single event that moves money: a salary payment, a purchase, a transfer. For each one, record:
+
+| Field | Example |
+|---|---|
+| Date | 9 November |
+| Account | Bank |
+| Description | Supermarket |
+| Category | Food |
+| Amount | −326.40 (money out is negative) |
+
+The **category** says what the money was for, as in your budget: food, housing, transport, family, income. Use the same categories as your budget so the two can be compared.
+
+## Transfers are not spending
+
+Moving money between your own accounts is a **transfer**. Taking GH₵ 500 from the bank as cash does not make you poorer; the money is now in your pocket. So a transfer is recorded twice, once leaving one account and once arriving in another, with the category “Transfer”, and the two lines cancel out. If you count the bank withdrawal as spending and then count what you buy with the cash as spending too, the same money is counted twice.
+
+## A month in a spreadsheet
+
+Here is part of Ama’s November, kept in one sheet for all her accounts. Column D is the category and column E the amount, rows 2 to 12:
+
+```text
+     A        B          C              D           E
+1    Date     Account    Description    Category    Amount
+2    01 Nov   Bank       Salary         Income      4000
+3    01 Nov   Bank       Rent           Housing     -1200
+4    02 Nov   Bank       To savings     Transfer    -400
+5    02 Nov   Savings    From bank      Transfer    400
+6    05 Nov   Bank       MoMo to Mum    Family      -300
+7    09 Nov   Bank       Supermarket    Food        -326.40
+8    12 Nov   Bank       ATM cash       Transfer    -500
+9    12 Nov   Cash       ATM cash       Transfer    500
+10   14 Nov   Cash       Market         Food        -185
+11   18 Nov   Cash       Trotro fares   Transport   -120
+12   20 Nov   Bank       Electricity    Utilities   -180
+```
+
+The built-in function `SUMIF` adds only the rows that match a condition: `=SUMIF(range to check, what to match, range to add)`. With it you get totals by category, or by account:
+
+```text
+=SUMIF(D2:D12, "Food", E2:E12)        gives -511.40
+=SUMIF(D2:D12, "Transfer", E2:E12)    gives 0
+=SUMIF(B2:B12, "Cash", E2:E12)        gives 195
+=SUM(E2:E12)                          gives 1688.60
+```
+
+Food appears twice, once paid from the bank and once in cash, and `SUMIF` adds both: GH₵ 511.40. The transfers add to exactly 0, a useful check that each one was recorded at both ends. The cash account went up by 195 (500 in, 305 spent). And the total, 1,688.60, is how much richer Ama is across all her accounts after these transactions: 4,000 of income minus 2,311.40 of real spending. In a fuller sheet you would also include each account’s opening balance, so that `SUMIF` by account gives each balance.
+
+## Reconciling with a statement
+
+**Reconciling** means checking your record of an account against the provider’s statement, and explaining every difference. The two closing balances rarely match at first, for four kinds of reason:
+
+1. **Items you did not record**: usually fees and interest, which appear only on the statement.
+2. **Timing differences**: something in your record that has not reached the statement yet (a deposit made on the last day of the month), or the reverse.
+3. **Errors**: a typing mistake in your record (32.64 for 326.40), or occasionally the bank’s.
+4. **Things that should not be there**: a payment you did not make, which may be fraud.
+
+**Worked example.** Ama’s bank account opened November at GH₵ 2,150.00 (the same statement as in <Ref to="fi-banking" />). Her own record ends at **GH₵ 3,193.60**; the bank’s statement at 30 November ends at **GH₵ 2,987.10**, a difference of 206.50. Going line by line:
+
+- **Fees she did not record**: a 1.50 transfer fee and a 5.00 ATM fee. She adds them to her record: 3,193.60 − 6.50 = **3,187.10**.
+- **A payment she did not make**: 89.99 to an online service, which she reported. The bank refunded 89.99 on 22 November, so the two lines cancel and need nothing more.
+- **A timing difference**: her friend Kofi repaid GH₵ 200 by transfer on 29 November. It is in her record but reached the bank only on 1 December, so the statement does not show it yet: 2,987.10 + 200 = **3,187.10**.
+
+Both sides now agree at GH₵ 3,187.10. Every difference is explained, which is what a reconciliation means. If a difference cannot be explained, look for a typing error first: a difference divisible by 9 often means two digits were swapped (such as 54 written as 45).
+
+<Walkthrough name="fi-bookkeeping-reconcile" />
+
+## Receipts and records
+
+Keep receipts for large purchases (warranties, insurance claims), anything related to tax, and any payment you might dispute. A photo in a dated folder is enough for most. How long you must keep records for tax depends on your country and whether you are self-employed: check your tax authority’s guidance.
+
+If you are **self-employed**, keep the business’s money in a separate account from your personal money. Mixing them makes it almost impossible to know whether the business is making money, and makes tax returns much harder. <Ref to="fi-double-entry" /> shows the system businesses use to keep their books.
+
+## Common mistakes
+
+- **Counting transfers as spending**, so the same money is counted twice.
+- **Forgetting cash and mobile money.** A record of the bank account alone misses much of everyday spending.
+- **Leaving it for months.** Weekly takes minutes; a year at once is a weekend of guessing.
+- **Not recording fees**, so your balance is always a little above the real one.
+- **Forcing a match.** Adjusting a figure to make the balances agree hides the error you were meant to find.
+- **Inconsistent categories**, such as “Food” one week and “Groceries” the next, so totals split in two.
+
+## Practice
+
+**1. (warm-up)** Ama withdraws GH₵ 500 cash from her bank account. Write the two lines for her record.
+
+<Solution>
+
+Bank, ATM cash, category Transfer, **−500**; Cash, ATM cash, category Transfer, **+500**. They cancel, so her total is unchanged.
+
+</Solution>
+
+**2. (warm-up)** In the sheet above, what does `=SUMIF(D2:D12, "Transport", E2:E12)` give?
+
+<Solution>
+
+Only row 11 matches: **−120**.
+
+</Solution>
+
+**3. (standard)** What does `=SUMIF(B2:B12, "Bank", E2:E12)` give, and what does it mean?
+
+<Solution>
+
+4,000 − 1,200 − 400 − 300 − 326.40 − 500 − 180 = **1,093.60**: the net change in the bank account from these transactions.
+
+</Solution>
+
+**4. (standard)** Ama’s total real spending in the sheet (not counting income or transfers) is how much?
+
+<Solution>
+
+Housing 1,200 + Family 300 + Food 511.40 + Transport 120 + Utilities 180 = **GH₵ 2,311.40**. Check: 4,000 − 2,311.40 = 1,688.60, the sheet’s total.
+
+</Solution>
+
+**5. (standard)** Kojo’s record of his account ends at GH₵ 1,840.00 and his statement at GH₵ 1,825.00. The statement shows a monthly account fee of GH₵ 15 he did not record. Does it reconcile?
+
+<Solution>
+
+Yes: 1,840.00 − 15.00 = **1,825.00**, the statement balance.
+
+</Solution>
+
+**6. (standard)** Esi’s record ends at GH₵ 2,600 and her statement at GH₵ 2,950. She paid a GH₵ 350 cheque into the bank on the last day of the month. Is that likely to explain it? Which way round?
+
+<Solution>
+
+No. A deposit on the last day would be in her record but *not yet* on the statement, which would make the statement **lower** than her record. Here the statement is **higher** by 350, so she should look for money in that she did not record, or a payment she recorded that has not gone out yet.
+
+</Solution>
+
+**7. (stretch)** Yaw’s record and statement differ by GH₵ 27. What kind of typing error might cause that, and what would you look for?
+
+<Solution>
+
+27 is divisible by 9, which often means **two digits were swapped**. Look for amounts where swapping two neighbouring digits gives a difference of 27, such as 41 recorded as 14, or 63 recorded as 36.
+
+</Solution>
+
+**8. (stretch)** Akosua the tailor pays for fabric, her rent and her groceries from one mobile money wallet. Why is this a problem, and what would you suggest?
+
+<Solution>
+
+She cannot easily tell what the business earns and spends, or whether it makes money, and her tax records will be unreliable. A **separate account or wallet for the business**, paying herself a set amount into her personal account, would fix it.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Bookkeeping** records what actually happened, for your budget, tax, disputes and household accounts.
+- An **account** is a named record of one pot of money or one kind of item; a **transaction** has a date, account, description, category and amount.
+- A **transfer** between your own accounts is recorded at both ends and is not spending.
+- `SUMIF` totals by category or account; transfers should sum to zero.
+- **Reconciling** explains every difference between your record and a statement: unrecorded fees, timing differences, errors, or payments that should not be there.
+- Keep business and personal money separate if you are self-employed.
+
+## Go deeper
+
+- [Bank Reconciliation](https://www.accountingcoach.com/bank-reconciliation/explanation), AccountingCoach. A step-by-step explanation of reconciling, with examples; written for businesses but the method is the same.
+- [SUMIF](https://support.google.com/docs/answer/3093583), Google Docs Editors Help. How the function works in Google Sheets, with examples.
+- [Financial goals](https://www.khanacademy.org/college-careers-more/financial-literacy/xa6995ea67a8e9fdd:financial-goals), Khan Academy. Lessons on goals and net worth, which the next chapter builds on.

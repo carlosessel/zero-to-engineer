@@ -1,0 +1,200 @@
+- id: fi-bookkeeping-reconcile
+  title: Reconciling Ama's November
+  hint: Tick off the lines that appear in both lists, then explain each one that does not, until the two balances agree.
+  steps:
+    - title: Two balances that disagree
+      text: Ama's own record of her bank account ends at 3,193.60. The bank's statement ends at 2,987.10. Both started from 2,150.00. The difference is 206.50, and every cedi of it must be explained.
+      vars: { "her record": "3,193.60", statement: "2,987.10", difference: "206.50" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 12
+          tables:
+            - id: r
+              title: her record
+              columns: [item, amount]
+              rows:
+                - { k: a1, cells: [Salary, "+4,000.00"] }
+                - { k: a2, cells: [Rent, "−1,200.00"] }
+                - { k: a3, cells: [To savings, "−400.00"] }
+                - { k: a4, cells: [MoMo to Mum, "−300.00"] }
+                - { k: a5, cells: [Supermarket, "−326.40"] }
+                - { k: a6, cells: [ATM cash, "−500.00"] }
+                - { k: a7, cells: [Electricity, "−180.00"] }
+                - { k: a8, cells: [Top-up, "−250.00"] }
+                - { k: a9, cells: [From Kofi, "+200.00"] }
+            - id: s
+              title: bank statement
+              columns: [item, amount]
+              rows:
+                - { k: b1, cells: [Salary, "+4,000.00"] }
+                - { k: b2, cells: [Rent, "−1,200.00"] }
+                - { k: b3, cells: [To savings, "−400.00"] }
+                - { k: b4, cells: [MoMo to Mum, "−300.00"] }
+                - { k: b5, cells: [Transfer fee, "−1.50"] }
+                - { k: b6, cells: [Supermarket, "−326.40"] }
+                - { k: b7, cells: [ATM cash, "−500.00"] }
+                - { k: b8, cells: [ATM fee, "−5.00"] }
+                - { k: b9, cells: [ONLINE SVC, "−89.99"] }
+                - { k: b10, cells: [Refund, "+89.99"] }
+                - { k: b11, cells: [Electricity, "−180.00"] }
+                - { k: b12, cells: [Top-up, "−250.00"] }
+    - title: Tick off the matches
+      text: Seven lines appear in both, with the same amounts. They are not the problem. What is left over on each side must explain the 206.50.
+      parts:
+        - kind: tables
+          id: t
+          slots: 12
+          tables:
+            - id: r
+              title: her record
+              columns: [item, amount]
+              rows:
+                - { k: a1, cells: [Salary, "+4,000.00"], tone: dim }
+                - { k: a2, cells: [Rent, "−1,200.00"], tone: dim }
+                - { k: a3, cells: [To savings, "−400.00"], tone: dim }
+                - { k: a4, cells: [MoMo to Mum, "−300.00"], tone: dim }
+                - { k: a5, cells: [Supermarket, "−326.40"], tone: dim }
+                - { k: a6, cells: [ATM cash, "−500.00"], tone: dim }
+                - { k: a7, cells: [Electricity, "−180.00"], tone: dim }
+                - { k: a8, cells: [Top-up, "−250.00"], tone: dim }
+                - { k: a9, cells: [From Kofi, "+200.00"], tone: compare }
+            - id: s
+              title: bank statement
+              columns: [item, amount]
+              rows:
+                - { k: b1, cells: [Salary, "+4,000.00"], tone: dim }
+                - { k: b2, cells: [Rent, "−1,200.00"], tone: dim }
+                - { k: b3, cells: [To savings, "−400.00"], tone: dim }
+                - { k: b4, cells: [MoMo to Mum, "−300.00"], tone: dim }
+                - { k: b5, cells: [Transfer fee, "−1.50"], tone: compare }
+                - { k: b6, cells: [Supermarket, "−326.40"], tone: dim }
+                - { k: b7, cells: [ATM cash, "−500.00"], tone: dim }
+                - { k: b8, cells: [ATM fee, "−5.00"], tone: compare }
+                - { k: b9, cells: [ONLINE SVC, "−89.99"], tone: compare }
+                - { k: b10, cells: [Refund, "+89.99"], tone: compare }
+                - { k: b11, cells: [Electricity, "−180.00"], tone: dim }
+                - { k: b12, cells: [Top-up, "−250.00"], tone: dim }
+    - title: Fees she did not record
+      text: The 1.50 transfer fee and 5.00 ATM fee are real; she just never wrote them down. She adds them to her record, which falls to 3,187.10.
+      vars: { "her record": "3,193.60 − 6.50 = 3,187.10" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 12
+          tables:
+            - id: r
+              title: her record
+              columns: [item, amount]
+              rows:
+                - { k: a1, cells: [Salary, "+4,000.00"], tone: dim }
+                - { k: a2, cells: [Rent, "−1,200.00"], tone: dim }
+                - { k: a3, cells: [To savings, "−400.00"], tone: dim }
+                - { k: a4, cells: [MoMo to Mum, "−300.00"], tone: dim }
+                - { k: a5, cells: [Supermarket, "−326.40"], tone: dim }
+                - { k: a6, cells: [ATM cash, "−500.00"], tone: dim }
+                - { k: a7, cells: [Electricity, "−180.00"], tone: dim }
+                - { k: a8, cells: [Top-up, "−250.00"], tone: dim }
+                - { k: a9, cells: [From Kofi, "+200.00"], tone: compare }
+                - { k: a10, cells: [Fees added, "−6.50"], tone: found }
+            - id: s
+              title: bank statement
+              columns: [item, amount]
+              rows:
+                - { k: b1, cells: [Salary, "+4,000.00"], tone: dim }
+                - { k: b2, cells: [Rent, "−1,200.00"], tone: dim }
+                - { k: b3, cells: [To savings, "−400.00"], tone: dim }
+                - { k: b4, cells: [MoMo to Mum, "−300.00"], tone: dim }
+                - { k: b5, cells: [Transfer fee, "−1.50"], tone: done }
+                - { k: b6, cells: [Supermarket, "−326.40"], tone: dim }
+                - { k: b7, cells: [ATM cash, "−500.00"], tone: dim }
+                - { k: b8, cells: [ATM fee, "−5.00"], tone: done }
+                - { k: b9, cells: [ONLINE SVC, "−89.99"], tone: compare }
+                - { k: b10, cells: [Refund, "+89.99"], tone: compare }
+                - { k: b11, cells: [Electricity, "−180.00"], tone: dim }
+                - { k: b12, cells: [Top-up, "−250.00"], tone: dim }
+    - title: A payment she did not make, refunded
+      text: The 89.99 to an online service was not hers. She reported it, and the bank refunded it on 22 November. The two lines cancel, so they explain none of the difference.
+      parts:
+        - kind: tables
+          id: t
+          slots: 12
+          tables:
+            - id: r
+              title: her record
+              columns: [item, amount]
+              rows:
+                - { k: a1, cells: [Salary, "+4,000.00"], tone: dim }
+                - { k: a2, cells: [Rent, "−1,200.00"], tone: dim }
+                - { k: a3, cells: [To savings, "−400.00"], tone: dim }
+                - { k: a4, cells: [MoMo to Mum, "−300.00"], tone: dim }
+                - { k: a5, cells: [Supermarket, "−326.40"], tone: dim }
+                - { k: a6, cells: [ATM cash, "−500.00"], tone: dim }
+                - { k: a7, cells: [Electricity, "−180.00"], tone: dim }
+                - { k: a8, cells: [Top-up, "−250.00"], tone: dim }
+                - { k: a9, cells: [From Kofi, "+200.00"], tone: compare }
+                - { k: a10, cells: [Fees added, "−6.50"], tone: dim }
+            - id: s
+              title: bank statement
+              columns: [item, amount]
+              rows:
+                - { k: b1, cells: [Salary, "+4,000.00"], tone: dim }
+                - { k: b2, cells: [Rent, "−1,200.00"], tone: dim }
+                - { k: b3, cells: [To savings, "−400.00"], tone: dim }
+                - { k: b4, cells: [MoMo to Mum, "−300.00"], tone: dim }
+                - { k: b5, cells: [Transfer fee, "−1.50"], tone: dim }
+                - { k: b6, cells: [Supermarket, "−326.40"], tone: dim }
+                - { k: b7, cells: [ATM cash, "−500.00"], tone: dim }
+                - { k: b8, cells: [ATM fee, "−5.00"], tone: dim }
+                - { k: b9, cells: [ONLINE SVC, "−89.99"], tone: bad }
+                - { k: b10, cells: [Refund, "+89.99"], tone: found }
+                - { k: b11, cells: [Electricity, "−180.00"], tone: dim }
+                - { k: b12, cells: [Top-up, "−250.00"], tone: dim }
+    - title: A timing difference
+      text: Kofi repaid her 200 on 29 November, but it reached the bank on 1 December, after the statement closed. It is real and will appear next month, so it is added to the statement side for the comparison.
+      vars: { statement: "2,987.10 + 200 = 3,187.10" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 12
+          tables:
+            - id: r
+              title: her record
+              columns: [item, amount]
+              rows:
+                - { k: a1, cells: [Salary, "+4,000.00"], tone: dim }
+                - { k: a2, cells: [Rent, "−1,200.00"], tone: dim }
+                - { k: a3, cells: [To savings, "−400.00"], tone: dim }
+                - { k: a4, cells: [MoMo to Mum, "−300.00"], tone: dim }
+                - { k: a5, cells: [Supermarket, "−326.40"], tone: dim }
+                - { k: a6, cells: [ATM cash, "−500.00"], tone: dim }
+                - { k: a7, cells: [Electricity, "−180.00"], tone: dim }
+                - { k: a8, cells: [Top-up, "−250.00"], tone: dim }
+                - { k: a9, cells: [From Kofi, "+200.00"], tone: active }
+                - { k: a10, cells: [Fees added, "−6.50"], tone: dim }
+            - id: s
+              title: bank statement
+              columns: [item, amount]
+              rows:
+                - { k: b1, cells: [Salary, "+4,000.00"], tone: dim }
+                - { k: b2, cells: [Rent, "−1,200.00"], tone: dim }
+                - { k: b3, cells: [To savings, "−400.00"], tone: dim }
+                - { k: b4, cells: [MoMo to Mum, "−300.00"], tone: dim }
+                - { k: b5, cells: [Transfer fee, "−1.50"], tone: dim }
+                - { k: b6, cells: [Supermarket, "−326.40"], tone: dim }
+                - { k: b7, cells: [ATM cash, "−500.00"], tone: dim }
+                - { k: b8, cells: [ATM fee, "−5.00"], tone: dim }
+                - { k: b9, cells: [ONLINE SVC, "−89.99"], tone: dim }
+                - { k: b10, cells: [Refund, "+89.99"], tone: dim }
+                - { k: b11, cells: [Electricity, "−180.00"], tone: dim }
+                - { k: b12, cells: [Top-up, "−250.00"], tone: dim }
+    - title: Reconciled
+      text: Her corrected record and the statement plus the money in transit both come to 3,187.10. Every difference is explained, so the account is reconciled.
+      parts:
+        - kind: kv
+          id: k
+          label: "Both sides, explained"
+          slots: 2
+          rows:
+            - { name: her record, value: "3,193.60 − 6.50 fees = 3,187.10", tone: found }
+            - { name: statement, value: "2,987.10 + 200.00 in transit = 3,187.10", tone: found }

@@ -1,0 +1,228 @@
+- id: fi-debt-avalanche-snowball
+  title: Avalanche or snowball?
+  hint: Switch between the two methods and watch which debt each one attacks first, and how long it takes to be debt free.
+  examples:
+  - label: 'Avalanche: highest rate first'
+    steps:
+    - title: The debts
+      text: 'Three debts, GH₵ 600 a month for all of them. Minimums take 315; the extra 285 goes to the debt with the highest rate first: the app loan at 5% a month.'
+      vars:
+        month: '0'
+        total owed: 6,400.00
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 900.0
+          tone: base
+        - k: card
+          v: 3000.0
+          tone: base
+        - k: app
+          v: 2500.0
+          tone: active
+    - title: Month 3
+      text: The app loan is falling fast. The card's minimum, 105, only just covers its 3.5% interest on 3,000, so its balance has not moved at all.
+      vars:
+        month: '3'
+        total owed: 5,268.19
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 745.46
+          tone: base
+        - k: card
+          v: 3000.0
+          tone: base
+        - k: app
+          v: 1522.73
+          tone: active
+    - title: 'Month 7: app loan cleared'
+      text: The most expensive debt is gone. Its 150 minimum and the extra now all go to the next-highest rate, the card.
+      vars:
+        month: '7'
+        total owed: 3,508.08
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 532.1
+          tone: base
+        - k: card
+          v: 2975.98
+          tone: active
+        - k: app
+          v: 0.0
+          tone: found
+    - title: Month 12
+      text: With most of the 600 aimed at it, the card balance falls quickly.
+      vars:
+        month: '12'
+        total owed: '891.97'
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 253.17
+          tone: base
+        - k: card
+          v: 638.8
+          tone: active
+        - k: app
+          v: 0.0
+          tone: found
+    - title: 'Month 14: debt free'
+      text: All three cleared in 14 months, with GH₵ 1,723.06 of interest in total.
+      vars:
+        month: '14'
+        total owed: '0.00'
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 0.0
+          tone: found
+        - k: card
+          v: 0.0
+          tone: found
+        - k: app
+          v: 0.0
+          tone: found
+  - label: 'Snowball: smallest first'
+    steps:
+    - title: The debts
+      text: 'The same three debts and the same GH₵ 600 a month. This time the extra 285 goes to the smallest balance first: the phone loan, though it has the lowest rate.'
+      vars:
+        month: '0'
+        total owed: 6,400.00
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 900.0
+          tone: active
+        - k: card
+          v: 3000.0
+          tone: base
+        - k: app
+          v: 2500.0
+          tone: base
+    - title: 'Month 3: phone loan cleared'
+      text: 'A quick win: one debt gone in three months. Meanwhile the app loan at 5% a month has barely fallen.'
+      vars:
+        month: '3'
+        total owed: 5,303.08
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 0.0
+          tone: found
+        - k: card
+          v: 3000.0
+          tone: base
+        - k: app
+          v: 2303.08
+          tone: active
+    - title: 'Month 9: app loan cleared'
+      text: Its minimum plus the extra have cleared the app loan. All the money now goes to the card, which has sat at 3,000 for months.
+      vars:
+        month: '9'
+        total owed: 2,719.39
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 0.0
+          tone: found
+        - k: card
+          v: 2719.39
+          tone: active
+        - k: app
+          v: 0.0
+          tone: found
+    - title: Month 12
+      text: The card is falling, but later than under the avalanche.
+      vars:
+        month: '12'
+        total owed: 1,151.30
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 0.0
+          tone: found
+        - k: card
+          v: 1151.3
+          tone: active
+        - k: app
+          v: 0.0
+          tone: found
+    - title: 'Month 15: debt free'
+      text: 'All three cleared in 15 months, with GH₵ 2,012.74 of interest: GH₵ 289.68 more than the avalanche, in exchange for an early win.'
+      vars:
+        month: '15'
+        total owed: '0.00'
+      parts:
+      - kind: cells
+        id: c
+        label: 'balances: phone 1%, card 3.5%, app 5% a month (GH₵)'
+        slots: 3
+        width: 150
+        bars: true
+        items:
+        - k: phone
+          v: 0.0
+          tone: found
+        - k: card
+          v: 0.0
+          tone: found
+        - k: app
+          v: 0.0
+          tone: found

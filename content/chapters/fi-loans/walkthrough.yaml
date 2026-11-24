@@ -1,0 +1,284 @@
+- id: fi-loans-schedule
+  title: A loan, payment by payment
+  hint: Watch the interest part of each payment shrink and the repaid part grow, while the payment itself stays the same.
+  steps:
+  - title: The loan
+    text: Kwame borrows GH₵ 10,000 for 12 months at 2% a month on the reducing balance. The repayment formula gives a fixed GH₵ 945.60 a month.
+    vars:
+      balance: 10,000.00
+      repayment: '945.60'
+    parts:
+    - kind: tables
+      id: t
+      slots: 7
+      tables:
+      - id: s
+        title: 'Kwame''s loan: GH₵ 10,000 at 2% a month'
+        columns:
+        - month
+        - payment
+        - interest
+        - repaid
+        - balance
+        rows:
+        - k: m0
+          cells: &id001
+          - 0
+          - ''
+          - ''
+          - ''
+          - 10,000.00
+          tone: active
+  - title: Month 1
+    text: 'Interest is 2% of the 10,000 owed: 200.00. The rest of the payment, 745.60, repays part of the loan.'
+    vars:
+      balance: 9,254.40
+      interest so far: '200.00'
+    parts:
+    - kind: tables
+      id: t
+      slots: 7
+      tables:
+      - id: s
+        title: 'Kwame''s loan: GH₵ 10,000 at 2% a month'
+        columns:
+        - month
+        - payment
+        - interest
+        - repaid
+        - balance
+        rows:
+        - k: m0
+          cells: *id001
+          tone: dim
+        - k: m1
+          cells:
+          - 1
+          - '945.60'
+          - '200.00'
+          - '745.60'
+          - 9,254.40
+          tone: active
+  - title: Month 2
+    text: 'Now he owes less, so interest is 2% of 9,254.40: 185.09. The same payment repays more of the loan, 760.51.'
+    vars:
+      balance: 8,493.89
+      interest so far: '385.09'
+    parts:
+    - kind: tables
+      id: t
+      slots: 7
+      tables:
+      - id: s
+        title: 'Kwame''s loan: GH₵ 10,000 at 2% a month'
+        columns:
+        - month
+        - payment
+        - interest
+        - repaid
+        - balance
+        rows:
+        - k: m0
+          cells: *id001
+          tone: dim
+        - k: m1
+          cells:
+          - 1
+          - '945.60'
+          - '200.00'
+          - '745.60'
+          - 9,254.40
+          tone: dim
+        - k: m2
+          cells:
+          - 2
+          - '945.60'
+          - '185.09'
+          - '760.51'
+          - 8,493.89
+          tone: active
+  - title: Month 3
+    text: Interest falls again, to 169.88, and the repaid part grows to 775.72. Every month the split shifts towards repaying the loan.
+    vars:
+      balance: 7,718.17
+      interest so far: '554.97'
+    parts:
+    - kind: tables
+      id: t
+      slots: 7
+      tables:
+      - id: s
+        title: 'Kwame''s loan: GH₵ 10,000 at 2% a month'
+        columns:
+        - month
+        - payment
+        - interest
+        - repaid
+        - balance
+        rows:
+        - k: m0
+          cells: *id001
+          tone: dim
+        - k: m1
+          cells:
+          - 1
+          - '945.60'
+          - '200.00'
+          - '745.60'
+          - 9,254.40
+          tone: dim
+        - k: m2
+          cells:
+          - 2
+          - '945.60'
+          - '185.09'
+          - '760.51'
+          - 8,493.89
+          tone: dim
+        - k: m3
+          cells:
+          - 3
+          - '945.60'
+          - '169.88'
+          - '775.72'
+          - 7,718.17
+          tone: active
+  - title: Halfway
+    text: After six payments the balance is 5,296.67, a little over half. Interest in month 7 will be about half of month 1's.
+    vars:
+      balance: 5,296.67
+    parts:
+    - kind: tables
+      id: t
+      slots: 7
+      tables:
+      - id: s
+        title: 'Kwame''s loan: GH₵ 10,000 at 2% a month'
+        columns:
+        - month
+        - payment
+        - interest
+        - repaid
+        - balance
+        rows:
+        - k: m0
+          cells: *id001
+          tone: dim
+        - k: m1
+          cells:
+          - 1
+          - '945.60'
+          - '200.00'
+          - '745.60'
+          - 9,254.40
+          tone: dim
+        - k: m2
+          cells:
+          - 2
+          - '945.60'
+          - '185.09'
+          - '760.51'
+          - 8,493.89
+          tone: dim
+        - k: m3
+          cells:
+          - 3
+          - '945.60'
+          - '169.88'
+          - '775.72'
+          - 7,718.17
+          tone: dim
+        - &id002
+          k: gap
+          cells:
+          - …
+          - ''
+          - ''
+          - ''
+          - ''
+          tone: dim
+        - k: m6
+          cells:
+          - 6
+          - '945.60'
+          - '122.40'
+          - '823.20'
+          - 5,296.67
+          tone: active
+  - title: The last two months
+    text: Month 11 is nearly all repayment. Month 12 is 5 pesewas smaller, so the balance ends at exactly zero after the rounding in earlier months.
+    vars:
+      balance: '0.00'
+    parts:
+    - kind: tables
+      id: t
+      slots: 7
+      tables:
+      - id: s
+        title: 'Kwame''s loan: GH₵ 10,000 at 2% a month'
+        columns:
+        - month
+        - payment
+        - interest
+        - repaid
+        - balance
+        rows:
+        - k: m0
+          cells: *id001
+          tone: dim
+        - k: m1
+          cells:
+          - 1
+          - '945.60'
+          - '200.00'
+          - '745.60'
+          - 9,254.40
+          tone: dim
+        - k: m2
+          cells:
+          - 2
+          - '945.60'
+          - '185.09'
+          - '760.51'
+          - 8,493.89
+          tone: dim
+        - k: m3
+          cells:
+          - 3
+          - '945.60'
+          - '169.88'
+          - '775.72'
+          - 7,718.17
+          tone: dim
+        - *id002
+        - k: m11
+          cells:
+          - 11
+          - '945.60'
+          - '36.72'
+          - '908.88'
+          - '927.01'
+          tone: active
+        - k: m12
+          cells:
+          - 12
+          - '945.55'
+          - '18.54'
+          - '927.01'
+          - '0.00'
+          tone: found
+  - title: The total cost
+    text: Twelve payments add up to 11,347.15. Take away the 10,000 borrowed, and the loan cost 1,347.15 in interest.
+    parts:
+    - kind: kv
+      id: k
+      label: Kwame's loan in total
+      slots: 3
+      rows:
+      - name: borrowed
+        value: 10,000.00
+      - name: repaid
+        value: 11 × 945.60 + 945.55 = 11,347.15
+      - name: interest
+        value: 1,347.15
+        tone: found

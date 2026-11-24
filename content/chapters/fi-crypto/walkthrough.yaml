@@ -1,0 +1,249 @@
+- id: fi-crypto-scam
+  title: How a fake trading platform works
+  hint: Follow the money between Ama, the 'mentor' and the platform. Notice when trust is built and when the money is taken.
+  steps:
+  - title: A stranger
+    text: A friendly stranger messages Ama, apparently by mistake. They chat for weeks about family and work. Nothing about money yet.
+    parts:
+    - kind: seq
+      id: s
+      actors: &id001
+      - Ama
+      - Mentor
+      - Platform
+      slots: 8
+      messages:
+      - from: Mentor
+        to: Ama
+        label: friendly chat, for weeks
+        tone: active
+  - title: The hook
+    text: The 'mentor' mentions trading crypto and shares screenshots of large profits, and offers to show Ama how.
+    parts:
+    - kind: seq
+      id: s
+      actors: *id001
+      slots: 8
+      messages:
+      - from: Mentor
+        to: Ama
+        label: friendly chat, for weeks
+        tone: dim
+      - from: Mentor
+        to: Ama
+        label: screenshots of big profits
+        tone: active
+  - title: A small start
+    text: Ama buys GH₵ 2,000 of a stablecoin and sends it to the mentor's recommended platform. The transfer cannot be reversed.
+    vars:
+      paid in: 2,000
+    parts:
+    - kind: seq
+      id: s
+      actors: *id001
+      slots: 8
+      messages:
+      - from: Mentor
+        to: Ama
+        label: friendly chat, for weeks
+        tone: dim
+      - from: Mentor
+        to: Ama
+        label: screenshots of big profits
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: deposit GH₵ 2,000 in USDT
+        tone: active
+  - title: Fake profits
+    text: The platform shows her balance up 40% in two weeks. The numbers are just text on a screen; her deposit has already gone.
+    vars:
+      paid in: 2,000
+      shown: 2,800
+    parts:
+    - kind: seq
+      id: s
+      actors: *id001
+      slots: 8
+      messages:
+      - from: Mentor
+        to: Ama
+        label: friendly chat, for weeks
+        tone: dim
+      - from: Mentor
+        to: Ama
+        label: screenshots of big profits
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: deposit GH₵ 2,000 in USDT
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: balance shows +40%
+        tone: active
+  - title: Building trust
+    text: She asks to withdraw 300, and it arrives. Paying out a little, from her own money, makes the platform look real.
+    vars:
+      paid in: 2,000
+      got back: '300'
+    parts:
+    - kind: seq
+      id: s
+      actors: *id001
+      slots: 8
+      messages:
+      - from: Mentor
+        to: Ama
+        label: friendly chat, for weeks
+        tone: dim
+      - from: Mentor
+        to: Ama
+        label: screenshots of big profits
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: deposit GH₵ 2,000 in USDT
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: balance shows +40%
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: withdrawal of 300 paid
+        tone: active
+  - title: The big deposit
+    text: Convinced, Ama borrows from family and deposits GH₵ 20,000 more.
+    vars:
+      paid in: 22,000
+      got back: '300'
+    parts:
+    - kind: seq
+      id: s
+      actors: *id001
+      slots: 8
+      messages:
+      - from: Mentor
+        to: Ama
+        label: friendly chat, for weeks
+        tone: dim
+      - from: Mentor
+        to: Ama
+        label: screenshots of big profits
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: deposit GH₵ 2,000 in USDT
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: balance shows +40%
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: withdrawal of 300 paid
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: deposit GH₵ 20,000
+        tone: active
+  - title: Trying to leave
+    text: When she asks to withdraw, the account is 'under review'.
+    vars:
+      paid in: 22,000
+      got back: '300'
+    parts:
+    - kind: seq
+      id: s
+      actors: *id001
+      slots: 8
+      messages:
+      - from: Mentor
+        to: Ama
+        label: friendly chat, for weeks
+        tone: dim
+      - from: Mentor
+        to: Ama
+        label: screenshots of big profits
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: deposit GH₵ 2,000 in USDT
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: balance shows +40%
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: withdrawal of 300 paid
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: deposit GH₵ 20,000
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: ask to withdraw
+        tone: active
+  - title: The last demand
+    text: 'She is told to pay a 15% ''tax'' before any withdrawal. Paying would only lose more: the platform never pays out.'
+    vars:
+      paid in: 22,000
+      lost: 21,700
+    parts:
+    - kind: seq
+      id: s
+      actors: *id001
+      slots: 8
+      messages:
+      - from: Mentor
+        to: Ama
+        label: friendly chat, for weeks
+        tone: dim
+      - from: Mentor
+        to: Ama
+        label: screenshots of big profits
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: deposit GH₵ 2,000 in USDT
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: balance shows +40%
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: withdrawal of 300 paid
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: deposit GH₵ 20,000
+        tone: dim
+      - from: Ama
+        to: Platform
+        label: ask to withdraw
+        tone: dim
+      - from: Platform
+        to: Ama
+        label: pay 15% 'tax' first
+        tone: found
+  - title: The red flags
+    text: Every step had a warning sign. Ama should stop, pay nothing more, keep the messages, and report it to the police and the regulator.
+    parts:
+    - kind: kv
+      id: k
+      label: Warning signs
+      slots: 4
+      rows:
+      - name: contact
+        value: a stranger found her
+      - name: returns
+        value: fast, large, 'sure'
+      - name: payment
+        value: crypto, irreversible
+      - name: withdrawal
+        value: fees demanded first
+        tone: found

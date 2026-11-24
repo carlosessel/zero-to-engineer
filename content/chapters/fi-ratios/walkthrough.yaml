@@ -1,0 +1,146 @@
+- id: fi-ratios-dupont
+  title: Breaking down return on equity
+  hint: ROE is three ratios multiplied together. Watch which ones moved between the two years.
+  steps:
+  - title: Net margin
+    text: 'How much of each cedi of sales becomes profit: 18 ÷ 260 in 2025, 24 ÷ 300 in 2026. Up by 1.1 points.'
+    vars:
+      '2026': 24 ÷ 300 = 8.0%
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: s
+        title: 'Volta Foods: ROE broken down'
+        columns:
+        - part
+        - '2025'
+        - '2026'
+        rows:
+        - k: r0
+          cells:
+          - net margin
+          - 6.9%
+          - 8.0%
+          tone: active
+  - title: Asset turnover
+    text: 'How many cedis of sales each cedi of assets produces: 260 ÷ 223 and 300 ÷ 229.6. The assets are working harder.'
+    vars:
+      '2026': 300 ÷ 229.6 = 1.31
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: s
+        title: 'Volta Foods: ROE broken down'
+        columns:
+        - part
+        - '2025'
+        - '2026'
+        rows:
+        - k: r0
+          cells:
+          - net margin
+          - 6.9%
+          - 8.0%
+          tone: dim
+        - k: r1
+          cells:
+          - asset turnover
+          - '1.17'
+          - '1.31'
+          tone: active
+  - title: Equity multiplier
+    text: 'Assets ÷ equity: how far borrowing stretches the shareholders'' money. It fell, so Volta used slightly less debt.'
+    vars:
+      '2026': 229.6 ÷ 109.6 = 2.09
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: s
+        title: 'Volta Foods: ROE broken down'
+        columns:
+        - part
+        - '2025'
+        - '2026'
+        rows:
+        - k: r0
+          cells:
+          - net margin
+          - 6.9%
+          - 8.0%
+          tone: dim
+        - k: r1
+          cells:
+          - asset turnover
+          - '1.17'
+          - '1.31'
+          tone: dim
+        - k: r2
+          cells:
+          - equity multiplier
+          - '2.23'
+          - '2.09'
+          tone: active
+  - title: Multiply them
+    text: '8.0% × 1.31 × 2.09 = 21.9%, exactly profit ÷ equity. In 2025: 6.9% × 1.17 × 2.23 = 18.0%.'
+    vars:
+      '2026': 21.9%
+      '2025': 18.0%
+    parts:
+    - kind: tables
+      id: t
+      slots: 4
+      tables:
+      - id: s
+        title: 'Volta Foods: ROE broken down'
+        columns:
+        - part
+        - '2025'
+        - '2026'
+        rows:
+        - k: r0
+          cells:
+          - net margin
+          - 6.9%
+          - 8.0%
+          tone: dim
+        - k: r1
+          cells:
+          - asset turnover
+          - '1.17'
+          - '1.31'
+          tone: dim
+        - k: r2
+          cells:
+          - equity multiplier
+          - '2.23'
+          - '2.09'
+          tone: dim
+        - k: r3
+          cells:
+          - ROE
+          - 18.0%
+          - 21.9%
+          tone: found
+  - title: Why ROE rose
+    text: Higher margins and harder-working assets lifted ROE, even with less leverage. That is a better-quality rise than one driven by borrowing.
+    parts:
+    - kind: kv
+      id: k
+      label: 2025 → 2026
+      slots: 4
+      rows:
+      - name: margin
+        value: up
+      - name: turnover
+        value: up
+      - name: leverage
+        value: slightly down
+      - name: ROE
+        value: 18.0% → 21.9%
+        tone: found

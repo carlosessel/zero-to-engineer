@@ -1,0 +1,270 @@
+- id: fi-inflation-real-value
+  title: Savings that grow but buy less
+  hint: 'Watch the balance column rise while the real value column falls: the interest rate is below inflation.'
+  steps:
+  - title: The start
+    text: Ama saves GH₵ 5,000 in an account paying 10% a year. Prices start at 1.0000, meaning today's prices, so her money's real value is also 5,000.
+    vars:
+      interest: 10%
+      inflation: 15%
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: 'Ama''s GH₵ 5,000: 10% interest, 15% inflation'
+        columns:
+        - year
+        - balance
+        - prices
+        - real value
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 5,000.00
+          - '1.0000'
+          - 5,000.00
+          tone: active
+  - title: Year 1
+    text: The balance grows to 5,500. But prices are now 1.15 times as high, so 5,500 buys what 5,500 ÷ 1.15 = 4,782.61 bought at the start.
+    vars:
+      real value: 4,782.61
+      real change: −4.35%
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: 'Ama''s GH₵ 5,000: 10% interest, 15% inflation'
+        columns:
+        - year
+        - balance
+        - prices
+        - real value
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 5,000.00
+          - '1.0000'
+          - 5,000.00
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - 5,500.00
+          - '1.1500'
+          - 4,782.61
+          tone: active
+  - title: Year 2
+    text: 'Interest is 10% of 5,500, so 6,050. Prices compound too: 1.15 × 1.15 = 1.3225. Real value: 6,050 ÷ 1.3225 = 4,574.67.'
+    vars:
+      real value: 4,574.67
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: 'Ama''s GH₵ 5,000: 10% interest, 15% inflation'
+        columns:
+        - year
+        - balance
+        - prices
+        - real value
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 5,000.00
+          - '1.0000'
+          - 5,000.00
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - 5,500.00
+          - '1.1500'
+          - 4,782.61
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - 6,050.00
+          - '1.3225'
+          - 4,574.67
+          tone: active
+  - title: Year 3
+    text: 'The balance passes 6,600, a gain of over 1,600 in cedis. Real value keeps falling, by the same 4.35% each year: 1.10 ÷ 1.15 − 1.'
+    vars:
+      real value: 4,375.77
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: 'Ama''s GH₵ 5,000: 10% interest, 15% inflation'
+        columns:
+        - year
+        - balance
+        - prices
+        - real value
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 5,000.00
+          - '1.0000'
+          - 5,000.00
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - 5,500.00
+          - '1.1500'
+          - 4,782.61
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - 6,050.00
+          - '1.3225'
+          - 4,574.67
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - 6,655.00
+          - '1.5209'
+          - 4,375.77
+          tone: active
+  - title: Year 4
+    text: Prices are now 1.749 times as high as at the start. The balance has grown 46%, prices 75%.
+    vars:
+      real value: 4,185.52
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: 'Ama''s GH₵ 5,000: 10% interest, 15% inflation'
+        columns:
+        - year
+        - balance
+        - prices
+        - real value
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 5,000.00
+          - '1.0000'
+          - 5,000.00
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - 5,500.00
+          - '1.1500'
+          - 4,782.61
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - 6,050.00
+          - '1.3225'
+          - 4,574.67
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - 6,655.00
+          - '1.5209'
+          - 4,375.77
+          tone: dim
+        - k: y4
+          cells:
+          - '4'
+          - 7,320.50
+          - '1.7490'
+          - 4,185.52
+          tone: active
+  - title: Year 5
+    text: The balance reads 8,052.55, but prices have doubled. What she can buy has shrunk to 4,003.54 in start-of-period money.
+    vars:
+      real value: 4,003.54
+    parts:
+    - kind: tables
+      id: t
+      slots: 6
+      tables:
+      - id: s
+        title: 'Ama''s GH₵ 5,000: 10% interest, 15% inflation'
+        columns:
+        - year
+        - balance
+        - prices
+        - real value
+        rows:
+        - k: y0
+          cells:
+          - '0'
+          - 5,000.00
+          - '1.0000'
+          - 5,000.00
+          tone: dim
+        - k: y1
+          cells:
+          - '1'
+          - 5,500.00
+          - '1.1500'
+          - 4,782.61
+          tone: dim
+        - k: y2
+          cells:
+          - '2'
+          - 6,050.00
+          - '1.3225'
+          - 4,574.67
+          tone: dim
+        - k: y3
+          cells:
+          - '3'
+          - 6,655.00
+          - '1.5209'
+          - 4,375.77
+          tone: dim
+        - k: y4
+          cells:
+          - '4'
+          - 7,320.50
+          - '1.7490'
+          - 4,185.52
+          tone: dim
+        - k: y5
+          cells:
+          - '5'
+          - 8,052.55
+          - '2.0114'
+          - 4,003.54
+          tone: found
+  - title: The result
+    text: The account looked like a gain of 3,052.55. In real terms Ama lost about a fifth of her savings, because the interest rate was below inflation.
+    parts:
+    - kind: kv
+      id: k
+      label: After five years
+      slots: 3
+      rows:
+      - name: nominal
+        value: 5,000 → 8,052.55 (+61%)
+      - name: prices
+        value: × 2.0114 (+101%)
+      - name: real
+        value: 5,000 → 4,003.54 (−20%)
+        tone: found

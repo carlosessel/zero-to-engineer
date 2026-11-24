@@ -4,6 +4,88 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-24: Zero to Money and Investing, part 10 (course complete)
+
+Added
+- Part 10 of Zero to Money and Investing, "Practice and reference", which completes the course's 38 chapters: money projects (a year of household accounts, a budget and debt-free plan, a savings and retirement model, a model portfolio tracked for a year, and an analysis of a real company's annual report, each with a specification, a definition of done and chapters to revisit), the library (42 free courses, textbooks, regulators' guides and official sources for Ghana and the UK, all opened on 23 or 24 November 2026), and the course glossary.
+- A walkthrough showing how the five projects build on each other.
+
+### 2026-11-24: Zero to Money and Investing, part 9
+
+Added
+- Part 9 of Zero to Money and Investing, "Judgement": behavioural mistakes (loss aversion, chasing returns and the behaviour gap, overconfidence and trading costs, herding and hype, market timing, mental accounting and other biases, rules that protect you), scams and fraud (why scams work, a Ponzi scheme month by month, pyramid arithmetic, investment, impersonation and payment scams, the warning signs, how to check a firm, what to do if it happens), how to evaluate an investment (ten questions applied to a Treasury bill, a licensed share fund, a farming "investment" and land bought in instalments), and putting it together (the order of priorities, a household's month-by-month route through them, a one-page plan, reviewing it, and when to get help).
+- Walkthroughs: holding against chasing in the same fund, a Ponzi scheme's collapse, four offers through the checklist, and a household's route through its priorities.
+- Country notes checked on 24 November 2026: SEC Ghana's warnings on fraudulent schemes; the FCA Firm Checker and the UK's Report Fraud service, which replaced Action Fraud in December 2025.
+- 22 glossary terms. "Worst case" now gives its finance meaning alongside its algorithms meaning.
+- The map, banking, markets and crypto chapters now link to the scams chapter.
+
+### 2026-11-24: Zero to Money and Investing, part 8
+
+Added
+- Part 8 of Zero to Money and Investing, "Reading company accounts", built around two years of accounts for one fictional company that tie together: reading company financial statements (the annual report and auditor's report, the income statement, balance sheet and cash flow statement line by line, how they fit together, free cash flow, warning signs), financial ratios (profitability, efficiency and the cash conversion cycle, liquidity, debt, per-share and market ratios, enterprise value, DuPont analysis, using ratios well), and valuing a share (multiples, dividends, a five-year discounted cash flow with terminal value, a sensitivity table, a reverse DCF, margin of safety, why valuations go wrong).
+- Walkthroughs: profit turned into the change in cash, return on equity broken into its three parts, and a discounted cash flow from forecast to value per share.
+- Optional Python checks: the balance sheet balances and the cash flow ties up, the DuPont ratios for two years, and a DCF with a sensitivity table.
+- Where to find real accounts: the Ghana Stock Exchange's financial statements page and Companies House.
+- 57 glossary terms.
+- The household accounts and shares chapters now link to the new chapters.
+
+### 2026-11-24: Zero to Money and Investing, part 7
+
+Added
+- Part 7 of Zero to Money and Investing, "Costs, tax, protection and retirement": fees and costs (every kind of charge, adding them up, percentage against flat fees, entry fees, what fees take from the real return, hidden and bundled costs), tax basics (withholding and returns, after-tax and tax-equivalent yields, capital gains and deferral, how inflation makes tax heavier, tax-advantaged accounts, avoidance and evasion), insurance and protection (pooling, why insurance costs more than it pays on average, what to insure and what to self-insure, excesses, the average clause, the main kinds, estimating life cover), and saving for retirement (the cost of starting late, defined benefit and defined contribution, Ghana's three tiers and SSNIT's pension formula, working out the pot and monthly saving needed, employer contributions and tax relief, annuities, drawdown and sequence risk).
+- Walkthroughs: a year's return with costs and inflation taken off layer by layer, a taxed account against a tax-free one, an underinsured house claim, and saving from 25 against saving from 40.
+- Optional Python check: early and late retirement saving.
+- Country notes checked on 24 November 2026: Ghana's tax exemptions on interest from banks and government securities, the National Insurance Commission and policyholders' rights, SSNIT's pension rules and the 18.5% contribution; the UK's Capital Gains Tax and dividend allowances, ISAs, the £241.30 State Pension and the 8% automatic-enrolment minimum.
+- 40 glossary terms. "Volatility" now also carries the database meaning, so the two courses no longer collide.
+- The markets chapter now links to the fees chapter.
+
+### 2026-11-24: Zero to Money and Investing, part 6
+
+Added
+- Part 6 of Zero to Money and Investing, "Investing fundamentals": risk and return (measuring returns, kinds of risk, volatility and its cost, recovering from losses, drawdowns, the risk premium, time horizon, risk tolerance and capacity), diversification and asset allocation (correlation, specific and market risk, concentration, weighted expected return, rebalancing), cash, Treasury bills and bonds (discount pricing from the Bank of Ghana's published rates, coupons, yields and prices, interest rate risk, credit risk and Ghana's 2023 domestic debt exchange), shares (rights, total return, EPS, P/E and dividend yield, the dividend growth model, splits and rights issues), funds and index funds (NAV, kinds of fund, active against passive and the SPIVA evidence, what fees cost over 30 years), property (renting against buying, mortgages, leverage and negative equity, buy to let, land titles, REITs), and crypto (blockchains and keys, why there is no cash flow, volatility and leverage, stablecoins, custody, and the scams that use it).
+- Walkthroughs: a drawdown tracked year by year, two opposite investments and their rebalanced mix, a bond repriced after rates rise or fall, a share's total return over three years, a fee's cost over 30 years, leverage on a house price rise or fall, and a fake trading platform from first message to final demand.
+- Optional Python checks: volatility and compound growth, bond prices and Treasury bill rates, the dividend growth model, and fee drag.
+- Country notes checked on 24 November 2026: Bank of Ghana Treasury bill rates, Ghana's 8% dividend withholding tax, SEC Ghana's register of funds, the Virtual Asset Service Providers Act 2025; UK gilts, dividend allowance, ISAs, FCA crypto warnings.
+- 75 glossary terms. "Rebalancing", "Issuer" and "Portfolio" now give their finance meaning alongside their existing meanings, and "Volatility" is a separate term from the database "Function volatility".
+- Earlier chapters now link to the new risk and return, bonds, shares and funds chapters.
+
+### 2026-11-24: Zero to Money and Investing, part 5
+
+Added
+- Part 5 of Zero to Money and Investing, "How money changes over time": inflation and real returns (price indices built from a basket, what inflation does to cash, nominal against real, comparing money across years, central banks and the policy rate), the time value of money (future and present value, discounting, NPV, annuity and perpetuity formulas, FV, PV, NPV, PMT and RATE in a spreadsheet), and how financial markets work (the main markets, primary and secondary markets, brokers, exchanges and depositories, the order book, bids, asks and spreads, market and limit orders, market capitalisation and indices, trading costs, what regulators do and do not do).
+- Walkthroughs: savings that grow but buy less, a course's payments discounted year by year at two rates, and orders matched in an order book.
+- Optional Python checks: savings against inflation year by year, and an NPV function.
+- Country notes checked on 24 November 2026: Ghana's and the UK's latest inflation (5.5% and 3.6% in October 2026) and targets; SEC Ghana's register and the GSE's licensed dealing members; the FCA Register and FSCS investment protection.
+- 54 glossary terms. "Derivative", "Exchange" and "Nominal" now give their finance meaning alongside their existing meanings in other courses.
+- The interest and numbers chapters now link to the new inflation and time value chapters.
+
+### 2026-11-24: Zero to Money and Investing, part 4
+
+Added
+- Part 4 of Zero to Money and Investing, "Personal accounting": personal bookkeeping (accounts, transactions, categories, transfers, SUMIF totals, reconciling a statement), household accounts (a year's income statement, balance sheet and cash flow statement for one household, depreciation, why a surplus is not cash, savings rate and other measures), and double-entry bookkeeping (the accounting equation, debits and credits, journal, ledger and T-accounts, accrual accounting, the trial balance, and statements from it).
+- Walkthroughs: reconciling a month's record against a bank statement, a balance sheet staying in balance through a year, and eight business transactions posted to the ledger.
+- Optional Python checks: the household statements tie together, and a small ledger whose balances sum to zero.
+- 30 glossary terms. "Transaction", "Ledger" and "Posting" now give their finance and database meanings separately, and "Debit" and "Credit" include their bookkeeping meanings.
+
+Changed
+- Every Zero to Money and Investing chapter is now marked resources-verified. Nine chapters with code were marked code-verified, which told readers their resources had not been checked, though every resource had been opened.
+
+### 2026-11-24: Zero to Money and Investing, part 3
+
+Added
+- Part 3 of Zero to Money and Investing, "Interest, debt and credit": simple and compound interest (compounding frequency, nominal and effective rates, APR and AER, the rule of 72, saving regularly), how loans work (repayment formula and schedule, longer terms, paying extra, flat-rate loans and upfront fees, PMT and RATE in a spreadsheet), getting out of debt (debt-to-income ratio, predatory lending, the minimum-payment trap, avalanche and snowball, consolidation, getting help), and credit scores and reports (what bureaus hold, utilisation, how lenders decide, building and protecting a record).
+- Walkthroughs: simple against compound interest year by year, a loan's repayment schedule, avalanche and snowball side by side on the same three debts, and a credit application from lender to bureau and back.
+- Country notes checked on 24 November 2026: Ghana's licensed credit bureaus (Bank of Ghana list) and digital lender licensing; UK representative APR, the 14-day cooling-off period, statutory credit reports and free debt advice.
+- 33 glossary terms. "Principal" and "Term" now have separate definitions for finance and for the courses that already used them, and "Credit" gives both of its finance meanings.
+
+### 2026-11-23: Zero to Money and Investing, part 2
+
+Added
+- Part 2 of Zero to Money and Investing, "Your money day to day": income and payslips (income tax in bands, marginal and effective rates, converting pay, irregular income), budgeting (tracking, needs and wants, sinking funds, 50/30/20, zero-based and envelope budgets, budget against actual), saving and emergency funds (goals, standing orders, building a fund in stages, safety, liquidity and return, savings groups and susu), and banks, mobile money and payments (accounts, payment methods, statements, fees, remittances, deposit protection, account safety).
+- A walkthrough in each: income filling Ghana's 2026 tax bands, a budget's envelopes through one month, an emergency fund built, used and rebuilt, and a bank statement read line by line.
+- Country notes for Ghana and the UK, checked against official sources on 23 November 2026: GRA's monthly PAYE bands from 1 September 2026, SSNIT contribution rates, UK income tax and National Insurance for 2026 to 2027, ISAs, and deposit protection (GDPC limits now and from 1 January 2027; FSCS £120,000).
+- 50 glossary terms. "Return" and "Variance" now have separate definitions for finance and for the courses that already used them.
+
 ### 2026-11-23: Zero to Money and Investing, part 1
 
 Added

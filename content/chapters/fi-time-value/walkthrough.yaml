@@ -1,0 +1,418 @@
+- id: fi-time-value-npv
+  title: Discounting a course, year by year
+  hint: Each later payment gets a smaller discount factor. Switch rates to see how the same payments are worth less at 25%.
+  examples:
+  - label: Discount rate 12%
+    steps:
+    - title: The cost
+      text: Kofi pays GH₵ 5,000 now. Money today needs no discounting, so its factor is 1 and its present value is −5,000. His discount rate is 12%.
+      vars:
+        NPV so far: −5,000.00
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 12%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: active
+    - title: Year 1
+      text: The first 2,000 is one year away. Its factor is 1 ÷ 1.12 = 0.8929, so it is worth 1,785.71 today.
+      vars:
+        NPV so far: −3,214.29
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 12%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: dim
+          - k: y1
+            cells:
+            - '1'
+            - 2,000
+            - '0.8929'
+            - 1,785.71
+            tone: active
+    - title: Year 2
+      text: The second 2,000 is two years away. Its factor is 1 ÷ 1.12 to the power 2 = 0.7972, so it is worth 1,594.39 today.
+      vars:
+        NPV so far: −1,619.90
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 12%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: dim
+          - k: y1
+            cells:
+            - '1'
+            - 2,000
+            - '0.8929'
+            - 1,785.71
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - 2,000
+            - '0.7972'
+            - 1,594.39
+            tone: active
+    - title: Year 3
+      text: The third 2,000 is three years away. Its factor is 1 ÷ 1.12 to the power 3 = 0.7118, so it is worth 1,423.56 today.
+      vars:
+        NPV so far: −196.34
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 12%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: dim
+          - k: y1
+            cells:
+            - '1'
+            - 2,000
+            - '0.8929'
+            - 1,785.71
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - 2,000
+            - '0.7972'
+            - 1,594.39
+            tone: dim
+          - k: y3
+            cells:
+            - '3'
+            - 2,000
+            - '0.7118'
+            - 1,423.56
+            tone: active
+    - title: Year 4
+      text: The fourth 2,000 is four years away. Its factor is 1 ÷ 1.12 to the power 4 = 0.6355, so it is worth 1,271.04 today.
+      vars:
+        NPV so far: 1,074.70
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 12%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: dim
+          - k: y1
+            cells:
+            - '1'
+            - 2,000
+            - '0.8929'
+            - 1,785.71
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - 2,000
+            - '0.7972'
+            - 1,594.39
+            tone: dim
+          - k: y3
+            cells:
+            - '3'
+            - 2,000
+            - '0.7118'
+            - 1,423.56
+            tone: dim
+          - k: y4
+            cells:
+            - '4'
+            - 2,000
+            - '0.6355'
+            - 1,271.04
+            tone: active
+    - title: The NPV
+      text: 'The four payments total 8,000 but are worth 6,074.70 today. Take away the 5,000 cost: NPV = 1,074.70. Positive: at this rate the course is worth more than it costs.'
+      parts:
+      - kind: kv
+        id: k
+        label: At 12%
+        slots: 3
+        rows:
+        - name: paid in total
+          value: 8,000.00
+        - name: worth today
+          value: 6,074.70
+        - name: NPV
+          value: 1,074.70
+          tone: found
+  - label: Discount rate 25%
+    steps:
+    - title: The cost
+      text: Kofi pays GH₵ 5,000 now. Money today needs no discounting, so its factor is 1 and its present value is −5,000. His discount rate is 25%.
+      vars:
+        NPV so far: −5,000.00
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 25%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: active
+    - title: Year 1
+      text: The first 2,000 is one year away. Its factor is 1 ÷ 1.25 = 0.8000, so it is worth 1,600.00 today.
+      vars:
+        NPV so far: −3,400.00
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 25%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: dim
+          - k: y1
+            cells:
+            - '1'
+            - 2,000
+            - '0.8000'
+            - 1,600.00
+            tone: active
+    - title: Year 2
+      text: The second 2,000 is two years away. Its factor is 1 ÷ 1.25 to the power 2 = 0.6400, so it is worth 1,280.00 today.
+      vars:
+        NPV so far: −2,120.00
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 25%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: dim
+          - k: y1
+            cells:
+            - '1'
+            - 2,000
+            - '0.8000'
+            - 1,600.00
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - 2,000
+            - '0.6400'
+            - 1,280.00
+            tone: active
+    - title: Year 3
+      text: The third 2,000 is three years away. Its factor is 1 ÷ 1.25 to the power 3 = 0.5120, so it is worth 1,024.00 today.
+      vars:
+        NPV so far: −1,096.00
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 25%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: dim
+          - k: y1
+            cells:
+            - '1'
+            - 2,000
+            - '0.8000'
+            - 1,600.00
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - 2,000
+            - '0.6400'
+            - 1,280.00
+            tone: dim
+          - k: y3
+            cells:
+            - '3'
+            - 2,000
+            - '0.5120'
+            - 1,024.00
+            tone: active
+    - title: Year 4
+      text: The fourth 2,000 is four years away. Its factor is 1 ÷ 1.25 to the power 4 = 0.4096, so it is worth 819.20 today.
+      vars:
+        NPV so far: −276.80
+      parts:
+      - kind: tables
+        id: t
+        slots: 5
+        tables:
+        - id: s
+          title: Kofi's course at 25%
+          columns:
+          - year
+          - money
+          - factor
+          - today
+          rows:
+          - k: y0
+            cells:
+            - '0'
+            - −5,000
+            - '1.0000'
+            - −5,000.00
+            tone: dim
+          - k: y1
+            cells:
+            - '1'
+            - 2,000
+            - '0.8000'
+            - 1,600.00
+            tone: dim
+          - k: y2
+            cells:
+            - '2'
+            - 2,000
+            - '0.6400'
+            - 1,280.00
+            tone: dim
+          - k: y3
+            cells:
+            - '3'
+            - 2,000
+            - '0.5120'
+            - 1,024.00
+            tone: dim
+          - k: y4
+            cells:
+            - '4'
+            - 2,000
+            - '0.4096'
+            - '819.20'
+            tone: active
+    - title: The NPV
+      text: 'The four payments total 8,000 but are worth 4,723.20 today. Take away the 5,000 cost: NPV = −276.80. Negative: at this rate the course is worth less than it costs.'
+      parts:
+      - kind: kv
+        id: k
+        label: At 25%
+        slots: 3
+        rows:
+        - name: paid in total
+          value: 8,000.00
+        - name: worth today
+          value: 4,723.20
+        - name: NPV
+          value: −276.80
+          tone: found

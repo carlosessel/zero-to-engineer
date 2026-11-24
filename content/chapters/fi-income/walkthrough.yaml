@@ -1,0 +1,116 @@
+- id: fi-income-tax-bands
+  title: Filling the tax bands
+  hint: Watch Kwesi's GH₵ 5,125 of chargeable income pour into the bands from the bottom, each slice taxed at its own rate.
+  steps:
+    - title: The income to tax
+      text: Kwesi's gross pay is GH₵ 5,400. His SSNIT contribution of GH₵ 275 is taken off first, leaving GH₵ 5,125 of chargeable income.
+      vars: { "still to place": "5,125.00", "tax so far": "0.00" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: b
+              title: "Ghana monthly bands, 2026 (GH₵)"
+              columns: [band, "in band", rate, tax]
+              rows:
+                - { k: b1, cells: ["first 588", "", "0%", ""] }
+                - { k: b2, cells: ["next 80", "", "5%", ""] }
+                - { k: b3, cells: ["next 100", "", "10%", ""] }
+                - { k: b4, cells: ["next 2,900", "", "17.5%", ""] }
+                - { k: b5, cells: ["next 16,000", "", "25%", ""] }
+                - { k: tot, cells: [total, "", "", ""] }
+    - title: The first 588 is tax-free
+      text: The lowest band is taxed at 0%. It fills completely, and no tax is due on it.
+      vars: { "still to place": "4,537.00", "tax so far": "0.00" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: b
+              title: "Ghana monthly bands, 2026 (GH₵)"
+              columns: [band, "in band", rate, tax]
+              rows:
+                - { k: b1, cells: ["first 588", "588.00", "0%", "0.00"], tone: active }
+                - { k: b2, cells: ["next 80", "", "5%", ""] }
+                - { k: b3, cells: ["next 100", "", "10%", ""] }
+                - { k: b4, cells: ["next 2,900", "", "17.5%", ""] }
+                - { k: b5, cells: ["next 16,000", "", "25%", ""] }
+                - { k: tot, cells: [total, "", "", ""] }
+    - title: Two small bands
+      text: The next 80 is taxed at 5% (4.00) and the next 100 at 10% (10.00). Both bands are full.
+      vars: { "still to place": "4,357.00", "tax so far": "14.00" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: b
+              title: "Ghana monthly bands, 2026 (GH₵)"
+              columns: [band, "in band", rate, tax]
+              rows:
+                - { k: b1, cells: ["first 588", "588.00", "0%", "0.00"], tone: done }
+                - { k: b2, cells: ["next 80", "80.00", "5%", "4.00"], tone: active }
+                - { k: b3, cells: ["next 100", "100.00", "10%", "10.00"], tone: active }
+                - { k: b4, cells: ["next 2,900", "", "17.5%", ""] }
+                - { k: b5, cells: ["next 16,000", "", "25%", ""] }
+                - { k: tot, cells: [total, "", "", ""] }
+    - title: The 17.5% band fills
+      text: There is more than 2,900 left, so this whole band fills. 0.175 × 2,900 = 507.50.
+      vars: { "still to place": "1,457.00", "tax so far": "521.50" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: b
+              title: "Ghana monthly bands, 2026 (GH₵)"
+              columns: [band, "in band", rate, tax]
+              rows:
+                - { k: b1, cells: ["first 588", "588.00", "0%", "0.00"], tone: done }
+                - { k: b2, cells: ["next 80", "80.00", "5%", "4.00"], tone: done }
+                - { k: b3, cells: ["next 100", "100.00", "10%", "10.00"], tone: done }
+                - { k: b4, cells: ["next 2,900", "2,900.00", "17.5%", "507.50"], tone: active }
+                - { k: b5, cells: ["next 16,000", "", "25%", ""] }
+                - { k: tot, cells: [total, "", "", ""] }
+    - title: The rest goes in at 25%
+      text: Only 1,457 is left, so the 25% band is partly filled. 0.25 × 1,457 = 364.25. Nothing reaches the higher bands.
+      vars: { "still to place": "0.00", "tax so far": "885.75" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: b
+              title: "Ghana monthly bands, 2026 (GH₵)"
+              columns: [band, "in band", rate, tax]
+              rows:
+                - { k: b1, cells: ["first 588", "588.00", "0%", "0.00"], tone: done }
+                - { k: b2, cells: ["next 80", "80.00", "5%", "4.00"], tone: done }
+                - { k: b3, cells: ["next 100", "100.00", "10%", "10.00"], tone: done }
+                - { k: b4, cells: ["next 2,900", "2,900.00", "17.5%", "507.50"], tone: done }
+                - { k: b5, cells: ["next 16,000", "1,457.00", "25%", "364.25"], tone: active }
+                - { k: tot, cells: [total, "", "", ""] }
+    - title: Add up the bands
+      text: The slices add back to 5,125, and the tax adds to GH₵ 885.75. Net pay is 5,400 − 275 − 885.75 = GH₵ 4,239.25.
+      vars: { "tax": "885.75", "net pay": "4,239.25" }
+      parts:
+        - kind: tables
+          id: t
+          slots: 6
+          tables:
+            - id: b
+              title: "Ghana monthly bands, 2026 (GH₵)"
+              columns: [band, "in band", rate, tax]
+              rows:
+                - { k: b1, cells: ["first 588", "588.00", "0%", "0.00"], tone: dim }
+                - { k: b2, cells: ["next 80", "80.00", "5%", "4.00"], tone: dim }
+                - { k: b3, cells: ["next 100", "100.00", "10%", "10.00"], tone: dim }
+                - { k: b4, cells: ["next 2,900", "2,900.00", "17.5%", "507.50"], tone: dim }
+                - { k: b5, cells: ["next 16,000", "1,457.00", "25%", "364.25"], tone: dim }
+                - { k: tot, cells: [total, "5,125.00", "", "885.75"], tone: found }
+    - title: Two rates, two meanings
+      text: His marginal rate, on the next cedi, is 25%. His effective rate, all tax over gross pay, is 885.75 ÷ 5,400 = 16.40%.
+      parts:
+        - { kind: note, id: n, text: "marginal 25% (next cedi)   ·   effective 885.75 ÷ 5,400 = 16.40%", tone: found }

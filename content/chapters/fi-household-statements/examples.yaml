@@ -1,0 +1,17 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    10480 10980 3980 10480
+  verify: |
+    # The chapter's measures table.
+    assert round(ns["surplus"] / ns["income"] * 100, 2) == 20.79
+    assert round(5480 / 3260, 2) == 1.68
+    assert ns["assets_end"] == 10480 and ns["expenses"] == 39920
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the Python block above, which that block's check compares exactly.
+  verify: |
+    assert block.split() == ["10480", "10980", "3980", "10480"]

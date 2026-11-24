@@ -1,0 +1,88 @@
+- id: fi-insurance-claim
+  title: A claim when underinsured
+  hint: The average clause scales the claim by the share of the value insured, before the excess is taken off.
+  steps:
+  - title: The policy
+    text: Ama's house would cost 400,000 to rebuild, but she insured it for 300,000 to save on the premium. The policy has a 2,000 excess and an average clause.
+    parts:
+    - kind: kv
+      id: k
+      label: Ama's house claim (GH₵)
+      slots: 4
+      rows:
+      - name: rebuild cost
+        value: 400,000
+      - name: sum insured
+        value: 300,000
+        tone: active
+      - name: excess
+        value: 2,000
+  - title: The fire
+    text: A kitchen fire causes 100,000 of damage. That is well below her 300,000 cover, so she expects 100,000 less the excess.
+    parts:
+    - kind: kv
+      id: k
+      label: Ama's house claim (GH₵)
+      slots: 4
+      rows:
+      - name: rebuild cost
+        value: 400,000
+      - name: sum insured
+        value: 300,000
+      - name: excess
+        value: 2,000
+      - name: damage
+        value: 100,000
+        tone: active
+  - title: The average clause
+    text: 'She insured only 300,000 ÷ 400,000 = three-quarters of the value, so the insurer pays three-quarters of the loss: 100,000 × 0.75 = 75,000.'
+    vars:
+      insured share: 75%
+    parts:
+    - kind: kv
+      id: k
+      label: Ama's house claim (GH₵)
+      slots: 4
+      rows:
+      - name: damage
+        value: 100,000
+      - name: insured share
+        value: 300,000 ÷ 400,000 = 75%
+        tone: active
+      - name: after average
+        value: 75,000
+  - title: The excess
+    text: This policy then takes off the 2,000 excess. The insurer pays 73,000, and Ama must find 27,000 herself.
+    vars:
+      paid: 73,000
+      Ama pays: 27,000
+    parts:
+    - kind: kv
+      id: k
+      label: Ama's house claim (GH₵)
+      slots: 4
+      rows:
+      - name: damage
+        value: 100,000
+      - name: after average
+        value: 75,000
+      - name: less excess
+        value: − 2,000
+      - name: insurer pays
+        value: 73,000
+        tone: found
+  - title: Fully insured
+    text: Had she insured the full 400,000, the insurer would have paid 100,000 − 2,000 = 98,000. Underinsuring saved a little premium and cost her 25,000.
+    parts:
+    - kind: kv
+      id: k
+      label: Comparing the two (GH₵)
+      slots: 4
+      rows:
+      - name: underinsured
+        value: 73,000 paid
+      - name: fully insured
+        value: 98,000 paid
+      - name: cost of the gap
+        value: 25,000
+        tone: found

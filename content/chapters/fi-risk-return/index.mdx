@@ -1,0 +1,223 @@
+---
+title: "Risk and return"
+summary: "Volatility, losses and drawdowns, time horizon, and why higher expected return comes with higher risk."
+prerequisites: [fi-inflation, fi-time-value, fi-markets]
+estimated_minutes: 120
+status: resources-verified
+---
+
+Every investment is a trade between what you hope to earn and what you might lose. Anyone who tells you about one without the other is not telling you the whole story. By the end of this chapter you will be able to calculate a return, describe how risky an investment is using volatility and drawdown, see why losses hurt more than equal gains help, explain why higher expected returns come with higher risk, and match an investment’s risk to when you will need the money. As throughout this course, this is general education, not advice for your situation.
+
+## Measuring a return
+
+The **return** on an investment over a period is what you gained, including any income paid out, as a share of what you started with:
+
+return = (end value − start value + income) ÷ start value
+
+**Worked example.** Ama buys a share for GH₵ 2.00. A year later it is worth GH₵ 2.30 and has paid a dividend of GH₵ 0.10. Her return is (2.30 − 2.00 + 0.10) ÷ 2.00 = 0.40 ÷ 2.00 = **20%**. Of that, 15% is the rise in price (the **capital gain**) and 5% is income.
+
+Returns over several years compound, as in <Ref to="fi-interest" />. And as <Ref to="fi-inflation" /> showed, what matters in the end is the **real return**, after inflation, fees and tax.
+
+## What risk means
+
+In investing, **risk** is the chance that what you get differs from what you expected, and in particular that you lose money or do not have enough when you need it. It has many sources:
+
+- **Market risk**: prices of a whole market fall together, in a recession or a panic.
+- **Inflation risk**: your return does not keep up with prices.
+- **Credit risk**: a borrower, such as a bond issuer, does not pay you back.
+- **Liquidity risk**: you cannot sell quickly without accepting a much lower price.
+- **Currency risk**: an investment in another currency loses value when exchange rates move.
+- **Concentration risk**: too much in one company, one property or one scheme.
+- **Fraud**: the investment does not exist, or the money is stolen.
+
+Some of these can be measured. The most common measure is volatility.
+
+## Volatility
+
+**Volatility** is how much an investment’s returns swing up and down from one period to the next. It is usually measured by the **standard deviation** of the returns: roughly, the typical distance of each return from the average.
+
+**Worked example.** Two fictional investments, each over five years:
+
+| Year | A | B |
+|---|---|---|
+| 1 | 8% | 25% |
+| 2 | 9% | −10% |
+| 3 | 7% | 30% |
+| 4 | 8% | −5% |
+| 5 | 8% | 0% |
+| **Average** | **8%** | **8%** |
+| **Standard deviation** | **0.71** | **18.23** |
+
+Both average 8% a year, but B swings far more. In a spreadsheet, `=AVERAGE(B2:B6)` gives the average and `=STDEV.S(B2:B6)` the standard deviation.
+
+Now look at what GH₵ 1,000 became:
+
+- A: 1,000 × 1.08 × 1.09 × 1.07 × 1.08 × 1.08 = **GH₵ 1,469.20**, a compound return of 8.0% a year.
+- B: 1,000 × 1.25 × 0.90 × 1.30 × 0.95 × 1.00 = **GH₵ 1,389.38**, only 6.8% a year.
+
+The same average return gave less money, because **volatility itself costs you**: a fall takes away part of the gains it follows, and you then grow from a lower base. This is why the average of yearly returns overstates what a volatile investment actually delivers.
+
+The same in Python (optional):
+
+```python
+from statistics import mean, stdev
+
+a = [8, 9, 7, 8, 8]
+b = [25, -10, 30, -5, 0]
+for name, returns in (("A", a), ("B", b)):
+    value = 1000
+    for r in returns:
+        value *= 1 + r / 100
+    yearly = ((value / 1000) ** (1 / len(returns)) - 1) * 100
+    print(name, mean(returns), round(stdev(returns), 2), f"{value:,.2f}", round(yearly, 1))
+```
+
+```text
+A 8 0.71 1,469.20 8.0
+B 8 18.23 1,389.38 6.8
+```
+
+## Losses need bigger gains to recover
+
+A loss and a gain of the same percentage do not cancel. After a 50% loss, you need a **100%** gain to get back to where you started: GH₵ 1,000 falls to 500, and 500 must double to return to 1,000.
+
+| Loss | Gain needed to recover |
+|---|---|
+| 10% | 11.1% |
+| 20% | 25% |
+| 50% | 100% |
+| 75% | 300% |
+| 90% | 900% |
+
+The gain needed is 1 ÷ (1 − loss) − 1. Large losses are very hard to recover from, which is why avoiding them matters more than chasing the highest return.
+
+## Drawdown
+
+A **drawdown** is a fall from the highest value reached so far (the **peak**) to a later low point. The **maximum drawdown** is the largest such fall over a period: the worst experience an investor who bought at the top would have had. It answers a practical question: “How much could I have seen disappear, on paper, before it recovered?”
+
+**Worked example.** A fund’s value at the end of each year is 100, 120, 90, 84, 110, 130. The peak reaches 120 in year 1. The value then falls to 90 (a 25% drawdown) and 84 (30%), before recovering past the old peak to 130. The maximum drawdown is 84 ÷ 120 − 1 = **−30%**, even though the fund ended up 30% higher than it started.
+
+<Walkthrough name="fi-risk-return-drawdown" />
+
+## Higher expected return comes with higher risk
+
+The **expected return** is what you would get on average if you could repeat the same situation many times; any one outcome may be far from it. Across markets, investments that can lose more have tended to offer higher expected returns. The reason is simple: if two investments were expected to pay the same, everyone would buy the safer one, pushing its price up and its return down, until the riskier one offered extra to attract buyers. That extra is the **risk premium**.
+
+Three things follow:
+
+1. **There is no high return without risk.** Anyone promising a high return with no risk is either mistaken or lying. This is the most reliable test for fraud you will ever have.
+2. **Higher risk does not guarantee a higher return.** It gives a higher *expected* return, and a wider range of outcomes, including bad ones.
+3. **The risk premium is earned over time, not on demand.** In any single year, risky investments may well do worse than safe ones.
+
+Roughly from lower to higher risk and expected return: cash and Treasury bills; government bonds; company bonds; property; shares; and, at the speculative end, crypto and single small companies. Later chapters cover each one.
+
+## Time horizon
+
+Your **time horizon** is how long until you need the money. It changes how much volatility you can live with:
+
+- **Money needed within a year or two**, for an emergency fund, rent or school fees, should not be in volatile investments. A fall just before you need it cannot wait to recover.
+- **Money for ten years or more**, such as retirement savings, can ride out falls, because there is time to recover and for the risk premium to build up.
+
+Time does not make risk disappear. A long period can still end badly, especially for a single company or a single country. But it gives a diversified investment more chances for good and bad years to even out, and lets compounding work.
+
+## Risk tolerance and risk capacity
+
+Two different questions:
+
+- **Risk tolerance** is how much loss you can bear emotionally without selling in a panic. People overestimate it when prices are rising.
+- **Risk capacity** is how much loss you can afford financially without harming your life or plans. Someone with no emergency fund, high-interest debt or a job at risk has low risk capacity, however brave they feel.
+
+Take the lower of the two. A useful exercise: imagine your investment falls 30% the month after you buy it, as the fund in the worked example did. Would you sell? Could you still pay your bills?
+
+## Common mistakes
+
+- **Looking only at returns**, and choosing whatever did best last year.
+- **Averaging yearly returns** and expecting to earn that average; volatility makes the compound return lower.
+- **Investing short-term money in volatile assets**, then being forced to sell after a fall.
+- **Believing a high, guaranteed return.** High returns always come with high risk.
+- **Treating “never lost money so far” as low risk.** A short history may not include a bad year.
+- **Judging your risk tolerance in a rising market.**
+
+## Practice
+
+**1. (warm-up)** Kojo buys an investment for GH₵ 5,000. A year later it is worth GH₵ 5,400 and has paid GH₵ 150 of income. What is his return?
+
+<Solution>
+
+(5,400 − 5,000 + 150) ÷ 5,000 = 550 ÷ 5,000 = **11%**.
+
+</Solution>
+
+**2. (warm-up)** An investment falls 20%. What gain does it need to get back to where it started?
+
+<Solution>
+
+1 ÷ 0.80 − 1 = **25%**.
+
+</Solution>
+
+**3. (standard)** GH₵ 1,000 rises 50% one year and falls 50% the next. What is it worth, and what was the average of the two returns?
+
+<Solution>
+
+1,000 × 1.50 × 0.50 = **GH₵ 750**. The average return is (50 − 50) ÷ 2 = **0%**, yet a quarter of the money is gone: volatility costs.
+
+</Solution>
+
+**4. (standard)** A fund’s yearly values are 200, 260, 230, 180, 240, 280. What is its maximum drawdown, and when did it recover?
+
+<Solution>
+
+The peak is 260 (year 1). The lowest point after it is 180: 180 ÷ 260 − 1 = **−30.8%**. It recovered when it passed 260, in the final year (280).
+
+</Solution>
+
+**5. (standard)** Esi will pay her daughter’s university fees in 18 months. A friend suggests putting the money in shares “because they return more”. What would you point out?
+
+<Solution>
+
+Her **time horizon** is short. Shares can fall 30% or more in a year and take years to recover; if they fall just before the fees are due she would have to sell at a loss. Money needed within a year or two belongs somewhere stable, such as a savings account or Treasury bills.
+
+</Solution>
+
+**6. (standard)** Investment C returned 12%, 12%, 12% and D returned 30%, −10%, 16%. Both average 12%. Which grew GH₵ 1,000 to more?
+
+<Solution>
+
+C: 1,000 × 1.12³ = **GH₵ 1,404.93**. D: 1,000 × 1.30 × 0.90 × 1.16 = **GH₵ 1,357.20**. C grew to more, because it has no volatility.
+
+</Solution>
+
+**7. (stretch)** A scheme offers “guaranteed 5% a month, no risk”. Using this chapter, give two reasons to be suspicious.
+
+<Solution>
+
+5% a month compounds to 1.05¹² − 1 = **79.6% a year**, far above anything a genuinely low-risk investment pays (compare Treasury bills). If such a return were available without risk, everyone would buy until it disappeared. **High return and no risk cannot go together**, so either the risk is hidden or the scheme is a fraud.
+
+</Solution>
+
+**8. (stretch)** Kwame says he has a high risk tolerance and wants to put all his savings into one company’s shares. He has no emergency fund and GH₵ 6,000 on a credit card at 4% a month. What would you say about his risk capacity?
+
+<Solution>
+
+His **risk capacity** is low: with no emergency fund, any shock may force him to sell at a bad time, and the card debt costs 1.04¹² − 1 = 60.1% a year, a sure “return” for paying it off that no share can reliably beat. One company is also concentrated risk. Paying the debt and building an emergency fund come first.
+
+</Solution>
+
+<Exercises />
+
+## Summary
+
+- **Return** = (end − start + income) ÷ start; judge it after inflation, fees and tax.
+- **Risk** is the chance of a different outcome than expected, especially loss; it comes from markets, inflation, credit, liquidity, currency, concentration and fraud.
+- **Volatility** (standard deviation) measures how much returns swing; it lowers the compound return below the average.
+- After a loss, the gain needed to recover is larger: 50% down needs 100% up.
+- **Maximum drawdown** is the worst fall from a peak.
+- Higher **expected** return comes with higher risk (the **risk premium**); high return with no risk is a warning sign.
+- Match risk to your **time horizon**, and take the lower of your risk **tolerance** and **capacity**.
+
+## Go deeper
+
+- [What is Risk?](https://www.investor.gov/introduction-investing/investing-basics/what-risk), Investor.gov (US SEC). The kinds of investment risk and how risk and return relate, in plain language.
+- [Investments and retirement](https://www.khanacademy.org/college-careers-more/financial-literacy/xa6995ea67a8e9fdd:investments-retirement), Khan Academy. Short lessons on investing basics, risk and return, and long-term saving.
+- [Beginners’ Guide to Asset Allocation, Diversification, and Rebalancing](https://www.investor.gov/additional-resources/general-resources/publications-research/info-sheets/beginners-guide-asset), Investor.gov. Time horizon and risk tolerance, and how they lead into the next chapter.
