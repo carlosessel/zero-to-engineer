@@ -4,6 +4,16 @@ All notable changes to this project are recorded here, newest first.
 
 ## Unreleased
 
+### 2026-11-24: Zero to Money and Investing, part 8
+
+Added
+- Part 8 of Zero to Money and Investing, "Reading company accounts", built around two years of accounts for one fictional company that tie together: reading company financial statements (the annual report and auditor's report, the income statement, balance sheet and cash flow statement line by line, how they fit together, free cash flow, warning signs), financial ratios (profitability, efficiency and the cash conversion cycle, liquidity, debt, per-share and market ratios, enterprise value, DuPont analysis, using ratios well), and valuing a share (multiples, dividends, a five-year discounted cash flow with terminal value, a sensitivity table, a reverse DCF, margin of safety, why valuations go wrong).
+- Walkthroughs: profit turned into the change in cash, return on equity broken into its three parts, and a discounted cash flow from forecast to value per share.
+- Optional Python checks: the balance sheet balances and the cash flow ties up, the DuPont ratios for two years, and a DCF with a sensitivity table.
+- Where to find real accounts: the Ghana Stock Exchange's financial statements page and Companies House.
+- 57 glossary terms.
+- The household accounts and shares chapters now link to the new chapters.
+
 ### 2026-11-24: Zero to Money and Investing, part 7
 
 Added

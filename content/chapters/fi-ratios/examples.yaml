@@ -1,0 +1,25 @@
+# How each code block in index.mdx is checked. See tests/examples/harness.py.
+- block: 1
+  lang: python
+  check: python
+  output: |
+    2026 8.0% 1.31 2.09 21.9% 3.46
+    2025 6.9% 1.17 2.23 18.0% 3.00
+  verify: |
+    # Other ratios in the chapter, from Volta's statements.
+    assert round(105 / 300 * 100, 1) == 35.0 and round(88 / 260 * 100, 1) == 33.8
+    assert round(40 / 195 * 365, 1) == 74.9 and round(35 / 300 * 365, 1) == 42.6 and round(30 / 195 * 365, 1) == 56.2
+    assert round(40 / 195 * 365 + 35 / 300 * 365 - 30 / 195 * 365, 1) == 61.3
+    assert round(35 / 172 * 365 + 30 / 260 * 365 - 28 / 172 * 365, 1) == 57.0
+    assert round((40 + 35 + 4.6) / 30, 2) == 2.65 and round((35 + 4.6) / 30, 2) == 1.32
+    assert round((35 + 30 + 18) / 28, 2) == 2.96 and round((30 + 18) / 28, 2) == 1.71
+    assert round(90 / 109.6, 2) == 0.82 and round(85.4 / 60, 2) == 1.42 and round(77 / 49, 2) == 1.57
+    assert round(4.05 / 0.20, 2) == 20.25 and round(0.20 / 4.05 * 100, 2) == 4.94
+    assert round(4.05 / (109.6 / 120), 2) == 4.43 and round((486 + 85.4) / 60, 2) == 9.52
+    assert round(24 / ((100 + 109.6) / 2) * 100, 1) == 22.9
+- block: 2
+  lang: text
+  check: illustration
+  note: The output of the Python block above, which that block's check compares exactly.
+  verify: |
+    assert block.strip().splitlines() == ["2026 8.0% 1.31 2.09 21.9% 3.46", "2025 6.9% 1.17 2.23 18.0% 3.00"]

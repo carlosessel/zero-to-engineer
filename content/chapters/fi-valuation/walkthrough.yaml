@@ -1,0 +1,248 @@
+- id: fi-valuation-dcf
+  title: A discounted cash flow, step by step
+  hint: Discount each year's cash, add a value for everything after year 5, then take off what is owed to lenders.
+  steps:
+  - title: Year 1
+    text: The first year's forecast free cash flow is 24. Discounted one year at 15% (× 0.8696), it is worth 20.87 today.
+    vars:
+      sum so far: '20.87'
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: Volta's free cash flow at 15% (GH₵ million)
+        columns:
+        - year
+        - cash
+        - factor
+        - today
+        rows:
+        - k: y0
+          cells:
+          - '1'
+          - '24'
+          - '0.8696'
+          - '20.87'
+          tone: active
+  - title: Year 2
+    text: '28 in two years: × 0.7561 gives 21.17. The cash grows each year, but so does the discounting.'
+    vars:
+      sum so far: '42.04'
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: Volta's free cash flow at 15% (GH₵ million)
+        columns:
+        - year
+        - cash
+        - factor
+        - today
+        rows:
+        - k: y0
+          cells:
+          - '1'
+          - '24'
+          - '0.8696'
+          - '20.87'
+          tone: dim
+        - k: y1
+          cells:
+          - '2'
+          - '28'
+          - '0.7561'
+          - '21.17'
+          tone: active
+  - title: Year 3
+    text: '32 in three years is worth 21.04 today: growth and discounting almost cancel.'
+    vars:
+      sum so far: '63.08'
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: Volta's free cash flow at 15% (GH₵ million)
+        columns:
+        - year
+        - cash
+        - factor
+        - today
+        rows:
+        - k: y0
+          cells:
+          - '1'
+          - '24'
+          - '0.8696'
+          - '20.87'
+          tone: dim
+        - k: y1
+          cells:
+          - '2'
+          - '28'
+          - '0.7561'
+          - '21.17'
+          tone: dim
+        - k: y2
+          cells:
+          - '3'
+          - '32'
+          - '0.6575'
+          - '21.04'
+          tone: active
+  - title: Year 4
+    text: '36 in four years: 20.58 today.'
+    vars:
+      sum so far: '83.66'
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: Volta's free cash flow at 15% (GH₵ million)
+        columns:
+        - year
+        - cash
+        - factor
+        - today
+        rows:
+        - k: y0
+          cells:
+          - '1'
+          - '24'
+          - '0.8696'
+          - '20.87'
+          tone: dim
+        - k: y1
+          cells:
+          - '2'
+          - '28'
+          - '0.7561'
+          - '21.17'
+          tone: dim
+        - k: y2
+          cells:
+          - '3'
+          - '32'
+          - '0.6575'
+          - '21.04'
+          tone: dim
+        - k: y3
+          cells:
+          - '4'
+          - '36'
+          - '0.5718'
+          - '20.58'
+          tone: active
+  - title: Year 5
+    text: '40 in five years: 19.89 today. Five years of forecast cash are worth 103.55 now.'
+    vars:
+      sum so far: '103.55'
+    parts:
+    - kind: tables
+      id: t
+      slots: 5
+      tables:
+      - id: s
+        title: Volta's free cash flow at 15% (GH₵ million)
+        columns:
+        - year
+        - cash
+        - factor
+        - today
+        rows:
+        - k: y0
+          cells:
+          - '1'
+          - '24'
+          - '0.8696'
+          - '20.87'
+          tone: dim
+        - k: y1
+          cells:
+          - '2'
+          - '28'
+          - '0.7561'
+          - '21.17'
+          tone: dim
+        - k: y2
+          cells:
+          - '3'
+          - '32'
+          - '0.6575'
+          - '21.04'
+          tone: dim
+        - k: y3
+          cells:
+          - '4'
+          - '36'
+          - '0.5718'
+          - '20.58'
+          tone: dim
+        - k: y4
+          cells:
+          - '5'
+          - '40'
+          - '0.4972'
+          - '19.89'
+          tone: active
+  - title: After year 5
+    text: 'Assume cash then grows 6% a year for ever. Terminal value at year 5: 40 × 1.06 ÷ (0.15 − 0.06) = 471.11. Today: × 0.4972 = 234.23.'
+    vars:
+      terminal today: '234.23'
+    parts:
+    - kind: kv
+      id: k
+      label: Valuing Volta (GH₵ million)
+      slots: 5
+      rows:
+      - name: years 1 to 5
+        value: '103.55'
+      - name: after year 5
+        value: '234.23'
+        tone: active
+  - title: The whole business
+    text: Enterprise value is 103.55 + 234.23 = 337.78. More than two-thirds comes from after year 5.
+    vars:
+      enterprise value: '337.78'
+    parts:
+    - kind: kv
+      id: k
+      label: Valuing Volta (GH₵ million)
+      slots: 5
+      rows:
+      - name: years 1 to 5
+        value: '103.55'
+      - name: after year 5
+        value: '234.23'
+      - name: enterprise value
+        value: '337.78'
+        tone: active
+  - title: One share
+    text: 'Take off net debt of 85.4, owed to lenders: 252.38 for shareholders. Divided by 120 million shares: GH₵ 2.10, against a price of GH₵ 4.05.'
+    vars:
+      value per share: '2.10'
+      price: '4.05'
+    parts:
+    - kind: kv
+      id: k
+      label: Valuing Volta (GH₵ million)
+      slots: 5
+      rows:
+      - name: enterprise value
+        value: '337.78'
+      - name: less net debt
+        value: − 85.4
+      - name: equity
+        value: '252.38'
+      - name: per share
+        value: GH₵ 2.10
+        tone: found
+      - name: price
+        value: GH₵ 4.05
